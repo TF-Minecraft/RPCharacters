@@ -67,6 +67,8 @@ public class InventoryManager {
 		return RPTexts.formatGui(raw);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void characterView(Player p, RPCharacter c) {
 		PlayerData pd = PlayerManager.get(c.getOwner());
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(c.getOwner()), 27, t(RPTexts.MUTED + "Character Info"));
@@ -476,6 +478,8 @@ public class InventoryManager {
 		return lines;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private void fillEmptySlots(Inventory inventory) {
 		for (int slot = 0; slot < inventory.getSize(); slot++) {
 			if (inventory.getItem(slot) == null) {
@@ -516,6 +520,8 @@ public class InventoryManager {
 		return i;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void traitsView(Player p, RPCharacter c) {
 		int visibleTraitCount = 0;
 		for(Trait t : c.getTraits()) {
@@ -547,6 +553,8 @@ public class InventoryManager {
 		}
 		p.openInventory(i);
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void deadView(Player p, Player t) {
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(t), 27, t(RPTexts.MUTED + "Dead Characters"));
 		PlayerData pd = PlayerManager.get(t);
@@ -570,6 +578,8 @@ public class InventoryManager {
 		}
 		p.openInventory(i);
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void profileView(Player p, Player t) {
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(t), 27, t(RPTexts.MUTED + "Character Menu"));
 		i.setItem(0, getPlayerHead(t));
@@ -681,6 +691,8 @@ public class InventoryManager {
 		i.setItem(s.getSize() - 1, getAttributeConfirmItem(s));
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getAttributePointsHeader(AttributesStage s) {
 		ItemStack i = new ItemStack(Material.EXPERIENCE_BOTTLE, Math.max(1, Math.min(64, s.getRemaining())));
 		ItemMeta meta = i.getItemMeta();
@@ -695,6 +707,8 @@ public class InventoryManager {
 		return i;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getAttributeConfirmItem(AttributesStage s) {
 		if (s.getRemaining() == 0) {
 			return getConfirmItem();
@@ -723,6 +737,8 @@ public class InventoryManager {
 		return new ItemStack(fallback, 1);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private ItemStack attributeActionItem(ItemStack base, String name, List<String> lore,
 		String attr, String action) {
 		ItemStack i = base.clone();
@@ -790,6 +806,8 @@ public class InventoryManager {
 		);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getAttributeStatItem(String attr, AttributesStage s) {
 		int rank = s.getRank(attr);
 		String label = MmoCoreAttributeHelper.displayName(attr);
@@ -811,6 +829,8 @@ public class InventoryManager {
 		return i;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void confirmView(Player player) {
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(player), 27, t(RPTexts.MUTED + "Confirm Action"));
 		i.setItem(11, createItemStack(Material.GREEN_CONCRETE, t(RPTexts.GUI_SUCCESS + "Confirm")));
@@ -851,6 +871,8 @@ public class InventoryManager {
 
 		return formattedTime.trim();
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack createItemStack(Material m, String name) {
 		ItemStack i = new ItemStack(m, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -858,6 +880,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getBackButton() {
 		ItemStack i = new ItemStack(Material.BARRIER, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -873,6 +897,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack createCancelItem(CharacterCreation cc) {
 		ItemStack i = new ItemStack(Material.BARRIER, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -892,6 +918,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getKillItem() {
 		ItemStack i = new ItemStack(Material.IRON_AXE, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -904,6 +932,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getSwitchItem() {
 		ItemStack i = new ItemStack(Material.EMERALD, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -915,6 +945,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getDescriptionItem(RPCharacter c) {
 		ItemStack i = new ItemStack(Material.WRITABLE_BOOK, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -1034,6 +1066,8 @@ public class InventoryManager {
 		return getCharacterItem(c, click, false);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getCharacterItem(RPCharacter c, boolean click, boolean overLimit) {
 		PlayerData pd = PlayerManager.get(c.getOwner());
 		ItemStack i = new ItemStack(Material.ENDER_PEARL, 1);
@@ -1101,6 +1135,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getDeadCharactersItem(PlayerData pd) {
 		ItemStack i = new ItemStack(Material.SKELETON_SKULL, 1);
 		int count = pd.getCharacters(Status.DEAD).size();
@@ -1114,6 +1150,8 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getEmptyCharacterItem(PlayerData pd) {
 		ItemStack i = new ItemStack(Material.YELLOW_CONCRETE, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -1129,6 +1167,8 @@ public class InventoryManager {
 		return i;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getLockedCharacterItem(Player player, int slotIndex) {
 		ItemStack i = new ItemStack(Material.BARRIER, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -1140,6 +1180,8 @@ public class InventoryManager {
 		return i;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getReviveItem(boolean canRevive, int aliveCount, int maxSlots) {
 		ItemStack i = new ItemStack(canRevive ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, 1);
 		ItemMeta meta = i.getItemMeta();
@@ -1180,6 +1222,8 @@ public class InventoryManager {
 		return i;
 	}
 	
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public ItemStack getConfirmItem() {
 		ItemStack i = new ItemStack(Material.LIME_DYE, 1);
 		ItemMeta meta = i.getItemMeta();

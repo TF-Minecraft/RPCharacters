@@ -25,6 +25,8 @@ public final class KitCustomiseApplyService {
 
 	private KitCustomiseApplyService() {}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static ItemStack buildStack(KitCustomiseData data) {
 		if (data == null) {
 			return null;
@@ -121,6 +123,8 @@ public final class KitCustomiseApplyService {
 	}
 
 	/** Copy existing lore lines from a stack (empty if none). */
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	static List<String> copyLore(ItemStack stack) {
 		if (stack == null) {
 			return List.of();

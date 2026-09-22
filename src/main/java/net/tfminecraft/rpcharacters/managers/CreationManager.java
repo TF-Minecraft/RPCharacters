@@ -189,6 +189,8 @@ public class CreationManager implements Listener{
 				|| stage instanceof ClueStage;
 	}
 	
+	// Retain Bukkit chat-event ordering and String message semantics for existing integrations.
+	@SuppressWarnings("deprecation")
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void chatEvent(AsyncPlayerChatEvent event) {
 		Player player = event.getPlayer();
@@ -514,6 +516,8 @@ public class CreationManager implements Listener{
 		click(p, h.getStage(), null, e);
 	}
 	
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void selectionClick(InventoryClickEvent e) {
 		Player p = (Player) e.getWhoClicked();

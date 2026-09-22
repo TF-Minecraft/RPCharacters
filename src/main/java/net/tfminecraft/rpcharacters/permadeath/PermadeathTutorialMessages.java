@@ -3,11 +3,11 @@ package net.tfminecraft.rpcharacters.permadeath;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
-import net.md_5.bungee.api.ChatColor;
-import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.ComponentBuilder;
-import net.md_5.bungee.api.chat.HoverEvent;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
@@ -29,33 +29,22 @@ public final class PermadeathTutorialMessages {
 		int sideDashes = (SEPARATOR_WIDTH - GOT_IT_LABEL.length()) / 2;
 		String dashes = "-".repeat(sideDashes);
 
-		TextComponent left = new TextComponent(dashes);
-		left.setColor(ChatColor.GRAY);
+		Component left = Component.text(dashes, NamedTextColor.GRAY);
 
-		TextComponent gotIt = new TextComponent(GOT_IT_LABEL);
-		gotIt.setColor(ChatColor.GREEN);
-		gotIt.setBold(true);
-		gotIt.setUnderlined(true);
-		gotIt.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rpcharacter dismisspdwarning"));
-		gotIt.setHoverEvent(new HoverEvent(
-				HoverEvent.Action.SHOW_TEXT,
-				new ComponentBuilder("Click to dismiss")
-						.color(ChatColor.GREEN)
-						.bold(true)
-						.append("\n")
-						.color(ChatColor.GRAY)
-						.italic(true)
-						.append("You won't see this tutorial again.")
-						.create()));
+		// ComponentBuilder carried bold into both the newline and the italic second line.
+		Component hover = Component.text("Click to dismiss", NamedTextColor.GREEN)
+				.decorate(TextDecoration.BOLD)
+				.append(Component.text("\nYou won't see this tutorial again.", NamedTextColor.GRAY)
+						.decorate(TextDecoration.BOLD, TextDecoration.ITALIC));
+		Component gotIt = Component.text(GOT_IT_LABEL, NamedTextColor.GREEN)
+				.decorate(TextDecoration.BOLD, TextDecoration.UNDERLINED)
+				.clickEvent(ClickEvent.runCommand("/rpcharacter dismisspdwarning"))
+				.hoverEvent(HoverEvent.showText(hover));
 
-		TextComponent right = new TextComponent(dashes);
-		right.setColor(ChatColor.GRAY);
+		Component right = Component.text(dashes, NamedTextColor.GRAY);
 
-		TextComponent row = new TextComponent("");
-		row.addExtra(left);
-		row.addExtra(gotIt);
-		row.addExtra(right);
-		player.spigot().sendMessage(row);
+		Component row = Component.empty().append(left).append(gotIt).append(right);
+		player.sendMessage(row);
 	}
 
 	private static String formatTutorialLine(String line) {

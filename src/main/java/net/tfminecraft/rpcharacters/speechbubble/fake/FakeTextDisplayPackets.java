@@ -25,7 +25,7 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 /**
  * Client-side TextDisplay packets for per-viewer speech bubbles.
  * Metadata indices match Minecraft 1.21.x Text Display entity (Display base + text fields).
- * Scale must use {@link org.joml.Vector3f} with {@code Registry.get(Vector3f.class)} — not Vector3F.
+ * Scale must use {@link org.joml.Vector3f} with {@code Registry.get((java.lang.reflect.Type) Vector3f.class, false)} — not Vector3F.
  *
  * <p>On 1.21+, spawn/teleport packets use nested NMS structures instead of flat short/double fields.
  */
@@ -165,17 +165,17 @@ public final class FakeTextDisplayPackets {
 
 	private List<WrappedDataValue> buildMetadata(String text, float scale, int lineWidth) {
 		List<WrappedDataValue> values = new ArrayList<>();
-		values.add(new WrappedDataValue(META_SCALE, WrappedDataWatcher.Registry.get(Vector3f.class),
+		values.add(new WrappedDataValue(META_SCALE, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Vector3f.class, false),
 				new Vector3f(scale, scale, scale)));
-		values.add(new WrappedDataValue(META_BILLBOARD, WrappedDataWatcher.Registry.get(Byte.class), BILLBOARD_CENTER));
+		values.add(new WrappedDataValue(META_BILLBOARD, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Byte.class, false), BILLBOARD_CENTER));
 		values.add(new WrappedDataValue(META_TEXT, WrappedDataWatcher.Registry.getChatComponentSerializer(false),
 				WrappedChatComponent.fromText(text != null ? text : "").getHandle()));
-		values.add(new WrappedDataValue(META_LINE_WIDTH, WrappedDataWatcher.Registry.get(Integer.class), lineWidth));
-		values.add(new WrappedDataValue(META_BACKGROUND, WrappedDataWatcher.Registry.get(Integer.class),
+		values.add(new WrappedDataValue(META_LINE_WIDTH, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Integer.class, false), lineWidth));
+		values.add(new WrappedDataValue(META_BACKGROUND, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Integer.class, false),
 				BACKGROUND_TRANSPARENT));
-		values.add(new WrappedDataValue(META_TEXT_OPACITY, WrappedDataWatcher.Registry.get(Byte.class),
+		values.add(new WrappedDataValue(META_TEXT_OPACITY, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Byte.class, false),
 				TEXT_OPACITY_DEFAULT));
-		values.add(new WrappedDataValue(META_TEXT_FLAGS, WrappedDataWatcher.Registry.get(Byte.class), TEXT_FLAG_SHADOW));
+		values.add(new WrappedDataValue(META_TEXT_FLAGS, WrappedDataWatcher.Registry.get((java.lang.reflect.Type) Byte.class, false), TEXT_FLAG_SHADOW));
 		return values;
 	}
 

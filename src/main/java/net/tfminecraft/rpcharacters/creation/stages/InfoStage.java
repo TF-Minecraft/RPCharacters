@@ -103,6 +103,8 @@ public class InfoStage extends Stage{
 
 
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void runMessage(Player p, String message) {
 
 		String substituted = substitutePlaceholders(message);

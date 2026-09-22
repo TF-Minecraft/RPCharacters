@@ -407,6 +407,8 @@ public final class RosterSyncService {
 		return classId;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static String strip(String raw) {
 		if (raw == null) {
 			return "";

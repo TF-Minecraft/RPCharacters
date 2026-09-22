@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.kit;
 
+import net.tfminecraft.rpcharacters.util.LegacyModelData;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -175,6 +177,8 @@ public final class EditableKitPreviewBuilder {
 		return segment.toLowerCase(Locale.ROOT);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static Preview resolvePreview(String path) {
 		ItemStack stack;
 		try {
@@ -203,8 +207,8 @@ public final class EditableKitPreviewBuilder {
 			lore = stripped;
 		}
 		Integer cmd = null;
-		if (meta != null && meta.hasCustomModelData()) {
-			cmd = Integer.valueOf(meta.getCustomModelData());
+		if (meta != null && LegacyModelData.has(meta)) {
+			cmd = Integer.valueOf(LegacyModelData.get(meta));
 		}
 		return new Preview(
 				displayName,
@@ -214,6 +218,8 @@ public final class EditableKitPreviewBuilder {
 		);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static String strip(String raw) {
 		if (raw == null) {
 			return "";

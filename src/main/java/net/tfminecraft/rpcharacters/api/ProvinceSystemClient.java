@@ -193,6 +193,7 @@ public final class ProvinceSystemClient {
 	}
 
 	/** @deprecated use {@link #fetchLoreItemClaimStatus(String, String, String)} */
+	@Deprecated
 	public static SimpleResult fetchLoreItemClaimStatus(String playerUuid, String characterId) {
 		return fetchLoreItemClaimStatus(playerUuid, characterId, "starter");
 	}
@@ -268,7 +269,7 @@ public final class ProvinceSystemClient {
 		if (realm == null || realm.isBlank()) {
 			return SimpleResult.fail("realm_id is required");
 		}
-		JSONArray ids = new JSONArray();
+		List<String> ids = new java.util.ArrayList<>();
 		if (characterIds != null) {
 			for (String id : characterIds) {
 				if (id != null && !id.isBlank()) {
@@ -279,9 +280,8 @@ public final class ProvinceSystemClient {
 		if (ids.isEmpty()) {
 			return SimpleResult.fail("character_ids is required");
 		}
-		JSONObject root = new JSONObject();
-		root.put("realm_id", realm.trim());
-		root.put("character_ids", ids);
+		JSONObject root = new JSONObject(java.util.Map.of(
+			"realm_id", realm.trim(), "character_ids", ids));
 		return request("POST", "/characters/plugin/characters/delete", root.toJSONString());
 	}
 

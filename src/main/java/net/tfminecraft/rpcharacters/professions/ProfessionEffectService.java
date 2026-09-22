@@ -49,6 +49,8 @@ public class ProfessionEffectService implements Listener {
 		return character.resolveProfessionUpgrades();
 	}
 
+	// Preserve mutations of the caller-owned ItemStack and its aliases.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void stationEnchantTypeEvent(PlayerUseCraftingStationEvent event) {
 		Player player = event.getPlayer();
@@ -77,8 +79,8 @@ public class ProfessionEffectService implements Listener {
 						}
 						String enchType = unlock.split("\\.")[1];
 						int enchLevel = Integer.parseInt(unlock.split("\\.")[2]);
-						enchLevel = enchLevel + enchants.getLevel(Enchantment.getByKey(NamespacedKey.minecraft(enchType)));
-						enchants.addEnchant(Enchantment.getByKey(NamespacedKey.minecraft(enchType)), enchLevel);
+						enchLevel = enchLevel + enchants.getLevel(io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT).get(NamespacedKey.minecraft(enchType)));
+						enchants.addEnchant(io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT).get(NamespacedKey.minecraft(enchType)), enchLevel);
 						hasChanged = true;
 					}
 				}
@@ -99,6 +101,8 @@ public class ProfessionEffectService implements Listener {
 		}
 	}
 
+	// This path mutates the existing ItemStack; replacing it would change aliases held by callers.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void stationAddedStats(PlayerUseCraftingStationEvent event) {
 		Player player = event.getPlayer();
@@ -138,7 +142,7 @@ public class ProfessionEffectService implements Listener {
 			}
 			if (hasChanged && statName != null) {
 				mmoitem.replaceData(MMOItems.plugin.getStats().get(statName.toUpperCase()), oldStat);
-				StatHistory hist = StatHistory.from(mmoitem, MMOItems.plugin.getStats().get(statName.toUpperCase()));
+				StatHistory hist = mmoitem.computeStatHistory(MMOItems.plugin.getStats().get(statName.toUpperCase()));
 				if (hist != null) {
 					DoubleData original = (DoubleData) hist.getOriginalData();
 					original.setValue(oldStat.getValue());

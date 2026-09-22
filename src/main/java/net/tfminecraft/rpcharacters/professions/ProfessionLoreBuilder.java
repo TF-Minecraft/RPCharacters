@@ -21,6 +21,8 @@ public final class ProfessionLoreBuilder {
 		return RPTexts.formatGui(raw);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static ItemStack buildUpgradeItem(ProfessionUpgradeDefinition upgrade, RPCharacter character) {
 		ItemStack item = new ItemStack(upgrade.getMenuItem());
 		ItemMeta meta = item.getItemMeta();
@@ -42,6 +44,8 @@ public final class ProfessionLoreBuilder {
 		return lore;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static List<String> descriptionLore(ItemStack template) {
 		List<String> lore = template.getItemMeta().getLore();
 		if (lore == null || lore.isEmpty()) {
@@ -58,6 +62,8 @@ public final class ProfessionLoreBuilder {
 		return description;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static boolean isLegacyDynamicLine(String line) {
 		if (line == null) {
 			return true;
@@ -70,12 +76,16 @@ public final class ProfessionLoreBuilder {
 				|| LEGACY_REQUIRES_LINE.matcher(plain).matches();
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static void trimTrailingBlankLines(List<String> lore) {
 		while (!lore.isEmpty() && ChatColor.stripColor(lore.get(lore.size() - 1)).trim().isEmpty()) {
 			lore.remove(lore.size() - 1);
 		}
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static void appendRequirements(List<String> lore, ProfessionUpgradeDefinition upgrade,
 			RPCharacter character) {
 		if (upgrade.getRequirements().isEmpty()) {

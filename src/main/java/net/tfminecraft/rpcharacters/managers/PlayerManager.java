@@ -311,7 +311,7 @@ public class PlayerManager implements Listener{
 
 					for(Map.Entry<PotionEffectType, Integer> entry : effects.entrySet()) {
 						PotionEffect effect = new PotionEffect(entry.getKey(), TRAIT_POTION_DURATION_TICKS, entry.getValue(), false, false, false);
-						p.addPotionEffect(effect, true);
+						p.addPotionEffect(effect);
 					}
 				}
 			}
@@ -475,6 +475,8 @@ public class PlayerManager implements Listener{
 		}
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void selectionClick(InventoryClickEvent e) {
 		Player p = (Player) e.getWhoClicked();

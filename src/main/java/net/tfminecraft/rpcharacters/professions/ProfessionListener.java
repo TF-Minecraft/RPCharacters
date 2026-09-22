@@ -28,6 +28,8 @@ public class ProfessionListener implements Listener {
 
 	private final ProfessionInventoryManager inventoryManager = new ProfessionInventoryManager();
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void onMainMenuClick(InventoryClickEvent event) {
 		if (event.getClickedInventory() == null || event.getCurrentItem() == null) {
@@ -50,6 +52,8 @@ public class ProfessionListener implements Listener {
 		}
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void onProfessionMenuClick(InventoryClickEvent event) {
 		if (event.getClickedInventory() == null || event.getCurrentItem() == null) {
@@ -91,6 +95,8 @@ public class ProfessionListener implements Listener {
 		}
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private void handleUpgradeClick(Player player, RPCharacter character, ProfessionDefinition profession,
 			ProfessionUpgradeDefinition upgrade, InventoryClickEvent event) {
 		if (character.getTotalSpentPoints() + upgrade.getCost() > Cache.professionMaxSpendingPoints

@@ -34,6 +34,8 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 
 	private final ProfessionInventoryManager inventoryManager = new ProfessionInventoryManager();
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@Override
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 		if (!COMMAND.equalsIgnoreCase(command.getName())) {
