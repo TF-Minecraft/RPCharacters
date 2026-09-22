@@ -48,3 +48,10 @@ Desktop.ini
 
 # Local investigation notes and test artifacts
 /.scratch/
+
+# Local runtime data and obsolete packaged snapshots
+/src/main/resources/data/
+/src/main/resources/logs/
+/src/main/resources/RPCharacters.zip
+/orp/descriptions/userdata.yml
+/orp/time/timedata.yml
