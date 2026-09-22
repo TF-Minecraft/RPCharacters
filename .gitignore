@@ -35,3 +35,6 @@ Thumbs.db
 # Private dependencies are downloaded from tfmc-deps and verified in CI.
 libs/*
 !libs/SHA256SUMS
+
+# Downloaded build dependencies
+/libs/*.jar

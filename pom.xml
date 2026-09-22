@@ -12,15 +12,6 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <worldguard.version>7.0.9</worldguard.version>
-        <tfmc.refs>D:/Dokumenter/My Plugins/Reference Libs</tfmc.refs>
-        <tfmc.builds>D:/Dokumenter/My Plugins/TFMC/RPCharacters</tfmc.builds>
-        <tfmc.tlibs>D:/Dokumenter/My Plugins/TFMC/TLibs</tfmc.tlibs>
-        <tfmc.simplefactions>D:/Dokumenter/My Plugins/TFMC/SimpleFactions</tfmc.simplefactions>
-        <itemsadder.jar>ItemsAdder_4.0.18.jar</itemsadder.jar>
-        <tlibs.jar>TLibs.jar</tlibs.jar>
-        <mmoitems.jar>MMOItems-6.10.1-20250521.175300-22.jar</mmoitems.jar>
-        <mythiclib.jar>MythicLib-dist-1.7.1.jar</mythiclib.jar>
-        <mythicmobs.jar>MythicMobs-5.8.0-SNAPSHOT.jar</mythicmobs.jar>
     </properties>
 
     <repositories>
@@ -48,16 +39,16 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>ItemsAdder</artifactId>
-            <version>4.0.17</version>
+            <version>4.0.18</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/${itemsadder.jar}</systemPath>
+            <systemPath>${project.basedir}/libs/ItemsAdder_4.0.18.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>TLibs</artifactId>
             <version>1.0</version>
             <scope>system</scope>
-            <systemPath>${tfmc.tlibs}/${tlibs.jar}</systemPath>
+            <systemPath>${project.basedir}/libs/TLibs.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>com.googlecode.json-simple</groupId>
@@ -76,21 +67,21 @@
             <artifactId>MMOCore</artifactId>
             <version>1.13.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/MMOCore-1.13.1.jar</systemPath>
+            <systemPath>${project.basedir}/libs/MMOCore-1.13.1.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MMOItems</artifactId>
             <version>6.10.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/${mmoitems.jar}</systemPath>
+            <systemPath>${project.basedir}/libs/MMOItems-6.10.1-20250521.175300-22.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MythicLib</artifactId>
             <version>1.7.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/${mythiclib.jar}</systemPath>
+            <systemPath>${project.basedir}/libs/MythicLib-dist-1.7.1.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>me.clip</groupId>
@@ -110,7 +101,7 @@
             <artifactId>ProtocolLib</artifactId>
             <version>1.0</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/ProtocolLib.jar</systemPath>
+            <systemPath>${project.basedir}/libs/ProtocolLib.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.joml</groupId>
@@ -135,14 +126,14 @@
             <artifactId>simplefactions</artifactId>
             <version>2.8.7</version>
             <scope>system</scope>
-            <systemPath>${tfmc.simplefactions}/simplefactions-2.8.7.jar</systemPath>
+            <systemPath>${project.basedir}/libs/simplefactions-2.8.7.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MythicMobs</artifactId>
-            <version>5.13.1-SNAPSHOT</version>
+            <version>5.8.0-SNAPSHOT</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/${mythicmobs.jar}</systemPath>
+            <systemPath>${project.basedir}/libs/MythicMobs-5.8.0-SNAPSHOT.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -159,7 +150,7 @@
                 <filtering>true</filtering>
                 <includes><include>plugin.yml</include></includes>
             </resource>
-                <resource>
+            <resource>
                 <directory>src/main/resources</directory>
                 <excludes>
                     <exclude>plugin.yml</exclude>
@@ -167,7 +158,7 @@
                     <exclude>logs/**</exclude>
                     <exclude>RPCharacters.zip</exclude>
                 </excludes>
-                </resource>
+            </resource>
         </resources>
         <plugins>
             <plugin>
@@ -180,102 +171,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <id>copy-to-builds</id>
-                        <phase>package</phase>
-                        <goals><goal>run</goal></goals>
-                        <configuration>
-                            <target>
-                                <mkdir dir="${tfmc.builds}"/>
-                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                      tofile="${tfmc.builds}/${project.build.finalName}.jar"/>
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 
-    <profiles>
-        <!-- Maintainer machine: jars live outside the repo under older filenames.
-             File activation with an absolute Windows path simply never matches on CI. -->
-        <profile>
-            <id>maintainer-libs</id>
-            <activation>
-                <file>
-                    <exists>D:/Documents/TFMC/ReferenceLibs</exists>
-                </file>
-            </activation>
-            <properties>
-                <tfmc.refs>D:/Documents/TFMC/ReferenceLibs</tfmc.refs>
-                <tfmc.tlibs>D:/Documents/TFMC/Builds/TLibs</tfmc.tlibs>
-                <tfmc.builds>D:/Documents/TFMC/Builds/RPCharacters</tfmc.builds>
-                <itemsadder.jar>ItemsAdder_3.5.0-r2.jar</itemsadder.jar>
-                <tlibs.jar>TLibs.jar</tlibs.jar>
-                <mmoitems.jar>MMOItems-6.10.jar</mmoitems.jar>
-                <mythiclib.jar>MythicLib-1.7.jar</mythiclib.jar>
-                <mythicmobs.jar>MythicMobs-5.8.0-SNAPSHOT.jar</mythicmobs.jar>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                        <version>3.1.0</version>
-                        <executions>
-                            <execution>
-                                <id>copy-to-builds</id>
-                                <phase>package</phase>
-                                <goals><goal>run</goal></goals>
-                                <configuration>
-                                    <target>
-                                        <mkdir dir="${tfmc.builds}"/>
-                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                              tofile="${tfmc.builds}/${project.build.finalName}.jar"/>
-                                    </target>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>deploy-live</id>
-            <activation>
-                <file>
-                    <exists>C:/Users/HP/Desktop/Java/Minecraft/Server Stuff/plugins/RPCharacters</exists>
-                </file>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                        <version>3.1.0</version>
-                        <executions>
-                            <execution>
-                                <id>copy-to-live</id>
-                                <phase>package</phase>
-                                <goals><goal>run</goal></goals>
-                                <configuration>
-                                    <target>
-                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                              tofile="C:/Users/HP/Desktop/Java/Minecraft/Server Stuff/plugins/RPCharacters.jar"/>
-                                    </target>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 
 </project>
