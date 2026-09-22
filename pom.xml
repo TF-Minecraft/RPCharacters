@@ -11,7 +11,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <simplefactions.version>3.0.0</simplefactions.version>
+        <simplefactions.version>3.0.1</simplefactions.version>
         <tlibs.version>2.0.0</tlibs.version>
         <worldguard.version>7.0.9</worldguard.version>
     </properties>
