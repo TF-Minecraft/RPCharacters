@@ -9,6 +9,8 @@ public final class TextWrapUtil {
 
 	private TextWrapUtil() {}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static String stripColor(String input) {
 		if (input == null) {
 			return "";

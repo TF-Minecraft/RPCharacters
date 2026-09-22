@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.professions;
 
+import net.tfminecraft.rpcharacters.util.LegacyModelData;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,6 +50,8 @@ public final class ProfessionItemFactory {
 		return build(snapshot(node));
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static ItemStack build(ProfessionItemSpec spec) {
 		if (spec == null) {
 			return new ItemStack(Material.BARRIER);
@@ -61,7 +65,7 @@ public final class ProfessionItemFactory {
 			meta.setDisplayName(formatItemText(spec.getName()));
 		}
 		if (spec.hasModelData()) {
-			meta.setCustomModelData(spec.getModelData());
+			LegacyModelData.set(meta, spec.getModelData());
 		}
 		if (spec.hasEnchants()) {
 			for (String enchantSpec : spec.getEnchants()) {
@@ -69,7 +73,9 @@ public final class ProfessionItemFactory {
 				if (parts.length < 2) {
 					continue;
 				}
-				Enchantment enchant = Enchantment.getByKey(NamespacedKey.minecraft(parts[0]));
+				Enchantment enchant = io.papermc.paper.registry.RegistryAccess.registryAccess()
+						.getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT)
+						.get(NamespacedKey.minecraft(parts[0]));
 				if (enchant == null) {
 					continue;
 				}

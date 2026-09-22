@@ -55,10 +55,14 @@ public final class RPTexts {
 		sender.sendMessage(formatDisplay(raw));
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static void title(Player player, String title, String subtitle) {
 		player.sendTitle(formatDisplay(title), formatDisplay(subtitle), 10, 60, 20);
 	}
 
+	// Preserve legacy title text formatting and timing semantics.
+	@SuppressWarnings("deprecation")
 	public static void title(Player player, String title, String subtitle, int fadeIn, int stay, int fadeOut) {
 		player.sendTitle(formatDisplay(title), formatDisplay(subtitle), fadeIn, stay, fadeOut);
 	}

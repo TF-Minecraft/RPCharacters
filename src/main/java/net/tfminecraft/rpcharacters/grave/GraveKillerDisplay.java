@@ -70,6 +70,8 @@ public final class GraveKillerDisplay {
 		return player.getName() != null ? player.getName() : "Unknown";
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static String entityLabel(LivingEntity entity) {
 		if (entity == null) {
 			return null;

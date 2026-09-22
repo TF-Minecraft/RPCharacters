@@ -457,6 +457,8 @@ public class Database {
 	       : (defaults.containsKey(key) ? defaults.get(key).toString() : key);
 	  }
 	
+	  // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	  @SuppressWarnings("deprecation")
 	  public String getString(String key, HashMap<String, Object> defaults) {
 	    return ChatColor.translateAlternateColorCodes('&', getRawData(key, defaults));
 	  }
@@ -528,25 +530,11 @@ public class Database {
 	}
 
 	private JSONObject toConversationCountsJson(Map<String, Integer> counts) {
-		JSONObject conversations = new JSONObject();
-		if (counts == null) {
-			return conversations;
-		}
-		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-			conversations.put(entry.getKey(), entry.getValue());
-		}
-		return conversations;
+		return counts == null ? new JSONObject() : new JSONObject(counts);
 	}
 
 	private JSONObject toConversationLastAtJson(Map<String, Long> lastAt) {
-		JSONObject conversationLastAt = new JSONObject();
-		if (lastAt == null) {
-			return conversationLastAt;
-		}
-		for (Map.Entry<String, Long> entry : lastAt.entrySet()) {
-			conversationLastAt.put(entry.getKey(), entry.getValue());
-		}
-		return conversationLastAt;
+		return lastAt == null ? new JSONObject() : new JSONObject(lastAt);
 	}
 
 	private void loadLastLocation(RPCharacter character, JSONObject characterJson) {

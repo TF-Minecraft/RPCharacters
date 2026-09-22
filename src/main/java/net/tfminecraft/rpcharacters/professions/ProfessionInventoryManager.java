@@ -23,6 +23,8 @@ public final class ProfessionInventoryManager {
 		return RPTexts.formatGui(raw);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void openMainMenu(Player player) {
 		PlayerData pd = PlayerManager.get(player);
 		RPCharacter character = pd != null ? pd.getActiveCharacter() : null;
@@ -53,6 +55,8 @@ public final class ProfessionInventoryManager {
 		player.openInventory(inventory);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void openProfessionMenu(Player player, ProfessionDefinition profession) {
 		PlayerData pd = PlayerManager.get(player);
 		RPCharacter character = pd != null ? pd.getActiveCharacter() : null;

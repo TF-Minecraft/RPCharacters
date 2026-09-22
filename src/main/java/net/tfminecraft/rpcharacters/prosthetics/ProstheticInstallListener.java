@@ -134,6 +134,8 @@ public final class ProstheticInstallListener implements Listener {
 		pendingSwaps.remove(event.getPlayer().getUniqueId());
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private void openReplaceConfirm(Player player, RPCharacter character, String fromTraitId,
 			ProstheticInstallMatch match) {
 		Trait fromTrait = TraitLoader.getByString(fromTraitId);
@@ -217,6 +219,8 @@ public final class ProstheticInstallListener implements Listener {
 		}
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static ItemStack confirmItem(Trait fromTrait, Trait toTrait) {
 		ItemStack item = new ItemStack(Material.GREEN_CONCRETE, 1);
 		ItemMeta meta = item.getItemMeta();
@@ -230,6 +234,8 @@ public final class ProstheticInstallListener implements Listener {
 		return item;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static ItemStack cancelItem() {
 		ItemStack item = new ItemStack(Material.RED_CONCRETE, 1);
 		ItemMeta meta = item.getItemMeta();
@@ -238,6 +244,8 @@ public final class ProstheticInstallListener implements Listener {
 		return item;
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static ItemStack filler() {
 		ItemStack fill = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
 		ItemMeta meta = fill.getItemMeta();

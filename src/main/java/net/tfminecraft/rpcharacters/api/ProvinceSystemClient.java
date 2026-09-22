@@ -193,6 +193,7 @@ public final class ProvinceSystemClient {
 	}
 
 	/** @deprecated use {@link #fetchLoreItemClaimStatus(String, String, String)} */
+	@Deprecated
 	public static SimpleResult fetchLoreItemClaimStatus(String playerUuid, String characterId) {
 		return fetchLoreItemClaimStatus(playerUuid, characterId, "starter");
 	}

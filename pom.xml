@@ -26,9 +26,8 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>ItemsAdder</artifactId>
-            <version>4.0.18</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/ItemsAdder_4.0.18.jar</systemPath>
+            <version>4.0.18-tfmc-5a01b37bd744</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>me.plugins</groupId>
@@ -58,23 +57,20 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>MMOCore</artifactId>
-            <version>1.13.1</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/MMOCore-1.13.1.jar</systemPath>
+            <version>1.13.1-tfmc-14850d745437</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MMOItems</artifactId>
-            <version>6.10.1</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/MMOItems-6.10.1-20250521.175300-22.jar</systemPath>
+            <version>6.10.1-tfmc-8ff714bd3f48</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MythicLib</artifactId>
-            <version>1.7.1</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/MythicLib-dist-1.7.1.jar</systemPath>
+            <version>1.7.1-tfmc-a3f86a50d382</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>me.clip</groupId>
@@ -92,9 +88,8 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>ProtocolLib</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/ProtocolLib.jar</systemPath>
+            <version>1.0-tfmc-ee2e7ab9b538</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.joml</groupId>
@@ -129,9 +124,8 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>MythicMobs</artifactId>
-            <version>5.8.0-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/MythicMobs-5.8.0-SNAPSHOT.jar</systemPath>
+            <version>5.8.0-SNAPSHOT-tfmc-575aa30aee8e</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -178,6 +172,18 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.7.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
             </plugin>
@@ -185,6 +191,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+                <configuration>
+                    <argLine>-javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

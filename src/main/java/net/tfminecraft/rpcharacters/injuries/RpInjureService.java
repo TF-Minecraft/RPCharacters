@@ -115,6 +115,8 @@ public final class RpInjureService {
 		scheduleTimeout(session);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static void accept(Player target) {
 		RpInjureSession session = getByTarget(target.getUniqueId());
 		if (session == null || session.phase != RpInjureSession.Phase.AWAITING_ACCEPT) {

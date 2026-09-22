@@ -214,6 +214,8 @@ public final class ClassService {
 		sanitizeForeignSkillLevels(PlayerData.get(player));
 	}
 
+	// Pinned MMOCore exposes the legacy class-skill map only through these accessors; slots and skill trees are different data.
+	@SuppressWarnings("deprecation")
 	private static List<String> sanitizeForeignSkillLevels(PlayerClass profess, SavedClassInformation info) {
 		List<String> stripped = new ArrayList<>();
 		for (String skillId : new ArrayList<>(info.mapSkillLevels().keySet())) {
@@ -226,6 +228,8 @@ public final class ClassService {
 		return stripped;
 	}
 
+	// Pinned MMOCore exposes the legacy class-skill map only through these accessors; slots and skill trees are different data.
+	@SuppressWarnings("deprecation")
 	private static List<String> sanitizeForeignSkillLevels(PlayerData mmoPd) {
 		List<String> stripped = new ArrayList<>();
 		PlayerClass profess = mmoPd.getProfess();
@@ -239,6 +243,8 @@ public final class ClassService {
 		return stripped;
 	}
 
+	// Pinned MMOCore exposes the legacy class-skill map only through these accessors; slots and skill trees are different data.
+	@SuppressWarnings("deprecation")
 	private static String formatSkillPointsSpentBreakdown(PlayerData mmoPd) {
 		List<String> parts = new ArrayList<>();
 		int totalContributed = 0;

@@ -632,6 +632,8 @@ public final class GraveManager {
 		return items;
 	}
 
+	// Preserve the existing serialized item format so previously saved graves remain readable.
+	@SuppressWarnings("deprecation")
 	private static String serializeItem(ItemStack item) {
 		if (Grave.isBlank(item)) {
 			return null;
@@ -646,6 +648,8 @@ public final class GraveManager {
 		}
 	}
 
+	// Preserve the existing serialized item format so previously saved graves remain readable.
+	@SuppressWarnings("deprecation")
 	private static ItemStack deserializeItem(String data) {
 		if (data == null || data.isEmpty()) {
 			return null;

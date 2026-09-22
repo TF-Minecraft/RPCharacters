@@ -23,7 +23,7 @@ public final class RpCharactersExpansion extends PlaceholderExpansion {
 
 	@Override
 	public String getVersion() {
-		return RPCharacters.plugin.getDescription().getVersion();
+		return RPCharacters.plugin.getPluginMeta().getVersion();
 	}
 
 	@Override

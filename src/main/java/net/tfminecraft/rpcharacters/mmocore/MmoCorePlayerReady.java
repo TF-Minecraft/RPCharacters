@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 
-import net.Indyuce.mmocore.api.event.PlayerDataLoadEvent;
+import io.lumine.mythic.lib.api.event.SynchronizedDataLoadEvent;
 import net.Indyuce.mmocore.api.player.PlayerData;
 import net.tfminecraft.rpcharacters.RPCharacters;
 
@@ -34,7 +34,7 @@ public final class MmoCorePlayerReady implements Listener {
 			if (!PlayerData.has(player)) {
 				return false;
 			}
-			return PlayerData.get(player).isFullyLoaded();
+			return PlayerData.get(player).isSynchronized();
 		} catch (Throwable t) {
 			return false;
 		}
@@ -66,8 +66,10 @@ public final class MmoCorePlayerReady implements Listener {
 	}
 
 	@EventHandler
-	public void onMmoLoaded(PlayerDataLoadEvent event) {
-		flush(event.getPlayer().getUniqueId());
+	public void onMmoLoaded(SynchronizedDataLoadEvent event) {
+		if (event.getHolder() instanceof PlayerData playerData) {
+			flush(playerData.getUniqueId());
+		}
 	}
 
 	private static void startPoll(UUID id) {

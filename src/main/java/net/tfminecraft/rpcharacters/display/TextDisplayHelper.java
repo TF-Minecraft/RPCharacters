@@ -74,6 +74,8 @@ public final class TextDisplayHelper {
 		return world.spawn(location, TextDisplay.class, spawner::accept);
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static void applyDisplay(TextDisplay display, String text, Transformation transformation,
 			boolean persistent) {
 		display.setText(text);

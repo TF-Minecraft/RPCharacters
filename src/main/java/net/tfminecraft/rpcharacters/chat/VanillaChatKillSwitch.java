@@ -13,6 +13,8 @@ import io.papermc.paper.event.player.AsyncChatEvent;
  */
 public final class VanillaChatKillSwitch implements Listener {
 
+	// Retain Bukkit chat-event ordering and String message semantics for existing integrations.
+	@SuppressWarnings("deprecation")
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
 	public void onLegacyChat(AsyncPlayerChatEvent event) {
 		event.setCancelled(true);

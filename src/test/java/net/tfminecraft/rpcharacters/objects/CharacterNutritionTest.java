@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.objects;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.HashMap;
+import java.util.Map;
 
 import org.json.simple.JSONObject;
 import org.junit.jupiter.api.Test;
@@ -27,8 +28,7 @@ class CharacterNutritionTest {
     @Test
     void legacyDietScoreInitializesRawAndEffective() {
         RPCharacter character = new RPCharacter(null);
-        JSONObject json = new JSONObject();
-        json.put("diet-score", 18L);
+        JSONObject json = new JSONObject(Map.of("diet-score", 18L));
 
         CharacterNutritionFields.load(character, json);
 
@@ -39,10 +39,8 @@ class CharacterNutritionTest {
     @Test
     void rawAndEffectiveLoadIndependently() {
         RPCharacter character = new RPCharacter(null);
-        JSONObject json = new JSONObject();
-        json.put("raw-diet-score", 80L);
-        json.put("diet-score", 32L);
-        json.put("last-diet-tier", "good");
+        JSONObject json = new JSONObject(Map.of(
+            "raw-diet-score", 80L, "diet-score", 32L, "last-diet-tier", "good"));
 
         CharacterNutritionFields.load(character, json);
 

@@ -160,6 +160,8 @@ public final class CreationStageHelp {
 	}
 
 	/** Readable stage name: the stage title when it has one, otherwise what it sets, otherwise its id. */
+	// Preserve configured stage-name capitalization.
+	@SuppressWarnings("deprecation")
 	private static String stageName(Stage stage) {
 		if (stage instanceof InfoStage info) {
 			for (String message : info.getMessages()) {
@@ -178,6 +180,8 @@ public final class CreationStageHelp {
 		return prettyId(stage.getId());
 	}
 
+	// Keep the existing display-name capitalization rules used by configuration and item names.
+	@SuppressWarnings("deprecation")
 	private static String prettyId(String id) {
 		if (id == null || id.isBlank()) {
 			return "Character creation";

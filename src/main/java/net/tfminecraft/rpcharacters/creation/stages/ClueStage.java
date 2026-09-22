@@ -52,6 +52,8 @@ public class ClueStage extends Stage {
 				.replace("{needed}", String.valueOf(needed));
 	}
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public void runMessage(Player p, String message) {
 		String type = message.split("\\(")[0];
 		String info = RPTexts.formatGui(message.split("\\(")[1].replace(")", ""));

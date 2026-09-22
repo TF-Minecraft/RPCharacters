@@ -66,6 +66,8 @@ public final class WardrobeGui {
 		openNow(player);
 	}
 
+	// Existing GUI text uses the same legacy formatter. Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	public static void openNow(Player player) {
 		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		if (player == null || !player.isOnline() || snapshot == null) {
@@ -75,7 +77,7 @@ public final class WardrobeGui {
 		Inventory inv = Bukkit.createInventory(
 			holder,
 			27,
-			RPTexts.format(TITLE_RAW)
+			RPTexts.formatGui(TITLE_RAW)
 		);
 		holder.setInventory(inv);
 		for (int i = 0; i < SLOT_IDS.length; i++) {
@@ -120,6 +122,8 @@ public final class WardrobeGui {
 		return raw.trim().toLowerCase();
 	}
 
+	// Existing GUI text uses the same legacy formatter. Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	private static ItemStack buildButton(WardrobeSnapshot snapshot, String slotId) {
 		WardrobeSlotData data = snapshot.getSlot(slotId);
 		boolean unlocked = isUnlocked(snapshot, slotId, data);
@@ -142,20 +146,20 @@ public final class WardrobeGui {
 		List<String> lore = new ArrayList<>();
 
 		if (!unlocked) {
-			meta.setDisplayName(RPTexts.format(RPTexts.ERROR + "LOCKED"));
-			lore.add(RPTexts.format(RPTexts.MUTED + label));
+			meta.setDisplayName(RPTexts.formatGui(RPTexts.ERROR + "LOCKED"));
+			lore.add(RPTexts.formatGui(RPTexts.MUTED + label));
 			lore.add(getUnlockRequirementLore(minSlotsFor(slotId)));
 		} else if (filled) {
-			meta.setDisplayName(RPTexts.format(RPTexts.SUCCESS + label));
+			meta.setDisplayName(RPTexts.formatGui(RPTexts.SUCCESS + label));
 			if (active) {
-				lore.add(RPTexts.format(RPTexts.SUCCESS + "Active"));
+				lore.add(RPTexts.formatGui(RPTexts.SUCCESS + "Active"));
 			} else {
-				lore.add(RPTexts.format(RPTexts.MUTED + "Click to equip"));
+				lore.add(RPTexts.formatGui(RPTexts.MUTED + "Click to equip"));
 			}
 		} else {
-			meta.setDisplayName(RPTexts.format(RPTexts.WARN + label));
-			lore.add(RPTexts.format(RPTexts.MUTED + "Empty"));
-			lore.add(RPTexts.format(
+			meta.setDisplayName(RPTexts.formatGui(RPTexts.WARN + label));
+			lore.add(RPTexts.formatGui(RPTexts.MUTED + "Empty"));
+			lore.add(RPTexts.formatGui(
 				RPTexts.MUTED + "Upload on the website (character → Wardrobe)"
 			));
 		}
@@ -224,13 +228,13 @@ public final class WardrobeGui {
 		Optional<PermissionGroupDefinition> group =
 			getMinimumVisibleUnlockGroup(minSlots);
 		if (group.isEmpty()) {
-			return RPTexts.format(RPTexts.MUTED + "You need a higher rank+");
+			return RPTexts.formatGui(RPTexts.MUTED + "You need a higher rank+");
 		}
 		String rawName = group.get().getDisplayName();
 		if (rawName == null || rawName.isBlank()) {
 			rawName = group.get().getId();
 		}
-		return RPTexts.format(
+		return RPTexts.formatGui(
 			RPTexts.MUTED + "You need " + formatGroupDisplayName(rawName) + "+"
 		);
 	}

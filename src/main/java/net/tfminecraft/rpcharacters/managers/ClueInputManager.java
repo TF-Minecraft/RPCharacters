@@ -62,6 +62,8 @@ public class ClueInputManager implements Listener {
 		creationSummaryClueInput.remove(id);
 	}
 
+	// Retain Bukkit chat-event ordering and String message semantics for existing integrations.
+	@SuppressWarnings("deprecation")
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onChat(AsyncPlayerChatEvent event) {
 		Player player = event.getPlayer();

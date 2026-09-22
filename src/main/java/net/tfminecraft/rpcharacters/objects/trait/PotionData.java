@@ -8,6 +8,8 @@ public class PotionData {
 	private final PotionEffectType type;
 	private final int amplifier;
 
+	// Existing configuration accepts legacy enum names and aliases; registry keys are not equivalent.
+	@SuppressWarnings("deprecation")
 	public PotionData(String input) {
 		String value = input == null ? "" : input.trim();
 		String effectId = value;
