@@ -1,40 +1,26 @@
-# rpcharacters
+# RPCharacters
 
-Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs/blob/main/projects/RPCharacters/README.md).
+> Character identity and everyday roleplay for TF-Minecraft.
 
-Use that project index for setup, configuration, architecture, integration and testing guides. This repository contains the source and project-specific assets.
+RPCharacters makes a player's character central to life on the server. It manages character creation and selection, connects identities to the website, and carries those identities into conversations, profiles, and gameplay.
 
-## TLibs build dependency
+Beyond a name and appearance, characters have traits, professions, injuries, and ways to leave traces in the world. The plugin brings those systems together so social scenes, investigation, and the consequences of conflict can share the same character context.
 
-TLibs is a versioned Maven `provided` dependency. From this repository, prepare
-it once with the shared installer, then build as usual:
+## Features
 
-```sh
-python3 ../tlibs/tools/install-dependency.py --pom pom.xml
-mvn clean verify
-```
+- **Character profiles** — create and switch between characters, with race, traits, descriptions, and website-connected creation.
+- **Roleplay conversation** — use local speech, whispers, shouts, actions, and out-of-character channels, with speech bubbles and channel preferences.
+- **Identity and disguise** — show character identities in social interactions and support masks and alternate personas.
+- **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
+- **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.
+- **Consequences and investigation** — support lethal or nonlethal PvP, graves, and discoverable clues left in the world.
 
-See [TLibs dependency setup](https://github.com/TF-Minecraft/TLibs/blob/5da8e77d0e0696bbff7d7064a2644072da9c6428/DEPENDENCIES.md)
-for public release installation, offline builds and rollback.
-Other declared build dependencies still need their usual preparation.
+## Beyond the game
 
-Builds and server runtime require Java 25. Local builds default to [TLibs 1.1.0](https://github.com/TF-Minecraft/TLibs/releases/tag/v1.1.0); CI resolves the latest published stable TLibs release for each build, verifies its checksum, and uses its exact version throughout that job.
+The character pages in [ProvinceSystem](https://github.com/TF-Minecraft/ProvinceSystem) provide the connected web experience for character creation and management.
 
-## Shared plugin dependencies
+## Documentation
 
-Build and release workflows install checksum-verified plugin releases through
-[TLibs' shared installer](https://github.com/TF-Minecraft/TLibs/blob/main/DEPENDENCIES.md).
-CI selects the latest published versions; local builds use the explicit Maven
-version properties. Shared plugins use `provided` scope and remain separate
-server plugins. Each build records exact versions and checksums in
-`.build/plugin-dependencies.json` alongside its JAR.
+[Project documentation](https://github.com/TF-Minecraft/Docs/blob/main/projects/RPCharacters/README.md)
 
-From this checkout, with the TLibs repository next to it:
-
-```sh
-python3 ../tlibs/tools/install-plugins.py --pom pom.xml
-```
-
-Prepare any remaining third-party inputs with `.github/scripts/prepare-release.sh`
-before running Maven. Any source-unavailable inputs remain private and checksum-pinned wherever declared; see the installer
-documentation for authentication and reproducible rebuilds.
+Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs).
