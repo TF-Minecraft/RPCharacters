@@ -98,6 +98,7 @@ public class RPCharacter {
 
 	private int foodValue = MAX_FOOD_VALUE;
 	private int dietScore;
+	private int rawDietScore;
 	private String lastDietTierId;
 	
 	private AttributeData attributeData;
@@ -213,6 +214,14 @@ public class RPCharacter {
 
 	public void setDietScore(int dietScore) {
 		this.dietScore = Math.max(0, Math.min(dietScore, MAX_DIET_SCORE));
+	}
+
+	public int getRawDietScore() {
+		return rawDietScore;
+	}
+
+	public void setRawDietScore(int rawDietScore) {
+		this.rawDietScore = Math.max(0, rawDietScore);
 	}
 
 	public String getLastDietTierId() {
