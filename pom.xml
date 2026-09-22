@@ -9,7 +9,7 @@
     <version>1.1.7</version>
 
     <properties>
-        <tlibs.version>1.0-tfmc-ecddb0e40a4d</tlibs.version>
+        <tlibs.version>1.1.0</tlibs.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <worldguard.version>7.0.9</worldguard.version>
