@@ -370,8 +370,17 @@ public final class KitService {
 
 		List<ItemStack> stacks = new ArrayList<>();
 		for (KitItemDefinition def : definitions) {
-			List<ItemStack> built = buildStacks(def);
+			List<ItemStack> built = buildStacks(def, character.getKitCustomisations());
 			if (built.isEmpty()) {
+				if (def.isEditable() && character.getKitCustomisations().get(
+						EditableKitPreviewBuilder.kitKeyFromPath(def.getPath())) != null) {
+					RPCharacters.plugin.getLogger().warning(
+							"[kit-claim] aborted kit='" + kitId + "' custom path='" + def.getPath() + "'"
+					);
+					RPTexts.send(player, RPTexts.ERROR
+							+ "That customised kit item could not be built. Your kit has not been claimed. Contact staff.");
+					return;
+				}
 				RPCharacters.plugin.getLogger().warning(
 						"[kit-claim] kit '" + kitId + "' could not build path '" + def.getPath()
 								+ "' for " + player.getName() + " - skipped line."
@@ -408,19 +417,6 @@ public final class KitService {
 		pd.setLastKitClaimAtMs(kitId, System.currentTimeMillis());
 		RPCharacters.getPlayerManager().savePlayer(player);
 		net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(player);
-
-		for (KitCustomiseData data : character.getKitCustomisations().values()) {
-			if (data == null || data.getKitKey().isBlank()) {
-				continue;
-			}
-			if (editableKeys.contains(data.getKitKey())) {
-				boolean replaced = KitCustomiseApplyService.applyToInventory(player, data);
-				RPCharacters.plugin.getLogger().info(
-						"[kit-claim] applyToInventory kit_key=" + data.getKitKey()
-								+ " replaced=" + replaced
-				);
-			}
-		}
 
 		RPTexts.send(player, RPTexts.SUCCESS + "You claimed the " + kit.getDisplayName() + " kit!");
 		if (dropped) {
@@ -579,14 +575,22 @@ public final class KitService {
 		return ResetResult.ok(msg, true, null);
 	}
 
-	private static List<ItemStack> buildStacks(KitItemDefinition def) {
+	// Customise only the new grant, before inventory insertion or overflow drops.
+	static List<ItemStack> buildStacks(
+			KitItemDefinition def, Map<String, KitCustomiseData> customisations
+	) {
 		List<ItemStack> out = new ArrayList<>();
 		if (def == null || def.getPath() == null || def.getPath().isBlank()) {
 			return out;
 		}
 		ItemStack template;
 		try {
-			template = TLibs.getItemAPI().getCreator().getItemFromPath(def.getPath());
+			KitCustomiseData customise = def.isEditable()
+					? customisations.get(EditableKitPreviewBuilder.kitKeyFromPath(def.getPath()))
+					: null;
+			template = customise != null
+					? KitCustomiseApplyService.buildStack(customise)
+					: TLibs.getItemAPI().getCreator().getItemFromPath(def.getPath());
 		} catch (Exception e) {
 			RPCharacters.plugin.getLogger().warning(
 					"Kit path '" + def.getPath() + "' threw: " + e.getMessage()
