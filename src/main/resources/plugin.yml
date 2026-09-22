@@ -1,4 +1,4 @@
-main: net.tfminecraft.RPCharacters.RPCharacters
+main: net.tfminecraft.rpcharacters.RPCharacters
 api-version: '1.21.10'
 name: RPCharacters
 version: ${project.version}
