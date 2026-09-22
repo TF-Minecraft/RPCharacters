@@ -1,7 +1,7 @@
 main: net.tfminecraft.RPCharacters.RPCharacters
 api-version: 1.20
 name: RPCharacters
-version: 1.1.7
+version: ${project.version}
 author: Drefvelin
 
 depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
