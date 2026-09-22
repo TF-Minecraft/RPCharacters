@@ -597,26 +597,11 @@ public class Database {
 		} else {
 			character.setFoodValue(RPCharacter.MAX_FOOD_VALUE);
 		}
-		if (characterJson.containsKey("diet-score")) {
-			character.setDietScore(((Number) characterJson.get("diet-score")).intValue());
-		}
-		if (characterJson.containsKey("last-diet-tier")) {
-			Object raw = characterJson.get("last-diet-tier");
-			if (raw != null) {
-				character.setLastDietTierId(raw.toString());
-			}
-		}
+		CharacterNutritionFields.load(character, characterJson);
 	}
 
 	private void saveNutritionFields(HashMap<String, Object> defaults, RPCharacter c) {
-		if (c == null) {
-			return;
-		}
-		defaults.put("food-value", c.getFoodValue());
-		defaults.put("diet-score", c.getDietScore());
-		if (c.getLastDietTierId() != null && !c.getLastDietTierId().isBlank()) {
-			defaults.put("last-diet-tier", c.getLastDietTierId());
-		}
+		CharacterNutritionFields.save(defaults, c);
 	}
 
 	@SuppressWarnings("unchecked")
