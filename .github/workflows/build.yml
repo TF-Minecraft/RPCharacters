@@ -31,6 +31,11 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Install pinned TLibs in Maven
+        uses: TF-Minecraft/TLibs/.github/actions/setup@804728d2c0d62d64e3194bcdeffc3708acfbc514
+        with:
+          token: ${{ secrets.DEPS_TOKEN }}
+
       - name: Fetch private dependencies
         env:
           GH_TOKEN: ${{ secrets.DEPS_TOKEN }}
@@ -42,7 +47,6 @@ jobs:
           mkdir -p libs
           gh release download v1 --repo JustinasLa/tfmc-deps --dir libs --clobber \
             --pattern 'ItemsAdder_4.0.17.jar' \
-            --pattern 'TLibs-1.0.jar' \
             --pattern 'MMOCore-1.13.1.jar' \
             --pattern 'MMOItems-6.10.1.jar' \
             --pattern 'MythicLib-dist-1.7.1.jar' \

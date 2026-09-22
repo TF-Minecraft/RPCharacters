@@ -9,15 +9,16 @@
     <version>1.1.7</version>
 
     <properties>
+        <tlibs.version>1.0-tfmc-ecddb0e40a4d</tlibs.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <worldguard.version>7.0.9</worldguard.version>
         <tfmc.refs>D:/Dokumenter/My Plugins/Reference Libs</tfmc.refs>
         <tfmc.builds>D:/Dokumenter/My Plugins/TFMC/RPCharacters</tfmc.builds>
-        <tfmc.tlibs>D:/Dokumenter/My Plugins/TFMC/TLibs</tfmc.tlibs>
+
         <tfmc.simplefactions>D:/Dokumenter/My Plugins/TFMC/SimpleFactions</tfmc.simplefactions>
         <itemsadder.jar>ItemsAdder_4.0.18.jar</itemsadder.jar>
-        <tlibs.jar>TLibs.jar</tlibs.jar>
+
         <mmoitems.jar>MMOItems-6.10.1-20250521.175300-22.jar</mmoitems.jar>
         <mythiclib.jar>MythicLib-dist-1.7.1.jar</mythiclib.jar>
         <mythicmobs.jar>MythicMobs-5.8.0-SNAPSHOT.jar</mythicmobs.jar>
@@ -53,11 +54,14 @@
             <systemPath>${tfmc.refs}/${itemsadder.jar}</systemPath>
         </dependency>
         <dependency>
-            <groupId>local</groupId>
-            <artifactId>TLibs</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>${tfmc.tlibs}/${tlibs.jar}</systemPath>
+            <groupId>me.plugins</groupId>
+            <artifactId>tlibs</artifactId>
+            <version>${tlibs.version}</version>
+            <scope>provided</scope>
+            <exclusions>
+                <!-- The server supplies TLibs and its integrations. -->
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.googlecode.json-simple</groupId>
@@ -208,10 +212,10 @@
             </activation>
             <properties>
                 <tfmc.refs>D:/Documents/TFMC/ReferenceLibs</tfmc.refs>
-                <tfmc.tlibs>D:/Documents/TFMC/Builds/TLibs</tfmc.tlibs>
+
                 <tfmc.builds>D:/Documents/TFMC/Builds/RPCharacters</tfmc.builds>
                 <itemsadder.jar>ItemsAdder_3.5.0-r2.jar</itemsadder.jar>
-                <tlibs.jar>TLibs.jar</tlibs.jar>
+
                 <mmoitems.jar>MMOItems-6.10.jar</mmoitems.jar>
                 <mythiclib.jar>MythicLib-1.7.jar</mythiclib.jar>
                 <mythicmobs.jar>MythicMobs-5.8.0-SNAPSHOT.jar</mythicmobs.jar>
