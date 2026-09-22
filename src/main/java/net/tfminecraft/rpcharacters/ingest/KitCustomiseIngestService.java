@@ -17,7 +17,6 @@ import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient;
 import net.tfminecraft.rpcharacters.database.Database;
-import net.tfminecraft.rpcharacters.kit.KitCustomiseApplyService;
 import net.tfminecraft.rpcharacters.kit.KitCustomiseData;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -290,14 +289,6 @@ public final class KitCustomiseIngestService {
 				DB.savePlayer(pd);
 			}
 
-			if (online != null && online.isOnline()) {
-				boolean active = pd.hasActiveCharacter()
-						&& pd.getActiveCharacter() != null
-						&& character.getId().equalsIgnoreCase(pd.getActiveCharacter().getId());
-				if (active) {
-					KitCustomiseApplyService.applyToInventory(online, data);
-				}
-			}
 			result.put("ok", true);
 		} catch (Exception e) {
 			result.put("ok", false);

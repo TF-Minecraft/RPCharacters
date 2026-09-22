@@ -6,13 +6,10 @@ import java.util.Optional;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import io.lumine.mythic.lib.api.item.NBTItem;
 import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.tlibs.objects.api.subapi.ArmorMerger;
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
@@ -20,60 +17,13 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 /**
- * Rebuild starter kit editable items: MI base → optional AS skin → append custom lore.
+ * Build customised kit items before collection: base → optional skin → custom lore.
  */
 public final class KitCustomiseApplyService {
 
 	public static final String PDC_KEY = "kit_customise";
 
 	private KitCustomiseApplyService() {}
-
-	public static void applyStoredForPlayer(Player player, RPCharacter character) {
-		if (player == null || character == null) {
-			return;
-		}
-		for (KitCustomiseData data : character.getKitCustomisations().values()) {
-			if (data == null || data.getKitKey().isBlank()) {
-				continue;
-			}
-			applyToInventory(player, data);
-		}
-	}
-
-	public static boolean applyToInventory(Player player, KitCustomiseData data) {
-		if (player == null || data == null) {
-			return false;
-		}
-		ItemStack built = buildStack(data);
-		if (built == null || built.getType().isAir()) {
-			RPCharacters.plugin.getLogger().warning(
-					"[kit-customise] could not build stack for " + data.getKitKey()
-			);
-			return false;
-		}
-		String itemId = itemIdFromPath(data.getPath());
-		if (itemId.isBlank()) {
-			itemId = data.getKitKey().toUpperCase();
-		}
-		PlayerInventory inv = player.getInventory();
-		boolean replaced = false;
-		ItemStack[] contents = inv.getContents();
-		for (int i = 0; i < contents.length; i++) {
-			ItemStack slot = contents[i];
-			if (matchesKitItem(slot, itemId, data.getKitKey())) {
-				built.setAmount(Math.max(1, slot.getAmount()));
-				inv.setItem(i, built.clone());
-				replaced = true;
-			}
-		}
-		ItemStack off = inv.getItemInOffHand();
-		if (matchesKitItem(off, itemId, data.getKitKey())) {
-			built.setAmount(Math.max(1, off.getAmount()));
-			inv.setItemInOffHand(built.clone());
-			replaced = true;
-		}
-		return replaced;
-	}
 
 	public static ItemStack buildStack(KitCustomiseData data) {
 		if (data == null) {
@@ -334,61 +284,4 @@ public final class KitCustomiseApplyService {
 		return false;
 	}
 
-	static boolean matchesKitItem(ItemStack stack, String itemId, String kitKey) {
-		if (stack == null || stack.getType() == Material.AIR) {
-			return false;
-		}
-		if (RPCharacters.plugin != null) {
-			ItemMeta meta = stack.getItemMeta();
-			if (meta != null) {
-				NamespacedKey key = new NamespacedKey(RPCharacters.plugin, PDC_KEY);
-				String tagged = meta.getPersistentDataContainer().get(key, PersistentDataType.STRING);
-				if (tagged != null && tagged.equalsIgnoreCase(kitKey)) {
-					return true;
-				}
-			}
-		}
-		try {
-			NBTItem nbt = NBTItem.get(stack);
-			if (nbt.hasType()) {
-				String id = nbt.getString("MMOITEMS_ITEM_ID");
-				if (id != null && id.equalsIgnoreCase(itemId)) {
-					return true;
-				}
-			}
-		} catch (Exception ignored) {
-			// fall through to material match (vanilla kit lines, e.g. books)
-		}
-		return matchesVanillaMaterial(stack, itemId);
-	}
-
-	/**
-	 * Vanilla kit paths ({@code v.WRITABLE_BOOK}) have no MMOItems type — match by material.
-	 */
-	static boolean matchesVanillaMaterial(ItemStack stack, String itemId) {
-		if (stack == null || itemId == null || itemId.isBlank()) {
-			return false;
-		}
-		Material want = Material.matchMaterial(itemId.trim());
-		if (want == null) {
-			return false;
-		}
-		Material have = stack.getType();
-		if (have == want) {
-			return true;
-		}
-		// Kit grants writable; player may have signed it before customise apply.
-		if (want == Material.WRITABLE_BOOK && have == Material.WRITTEN_BOOK) {
-			return true;
-		}
-		return false;
-	}
-
-	static String itemIdFromPath(String path) {
-		if (path == null || path.isBlank()) {
-			return "";
-		}
-		int dot = path.lastIndexOf('.');
-		return dot >= 0 ? path.substring(dot + 1) : path;
-	}
 }

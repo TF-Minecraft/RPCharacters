@@ -380,9 +380,6 @@ public class PlayerManager implements Listener{
 			net.tfminecraft.rpcharacters.clues.discovery.InvestigationPointService.bootstrap(p);
 			reevaluateFreeze(p);
 			if (loaded.hasActiveCharacter()) {
-				net.tfminecraft.rpcharacters.kit.KitCustomiseApplyService.applyStoredForPlayer(
-						p, loaded.getActiveCharacter()
-				);
 				net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(p);
 			}
 			MmoCorePlayerReady.runWhenLoaded(p, () -> applyMmoOnJoin(p, loaded));
