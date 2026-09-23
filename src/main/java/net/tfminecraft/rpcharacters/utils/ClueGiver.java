@@ -25,7 +25,6 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.races.Race;
 import net.tfminecraft.rpcharacters.objects.SpawnedClue;
 import net.tfminecraft.rpcharacters.RPCharacters;
-import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * API for other plugins (e.g. Thievery) to obtain leave-behind clues from a character.
@@ -34,8 +33,6 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 public final class ClueGiver {
 
 	private static final String CLUE_ITEM_PDC_KEY = "clue_item";
-	public static final String CLUE_ITEM_DISPLAY_NAME = RPTexts.formatGui(RPTexts.WHITE + "You find a clue.");
-	public static final String CLUE_ITEM_FOOTER = RPTexts.formatGui(RPTexts.GUI_WARN + "Click to remove");
 
 	private ClueGiver() {}
 
@@ -110,22 +107,6 @@ public final class ClueGiver {
 
 	public static ItemStack getClueItem(RPCharacter character, Collection<String> excluded) {
 		return new ItemStack(Material.AIR);
-	}
-
-	/** @deprecated Chest clue items retired; kept for legacy inventory cleanup only. */
-	@Deprecated
-	public static ItemStack createClueItem(String clueText) {
-		if (clueText == null || clueText.isEmpty()) return new ItemStack(Material.AIR);
-		ItemStack item = new ItemStack(Material.PAPER, 1);
-		ItemMeta meta = item.getItemMeta();
-		if (meta == null) return item;
-		meta.setDisplayName(CLUE_ITEM_DISPLAY_NAME);
-		List<String> lore = new ArrayList<>(ClueFormatter.wrapLore(clueText));
-		lore.add(CLUE_ITEM_FOOTER);
-		meta.setLore(lore);
-		meta.getPersistentDataContainer().set(clueItemKey(), PersistentDataType.STRING, clueText);
-		item.setItemMeta(meta);
-		return item;
 	}
 
 	public static boolean isClueItem(ItemStack item) {

@@ -44,10 +44,4 @@ public final class RemedyDefinition {
 	public List<String> getTraits() {
 		return traits;
 	}
-
-	/** @deprecated use {@link #getTraits()} */
-	@Deprecated
-	public String getTrait() {
-		return traits.isEmpty() ? "" : traits.get(0);
-	}
 }
