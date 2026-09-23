@@ -5,20 +5,20 @@ set -euo pipefail
 sha256sum --check .github/dependencies.sha256
 
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/ItemsAdder_4.0.18.jar" -DgroupId="local" -DartifactId="ItemsAdder" \
+    -Dfile="libs/ItemsAdder-4.0.18.jar" -DgroupId="local" -DartifactId="ItemsAdder" \
     -Dversion="4.0.18-tfmc-5a01b37bd744" -Dpackaging=jar -DgeneratePom=true "$@"
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/MMOCore-1.13.1.jar" -DgroupId="local" -DartifactId="MMOCore" \
-    -Dversion="1.13.1-tfmc-14850d745437" -Dpackaging=jar -DgeneratePom=true "$@"
+    -Dfile="libs/MMOCore-1.13.1-SNAPSHOT.jar" -DgroupId="local" -DartifactId="MMOCore" \
+    -Dversion="1.13.1-SNAPSHOT-tfmc-81d511d08309" -Dpackaging=jar -DgeneratePom=true "$@"
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/MMOItems-6.10.1-20250521.175300-22.jar" -DgroupId="local" -DartifactId="MMOItems" \
-    -Dversion="6.10.1-tfmc-8ff714bd3f48" -Dpackaging=jar -DgeneratePom=true "$@"
+    -Dfile="libs/MMOItems-6.10.1-SNAPSHOT.jar" -DgroupId="local" -DartifactId="MMOItems" \
+    -Dversion="6.10.1-SNAPSHOT-tfmc-a37f7789fcdc" -Dpackaging=jar -DgeneratePom=true "$@"
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/MythicLib-dist-1.7.1.jar" -DgroupId="local" -DartifactId="MythicLib" \
-    -Dversion="1.7.1-tfmc-a3f86a50d382" -Dpackaging=jar -DgeneratePom=true "$@"
+    -Dfile="libs/MythicLib-1.7.1-SNAPSHOT.jar" -DgroupId="local" -DartifactId="MythicLib" \
+    -Dversion="1.7.1-SNAPSHOT-tfmc-225aa7f75d4e" -Dpackaging=jar -DgeneratePom=true "$@"
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/ProtocolLib.jar" -DgroupId="local" -DartifactId="ProtocolLib" \
-    -Dversion="1.0-tfmc-ee2e7ab9b538" -Dpackaging=jar -DgeneratePom=true "$@"
+    -Dfile="libs/ProtocolLib-5.5.0-SNAPSHOT.jar" -DgroupId="local" -DartifactId="ProtocolLib" \
+    -Dversion="5.5.0-SNAPSHOT-tfmc-355f7117af95" -Dpackaging=jar -DgeneratePom=true "$@"
 mvn -B --no-transfer-progress org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-    -Dfile="libs/MythicMobs-5.8.0-SNAPSHOT.jar" -DgroupId="local" -DartifactId="MythicMobs" \
-    -Dversion="5.8.0-SNAPSHOT-tfmc-575aa30aee8e" -Dpackaging=jar -DgeneratePom=true "$@"
+    -Dfile="libs/MythicMobs-5.13.1-SNAPSHOT-88530541.jar" -DgroupId="local" -DartifactId="MythicMobs" \
+    -Dversion="5.13.1-SNAPSHOT-88530541-tfmc-6df72b5b331d" -Dpackaging=jar -DgeneratePom=true "$@"
