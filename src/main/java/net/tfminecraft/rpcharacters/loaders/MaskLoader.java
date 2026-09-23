@@ -58,14 +58,14 @@ public final class MaskLoader implements LoaderInterface {
 		FileConfiguration bundled = loadYaml(bundledFile);
 		if (bundled != null) {
 			Cache.maskedLabel = bundled.getString("masked-label", "Masked");
-			loadMasks(bundled);
+			loadMasks(bundled, "");
 		}
 		long stamp = -1L;
 		if (customFile != null && customFile.isFile()) {
 			stamp = customFile.lastModified();
 			FileConfiguration custom = loadYaml(customFile);
 			if (custom != null) {
-				loadMasks(custom);
+				loadMasks(custom, "custom_");
 			}
 		}
 		customStamp = stamp;
@@ -96,7 +96,12 @@ public final class MaskLoader implements LoaderInterface {
 		return config;
 	}
 
-	private static void loadMasks(FileConfiguration config) {
+	/**
+	 * {@code prefix} keeps bundled and custom entries from replacing each other.
+	 * {@link MaskDefinition} ids stay the original keys.
+	 */
+	private static void loadMasks(FileConfiguration config, String prefix) {
+		String keyPrefix = prefix == null ? "" : prefix;
 		if (config.isList("masks")) {
 			int index = 0;
 			for (String path : config.getStringList("masks")) {
@@ -104,7 +109,10 @@ public final class MaskLoader implements LoaderInterface {
 					continue;
 				}
 				String id = "mask_" + index++;
-				masks.put(id.toLowerCase(Locale.ROOT), MaskDefinition.fromItemPath(id, path.trim()));
+				masks.put(
+					(keyPrefix + id).toLowerCase(Locale.ROOT),
+					MaskDefinition.fromItemPath(id, path.trim())
+				);
 			}
 			return;
 		}
@@ -115,18 +123,16 @@ public final class MaskLoader implements LoaderInterface {
 
 		ConfigurationSection section = config.getConfigurationSection("masks");
 		for (String key : section.getKeys(false)) {
+			String mapKey = (keyPrefix + key).toLowerCase(Locale.ROOT);
 			ConfigurationSection maskSection = section.getConfigurationSection(key);
 			if (maskSection == null) {
 				String path = section.getString(key);
 				if (path != null && !path.isBlank()) {
-					masks.put(
-						key.toLowerCase(Locale.ROOT),
-						MaskDefinition.fromItemPath(key, path.trim())
-					);
+					masks.put(mapKey, MaskDefinition.fromItemPath(key, path.trim()));
 				}
 				continue;
 			}
-			masks.put(key.toLowerCase(Locale.ROOT), new MaskDefinition(key, maskSection));
+			masks.put(mapKey, new MaskDefinition(key, maskSection));
 		}
 	}
 
