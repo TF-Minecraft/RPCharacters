@@ -1,3 +1,4 @@
+# Static masks. ArmourShop writes approved custom 3D masks to custom-masks.yml.
 masked-label: "Masked"
 
 masks:
