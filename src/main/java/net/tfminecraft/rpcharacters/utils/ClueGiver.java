@@ -112,22 +112,6 @@ public final class ClueGiver {
 		return new ItemStack(Material.AIR);
 	}
 
-	/** @deprecated Chest clue items retired; kept for legacy inventory cleanup only. */
-	@Deprecated
-	public static ItemStack createClueItem(String clueText) {
-		if (clueText == null || clueText.isEmpty()) return new ItemStack(Material.AIR);
-		ItemStack item = new ItemStack(Material.PAPER, 1);
-		ItemMeta meta = item.getItemMeta();
-		if (meta == null) return item;
-		meta.setDisplayName(CLUE_ITEM_DISPLAY_NAME);
-		List<String> lore = new ArrayList<>(ClueFormatter.wrapLore(clueText));
-		lore.add(CLUE_ITEM_FOOTER);
-		meta.setLore(lore);
-		meta.getPersistentDataContainer().set(clueItemKey(), PersistentDataType.STRING, clueText);
-		item.setItemMeta(meta);
-		return item;
-	}
-
 	public static boolean isClueItem(ItemStack item) {
 		if (item == null || item.getType() != Material.PAPER || !item.hasItemMeta()) return false;
 		ItemMeta meta = item.getItemMeta();

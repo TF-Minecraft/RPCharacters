@@ -45,12 +45,6 @@ public final class RPTexts {
 		return StringFormatter.formatHex(raw.replace('&', '\u00A7'));
 	}
 
-	/** @deprecated Use {@link #formatGui(String)} for lore or {@link #formatDisplay(String)} for chat. */
-	@Deprecated
-	public static String format(String raw) {
-		return formatGui(raw);
-	}
-
 	public static void send(CommandSender sender, String raw) {
 		sender.sendMessage(formatDisplay(raw));
 	}

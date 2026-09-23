@@ -556,18 +556,6 @@ public class RPCharacters extends JavaPlugin{
 		return character != null ? character.getAgeSeconds() : 0;
 	}
 
-	/** @deprecated use {@link #getAccountAgeSeconds(Player)} */
-	@Deprecated
-	public static int getAccountPlaytimeSeconds(Player player) {
-		return getAccountAgeSeconds(player);
-	}
-
-	/** @deprecated use {@link #getCharacterAgeSeconds(RPCharacter)} */
-	@Deprecated
-	public static int getCharacterPlaytimeSeconds(RPCharacter character) {
-		return getCharacterAgeSeconds(character);
-	}
-
 	public static int getConversationCount(RPCharacter character, String otherCharacterId) {
 		return character != null ? character.getConversationCount(otherCharacterId) : 0;
 	}
