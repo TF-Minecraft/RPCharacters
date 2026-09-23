@@ -25,7 +25,6 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.races.Race;
 import net.tfminecraft.rpcharacters.objects.SpawnedClue;
 import net.tfminecraft.rpcharacters.RPCharacters;
-import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * API for other plugins (e.g. Thievery) to obtain leave-behind clues from a character.
