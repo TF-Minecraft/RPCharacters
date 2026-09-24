@@ -17,15 +17,9 @@ import com.google.gson.JsonParser;
 public final class FocusStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private final File folder;
-    private final File researchFolder;
 
     public FocusStore(File folder) {
-        this(folder, new File("plugins/Research/data/players"));
-    }
-
-    FocusStore(File folder, File researchFolder) {
         this.folder = folder;
-        this.researchFolder = researchFolder;
     }
 
     /** Null means absent, never an unreadable or malformed existing character record. */
@@ -66,30 +60,6 @@ public final class FocusStore {
             if (temp != null) {
                 try { Files.deleteIfExists(temp); } catch (IOException ignored) { /* Reported primary failure. */ }
             }
-        }
-    }
-
-    FocusData migrateFromResearch(String characterId, String ownerUuid) {
-        return migrateFromResearch(researchFolder, characterId, ownerUuid);
-    }
-
-    public static FocusData tryMigrateFromResearch(String characterId, String ownerUuid) {
-        return migrateFromResearch(new File("plugins/Research/data/players"), characterId, ownerUuid);
-    }
-
-    private static FocusData migrateFromResearch(File researchFolder, String characterId, String ownerUuid) {
-        if (ownerUuid == null || ownerUuid.isBlank()) return null;
-        File researchFile = new File(researchFolder, ownerUuid + ".json");
-        if (Files.notExists(researchFile.toPath())) return null;
-        try (Reader reader = new FileReader(researchFile)) {
-            JsonObject object = JsonParser.parseReader(reader).getAsJsonObject();
-            if (!object.has("mental_points")) return null;
-            FocusData data = FocusData.createNew(characterId, ownerUuid);
-            data.setPoints(exactNonnegativeNumber(object, "mental_points").intValueExact());
-            if (object.has("last_regen_ms")) data.setLastRegenMs(exactNonnegativeNumber(object, "last_regen_ms").longValueExact());
-            return data;
-        } catch (IOException | RuntimeException ex) {
-            throw failure("import legacy Research data from", researchFile, ex);
         }
     }
 

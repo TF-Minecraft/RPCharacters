@@ -234,6 +234,9 @@ public class RPCharacters extends JavaPlugin{
 		loadPlayers();
 		focusModule = new net.tfminecraft.rpcharacters.focus.FocusModule(this);
 		focusModule.start();
+		var focusCommand = new net.tfminecraft.rpcharacters.focus.FocusCommand(this);
+		getCommand("focus").setExecutor(focusCommand);
+		getCommand("focus").setTabCompleter(focusCommand);
 		startManagers();
 		getCommand(commandManager.cmd1).setExecutor(commandManager);
 		getCommand("rpcharacter").setTabCompleter(new CommandTabCompleter());
@@ -501,7 +504,7 @@ public class RPCharacters extends JavaPlugin{
 		loadConfigs();
 		boolean focusReloaded = reloadFocusConfig();
 		if (!focusReloaded) {
-			getLogger().warning("Focus did not reload; see the preceding ownership/configuration message. "
+			getLogger().warning("Focus did not reload; see the preceding focus error. "
 					+ "Continuing the other RPCharacters reload steps.");
 		}
 		LastSolidTracker.get().start();
@@ -525,7 +528,7 @@ public class RPCharacters extends JavaPlugin{
 			if (sender != null) {
 				RPTexts.sendPrefixed(sender, RPTexts.WARN + (focusReloaded
 						? "Reloading complete!"
-						: "Other configs reloaded; focus did not reload. Check console for the ownership/configuration message."));
+						: "Other configs reloaded; focus did not reload. Check console for the focus error."));
 			}
 		} catch (Exception e) {
 			getLogger().severe("Config reload failed: " + e.getMessage());
@@ -536,7 +539,7 @@ public class RPCharacters extends JavaPlugin{
 		}
 	}
 
-	/** Character focus; null when ownership or migration checks prevent startup. */
+	/** Character focus; null when startup fails. */
 	public static net.tfminecraft.rpcharacters.focus.FocusService getFocusService() {
 		return plugin == null || plugin.focusModule == null ? null : plugin.focusModule.getService();
 	}

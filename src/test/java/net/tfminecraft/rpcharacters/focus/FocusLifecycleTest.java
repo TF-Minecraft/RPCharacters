@@ -3,8 +3,6 @@ package net.tfminecraft.rpcharacters.focus;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -15,7 +13,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
@@ -44,7 +41,7 @@ class FocusLifecycleTest {
         when(plugin.getDataFolder()).thenReturn(root.resolve("RPCharacters").toFile());
         player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(UUID.randomUUID());
-        store = new FocusStore(root.resolve("RPCharacters/data/focus").toFile(), root.resolve("Research").toFile());
+        store = new FocusStore(root.resolve("RPCharacters/data/focus").toFile());
     }
 
     private RPCharacter character(String id) {
@@ -104,34 +101,6 @@ class FocusLifecycleTest {
     }
 
     @Test
-    void disabledOldCoreStillBlocksStartupBeforeAnyDataOrListeners() {
-        var core = mock(Plugin.class);
-        when(core.getResource("plugin.yml")).thenAnswer(invocation -> descriptor("name: TFMCCore\n"));
-        var server = mock(Server.class);
-        var manager = mock(PluginManager.class);
-        when(plugin.getServer()).thenReturn(server);
-        when(server.getPluginManager()).thenReturn(manager);
-        when(manager.getPlugin("TFMCCore")).thenReturn(core);
-        var module = new FocusModule(plugin);
-        assertFalse(module.start());
-        assertFalse(assertDoesNotThrow(module::reloadConfig));
-        assertNull(module.getService());
-        verify(core, never()).isEnabled();
-        verify(manager, never()).registerEvents(any(), any());
-        assertFalse(Files.exists(root.resolve("RPCharacters")));
-    }
-
-    @Test
-    void markerAllowsHandoffAndAbsentCoreAllowsStandaloneOwner() {
-        var core = mock(Plugin.class);
-        when(core.getResource("plugin.yml")).thenReturn(descriptor("feature-owners:\n  focus: RPCharacters\n"));
-        assertTrue(FocusOwnership.canStart(core, plugin.getLogger()));
-        assertTrue(FocusOwnership.canStart(null, plugin.getLogger()));
-        when(core.getResource("plugin.yml")).thenReturn(descriptor("feature-owners: [broken"));
-        assertFalse(FocusOwnership.canStart(core, plugin.getLogger()));
-    }
-
-    @Test
     void startupReloadAndShutdownHaveOneTimerAndSaveBalance() throws Exception {
         var server = mock(Server.class);
         var manager = mock(PluginManager.class);
@@ -168,7 +137,4 @@ class FocusLifecycleTest {
         }
     }
 
-    private ByteArrayInputStream descriptor(String text) {
-        return new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
-    }
 }

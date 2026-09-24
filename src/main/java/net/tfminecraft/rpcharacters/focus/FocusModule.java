@@ -17,25 +17,19 @@ public final class FocusModule {
 
     public boolean start() {
         if (service != null) return true;
-        var core = plugin.getServer().getPluginManager().getPlugin("TFMCCore");
-        if (!FocusOwnership.canStart(core, plugin.getLogger())) return false;
         try {
-            File legacy = core == null ? new File(plugin.getDataFolder().getParentFile(), "TFMCCore")
-                    : core.getDataFolder();
-            FocusMigration.copyLegacy(legacy.toPath(), plugin.getDataFolder().toPath());
             File config = new File(plugin.getDataFolder(), "focus.yml");
             if (!config.exists()) plugin.saveResource("focus.yml", false);
             if (!FocusConfigLoader.load(config, plugin.getLogger())) return false;
-            var store = new FocusStore(new File(plugin.getDataFolder(), "data/focus"),
-                    new File(plugin.getDataFolder().getParentFile(), "Research/data/players"));
+            var store = new FocusStore(new File(plugin.getDataFolder(), "data/focus"));
             service = new FocusService(plugin, store);
             listener = new FocusListener(service);
             plugin.getServer().getPluginManager().registerEvents(listener, plugin);
             service.start();
             return true;
-        } catch (RuntimeException | java.io.IOException ex) {
+        } catch (RuntimeException ex) {
             plugin.getLogger().severe("Focus startup stopped; existing data was preserved. Repair the reported "
-                    + "file or ownership issue and reload RPCharacters: " + ex.getMessage());
+                    + "file issue and reload RPCharacters: " + ex.getMessage());
             shutdown();
             return false;
         }

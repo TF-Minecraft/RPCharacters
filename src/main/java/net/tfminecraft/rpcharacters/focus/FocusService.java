@@ -96,8 +96,7 @@ public final class FocusService {
         try {
             FocusData data = store.load(characterId);
             if (data == null) {
-                data = store.migrateFromResearch(characterId, owner);
-                if (data == null) data = FocusData.createNew(characterId, owner);
+                data = FocusData.createNew(characterId, owner);
                 store.save(data);
             } else {
                 data.setOwnerUuid(owner);
