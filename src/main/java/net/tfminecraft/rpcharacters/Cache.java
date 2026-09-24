@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import net.tfminecraft.rpcharacters.playerlist.PlayerListSettings;
+
 public class Cache {
 	public static List<String> attributes = new ArrayList<>();
 	public static Set<String> ignoredAttributes = new HashSet<>();
@@ -118,6 +120,8 @@ public class Cache {
 	public static boolean profileRequireEmptyHand = true;
 	public static int profileViewCooldownSeconds = 0;
 	public static List<String> profileFormatLines = new ArrayList<>();
+
+	public static PlayerListSettings playerList = PlayerListSettings.defaults();
 
 	public static String rollPermission = "rpchar.roll";
 	public static String rollAltPermission = "rpchar.roll.alt";

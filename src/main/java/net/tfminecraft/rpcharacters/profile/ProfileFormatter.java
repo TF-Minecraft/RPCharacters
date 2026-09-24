@@ -3,8 +3,6 @@ package net.tfminecraft.rpcharacters.profile;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.bukkit.entity.Player;
-
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
@@ -15,7 +13,7 @@ public final class ProfileFormatter {
 
 	private ProfileFormatter() {}
 
-	public static List<String> format(Player target, RPCharacter character) {
+	public static List<String> format(RPCharacter character) {
 		List<String> lines = new ArrayList<>();
 		for (String template : Cache.profileFormatLines) {
 			if (template == null) {
@@ -23,7 +21,7 @@ public final class ProfileFormatter {
 				continue;
 			}
 			String withTokens = template
-					.replace("{display_tab}", DisplayIdentityService.resolveDisplayTab(target))
+					.replace("{display_tab}", DisplayIdentityService.resolveDisplayTab(character))
 					.replace("{gender}", PersonaService.resolveGender(character))
 					.replace("{age}", PersonaService.resolveAge(character))
 					.replace("{birthday}", PersonaService.resolveBirthday(character))

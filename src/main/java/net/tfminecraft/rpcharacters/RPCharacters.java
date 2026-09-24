@@ -22,6 +22,7 @@ import net.tfminecraft.rpcharacters.loaders.SkillPointTomeLoader;
 import net.tfminecraft.rpcharacters.loaders.PermissionGroupsLoader;
 import net.tfminecraft.rpcharacters.loaders.WebCreatorLoader;
 import net.tfminecraft.rpcharacters.loaders.PersonaLoader;
+import net.tfminecraft.rpcharacters.loaders.PlayerListLoader;
 import net.tfminecraft.rpcharacters.loaders.ProfessionLoader;
 import net.tfminecraft.rpcharacters.loaders.ProfessionsGlobalLoader;
 import net.tfminecraft.rpcharacters.loaders.ProfileLoader;
@@ -93,6 +94,8 @@ import net.tfminecraft.rpcharacters.grave.GraveExpiryService;
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.rpcharacters.grave.GraveVisualManager;
 import net.tfminecraft.rpcharacters.grave.LastSolidTracker;
+import net.tfminecraft.rpcharacters.playerlist.PlayerListCommand;
+import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
 import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
 import net.tfminecraft.rpcharacters.party.PartyChatRecipientResolver;
@@ -158,6 +161,7 @@ public class RPCharacters extends JavaPlugin{
 	private RemedyLoader remedyLoader;
 	private ChatLoader chatLoader;
 	private ProfileViewLoader profileViewLoader;
+	private PlayerListLoader playerListLoader;
 	private RollLoader rollLoader;
 	private CalendarLoader calendarLoader;
 	private ProfessionsGlobalLoader professionsGlobalLoader;
@@ -175,6 +179,7 @@ public class RPCharacters extends JavaPlugin{
 	private PartyLoader partyLoader;
 	private GraveLoader graveLoader;
 	private final PvpCommand pvpCommand = new PvpCommand();
+	private final PlayerListCommand playerListCommand = new PlayerListCommand();
 	private final GraveCommand graveCommand = new GraveCommand();
 	private final PvpKnockoutManager pvpKnockoutManager = new PvpKnockoutManager();
 	private final PartyListener partyListener = new PartyListener();
@@ -199,6 +204,7 @@ public class RPCharacters extends JavaPlugin{
 		remedyLoader = new RemedyLoader();
 		chatLoader = new ChatLoader();
 		profileViewLoader = new ProfileViewLoader();
+		playerListLoader = new PlayerListLoader();
 		rollLoader = new RollLoader();
 		calendarLoader = new CalendarLoader();
 		professionsGlobalLoader = new ProfessionsGlobalLoader();
@@ -252,6 +258,7 @@ public class RPCharacters extends JavaPlugin{
 		getCommand(PvpCommand.COMMAND).setTabCompleter(pvpCommand);
 		getCommand(GraveCommand.COMMAND).setExecutor(graveCommand);
 		getCommand(GraveCommand.COMMAND).setTabCompleter(graveCommand);
+		getCommand(PlayerListCommand.COMMAND).setExecutor(playerListCommand);
 		ChatRecipientResolverRegistry.register(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID,
 				partyChatRecipientResolver);
@@ -317,6 +324,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(ChatCooldownManager.get(), this);
 		getServer().getPluginManager().registerEvents(ChatChannelPreferenceManager.get(), this);
 		getServer().getPluginManager().registerEvents(profileManager, this);
+		getServer().getPluginManager().registerEvents(playerListCommand, this);
 		getServer().getPluginManager().registerEvents(ProfileViewCooldownManager.get(), this);
 		getServer().getPluginManager().registerEvents(PersonaCooldownManager.get(), this);
 		getServer().getPluginManager().registerEvents(professionListener, this);
@@ -360,6 +368,11 @@ public class RPCharacters extends JavaPlugin{
 		speechBubbleLoader.load(new File(getDataFolder(), "speechbubbles.yml"));
 		smartMessageLoader.load(new File(getDataFolder(), "smart-messages.yml"));
 		profileViewLoader.load(new File(getDataFolder(), "profile-view.yml"));
+		playerListLoader.load(new File(getDataFolder(), "player-list.yml"));
+		if (!getServer().getWorlds().isEmpty()) {
+			QuickActionPack.syncMainWorld(getServer().getWorlds().get(0).getWorldFolder().toPath(),
+					Cache.playerList, getLogger());
+		}
 		rollLoader.load(new File(getDataFolder(), "rolls.yml"));
 		calendarLoader.load(new File(getDataFolder(), "calendar.yml"));
 		File professionsGlobal = new File(getDataFolder(), "professions.yml");
@@ -428,6 +441,7 @@ public class RPCharacters extends JavaPlugin{
 				"speechbubbles.yml",
 				"smart-messages.yml",
 				"profile-view.yml",
+				"player-list.yml",
 				"rolls.yml",
 				"calendar.yml",
 				"permission-groups.yml",

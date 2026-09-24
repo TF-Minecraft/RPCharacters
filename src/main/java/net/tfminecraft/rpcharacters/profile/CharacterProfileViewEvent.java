@@ -16,16 +16,31 @@ public class CharacterProfileViewEvent extends Event implements Cancellable {
 	private final RPCharacter targetCharacter;
 	private final boolean masked;
 	private final boolean fromCommand;
+	private final Presentation presentation;
 
 	private boolean cancelled;
 
+	/** How an allowed profile view is shown. */
+	public enum Presentation {
+		/** Profile lines in chat. */
+		CHAT,
+		/** Character sheet dialog, opened from the player list. */
+		SHEET
+	}
+
 	public CharacterProfileViewEvent(Player viewer, Player target, RPCharacter targetCharacter,
 			boolean masked, boolean fromCommand) {
+		this(viewer, target, targetCharacter, masked, fromCommand, Presentation.CHAT);
+	}
+
+	public CharacterProfileViewEvent(Player viewer, Player target, RPCharacter targetCharacter,
+			boolean masked, boolean fromCommand, Presentation presentation) {
 		this.viewer = viewer;
 		this.target = target;
 		this.targetCharacter = targetCharacter;
 		this.masked = masked;
 		this.fromCommand = fromCommand;
+		this.presentation = presentation;
 	}
 
 	public Player getViewer() {
@@ -46,6 +61,10 @@ public class CharacterProfileViewEvent extends Event implements Cancellable {
 
 	public boolean isFromCommand() {
 		return fromCommand;
+	}
+
+	public Presentation getPresentation() {
+		return presentation;
 	}
 
 	@Override

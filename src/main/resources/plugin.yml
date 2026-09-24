@@ -35,11 +35,17 @@ commands:
   grave:
     usage: /<command> unlock
     description: Unlock your newest grave so others can loot it
+  players:
+    usage: /<command>
+    description: Open the online player list
 permissions:
   rpchar.focus.admin:
     description: Restore character focus and reload focus configuration
     default: op
   rpchar.profession.use:
+    default: true
+  rpchar.playerlist:
+    description: Open the online player list
     default: true
   rpchar.pvp:
     default: true
