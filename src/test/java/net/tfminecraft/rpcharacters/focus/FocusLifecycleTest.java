@@ -106,13 +106,16 @@ class FocusLifecycleTest {
     @Test
     void disabledOldCoreStillBlocksStartupBeforeAnyDataOrListeners() {
         var core = mock(Plugin.class);
-        when(core.getResource("plugin.yml")).thenReturn(descriptor("name: TFMCCore\n"));
+        when(core.getResource("plugin.yml")).thenAnswer(invocation -> descriptor("name: TFMCCore\n"));
         var server = mock(Server.class);
         var manager = mock(PluginManager.class);
         when(plugin.getServer()).thenReturn(server);
         when(server.getPluginManager()).thenReturn(manager);
         when(manager.getPlugin("TFMCCore")).thenReturn(core);
-        assertFalse(new FocusModule(plugin).start());
+        var module = new FocusModule(plugin);
+        assertFalse(module.start());
+        assertFalse(assertDoesNotThrow(module::reloadConfig));
+        assertNull(module.getService());
         verify(core, never()).isEnabled();
         verify(manager, never()).registerEvents(any(), any());
         assertFalse(Files.exists(root.resolve("RPCharacters")));
