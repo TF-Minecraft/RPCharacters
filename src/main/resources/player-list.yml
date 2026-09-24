@@ -1,7 +1,8 @@
 # Online player list, opened with /players or the Quick Actions key (G).
 # Names are each player's safe character display (%rpcharacters_display_safe%).
 # Hovering a name shows the account, rank and ping; clicking opens the
-# character sheet, which follows the profile-view.yml permission and rules.
+# character sheet, using the profile-view.yml permission and cooldown. Masks do
+# not hide sheets here: the list is out of character.
 
 permission: rpchar.playerlist
 

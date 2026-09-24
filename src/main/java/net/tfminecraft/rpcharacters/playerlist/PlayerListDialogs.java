@@ -30,7 +30,6 @@ import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
-import net.tfminecraft.rpcharacters.identity.MaskService;
 import net.tfminecraft.rpcharacters.profile.ProfileManager;
 
 /**
@@ -104,9 +103,7 @@ public final class PlayerListDialogs {
 		UUID targetId = target.getUniqueId();
 		skin.thenAccept(image -> Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			Player current = Bukkit.getPlayer(targetId);
-			// Recheck what the profile rules checked before the download.
-			if (!viewer.isOnline() || current == null || !viewer.canSee(current)
-					|| MaskService.isMasked(current)) {
+			if (!viewer.isOnline() || current == null || !viewer.canSee(current)) {
 				return;
 			}
 			BufferedImage front = image == null ? null : SkinPortrait.front(image, texture.slim());
