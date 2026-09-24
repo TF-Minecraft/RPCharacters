@@ -81,6 +81,24 @@ public final class RosterSyncService {
 		if (pd == null) {
 			return;
 		}
+		java.util.List<String> onDisk = DB.listCharacterFileIds(playerUuid);
+		java.util.Set<String> loaded = new java.util.HashSet<>();
+		for (RPCharacter character : pd.getCharacters()) {
+			if (character != null && character.getId() != null && !character.getId().isBlank()) {
+				loaded.add(character.getId());
+			}
+		}
+		if (RosterPushPolicy.wouldDropSavedCharacters(loaded, onDisk)) {
+			if (RPCharacters.plugin != null) {
+				RPCharacters.plugin.getLogger().warning(
+						"[roster] skipped push for " + playerUuid
+								+ ": loaded " + loaded.size()
+								+ " character(s), disk "
+								+ (onDisk == null ? "unreadable" : onDisk.size() + " file(s)")
+								+ ". Website roster left unchanged.");
+			}
+			return;
+		}
 
 		JSONObject root = new JSONObject();
 		root.put("player_uuid", playerUuid.toString());

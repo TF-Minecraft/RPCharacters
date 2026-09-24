@@ -133,10 +133,8 @@ public class RPCharacter {
 		update();
 	}
 	
+	/** Refresh race and trait sheet data. Class sync waits until MMOCore player data is ready. */
 	public void update() {
-		if(active) {
-			syncMMOClass(false);
-		}
 		attributeData = new AttributeData();
 		attributeData.mergeFrom(race.getRaceData().getAttributeData());
 		desc = new ArrayList<>();
@@ -282,6 +280,16 @@ public class RPCharacter {
 	public String getMMOClass() {
 		return mmoClass;
 	}
+	/**
+	 * Apply the stored class once MMOCore has finished loading this player.
+	 * Sheet refresh must not do this: attribute maps are still being filled during join.
+	 *
+	 * @return false when the class could not be applied yet
+	 */
+	public boolean applyStoredClass() {
+		return syncMMOClass(false);
+	}
+
 	public void activate() {
 		syncMMOClass(true);
 		Database.log(owner, "Activated the character "+name);
@@ -297,19 +305,23 @@ public class RPCharacter {
 		AttributePointService.syncOnDeactivate(this);
 	}
 
-	private void syncMMOClass(boolean notifyOnChange) {
-		if (mmoClass == null) {
-			return;
+	private boolean syncMMOClass(boolean notifyOnChange) {
+		if (mmoClass == null || owner == null) {
+			return true;
+		}
+		if (!net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady.isReady(owner)) {
+			return false;
 		}
 		PlayerClass playerClass = MMOCore.plugin.classManager.get(mmoClass);
 		if (playerClass == null) {
-			return;
+			return true;
 		}
 		boolean alreadyOnClass = ClassService.isOnClass(owner, mmoClass);
-		ClassService.applyClass(owner, mmoClass);
-		if (notifyOnChange && !alreadyOnClass) {
+		boolean applied = ClassService.applyClass(owner, mmoClass);
+		if (applied && notifyOnChange && !alreadyOnClass) {
 			RPTexts.send(owner, RPTexts.WARN + "Your class was changed to " + playerClass.getName());
 		}
+		return applied;
 	}
 	public Status getStatus() {
 		return status;

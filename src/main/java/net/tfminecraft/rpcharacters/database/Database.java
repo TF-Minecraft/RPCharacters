@@ -208,13 +208,59 @@ public class Database {
 		}
 	}
 
+	private static File characterFolder(java.util.UUID uuid) {
+		return new File("plugins/RPCharacters/data/characterdata", uuid.toString());
+	}
+
+	/**
+	 * Character file ids in the player's folder.
+	 * An empty list means the folder is absent. Null means the folder exists but could not be listed.
+	 */
+	public List<String> listCharacterFileIds(java.util.UUID uuid) {
+		if (uuid == null) {
+			return List.of();
+		}
+		File folder = characterFolder(uuid);
+		if (!folder.exists()) {
+			return List.of();
+		}
+		if (!folder.isDirectory()) {
+			return null;
+		}
+		File[] files = folder.listFiles();
+		if (files == null) {
+			return null;
+		}
+		List<String> ids = new ArrayList<>();
+		for (File file : files) {
+			if (!file.isFile()) {
+				continue;
+			}
+			String name = file.getName();
+			if (name.endsWith(".json")) {
+				name = name.substring(0, name.length() - ".json".length());
+			}
+			if (!name.isBlank()) {
+				ids.add(name);
+			}
+		}
+		return ids;
+	}
+
 	public void loadCharacters(PlayerData pd) {
-		File folder = new File("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString());
+		File folder = characterFolder(pd.getUniqueId());
 		if (!folder.exists() || !folder.isDirectory()) {
 			return;
 		}
 		File[] files = folder.listFiles();
 		if (files == null) {
+			String message = "Could not list character files for " + pd.getUniqueId()
+					+ " in " + folder.getAbsolutePath() + "; roster push will be skipped";
+			if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+				net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().severe(message);
+			} else {
+				System.err.println("[RPCharacters] " + message);
+			}
 			return;
 		}
     	for (final File file : files) {
@@ -276,7 +322,15 @@ public class Database {
     				pd.addCharacter(c);
 					net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
     			} catch (Exception ex) {
-    				ex.printStackTrace();
+    				String message = "Skipped character file " + file.getAbsolutePath()
+    						+ " for " + pd.getUniqueId() + "; it stays on disk and will not be removed from the website roster";
+    				if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+    					net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
+    							java.util.logging.Level.SEVERE, message, ex);
+    				} else {
+    					System.err.println("[RPCharacters] " + message);
+    					ex.printStackTrace();
+    				}
     			}
             }
         }

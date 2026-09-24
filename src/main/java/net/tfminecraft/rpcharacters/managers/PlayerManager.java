@@ -386,14 +386,38 @@ public class PlayerManager implements Listener{
 		}
 	}
 
+	private static final int CLASS_APPLY_RETRIES = 3;
+	private static final long CLASS_APPLY_RETRY_TICKS = 5L;
+
 	private void applyMmoOnJoin(Player p, PlayerData pd) {
 		if (p == null || !p.isOnline() || pd == null) {
 			return;
 		}
 		new Integrator().applyPendingRemoves(p, pd.takePendingMmoAttributeRemoves());
 		AttributePointService.migrateAttributePointsIfNeeded(p, pd);
-		if(pd.hasActiveCharacter()) {
+		finishMmoOnJoin(p, pd, 0);
+	}
+
+	private void finishMmoOnJoin(Player p, PlayerData pd, int attempt) {
+		if (p == null || !p.isOnline() || pd == null) {
+			return;
+		}
+		if (pd.hasActiveCharacter()) {
 			RPCharacter active = pd.getActiveCharacter();
+			if (!active.applyStoredClass()) {
+				if (attempt < CLASS_APPLY_RETRIES && RPCharacters.plugin != null) {
+					Bukkit.getScheduler().runTaskLater(
+							RPCharacters.plugin,
+							() -> finishMmoOnJoin(p, pd, attempt + 1),
+							CLASS_APPLY_RETRY_TICKS);
+					return;
+				}
+				if (RPCharacters.plugin != null) {
+					RPCharacters.plugin.getLogger().warning(
+							"Class for " + p.getName() + " was not applied after "
+									+ attempt + " retries; continuing join setup");
+				}
+			}
 			AttributePointService.syncOnActivate(active);
 			net.tfminecraft.rpcharacters.professions.ProfessionIntegrator.apply(p, active);
 			net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireActivated(
