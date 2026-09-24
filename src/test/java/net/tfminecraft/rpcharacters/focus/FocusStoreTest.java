@@ -44,6 +44,25 @@ class FocusStoreTest {
     }
 
     @Test
+    void rejectsPathSeparatorsForReadsAndWritesWithoutTouchingOtherFiles() throws Exception {
+        Path folder = root.resolve("focus");
+        Files.createDirectories(folder);
+        Path outside = root.resolve("outside.json");
+        String contents = "{\"characterId\":\"../outside\",\"points\":42,\"lastRegenMs\":1}";
+        Files.writeString(outside, contents);
+        var store = new FocusStore(folder.toFile());
+        for (String id : new String[] {"../outside", "nested/child", "nested\\child", "/absolute"}) {
+            assertThrows(IllegalArgumentException.class, () -> store.load(id));
+            FocusData data = FocusData.createNew(id, "account");
+            assertThrows(IllegalArgumentException.class, () -> store.save(data));
+            assertEquals(contents, Files.readString(outside));
+        }
+        try (var files = Files.list(folder)) {
+            assertEquals(0, files.count());
+        }
+    }
+
+    @Test
     void nullFractionalAndOutOfRangeBalancesAndTimestampsAreRejected() throws Exception {
         Path folder = root.resolve("focus");
         Files.createDirectories(folder);

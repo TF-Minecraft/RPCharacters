@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
@@ -18,9 +19,13 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.mockito.MockedStatic;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterActivatedEvent;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
@@ -29,6 +34,8 @@ class FocusLifecycleTest {
     JavaPlugin plugin;
     Player player;
     FocusStore store;
+    MockedStatic<RPCharacters> characters;
+    final AtomicReference<RPCharacter> active = new AtomicReference<>();
 
     @BeforeEach void setup() {
         FocusConfig.max = 150;
@@ -42,7 +49,11 @@ class FocusLifecycleTest {
         player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(UUID.randomUUID());
         store = new FocusStore(root.resolve("RPCharacters/data/focus").toFile());
+        characters = mockStatic(RPCharacters.class);
+        characters.when(() -> RPCharacters.getActiveCharacter(player)).thenAnswer(invocation -> active.get());
     }
+
+    @AfterEach void cleanup() { characters.close(); }
 
     private RPCharacter character(String id) {
         RPCharacter character = mock(RPCharacter.class);
@@ -56,8 +67,10 @@ class FocusLifecycleTest {
         var listener = new FocusListener(service);
         var alice = character("alice");
         var bob = character("bob");
+        active.set(alice);
         listener.onCharacterActivated(new CharacterActivatedEvent(player, player.getUniqueId(), alice, null));
         assertTrue(service.trySpend(player, 40));
+        active.set(bob);
         listener.onCharacterActivated(new CharacterActivatedEvent(player, player.getUniqueId(), bob, alice));
         assertEquals(110, store.load("alice").getPoints());
         assertEquals(150, service.getPoints(player));
@@ -65,6 +78,7 @@ class FocusLifecycleTest {
         listener.onQuit(new PlayerQuitEvent(player, (String) null));
         assertEquals(140, store.load("bob").getPoints());
         assertEquals(0, service.getPoints(player));
+        active.set(alice);
         service.activate(player, alice);
         assertEquals(110, service.getPoints(player));
     }
@@ -72,10 +86,12 @@ class FocusLifecycleTest {
     @Test
     void failedActivationCannotReusePreviousCharacterOrOverwriteCorruptData() throws Exception {
         var service = new FocusService(plugin, store);
-        service.activate(player, character("alice"));
+        active.set(character("alice"));
+        service.activate(player, active.get());
         Path bad = root.resolve("RPCharacters/data/focus/bob.json");
         Files.writeString(bad, "broken");
-        service.activate(player, character("bob"));
+        active.set(character("bob"));
+        service.activate(player, active.get());
         assertEquals(0, service.getPoints(player));
         assertFalse(service.trySpend(player, 1));
         service.deactivate(player);
@@ -91,13 +107,88 @@ class FocusLifecycleTest {
         store.save(data);
         var service = new FocusService(plugin, store);
         FocusConfig.offlineRegen = true;
-        service.activate(player, character("alice"));
+        active.set(character("alice"));
+        service.activate(player, active.get());
         assertEquals(40, service.getPoints(player));
         FocusConfig.offlineRegen = false;
-        service.activate(player, character("alice"));
+        active.set(character("alice"));
+        service.activate(player, active.get());
         assertEquals(20, service.getPoints(player));
         service.deactivate(player);
         assertTrue(System.currentTimeMillis() - store.load("alice").getLastRegenMs() < 5000);
+    }
+
+    @Test
+    void everyPublicOperationEvictsAndSavesAnInactiveCharactersBalance() {
+        for (String operation : List.of("get", "spend", "grant", "restore")) {
+            var service = new FocusService(plugin, store);
+            var character = character(operation);
+            active.set(character);
+            service.activate(player, character);
+            assertTrue(service.trySpend(player, 40));
+            active.set(null);
+            switch (operation) {
+                case "get" -> assertEquals(0, service.getPoints(player));
+                case "spend" -> assertFalse(service.trySpend(player, 1));
+                case "grant" -> service.grant(player, 1);
+                case "restore" -> assertFalse(service.restore(player));
+            }
+            assertEquals(110, store.load(operation).getPoints());
+            active.set(character);
+            assertEquals(0, service.getPoints(player), "Inactive state must be evicted, not merely hidden");
+            service.activate(player, character);
+            assertEquals(110, service.getPoints(player));
+        }
+    }
+
+    @Test
+    void aDifferentActiveCharacterCannotSpendTheCachedCharactersFocus() {
+        var service = new FocusService(plugin, store);
+        var alice = character("alice");
+        active.set(alice);
+        service.activate(player, alice);
+        service.trySpend(player, 40);
+        active.set(character("bob"));
+        assertFalse(service.trySpend(player, 1));
+        assertEquals(110, store.load("alice").getPoints());
+    }
+
+    @Test
+    void timerAndSaveAllEvictInactiveCharactersWithoutRegenerating() {
+        var scheduler = mock(BukkitScheduler.class);
+        when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), anyLong(), anyLong()))
+                .thenReturn(mock(BukkitTask.class));
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(player));
+            for (boolean timer : List.of(true, false)) {
+                var trackedStore = mock(FocusStore.class);
+                var data = FocusData.createNew("alice", player.getUniqueId().toString());
+                data.setPoints(20);
+                when(trackedStore.load("alice")).thenReturn(data);
+                var service = new FocusService(plugin, trackedStore);
+                var alice = character("alice");
+                active.set(alice);
+                service.activate(player, alice);
+                data.setLastRegenMs(System.currentTimeMillis() - 7_200_500);
+                long lastRegen = data.getLastRegenMs();
+                active.set(null);
+                if (timer) {
+                    service.restartRegen();
+                    var callback = ArgumentCaptor.forClass(Runnable.class);
+                    verify(scheduler).runTaskTimer(eq(plugin), callback.capture(), anyLong(), anyLong());
+                    callback.getValue().run();
+                } else {
+                    service.saveAllOnline();
+                }
+                assertEquals(20, data.getPoints());
+                assertEquals(lastRegen, data.getLastRegenMs());
+                verify(trackedStore).save(data);
+                active.set(alice);
+                assertEquals(0, service.getPoints(player));
+                service.shutdown();
+            }
+        }
     }
 
     @Test
@@ -120,7 +211,8 @@ class FocusLifecycleTest {
             assertTrue(module.start());
             assertTrue(module.start());
             FocusService service = module.getService();
-            service.activate(player, character("alice"));
+            active.set(character("alice"));
+            service.activate(player, active.get());
             service.trySpend(player, 30);
             Files.writeString(config, "max: 180\nregen_interval_ticks: 100\noffline_regen: false\n");
             assertTrue(module.reloadConfig());

@@ -79,6 +79,9 @@ public final class FocusStore {
     }
 
     private File fileFor(String characterId) {
+        if (characterId.indexOf('/') >= 0 || characterId.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("Character ID must not contain a path separator");
+        }
         return new File(folder, characterId + ".json");
     }
 }

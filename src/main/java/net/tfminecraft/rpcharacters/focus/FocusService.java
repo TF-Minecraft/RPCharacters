@@ -132,7 +132,7 @@ public final class FocusService {
 
     public void saveAllOnline() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            FocusData data = loaded.get(player.getUniqueId());
+            FocusData data = dataFor(player);
             if (data != null) {
                 saveSafely(data);
             }
@@ -150,7 +150,15 @@ public final class FocusService {
     }
 
     private FocusData dataFor(Player player) {
-        return player == null ? null : loaded.get(player.getUniqueId());
+        if (player == null) return null;
+        FocusData data = loaded.get(player.getUniqueId());
+        if (data == null) return null;
+        RPCharacter active = RPCharacters.getActiveCharacter(player);
+        if (active == null || !java.util.Objects.equals(active.getId(), data.getCharacterId())) {
+            deactivate(player);
+            return null;
+        }
+        return data;
     }
 
     private void applyOfflineRegen(Player player, FocusData data) {
@@ -167,7 +175,7 @@ public final class FocusService {
         long now = System.currentTimeMillis();
         long intervalMs = Math.max(1L, FocusConfig.regenIntervalTicks) * 50L;
         for (Player player : Bukkit.getOnlinePlayers()) {
-            FocusData data = loaded.get(player.getUniqueId());
+            FocusData data = dataFor(player);
             if (data == null) {
                 continue;
             }
