@@ -38,7 +38,7 @@ public final class ProfileManager implements Listener {
 
 	/**
 	 * Opens the character sheet from the player list. Uses the same view rules as
-	 * {@code /rpcharacter profile}, and shows the character others may see.
+	 * {@code /rpcharacter profile}, except masks, and shows the character others may see.
 	 */
 	public static void showProfileSheet(Player viewer, Player target) {
 		if (viewer == null || target == null) {
@@ -91,7 +91,8 @@ public final class ProfileManager implements Listener {
 			return;
 		}
 
-		if (event.isMasked()) {
+		// The player list is out of character: refusing masked players there would reveal who is masked.
+		if (event.isMasked() && event.getPresentation() != CharacterProfileViewEvent.Presentation.SHEET) {
 			RPTexts.send(viewer, RPTexts.ERROR + "That player's identity is concealed.");
 			event.setCancelled(true);
 			return;
