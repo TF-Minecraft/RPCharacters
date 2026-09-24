@@ -102,7 +102,7 @@ public final class GuiText {
 		return width(legacy) + (spaces - bold) * 4 + bold * 5;
 	}
 
-	/** Word-wraps a line to {@code maxWidth}, carrying its leading colour codes onto each line. */
+	/** Word-wraps a line to {@code maxWidth}; each new line starts with the codes active at the break. */
 	public static List<String> wrap(String legacy, int maxWidth) {
 		List<String> lines = new ArrayList<>();
 		if (legacy == null || legacy.isEmpty()) {
@@ -113,24 +113,56 @@ public final class GuiText {
 			lines.add(legacy);
 			return lines;
 		}
-		int codes = 0;
-		while (codes + 1 < legacy.length() && legacy.charAt(codes) == SECTION) {
-			codes += 2;
-		}
-		String prefix = legacy.substring(0, codes);
+		String active = "";
+		String lineStart = "";
 		StringBuilder current = new StringBuilder();
-		for (String word : plain(legacy).split(" ")) {
+		for (String word : legacy.split(" ")) {
 			String candidate = current.length() == 0 ? word : current + " " + word;
-			if (width(candidate) > maxWidth && current.length() > 0) {
-				lines.add(prefix + current);
+			if (width(lineStart + candidate) > maxWidth && current.length() > 0) {
+				lines.add(lineStart + current);
+				lineStart = active;
 				current = new StringBuilder(word);
 			} else {
 				current = new StringBuilder(candidate);
 			}
+			active = activeCodes(active, word);
 		}
 		if (current.length() > 0) {
-			lines.add(prefix + current);
+			lines.add(lineStart + current);
 		}
 		return lines;
+	}
+
+	/**
+	 * Codes in effect after {@code text}, starting from {@code active}. A colour
+	 * (including a full §x hex sequence) or §r clears format codes.
+	 */
+	static String activeCodes(String active, String text) {
+		String colour = "";
+		StringBuilder formats = new StringBuilder();
+		String state = active + text;
+		for (int i = 0; i + 1 < state.length(); i++) {
+			if (state.charAt(i) != SECTION) {
+				continue;
+			}
+			char code = Character.toLowerCase(state.charAt(i + 1));
+			if (code == 'x' && i + 14 <= state.length()) {
+				colour = state.substring(i, i + 14);
+				formats.setLength(0);
+				i += 13;
+			} else if (isColour(code)) {
+				colour = state.substring(i, i + 2);
+				formats.setLength(0);
+				i++;
+			} else if (code == 'r') {
+				colour = "";
+				formats.setLength(0);
+				i++;
+			} else if (code >= 'k' && code <= 'o') {
+				formats.append(SECTION).append(code);
+				i++;
+			}
+		}
+		return colour + formats;
 	}
 }

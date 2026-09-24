@@ -55,6 +55,23 @@ class GuiTextTest {
 	}
 
 	@Test
+	void wrapCarriesEmbeddedFormattingAcrossBreaks() {
+		String gold = "\u00A76";
+		String hex = "\u00A7x\u00A7a\u00A7b\u00A7c\u00A7d\u00A7e\u00A7f";
+		List<String> lines = GuiText.wrap("\u00A77aaaa " + gold + "\u00A7lbbbb cccc " + hex + "dddd eeee", 60);
+		assertEquals(List.of(
+				"\u00A77aaaa " + gold + "\u00A7lbbbb",
+				gold + "\u00A7lcccc " + hex + "dddd",
+				hex + "eeee"), lines);
+	}
+
+	@Test
+	void activeCodesResetFormatsOnColourAndReset() {
+		assertEquals("\u00A7c\u00A7l", GuiText.activeCodes("", "\u00A7a\u00A7lx\u00A7cy\u00A7l"));
+		assertEquals("", GuiText.activeCodes("\u00A7c\u00A7l", "z\u00A7r"));
+	}
+
+	@Test
 	void wrapLeavesShortLinesAlone() {
 		assertEquals(List.of("§eShort"), GuiText.wrap("§eShort", 190));
 	}

@@ -103,7 +103,7 @@ public final class PlayerListDialogs {
 		UUID targetId = target.getUniqueId();
 		skin.thenAccept(image -> Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			Player current = Bukkit.getPlayer(targetId);
-			if (!viewer.isOnline() || current == null) {
+			if (!viewer.isOnline() || current == null || !viewer.canSee(current)) {
 				return;
 			}
 			BufferedImage front = image == null ? null : SkinPortrait.front(image, texture.slim());
