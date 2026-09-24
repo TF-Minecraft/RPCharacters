@@ -1,0 +1,40 @@
+# Online player list, opened with /players or the Quick Actions key (G).
+# Names are each player's safe character display (%rpcharacters_display_safe%).
+# Hovering a name shows the account, rank and ping; clicking opens the
+# character sheet, which follows the profile-view.yml permission and rules.
+
+permission: rpchar.playerlist
+
+# Title and header text. {online} is the number of players listed.
+title: "#b854f2&l❖ #f4c542&lTFMC&l #b854f2&l❖"
+header: "&7Online players: &f&l{online}\n&8Hover a name to see who is playing them"
+
+# Show the player's skin as a pixel portrait on the character sheet. The skin
+# image is downloaded from Mojang's texture server the first time it is shown.
+portrait: true
+
+# Adds a "Who's online" button to the vanilla Quick Actions key (G) by keeping
+# a small data pack in the main world's datapacks folder. Data packs load at
+# startup, so turning this on or off takes effect after the next restart.
+quick-action:
+  enabled: true
+  label: "Who's online"
+
+# LuckPerms groups in priority order. A player shows the tag of the first group
+# they belong to, and the list is sorted in this order. Players in none of these
+# groups are listed last without a tag.
+ranks:
+  staff: "#f1c40f[Staff]"
+  staff_inactive: "&7[Staff]"
+  staff_player: "&7[Commoner]"
+  helper+: "#ff00cc[Helper]"
+  helper: "#ff00cc[Helper]"
+  helper+_inactive: "&7[Helper]"
+  helper_inactive: "&7[Helper]"
+  helper+_player: "&7[Commoner]"
+  helper_player: "&7[Commoner]"
+  legacy: "#41FB9C&l[#3AE38C&lL#33CB7C&le#2CB36C&lg#259C5D&la#1E844D&lc#176C3D&ly#10542D&l]"
+  ascended: "#823FFF&l[#8939EE&lA#9033DD&ls#972DCC&lc#9E27BB&le#A620AB&ln#AD1A9A&ld#B41489&le#BB0E78&ld#C20867&l]"
+  gilded: "#FFB819[#FDAA17G#FB9C14i#F98E12l#F67F10d#F4710Ee#F2630Bd#F05509]"
+  noble: "#2A93C7[#2981C4N#276EC1o#265CBEb#2549BBl#2337B8e#2224B5]"
+  commoner: "&7[Commoner]"

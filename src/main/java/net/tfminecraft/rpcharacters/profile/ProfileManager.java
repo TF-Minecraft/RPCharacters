@@ -15,7 +15,9 @@ import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.identity.MaskService;
+import net.tfminecraft.rpcharacters.playerlist.PlayerListDialogs;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 public final class ProfileManager implements Listener {
@@ -31,6 +33,20 @@ public final class ProfileManager implements Listener {
 
 		CharacterProfileViewEvent event = new CharacterProfileViewEvent(
 				viewer, target, targetCharacter, masked, fromCommand);
+		Bukkit.getPluginManager().callEvent(event);
+	}
+
+	/**
+	 * Opens the character sheet from the player list. Uses the same view rules as
+	 * {@code /rpcharacter profile}, and shows the character others may see.
+	 */
+	public static void showProfileSheet(Player viewer, Player target) {
+		if (viewer == null || target == null) {
+			return;
+		}
+		RPCharacter shown = DisplayIdentityService.resolveSafeCharacter(target);
+		CharacterProfileViewEvent event = new CharacterProfileViewEvent(viewer, target, shown,
+				MaskService.isMasked(target), true, CharacterProfileViewEvent.Presentation.SHEET);
 		Bukkit.getPluginManager().callEvent(event);
 	}
 
@@ -110,9 +126,13 @@ public final class ProfileManager implements Listener {
 			return;
 		}
 
-		List<String> lines = ProfileFormatter.format(target, event.getTargetCharacter());
-		for (String line : lines) {
-			RPTexts.send(viewer, line);
+		List<String> lines = ProfileFormatter.format(event.getTargetCharacter());
+		if (event.getPresentation() == CharacterProfileViewEvent.Presentation.SHEET) {
+			PlayerListDialogs.openCharacterSheet(viewer, target, lines);
+		} else {
+			for (String line : lines) {
+				RPTexts.send(viewer, line);
+			}
 		}
 
 		ProfileViewCooldownManager.get().applyCooldown(viewer, Cache.profileViewCooldownSeconds);

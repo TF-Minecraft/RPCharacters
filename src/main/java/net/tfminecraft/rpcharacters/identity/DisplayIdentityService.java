@@ -52,19 +52,24 @@ public final class DisplayIdentityService {
 	}
 
 	public static String resolveDisplaySafe(Player player) {
-		PlayerData data = getPlayerData(player);
-		if (data == null) {
-			return Cache.personaNoCharacterFallback;
-		}
-		RPCharacter active = data.getActiveCharacter();
-		RPCharacter displayChar = active;
-		if (active != null && active.isHidden()) {
-			displayChar = data.findFacadeCharacter();
-		}
+		RPCharacter displayChar = resolveSafeCharacter(player);
 		if (displayChar == null) {
 			return Cache.personaNoCharacterFallback;
 		}
 		return formatColouredDisplay(displayChar);
+	}
+
+	/** The character others may see: the active one, or its facade when it is hidden. */
+	public static RPCharacter resolveSafeCharacter(Player player) {
+		PlayerData data = getPlayerData(player);
+		if (data == null) {
+			return null;
+		}
+		RPCharacter active = data.getActiveCharacter();
+		if (active != null && active.isHidden()) {
+			return data.findFacadeCharacter();
+		}
+		return active;
 	}
 
 	public static String resolveDisplay(Player player) {
