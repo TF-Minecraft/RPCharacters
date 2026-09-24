@@ -580,6 +580,9 @@ public class CharacterCreation {
 		ProstheticTraitRules.stripReplacedInjuries(character);
 
 		character.update();
+		if (character.isActive()) {
+			character.applyStoredClass();
+		}
 
 		RPCharacters.getPlayerManager().savePlayer(p);
 

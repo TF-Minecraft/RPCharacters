@@ -133,23 +133,26 @@ public final class ClassService {
 		}, 1L);
 	}
 
-	public static void applyClass(Player player, String classId) {
+	/** @return false when MMOCore data was not stable enough to apply the class */
+	public static boolean applyClass(Player player, String classId) {
 		if (player == null || classId == null || classId.isBlank()) {
-			return;
+			return true;
 		}
 		if (!MmoCorePlayerReady.isReady(player)) {
-			return;
+			return false;
 		}
 		try {
 			applyClassNow(player, classId);
+			return true;
 		} catch (java.util.ConcurrentModificationException ex) {
 			if (RPCharacters.plugin != null) {
 				RPCharacters.plugin.getLogger().log(
 						java.util.logging.Level.WARNING,
-						"Skipped class " + classId + " for " + player.getName()
+						"Class " + classId + " was not applied for " + player.getName()
 								+ " because MMOCore attribute data changed during apply",
 						ex);
 			}
+			return false;
 		}
 	}
 

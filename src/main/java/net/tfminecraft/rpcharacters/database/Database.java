@@ -212,25 +212,39 @@ public class Database {
 		return new File("plugins/RPCharacters/data/characterdata", uuid.toString());
 	}
 
-	public int countCharacterFiles(java.util.UUID uuid) {
+	/**
+	 * Character file ids in the player's folder.
+	 * An empty list means the folder is absent. Null means the folder exists but could not be listed.
+	 */
+	public List<String> listCharacterFileIds(java.util.UUID uuid) {
 		if (uuid == null) {
-			return 0;
+			return List.of();
 		}
 		File folder = characterFolder(uuid);
+		if (!folder.exists()) {
+			return List.of();
+		}
 		if (!folder.isDirectory()) {
-			return 0;
+			return null;
 		}
 		File[] files = folder.listFiles();
 		if (files == null) {
-			return 0;
+			return null;
 		}
-		int count = 0;
+		List<String> ids = new ArrayList<>();
 		for (File file : files) {
-			if (file.isFile()) {
-				count++;
+			if (!file.isFile()) {
+				continue;
+			}
+			String name = file.getName();
+			if (name.endsWith(".json")) {
+				name = name.substring(0, name.length() - ".json".length());
+			}
+			if (!name.isBlank()) {
+				ids.add(name);
 			}
 		}
-		return count;
+		return ids;
 	}
 
 	public void loadCharacters(PlayerData pd) {
@@ -240,6 +254,13 @@ public class Database {
 		}
 		File[] files = folder.listFiles();
 		if (files == null) {
+			String message = "Could not list character files for " + pd.getUniqueId()
+					+ " in " + folder.getAbsolutePath() + "; roster push will be skipped";
+			if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+				net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().severe(message);
+			} else {
+				System.err.println("[RPCharacters] " + message);
+			}
 			return;
 		}
     	for (final File file : files) {
