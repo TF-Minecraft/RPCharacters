@@ -11,6 +11,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Character profiles** — create and switch between characters, with race, traits, descriptions, and website-connected creation.
 - **Roleplay conversation** — use local speech, whispers, shouts, actions, and out-of-character channels, with speech bubbles and channel preferences.
 - **Identity and disguise** — show character identities in social interactions and support masks and alternate personas.
+- **Character focus** — a shared, regenerating per-character resource used by Research and Magic.
 - **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
 - **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.
 - **Consequences and investigation** — support lethal or nonlethal PvP, graves, and discoverable clues left in the world.
@@ -24,6 +25,38 @@ The character pages in [ProvinceSystem](https://github.com/TF-Minecraft/Province
 [Project documentation](https://github.com/TF-Minecraft/Docs/blob/main/projects/RPCharacters/README.md)
 
 Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs).
+
+## Focus ownership migration
+
+RPCharacters now owns `focus.yml`, `data/focus/<character-id>.json`, character
+activation/quit handling, and the regeneration timer. Consumers use
+`RPCharacters.getFocusService()`; the getter returns `null` if ownership or startup
+checks prevent focus from starting. `/rpcharacter reload` reloads `focus.yml` and
+restarts the single regeneration timer. The existing point limits, attribute
+bonuses, offline regeneration, and legacy Research import retain their behavior.
+
+Deploy RPCharacters 2.1.0 with the matching TFMCCore build declaring
+`feature-owners.focus: RPCharacters` in its bundled `plugin.yml`, plus the updated
+Research/Magic consumers. Stage the full set and restart the server together.
+RPCharacters checks installed Core even before Core enables; an older Core causes
+RPCharacters focus to stand down with an actionable log message, preventing two
+writers/timers. RPCharacters does not need Core to be installed.
+
+On startup, missing focus configuration and character JSON files are copied from
+TFMCCore's data directory (or the sibling `TFMCCore` directory when Core is absent).
+Existing RPCharacters files always win. Originals are retained, partial copies
+can be retried, and failed configuration/file copies prevent focus startup.
+Malformed or unreadable character records leave that character's focus unavailable
+and are logged; they are not replaced with fresh points. Repair the reported file
+before reactivating the character. Legacy Research `mental_points` and
+`last_regen_ms` remain an import source only when no focus record exists.
+
+For rollback, stop the server and retain backups of both directories. Before
+restoring the previous plugin set, copy the latest RPCharacters focus config and
+character records back to TFMCCore (review conflicts first). The preserved Core
+copies become stale as soon as players spend or regenerate points under the new
+owner; restoring only old JARs would lose those later changes. No old state is
+automatically deleted.
 
 ## License
 

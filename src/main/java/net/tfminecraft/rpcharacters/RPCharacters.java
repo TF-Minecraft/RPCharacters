@@ -109,6 +109,7 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
 public class RPCharacters extends JavaPlugin{
 	public static RPCharacters plugin;
+	private net.tfminecraft.rpcharacters.focus.FocusModule focusModule;
 	
 	private final CommandManager commandManager = new CommandManager();
 	private static final PlayerManager playerManager = new PlayerManager();
@@ -231,6 +232,8 @@ public class RPCharacters extends JavaPlugin{
 		GraveManager.get().loadAll();
 		MailRecipientDirectory.scanFromDisk();
 		loadPlayers();
+		focusModule = new net.tfminecraft.rpcharacters.focus.FocusModule(this);
+		focusModule.start();
 		startManagers();
 		getCommand(commandManager.cmd1).setExecutor(commandManager);
 		getCommand("rpcharacter").setTabCompleter(new CommandTabCompleter());
@@ -253,6 +256,7 @@ public class RPCharacters extends JavaPlugin{
 	}
 	@Override
 	public void onDisable() {
+		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID);
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.stopPeriodicPull();
@@ -491,6 +495,9 @@ public class RPCharacters extends JavaPlugin{
 	
 	public void reload() {
 		loadConfigs();
+		if (!reloadFocusConfig()) {
+			throw new IllegalStateException("Focus configuration did not reload; see the preceding focus error.");
+		}
 		LastSolidTracker.get().start();
 		ProfessionCommandHandler.reapplyActiveCharacterPerms();
 		// Catalog + pending pull already run inside loadConfigs(); also refresh website sheets.
@@ -516,6 +523,15 @@ public class RPCharacters extends JavaPlugin{
 				RPTexts.sendPrefixed(sender, RPTexts.ERROR + "Reload failed. Check console.");
 			}
 		}
+	}
+
+	/** Character focus; null when ownership or migration checks prevent startup. */
+	public static net.tfminecraft.rpcharacters.focus.FocusService getFocusService() {
+		return plugin == null || plugin.focusModule == null ? null : plugin.focusModule.getService();
+	}
+
+	public boolean reloadFocusConfig() {
+		return focusModule != null && focusModule.reloadConfig();
 	}
 
 	public static PlayerManager getPlayerManager() {
