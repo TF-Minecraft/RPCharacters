@@ -58,6 +58,7 @@ import net.tfminecraft.rpcharacters.mmocore.ClassService;
 import net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
+import net.tfminecraft.rpcharacters.gate.DiscordGatePolicy;
 import net.tfminecraft.rpcharacters.enums.ConfirmType;
 import net.tfminecraft.rpcharacters.enums.FreezeReason;
 import net.tfminecraft.rpcharacters.enums.Status;
@@ -187,7 +188,9 @@ public class PlayerManager implements Listener{
 	}
 
 	private FreezeReason getFreezeReason(Player player, PlayerData pd) {
-		if (player != null && isDiscordGate(player.getUniqueId())) {
+		if (player != null && DiscordGatePolicy.freezes(
+				isDiscordGate(player.getUniqueId()),
+				player.hasPermission(DiscordGatePolicy.BYPASS_PERMISSION))) {
 			return FreezeReason.DISCORD_REQUIRED;
 		}
 		if (Cache.excessCharactersFreeze && player != null) {
