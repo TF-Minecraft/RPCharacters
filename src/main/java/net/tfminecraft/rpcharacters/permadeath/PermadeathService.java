@@ -64,10 +64,9 @@ public final class PermadeathService {
 		}
 
 		List<Trait> healing = listHealingInjuryTraits(character);
-		if (!healing.isEmpty()) {
-			for (Trait trait : healing) {
-				convertTrait(player, character, trait, InjuryProgressionLoader.getPermanentId(trait.getId()));
-			}
+		Trait toUpgrade = selectHealingInjuryToUpgrade(healing);
+		if (toUpgrade != null) {
+			convertTrait(player, character, toUpgrade, InjuryProgressionLoader.getPermanentId(toUpgrade.getId()));
 			return;
 		}
 
@@ -248,6 +247,17 @@ public final class PermadeathService {
 			return true;
 		}
 		return ThreadLocalRandom.current().nextInt(100) < chancePercent;
+	}
+
+	/**
+	 * One zone death changes a single injury: upgrade one existing healing injury,
+	 * or leave the caller to roll a new one when this returns null.
+	 */
+	static Trait selectHealingInjuryToUpgrade(List<Trait> healingInjuries) {
+		if (healingInjuries == null || healingInjuries.isEmpty()) {
+			return null;
+		}
+		return healingInjuries.get(0);
 	}
 
 	private static List<Trait> listHealingInjuryTraits(RPCharacter character) {
