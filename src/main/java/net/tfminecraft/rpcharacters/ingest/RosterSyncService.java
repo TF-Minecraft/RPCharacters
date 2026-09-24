@@ -81,6 +81,17 @@ public final class RosterSyncService {
 		if (pd == null) {
 			return;
 		}
+		int onDisk = DB.countCharacterFiles(playerUuid);
+		int loaded = pd.getCharacters().size();
+		if (RosterPushPolicy.wouldDropSavedCharacters(loaded, onDisk)) {
+			if (RPCharacters.plugin != null) {
+				RPCharacters.plugin.getLogger().warning(
+						"[roster] skipped push for " + playerUuid
+								+ ": loaded " + loaded + " of " + onDisk
+								+ " character files. Website roster left unchanged.");
+			}
+			return;
+		}
 
 		JSONObject root = new JSONObject();
 		root.put("player_uuid", playerUuid.toString());

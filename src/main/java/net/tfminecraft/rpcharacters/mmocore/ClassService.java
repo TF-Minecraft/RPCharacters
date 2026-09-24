@@ -137,6 +137,23 @@ public final class ClassService {
 		if (player == null || classId == null || classId.isBlank()) {
 			return;
 		}
+		if (!MmoCorePlayerReady.isReady(player)) {
+			return;
+		}
+		try {
+			applyClassNow(player, classId);
+		} catch (java.util.ConcurrentModificationException ex) {
+			if (RPCharacters.plugin != null) {
+				RPCharacters.plugin.getLogger().log(
+						java.util.logging.Level.WARNING,
+						"Skipped class " + classId + " for " + player.getName()
+								+ " because MMOCore attribute data changed during apply",
+						ex);
+			}
+		}
+	}
+
+	private static void applyClassNow(Player player, String classId) {
 		PlayerData mmoPd = PlayerData.get(player);
 		PlayerClass target = MMOCore.plugin.classManager.get(classId);
 		if (target == null) {

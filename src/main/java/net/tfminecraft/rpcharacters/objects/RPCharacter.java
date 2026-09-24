@@ -133,10 +133,8 @@ public class RPCharacter {
 		update();
 	}
 	
+	/** Refresh race and trait sheet data. Class sync waits until MMOCore player data is ready. */
 	public void update() {
-		if(active) {
-			syncMMOClass(false);
-		}
 		attributeData = new AttributeData();
 		attributeData.mergeFrom(race.getRaceData().getAttributeData());
 		desc = new ArrayList<>();
@@ -282,6 +280,14 @@ public class RPCharacter {
 	public String getMMOClass() {
 		return mmoClass;
 	}
+	/**
+	 * Apply the stored class once MMOCore has finished loading this player.
+	 * Sheet refresh must not do this: attribute maps are still being filled during join.
+	 */
+	public void applyStoredClass() {
+		syncMMOClass(false);
+	}
+
 	public void activate() {
 		syncMMOClass(true);
 		Database.log(owner, "Activated the character "+name);

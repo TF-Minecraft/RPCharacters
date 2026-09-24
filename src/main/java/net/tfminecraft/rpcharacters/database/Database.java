@@ -208,8 +208,33 @@ public class Database {
 		}
 	}
 
+	private static File characterFolder(java.util.UUID uuid) {
+		return new File("plugins/RPCharacters/data/characterdata", uuid.toString());
+	}
+
+	public int countCharacterFiles(java.util.UUID uuid) {
+		if (uuid == null) {
+			return 0;
+		}
+		File folder = characterFolder(uuid);
+		if (!folder.isDirectory()) {
+			return 0;
+		}
+		File[] files = folder.listFiles();
+		if (files == null) {
+			return 0;
+		}
+		int count = 0;
+		for (File file : files) {
+			if (file.isFile()) {
+				count++;
+			}
+		}
+		return count;
+	}
+
 	public void loadCharacters(PlayerData pd) {
-		File folder = new File("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString());
+		File folder = characterFolder(pd.getUniqueId());
 		if (!folder.exists() || !folder.isDirectory()) {
 			return;
 		}
@@ -276,7 +301,15 @@ public class Database {
     				pd.addCharacter(c);
 					net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
     			} catch (Exception ex) {
-    				ex.printStackTrace();
+    				String message = "Skipped character file " + file.getAbsolutePath()
+    						+ " for " + pd.getUniqueId() + "; it stays on disk and will not be removed from the website roster";
+    				if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+    					net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
+    							java.util.logging.Level.SEVERE, message, ex);
+    				} else {
+    					System.err.println("[RPCharacters] " + message);
+    					ex.printStackTrace();
+    				}
     			}
             }
         }

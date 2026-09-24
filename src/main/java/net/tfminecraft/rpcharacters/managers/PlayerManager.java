@@ -394,6 +394,7 @@ public class PlayerManager implements Listener{
 		AttributePointService.migrateAttributePointsIfNeeded(p, pd);
 		if(pd.hasActiveCharacter()) {
 			RPCharacter active = pd.getActiveCharacter();
+			active.applyStoredClass();
 			AttributePointService.syncOnActivate(active);
 			net.tfminecraft.rpcharacters.professions.ProfessionIntegrator.apply(p, active);
 			net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireActivated(
