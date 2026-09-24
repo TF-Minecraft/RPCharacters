@@ -8,6 +8,10 @@ depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
 softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions]
 
 commands:
+  focus:
+    description: Manage character focus
+    usage: /focus restore <player> | /focus reload
+    permission: rpchar.focus.admin
   rpcharacter:
     useage: /<command>
     description: RPCharacters Command
@@ -32,6 +36,9 @@ commands:
     usage: /<command> unlock
     description: Unlock your newest grave so others can loot it
 permissions:
+  rpchar.focus.admin:
+    description: Restore character focus and reload focus configuration
+    default: op
   rpchar.profession.use:
     default: true
   rpchar.pvp:

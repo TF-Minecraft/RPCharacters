@@ -11,6 +11,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Character profiles** — create and switch between characters, with race, traits, descriptions, and website-connected creation.
 - **Roleplay conversation** — use local speech, whispers, shouts, actions, and out-of-character channels, with speech bubbles and channel preferences.
 - **Identity and disguise** — show character identities in social interactions and support masks and alternate personas.
+- **Character focus** — a shared, regenerating per-character resource used by Research and Magic.
 - **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
 - **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.
 - **Consequences and investigation** — support lethal or nonlethal PvP, graves, and discoverable clues left in the world.
