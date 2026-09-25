@@ -268,7 +268,7 @@ public final class MailRecipientDirectory {
 				return;
 			}
 		}
-		if (status != Status.ALIVE || Boolean.FALSE.equals(json.get("mail-listed"))) {
+		if (status != Status.ALIVE || "false".equalsIgnoreCase(String.valueOf(json.get("mail-listed")))) {
 			ENTRIES.remove(characterId);
 			return;
 		}

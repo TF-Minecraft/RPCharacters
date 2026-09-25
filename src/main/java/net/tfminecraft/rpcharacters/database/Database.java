@@ -682,7 +682,7 @@ public class Database {
 		if (characterJson.containsKey("slug")) {
 			character.setSlug((String) characterJson.get("slug"));
 		}
-		character.setMailListed(!Boolean.FALSE.equals(characterJson.get("mail-listed")));
+		character.setMailListed(!"false".equalsIgnoreCase(String.valueOf(characterJson.get("mail-listed"))));
 		if (characterJson.containsKey("hidden")) {
 			character.setHidden(Boolean.parseBoolean(characterJson.get("hidden").toString()));
 		}
@@ -787,7 +787,7 @@ public class Database {
 		if (character.getSlug() != null && !character.getSlug().isBlank()) {
 			defaults.put("slug", character.getSlug());
 		}
-		defaults.put("mail-listed", character.isMailListed());
+		defaults.put("mail-listed", String.valueOf(character.isMailListed()));
 		if (character.isHidden()) {
 			defaults.put("hidden", "true");
 		}

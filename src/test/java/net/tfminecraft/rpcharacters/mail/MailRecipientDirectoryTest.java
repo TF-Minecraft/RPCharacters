@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,8 +13,10 @@ import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import net.tfminecraft.rpcharacters.database.Database;
 import net.tfminecraft.rpcharacters.enums.Status;
@@ -21,6 +25,7 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 class MailRecipientDirectoryTest {
+    @TempDir Path folder;
     private final UUID owner = UUID.randomUUID();
     private final String id = UUID.randomUUID().toString();
 
@@ -87,13 +92,29 @@ class MailRecipientDirectoryTest {
         save.setAccessible(true);
         load.setAccessible(true);
         Database database = new Database();
+        // saveCharacter initializes the serializer from an empty character document.
+        var jsonField = Database.class.getDeclaredField("json");
+        jsonField.setAccessible(true);
+        jsonField.set(database, new JSONObject());
         for (boolean listed : List.of(false, true)) {
             original.setMailListed(listed);
             HashMap<String, Object> fields = new HashMap<>();
             save.invoke(database, fields, original);
             RPCharacter restored = new RPCharacter(null);
-            load.invoke(database, restored, new JSONObject(fields));
+            Path file = folder.resolve("character.json");
+            assertTrue(database.save(file.toFile(), fields));
+            JSONObject persisted;
+            try (var reader = Files.newBufferedReader(file)) {
+                persisted = (JSONObject) new JSONParser().parse(reader);
+            }
+            load.invoke(database, restored, persisted);
             assertEquals(listed, restored.isMailListed());
+            persisted.put("id", id);
+            persisted.put("name", "Recipient");
+            try (var bukkit = mockStatic(Bukkit.class); var manager = mockStatic(PlayerManager.class)) {
+                loadDirectory(persisted);
+                assertEquals(listed ? 1 : 0, MailRecipientDirectory.listMailTargets().size());
+            }
         }
         original.setMailListed(false);
         load.invoke(database, original, new JSONObject());
