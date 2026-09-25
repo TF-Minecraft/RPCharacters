@@ -11,6 +11,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Character profiles** — create and switch between characters, with race, traits, descriptions, and website-connected creation.
 - **Roleplay conversation** — use local speech, whispers, shouts, actions, and out-of-character channels, with speech bubbles and channel preferences.
 - **Identity and disguise** — show character identities in social interactions and support masks and alternate personas.
+- **Mail recipient visibility** — `/rpcharacter mail` toggles whether your active character appears in BirdMessenger’s recipient list; `/rpcharacter mail off` hides it and `/rpcharacter mail on` restores it. Characters are listed by default, and the setting persists across logouts and restarts. Already-sent mail still arrives.
 - **Character focus** — a shared, regenerating per-character resource used by Research and Magic.
 - **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
 - **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.

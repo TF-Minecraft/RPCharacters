@@ -81,7 +81,7 @@ public final class MailRecipientDirectory {
 		if (ownerUuid == null || character == null || character.getId() == null) {
 			return;
 		}
-		if (character.getStatus() != Status.ALIVE) {
+		if (character.getStatus() != Status.ALIVE || !character.isMailListed()) {
 			ENTRIES.remove(character.getId());
 			return;
 		}
@@ -89,6 +89,7 @@ public final class MailRecipientDirectory {
 		Entry entry = new Entry();
 		entry.ownerUuid = ownerUuid;
 		entry.characterId = character.getId();
+		entry.mailListed = character.isMailListed();
 		entry.displayPlain = character.getEffectiveDisplayPlain();
 		entry.displayTab = DisplayIdentityService.resolveDisplayTab(character);
 		if (character.hasLastLocation()) {
@@ -213,6 +214,10 @@ public final class MailRecipientDirectory {
 				if (character == null || character.getId() == null) {
 					continue;
 				}
+				if (!character.isMailListed()) {
+					targets.remove(character.getId());
+					continue;
+				}
 				if (targets.containsKey(character.getId())) {
 					continue;
 				}
@@ -263,7 +268,7 @@ public final class MailRecipientDirectory {
 				return;
 			}
 		}
-		if (status != Status.ALIVE) {
+		if (status != Status.ALIVE || "false".equalsIgnoreCase(String.valueOf(json.get("mail-listed")))) {
 			ENTRIES.remove(characterId);
 			return;
 		}
@@ -279,6 +284,7 @@ public final class MailRecipientDirectory {
 		Entry entry = new Entry();
 		entry.ownerUuid = ownerUuid;
 		entry.characterId = characterId;
+		entry.mailListed = true;
 		entry.displayPlain = displayPlain;
 		entry.displayTab = DisplayIdentityService.colourPlain(displayPlain, colour);
 		Object locRaw = json.get("last-location");
@@ -303,6 +309,7 @@ public final class MailRecipientDirectory {
 		Entry entry = new Entry();
 		entry.ownerUuid = ownerUuid;
 		entry.characterId = character.getId();
+		entry.mailListed = character.isMailListed();
 		entry.displayPlain = character.getEffectiveDisplayPlain();
 		entry.displayTab = DisplayIdentityService.resolveDisplayTab(character);
 		if (character.hasLastLocation()) {
@@ -316,10 +323,16 @@ public final class MailRecipientDirectory {
 	}
 
 	private static CharacterMailTarget toTarget(Entry entry) {
-		if (entry == null || entry.characterId == null) {
+		if (entry == null || entry.characterId == null || !entry.mailListed) {
 			return null;
 		}
 		PlayerData pd = PlayerManager.get(entry.ownerUuid);
+		if (pd != null) {
+			RPCharacter character = pd.getCharacterById(entry.characterId);
+			if (character != null && (character.getStatus() != Status.ALIVE || !character.isMailListed())) {
+				return null;
+			}
+		}
 		Player owner = resolveOwner(entry.ownerUuid, pd);
 		boolean liveActive = false;
 		RPCharacter liveCharacter = null;
@@ -390,6 +403,8 @@ public final class MailRecipientDirectory {
 	private static final class Entry {
 		private UUID ownerUuid;
 		private String characterId;
+		// Texture-only cache entries must not become recipients.
+		private boolean mailListed;
 		private String displayTab = "";
 		private String displayPlain = "";
 		private boolean hasStoredLocation;

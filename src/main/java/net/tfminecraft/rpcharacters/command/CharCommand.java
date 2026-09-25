@@ -32,7 +32,7 @@ import net.tfminecraft.rpcharacters.persona.PersonaCooldownManager;
 public final class CharCommand {
 
 	private static final Set<String> SUBCOMMANDS = Set.of(
-			"alias", "namecolour", "gender", "description", "profile", "override", "birthday");
+			"alias", "namecolour", "gender", "description", "profile", "override", "birthday", "mail");
 
 	private static final String FIELD_ALIAS = "alias";
 	private static final String FIELD_GENDER = "gender";
@@ -47,7 +47,7 @@ public final class CharCommand {
 	public static boolean handle(CommandSender sender, String label, String[] args) {
 		if (args.length == 0) {
 			RPTexts.send(sender, RPTexts.WARN + "Usage: /" + label
-					+ " <alias|namecolour|gender|description|profile|birthday|override>");
+					+ " <alias|namecolour|gender|description|profile|birthday|mail|override>");
 			return true;
 		}
 
@@ -69,6 +69,8 @@ public final class CharCommand {
 		}
 
 		switch (sub) {
+			case "mail":
+				return handleMail(player, label, args);
 			case "alias":
 				return handleAlias(player, label, args);
 			case "namecolour":
@@ -81,9 +83,28 @@ public final class CharCommand {
 				return handleBirthday(player, label, args);
 			default:
 				RPTexts.send(player, RPTexts.ERROR
-						+ "Unknown subcommand. Use alias, namecolour, gender, description, profile, or birthday.");
+						+ "Unknown subcommand. Use alias, namecolour, gender, description, profile, birthday, or mail.");
 				return true;
 		}
+	}
+
+	private static boolean handleMail(Player player, String label, String[] args) {
+		if (args.length > 2 || (args.length == 2
+				&& !args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off"))) {
+			RPTexts.send(player, RPTexts.WARN + "Usage: /" + label + " mail [on|off]");
+			return true;
+		}
+		RPCharacter character = requireActiveCharacter(player);
+		if (character == null) {
+			return true;
+		}
+		boolean listed = args.length == 1 ? !character.isMailListed() : args[1].equalsIgnoreCase("on");
+		character.setMailListed(listed);
+		RPCharacters.getPlayerManager().savePlayer(player);
+		RPTexts.send(player, RPTexts.SUCCESS + (listed
+				? "Your character is now listed as a mail recipient."
+				: "Your character is no longer listed as a mail recipient."));
+		return true;
 	}
 
 	private static boolean handleAlias(Player player, String label, String[] args) {

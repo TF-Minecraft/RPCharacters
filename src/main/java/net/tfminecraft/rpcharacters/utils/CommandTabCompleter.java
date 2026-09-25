@@ -27,7 +27,7 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 public class CommandTabCompleter implements TabCompleter {
 
 	private static final List<String> PERSONA_SUBCOMMANDS = List.of(
-			"alias", "namecolour", "gender", "description", "profile", "override", "birthday");
+			"alias", "namecolour", "gender", "description", "profile", "override", "birthday", "mail");
 	private static final List<String> CLEAR = List.of("clear");
 	private static final List<String> OVERRIDE_FIELDS = List.of(
 			"alias", "tempalias", "gender", "description", "namecolour", "birthday", "playtime");
@@ -361,6 +361,8 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 
 		switch (sub) {
+			case "mail":
+				return args.length == 2 ? filter(List.of("on", "off"), args[1]) : Collections.emptyList();
 			case "alias":
 			case "description":
 				if (args.length == 2) {
