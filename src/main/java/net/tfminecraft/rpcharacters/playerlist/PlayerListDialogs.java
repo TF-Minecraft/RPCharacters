@@ -43,7 +43,6 @@ public final class PlayerListDialogs {
 	public static final Key OPEN_ACTION = Key.key("rpcharacters", "player_list");
 
 	private static final int SCREEN_BUDGET = 460;
-	private static final int CARD_WIDTH = 190;
 	private static final int BODY_WIDTH = 420;
 	private static final ClickCallback.Options CALLBACKS = ClickCallback.Options.builder()
 			.uses(ClickCallback.UNLIMITED_USES).lifetime(Duration.ofMinutes(10)).build();
@@ -86,12 +85,10 @@ public final class PlayerListDialogs {
 		viewer.showDialog(dialog);
 	}
 
-	/** Shows an allowed profile view as a character sheet: skin portrait beside the profile lines. */
+	/** Shows an allowed profile view with an image grid above the profile lines. */
 	public static void openCharacterSheet(Player viewer, Player target, List<String> profileLines) {
-		List<String> card = new ArrayList<>();
-		for (String line : profileLines) {
-			card.addAll(GuiText.wrap(line, CARD_WIDTH));
-		}
+		// Let the client wrap the details using its actual font metrics.
+		List<String> card = new ArrayList<>(profileLines);
 		String tag = format(Cache.playerList.tag(rank(target, Cache.playerList)));
 		int ping = target.getPing();
 		card.add("");
@@ -111,35 +108,29 @@ public final class PlayerListDialogs {
 		}));
 	}
 
-	private static Dialog sheet(Player target, List<String> card, BufferedImage front) {
-		TextComponent.Builder body = Component.text();
-		if (front == null) {
-			for (int i = 0; i < card.size(); i++) {
-				body.append(GuiText.component(card.get(i)));
-				if (i < card.size() - 1) {
-					body.append(Component.newline());
-				}
-			}
-		} else {
-			List<Component> portrait = SkinPortrait.rows(front);
-			int rows = Math.max(portrait.size(), card.size() + 1);
-			for (int y = 0; y < rows; y++) {
-				body.append(y < portrait.size() ? portrait.get(y) : SkinPortrait.blankRow());
-				body.append(Component.text(SkinPortrait.BLANK + SkinPortrait.BLANK));
-				int line = y - 1;
-				body.append(GuiText.padded(line >= 0 && line < card.size() ? card.get(line) : "", CARD_WIDTH));
-				if (y < rows - 1) {
-					body.append(Component.newline());
-				}
-			}
+	static List<Component> sheetSections(List<String> card, BufferedImage front) {
+		List<Component> sections = new ArrayList<>();
+		if (front != null) {
+			sections.add(SkinPortrait.grid(front));
 		}
+		TextComponent.Builder details = Component.text();
+		for (int i = 0; i < card.size(); i++) {
+			if (i > 0) details.append(Component.newline());
+			details.append(GuiText.component(card.get(i)));
+		}
+		sections.add(details.build());
+		return sections;
+	}
+
+	private static Dialog sheet(Player target, List<String> card, BufferedImage front) {
 		Component title = face(target).append(Component.text(" "))
 				.append(GuiText.component(DisplayIdentityService.resolveDisplaySafe(target)));
 		return Dialog.create(builder -> builder.empty()
 				.base(DialogBase.builder(title)
 						.externalTitle(Component.text("Character"))
 						.canCloseWithEscape(true)
-						.body(List.of(DialogBody.plainMessage(body.build(), BODY_WIDTH)))
+						.body(sheetSections(card, front).stream()
+								.map(section -> DialogBody.plainMessage(section, BODY_WIDTH)).toList())
 						.build())
 				.type(DialogType.notice(ActionButton.builder(Component.text("Back to player list"))
 						.width(160)
