@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.UUID;
 import org.bukkit.damage.DamageSource;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -66,14 +67,37 @@ class PvpKnockoutManagerTest {
         assertSame(attacker, PvpKnockoutManager.attackingPlayer(event));
     }
 
-    @Test void environmentalDamageRetainsVictimMode() {
+    @Test void environmentalDamageIgnoresVictimMode() {
         Player victim = player();
         var event = mock(EntityDamageEvent.class);
         PlayerData nonlethal = data(false), lethal = data(true);
         try (var players = mockStatic(PlayerManager.class)) {
             players.when(() -> PlayerManager.get(victim)).thenReturn(nonlethal);
-            assertTrue(PvpKnockoutManager.usesNonlethalMode(event, victim));
+            assertFalse(PvpKnockoutManager.usesNonlethalMode(event, victim));
             players.when(() -> PlayerManager.get(victim)).thenReturn(lethal);
+            assertFalse(PvpKnockoutManager.usesNonlethalMode(event, victim));
+        }
+    }
+
+    @Test void mobDamageIgnoresVictimMode() {
+        Player victim = player();
+        Entity mob = mock(Entity.class);
+        var event = mock(EntityDamageByEntityEvent.class);
+        when(event.getDamager()).thenReturn(mob);
+        PlayerData nonlethal = data(false);
+        try (var players = mockStatic(PlayerManager.class)) {
+            players.when(() -> PlayerManager.get(victim)).thenReturn(nonlethal);
+            assertFalse(PvpKnockoutManager.usesNonlethalMode(event, victim));
+        }
+    }
+
+    @Test void selfDamageIgnoresOwnMode() {
+        Player victim = player();
+        var event = mock(EntityDamageByEntityEvent.class);
+        when(event.getDamager()).thenReturn(victim);
+        PlayerData nonlethal = data(false);
+        try (var players = mockStatic(PlayerManager.class)) {
+            players.when(() -> PlayerManager.get(victim)).thenReturn(nonlethal);
             assertFalse(PvpKnockoutManager.usesNonlethalMode(event, victim));
         }
     }
