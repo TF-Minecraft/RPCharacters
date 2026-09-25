@@ -90,7 +90,7 @@ public final class PlaytimeDialogs {
 					.append(GuiText.padded(onlineMarker(viewer, player), 14))
 					.append(GuiText.padded(shortName(player.name()), 150).color(NamedTextColor.WHITE))
 					.append(GuiText.padded(formatSeconds(player.seconds()), 112).color(colour))
-					.hoverEvent(tooltip(viewer, player, rank)).build();
+					.hoverEvent(tooltip(player)).build();
 			rows = rows.append(Component.newline()).append(row);
 		}
 		if (!players.isEmpty()) body.add(DialogBody.plainMessage(rows, 420));
@@ -150,8 +150,7 @@ public final class PlaytimeDialogs {
 		return active != null && !active.isHidden() && entry.characterId().equals(active.getId()) ? online : null;
 	}
 
-	static Component tooltip(Player viewer, Entry entry, int rank) {
-		Player online = visibleActivePlayer(viewer, entry);
+	static Component tooltip(Entry entry) {
 		String playerName = Bukkit.getOfflinePlayer(entry.ownerId()).getName();
 		if (playerName == null || playerName.isBlank()) playerName = entry.ownerId().toString();
 		String status = switch (entry.status()) {
@@ -159,18 +158,10 @@ public final class PlaytimeDialogs {
 			case DEAD -> "Deceased";
 			case MISSING -> "Missing";
 		};
-		Component details = Component.text(entry.name(), NamedTextColor.WHITE)
+		return Component.text(entry.name(), NamedTextColor.WHITE)
 				.append(Component.newline()).append(Component.text("Player: " + playerName, NamedTextColor.GRAY))
-				.append(Component.newline()).append(Component.text("Leaderboard: #" + rank, NamedTextColor.GOLD))
 				.append(Component.newline()).append(Component.text("Character playtime: "
 						+ formatSeconds(entry.seconds()) + " " + (entry.seconds() % 60) + "s", NamedTextColor.GRAY))
-				.append(Component.newline()).append(Component.text("Character status: " + status, NamedTextColor.GRAY))
-				.append(Component.newline()).append(Component.text(online == null ? "Not currently played" : "● Currently playing",
-						online == null ? NamedTextColor.GRAY : NamedTextColor.GREEN));
-		if (online != null) {
-			details = details.append(Component.newline())
-					.append(Component.text("Ping: " + online.getPing() + "ms", NamedTextColor.GRAY));
-		}
-		return details;
+				.append(Component.newline()).append(Component.text("Character status: " + status, NamedTextColor.GRAY));
 	}
 }
