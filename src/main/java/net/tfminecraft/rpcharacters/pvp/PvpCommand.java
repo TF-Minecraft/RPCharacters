@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
@@ -164,12 +165,20 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 
 	private void broadcastStartedTitle(List<UUID> targets) {
 		String title = PvpLoader.getStartedTitle();
+		List<UUID> started = new ArrayList<>();
 		for (UUID id : targets) {
 			Player online = Bukkit.getPlayer(id);
 			if (online != null && online.isOnline()) {
 				RPTexts.title(online, title, " ");
+				started.add(id);
 			}
 		}
+		PvpStartSessions.begin(started, System.currentTimeMillis(), PvpLoader.getStartActiveMs());
+	}
+
+	@EventHandler
+	public void onQuit(PlayerQuitEvent event) {
+		PvpStartSessions.end(event.getPlayer().getUniqueId());
 	}
 
 	@Override

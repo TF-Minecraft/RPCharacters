@@ -21,6 +21,17 @@ public final class GraveLootRules {
 		return grave.isOwner(player.getUniqueId()) || player.hasPermission(ADMIN_PERMISSION);
 	}
 
+	/** Whether this player could take items from a grave they had just made by killing someone. */
+	public static boolean canLootGrave(Player player) {
+		if (player == null) {
+			return false;
+		}
+		if (player.hasPermission(ADMIN_PERMISSION)) {
+			return true;
+		}
+		return hasCanLootGravesTrait(player);
+	}
+
 	public static boolean canSteal(Player player, Grave grave) {
 		if (player == null || grave == null || canRecover(player, grave)) {
 			return false;

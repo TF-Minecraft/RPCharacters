@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,6 +18,8 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
+import net.tfminecraft.rpcharacters.pvp.PvpStartDeathPolicy;
+import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 
 public final class GraveDeathListener implements Listener {
@@ -25,16 +28,28 @@ public final class GraveDeathListener implements Listener {
 
 	private final Map<UUID, Map<Integer, ItemStack>> excludedStash = new ConcurrentHashMap<>();
 	private final Map<UUID, List<String>> placedNotice = new ConcurrentHashMap<>();
+	private final Set<UUID> keepInventory = ConcurrentHashMap.newKeySet();
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	public void onPlayerDeath(PlayerDeathEvent event) {
+		Player victim = event.getEntity();
+		boolean inPvpStart = PvpStartSessions.isActive(victim.getUniqueId(), System.currentTimeMillis());
+		PvpStartSessions.end(victim.getUniqueId());
 		if (!GraveLoader.isEnabled()) {
 			return;
 		}
 		if (event.getKeepInventory()) {
 			return;
 		}
-		Player victim = event.getEntity();
+		Player killerPlayer = victim.getKiller();
+		boolean killedByOther = killerPlayer != null
+				&& !killerPlayer.getUniqueId().equals(victim.getUniqueId());
+		boolean killerCanLoot = killedByOther && GraveLootRules.canLootGrave(killerPlayer);
+		if (PvpStartDeathPolicy.keepInventory(inPvpStart, killedByOther, killerCanLoot)) {
+			// Set on MONITOR, after DenarEconomy's NORMAL handler has dropped the pouch.
+			keepInventory.add(victim.getUniqueId());
+			return;
+		}
 		PlayerInventory inventory = victim.getInventory();
 		ItemStack[] storage = cloneArray(inventory.getStorageContents());
 		ItemStack[] armor = cloneArray(inventory.getArmorContents());
@@ -50,7 +65,6 @@ public final class GraveDeathListener implements Listener {
 			return;
 		}
 
-		Player killerPlayer = victim.getKiller();
 		UUID killer = killerPlayer != null && !killerPlayer.getUniqueId().equals(victim.getUniqueId())
 				? killerPlayer.getUniqueId()
 				: null;
@@ -70,6 +84,18 @@ public final class GraveDeathListener implements Listener {
 		sendPlaced(victim, chestBlock);
 		event.setDroppedExp(0);
 		event.getDrops().clear();
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void keepItemsAfterPouchDrop(PlayerDeathEvent event) {
+		if (!keepInventory.remove(event.getEntity().getUniqueId()) || event.isCancelled()) {
+			return;
+		}
+		// Paper still spawns getDrops() when keepInventory is set. Clear the copies
+		// so the items stay in the inventory, while the pouch DenarEconomy already
+		// spawned is left on the ground.
+		event.getDrops().clear();
+		event.setKeepInventory(true);
 	}
 
 	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
