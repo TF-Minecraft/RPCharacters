@@ -304,7 +304,7 @@ public class CommandTabCompleter implements TabCompleter {
 		boolean tutorial = args[1].equalsIgnoreCase("tutorial");
 		if (args.length == 3) {
 			return filter(tutorial ? List.of("reset")
-					: List.of("view", "add", "remove", "set", "endsession"), last);
+					: List.of("view", "add", "remove", "set", "startsession", "endsession"), last);
 		}
 		if (args.length == 4) {
 			return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList()), last);
@@ -319,7 +319,7 @@ public class CommandTabCompleter implements TabCompleter {
 		if (set && args.length == 5) {
 			return filter(List.of("0", "1", "2"), last);
 		}
-		if (args.length == (set ? 6 : 5)) {
+		if (args.length == (set ? 6 : 5) && !args[2].equalsIgnoreCase("startsession")) {
 			completions.addAll(characterNames(args[3]));
 		}
 		if (args[2].equalsIgnoreCase("add") && args.length <= 6) {

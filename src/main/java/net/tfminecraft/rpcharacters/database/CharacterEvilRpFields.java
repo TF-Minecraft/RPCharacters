@@ -6,7 +6,7 @@ import org.json.simple.JSONObject;
 
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
-/** Strike count and evil RP session end, stored under "evil-rp" in the character file. */
+/** Strike count, latest strike time and evil RP session end, stored under "evil-rp" in the character file. */
 public final class CharacterEvilRpFields {
 	private CharacterEvilRpFields() {}
 
@@ -21,6 +21,9 @@ public final class CharacterEvilRpFields {
 		if (evilRp.get("session-ends-at") instanceof Number endsAt) {
 			character.setEvilRpSessionEndsAtMs(endsAt.longValue());
 		}
+		if (evilRp.get("last-strike-at") instanceof Number lastStrikeAt) {
+			character.setLastStrikeAtMs(lastStrikeAt.longValue());
+		}
 	}
 
 	@SuppressWarnings("unchecked")
@@ -33,6 +36,9 @@ public final class CharacterEvilRpFields {
 		evilRp.put("strikes", character.getEvilRpStrikes());
 		if (character.getEvilRpSessionEndsAtMs() > 0) {
 			evilRp.put("session-ends-at", character.getEvilRpSessionEndsAtMs());
+		}
+		if (character.getEvilRpStrikes() > 0 && character.getLastStrikeAtMs() > 0) {
+			evilRp.put("last-strike-at", character.getLastStrikeAtMs());
 		}
 		defaults.put("evil-rp", evilRp);
 	}

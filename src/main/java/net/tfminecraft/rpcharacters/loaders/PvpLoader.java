@@ -18,8 +18,11 @@ public final class PvpLoader implements LoaderInterface {
 	private static int knockoutSeconds = 30;
 	private static int blindnessAmplifier = 4;
 	private static long freezePeriodTicks = 1L;
+	private static int decisionSeconds = 30;
+	private static boolean strikeDecayEnabled = false;
+	private static int strikeDecayDays = 14;
 
-	private static String startWarning = "&ePvP will start in {seconds} seconds!";
+	private static String startWarning = "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes.";
 	private static String countdown = "&c{count}";
 	private static String startedTitle = "&cPVP STARTED";
 	private static String lethal = "&aThis character is now in lethal PvP.";
@@ -45,6 +48,9 @@ public final class PvpLoader implements LoaderInterface {
 		knockoutSeconds = Math.max(1, config.getInt("knockout-seconds", 30));
 		blindnessAmplifier = Math.max(0, config.getInt("blindness-amplifier", 4));
 		freezePeriodTicks = Math.max(1L, config.getLong("freeze-period-ticks", 1L));
+		decisionSeconds = Math.max(1, config.getInt("strikes.decision-seconds", 30));
+		strikeDecayEnabled = config.getBoolean("strikes.decay.enabled", false);
+		strikeDecayDays = Math.max(1, config.getInt("strikes.decay.days", 14));
 
 		startWarning = config.getString("messages.start-warning", startWarning);
 		countdown = config.getString("messages.countdown", countdown);
@@ -83,6 +89,22 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static long getFreezePeriodTicks() {
 		return freezePeriodTicks;
+	}
+
+	public static int getDecisionSeconds() {
+		return decisionSeconds;
+	}
+
+	public static long getDecisionMs() {
+		return decisionSeconds * 1000L;
+	}
+
+	public static boolean isStrikeDecayEnabled() {
+		return strikeDecayEnabled;
+	}
+
+	public static long getStrikeDecayMs() {
+		return strikeDecayDays * 86_400_000L;
 	}
 
 	public static String getStartWarning() {

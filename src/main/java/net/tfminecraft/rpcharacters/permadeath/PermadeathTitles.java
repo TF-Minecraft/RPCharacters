@@ -29,8 +29,8 @@ public final class PermadeathTitles {
 			return RPTexts.ERROR + "Your character " + RPTexts.WARN + killedName
 					+ RPTexts.ERROR + " has been permanently killed in a permadeath zone.";
 		}
-		if (cause == PermakillCause.EVIL_RP_STRIKES) {
-			return RPTexts.ERROR + "That was your third strike. " + RPTexts.WARN + killedName
+		if (cause == PermakillCause.STRIKES) {
+			return RPTexts.ERROR + "That was your final strike. " + RPTexts.WARN + killedName
 					+ RPTexts.ERROR + " has been permanently killed.";
 		}
 		return RPTexts.ERROR + "Your character " + RPTexts.WARN + killedName

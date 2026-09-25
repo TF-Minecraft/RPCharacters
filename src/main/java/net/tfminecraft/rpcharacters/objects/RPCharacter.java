@@ -96,6 +96,8 @@ public class RPCharacter {
 	private int evilRpStrikes;
 	/** Epoch ms when the evil RP session ends; 0 when there is none. Runs while offline. */
 	private long evilRpSessionEndsAtMs;
+	/** When the latest strike landed, so strikes can wear off. 0 when unknown. */
+	private long lastStrikeAtMs;
 
 	public static final int MAX_FOOD_VALUE = 200;
 	private static final int MAX_DIET_SCORE = 40;
@@ -216,6 +218,14 @@ public class RPCharacter {
 
 	public void setEvilRpSessionEndsAtMs(long evilRpSessionEndsAtMs) {
 		this.evilRpSessionEndsAtMs = Math.max(0L, evilRpSessionEndsAtMs);
+	}
+
+	public long getLastStrikeAtMs() {
+		return lastStrikeAtMs;
+	}
+
+	public void setLastStrikeAtMs(long lastStrikeAtMs) {
+		this.lastStrikeAtMs = Math.max(0L, lastStrikeAtMs);
 	}
 
 	public int getFoodValue() {

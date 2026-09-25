@@ -30,4 +30,35 @@ class EvilRpRulesTest {
         assertEquals("0:01", EvilRpService.formatRemaining(1L));
         assertEquals("12:05", EvilRpService.formatRemaining(12 * 60_000L + 4_500L));
     }
+
+    @Test
+    void anyStrikeKillsDuringAnEvilSession() {
+        assertTrue(StrikeOutcome.nextStrikeKills(0, true));
+        assertFalse(StrikeOutcome.nextStrikeKills(0, false));
+        assertFalse(StrikeOutcome.nextStrikeKills(1, false));
+        assertTrue(StrikeOutcome.nextStrikeKills(2, false));
+    }
+
+    @Test
+    void oneStrikeWearsOffPerPeriod() {
+        long day = 86_400_000L;
+        long period = 14 * day;
+        StrikeDecay.Result early = StrikeDecay.apply(2, 1_000L, 1_000L + period - 1, period);
+        assertEquals(2, early.strikes());
+        assertEquals(1_000L, early.lastStrikeAtMs());
+
+        StrikeDecay.Result one = StrikeDecay.apply(2, 1_000L, 1_000L + period + day, period);
+        assertEquals(1, one.strikes());
+        // The next strike wears off a full period after the first one did, not after the check.
+        assertEquals(1_000L + period, one.lastStrikeAtMs());
+
+        assertEquals(0, StrikeDecay.apply(2, 1_000L, 1_000L + 5 * period, period).strikes());
+    }
+
+    @Test
+    void untrackedStrikesStartTheirClockNow() {
+        StrikeDecay.Result result = StrikeDecay.apply(1, 0L, 50_000L, 10L);
+        assertEquals(1, result.strikes());
+        assertEquals(50_000L, result.lastStrikeAtMs());
+    }
 }

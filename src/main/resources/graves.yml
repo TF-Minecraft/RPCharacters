@@ -42,6 +42,8 @@ messages:
   empty: "&7There is nothing left here."
   placed: "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}."
   unlock-hint: "&eRun &f/grave unlock &eto let others loot this grave."
+  # Shown instead of unlock-hint when an evil RP victim dies in a /pvp start fight.
+  unlocked-evil-rp: "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it."
   insurance-none: "&eYou have no grave to recover."
   unlock-none: "&eYou have no grave to unlock."
   unlock-already: "&eYour grave is already unlocked."

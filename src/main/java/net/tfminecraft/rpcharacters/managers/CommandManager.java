@@ -439,7 +439,10 @@ public class CommandManager implements Listener, CommandExecutor{
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("strikes") && args.length == 1) {
 				return EvilRpCommands.handleOwnStrikes(p);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("spare")) {
-				return EvilRpCommands.handleSpare(p, args);
+				return EvilRpCommands.handleDecision(p, args, false);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1)
+					&& (args[0].equalsIgnoreCase("strike") || args[0].equalsIgnoreCase("kill"))) {
+				return EvilRpCommands.handleDecision(p, args, true);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("setworldspawn")) {
 				if (!Permissions.isAdmin(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");

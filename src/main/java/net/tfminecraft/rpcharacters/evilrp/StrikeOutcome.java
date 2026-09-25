@@ -14,4 +14,9 @@ public enum StrikeOutcome {
 		}
 		return strikeNumber == 2 ? PERMANENT_INJURY : HEALING_INJURY;
 	}
+
+	/** Whether the next strike kills: always during an evil RP session, otherwise only the last one. */
+	public static boolean nextStrikeKills(int currentStrikes, boolean inEvilSession) {
+		return inEvilSession || forStrike(currentStrikes + 1) == DEATH;
+	}
 }

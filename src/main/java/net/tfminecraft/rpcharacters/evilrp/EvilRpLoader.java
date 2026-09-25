@@ -12,7 +12,6 @@ import net.tfminecraft.tlibs.interfaces.LoaderInterface;
 public final class EvilRpLoader implements LoaderInterface {
 
 	private static int sessionMinutes = 30;
-	private static int spareSeconds = 30;
 
 	@Override
 	public void load(File configFile) {
@@ -24,7 +23,6 @@ public final class EvilRpLoader implements LoaderInterface {
 		}
 
 		sessionMinutes = Math.max(1, config.getInt("session-minutes", 30));
-		spareSeconds = Math.max(1, config.getInt("spare-seconds", 30));
 	}
 
 	public static int getSessionMinutes() {
@@ -33,13 +31,5 @@ public final class EvilRpLoader implements LoaderInterface {
 
 	public static long getSessionMs() {
 		return sessionMinutes * 60_000L;
-	}
-
-	public static long getSpareMs() {
-		return spareSeconds * 1000L;
-	}
-
-	public static int getSpareSeconds() {
-		return spareSeconds;
 	}
 }

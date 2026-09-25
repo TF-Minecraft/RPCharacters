@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Players who were online when a {@code /pvp start} countdown finished.
- * The mark lasts until it expires, they die, or they log out.
+ * The mark lasts until it expires, they die, they are knocked out, or they log out.
  */
 public final class PvpStartSessions {
 
@@ -42,6 +42,13 @@ public final class PvpStartSessions {
 			return false;
 		}
 		return true;
+	}
+
+	/** Whether the player was in a PvP start, ending it either way. */
+	public static boolean consume(UUID playerId, long nowMs) {
+		boolean active = isActive(playerId, nowMs);
+		end(playerId);
+		return active;
 	}
 
 	public static void end(UUID playerId) {

@@ -25,7 +25,8 @@ import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
-import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
+import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
+import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.enums.Status;
 
 public final class PermadeathService {
@@ -39,17 +40,19 @@ public final class PermadeathService {
 	}
 
 	public static void handleDeath(Player player, Location deathLocation) {
+		// Every death ends the player's PvP start, whatever happens below.
+		boolean inPvpStart = PvpStartSessions.consume(player.getUniqueId(), System.currentTimeMillis());
 		if (ignoreNextZoneDeath.remove(player.getUniqueId())) {
-			return;
-		}
-		// A strike replaces the permadeath-zone roll, so the two never stack.
-		if (EvilRpService.handleDeath(player)) {
 			return;
 		}
 		if (ClueAdminModeService.isEnabled(player)) {
 			return;
 		}
 		if (PermadeathBattleExemption.isInStartedBattle(player)) {
+			return;
+		}
+		// The killer's spare-or-strike choice replaces the permadeath-zone roll, so the two never stack.
+		if (PvpStrikeService.handleDeath(player, inPvpStart)) {
 			return;
 		}
 		if (PermadeathAreaLookup.getPermadeathZoneAt(player, deathLocation) == null) {
@@ -193,6 +196,15 @@ public final class PermadeathService {
 	}
 
 	public static boolean killCharacter(Player player, RPCharacter character, PermakillCause cause, Player killer) {
+		return killCharacter(player, character, cause, killer, true);
+	}
+
+	/**
+	 * {@code killEntity} false leaves a living player standing: they already died for this,
+	 * for example a {@code /pvp start} killer choosing Kill after the victim respawned.
+	 */
+	public static boolean killCharacter(Player player, RPCharacter character, PermakillCause cause, Player killer,
+			boolean killEntity) {
 		if (!character.getStatus().equals(Status.ALIVE)) {
 			return false;
 		}
@@ -205,7 +217,7 @@ public final class PermadeathService {
 
 		// Kills applied inside the death event respawn at world spawn once the player clicks respawn.
 		boolean duringDeath = cause == PermakillCause.PERMADEATH_ZONE
-				|| (cause == PermakillCause.EVIL_RP_STRIKES && player.isDead());
+				|| (cause == PermakillCause.STRIKES && player.isDead());
 		boolean wasActive = character.isActive();
 		String killedName = character.getName();
 		character.setStatus(Status.DEAD);
@@ -235,10 +247,14 @@ public final class PermadeathService {
 			RPCharacters.getPlayerManager().releaseFreeze(player);
 		}
 		if (wasActive) {
-			markPendingPermakillSounds(player);
 			PermadeathTitles.showPermakill(player, killedName, replacementName, cause);
-			if (!player.isDead()) {
-				scheduleEntityDeath(player);
+			if (!player.isDead() && !killEntity) {
+				PermadeathSounds.playPermakill(player);
+			} else {
+				markPendingPermakillSounds(player);
+				if (!player.isDead()) {
+					scheduleEntityDeath(player);
+				}
 			}
 		}
 		return true;

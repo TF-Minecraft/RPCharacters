@@ -47,6 +47,7 @@ public final class GraveLoader implements LoaderInterface {
 	private static String messagePlaced = "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}.";
 	private static String messageUnlockHint = "&eRun &f/grave unlock &eto let others loot this grave.";
 	private static String messageInsuranceNone = "&eYou have no grave to recover.";
+	private static String messageUnlockedByStrike = "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it.";
 	private static String messageUnlockNone = "&eYou have no grave to unlock.";
 	private static String messageUnlockAlready = "&eYour grave is already unlocked.";
 	private static String messageUnlockSuccess = "&aYour grave is now unlocked. Anyone can loot it.";
@@ -90,6 +91,7 @@ public final class GraveLoader implements LoaderInterface {
 		messagePlaced = config.getString("messages.placed", messagePlaced);
 		messageUnlockHint = config.getString("messages.unlock-hint", messageUnlockHint);
 		messageInsuranceNone = config.getString("messages.insurance-none", messageInsuranceNone);
+		messageUnlockedByStrike = config.getString("messages.unlocked-evil-rp", messageUnlockedByStrike);
 		messageUnlockNone = config.getString("messages.unlock-none", messageUnlockNone);
 		messageUnlockAlready = config.getString("messages.unlock-already", messageUnlockAlready);
 		messageUnlockSuccess = config.getString("messages.unlock-success", messageUnlockSuccess);
@@ -246,6 +248,10 @@ public final class GraveLoader implements LoaderInterface {
 
 	public static String getMessagePlaced() {
 		return messagePlaced;
+	}
+
+	public static String getMessageUnlockedByStrike() {
+		return messageUnlockedByStrike;
 	}
 
 	public static String getMessageUnlockHint() {
