@@ -90,10 +90,8 @@ public final class PlayerListDialogs {
 		// Let the client wrap the details using its actual font metrics.
 		List<String> card = new ArrayList<>(profileLines);
 		String tag = format(Cache.playerList.tag(rank(target, Cache.playerList)));
-		int ping = target.getPing();
 		card.add("");
-		card.add("§7(" + target.getName() + ")" + (tag.isEmpty() ? "" : "  " + tag));
-		card.add("§8Ping: " + pingColour(ping) + ping + "ms");
+		card.add((tag.isEmpty() ? "" : tag + " ") + "§r§7" + target.getName());
 
 		SkinPortrait.SkinTexture texture = Cache.playerList.portrait() ? SkinPortrait.texture(target) : null;
 		CompletableFuture<BufferedImage> skin = SkinPortrait.fetch(texture);

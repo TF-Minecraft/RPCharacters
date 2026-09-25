@@ -11,6 +11,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.profile.ProfileFormatter;
 
 public final class ProfileViewLoader implements LoaderInterface {
 
@@ -33,5 +34,9 @@ public final class ProfileViewLoader implements LoaderInterface {
 
 		List<String> format = config.getStringList("format");
 		Cache.profileFormatLines = format != null ? new ArrayList<>(format) : new ArrayList<>();
+		// Existing installations get the compact sheet without rewriting their chat format.
+		Cache.profileSheetFormatLines = config.isList("sheet-format")
+				? new ArrayList<>(config.getStringList("sheet-format"))
+				: ProfileFormatter.DEFAULT_SHEET_FORMAT;
 	}
 }

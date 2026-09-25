@@ -11,11 +11,28 @@ import net.tfminecraft.rpcharacters.identity.PersonaService;
 
 public final class ProfileFormatter {
 
+	public static final List<String> DEFAULT_SHEET_FORMAT = List.of(
+			"&fGender: &e{gender}",
+			"&fAge: &e{age}",
+			"&fBirthday: &e{birthday}",
+			"&fRace: &e{race}",
+			"",
+			"&fDescription:",
+			"&7{description}");
+
 	private ProfileFormatter() {}
 
 	public static List<String> format(RPCharacter character) {
+		return format(character, Cache.profileFormatLines);
+	}
+
+	public static List<String> formatSheet(RPCharacter character) {
+		return format(character, Cache.profileSheetFormatLines);
+	}
+
+	private static List<String> format(RPCharacter character, List<String> templates) {
 		List<String> lines = new ArrayList<>();
-		for (String template : Cache.profileFormatLines) {
+		for (String template : templates) {
 			if (template == null) {
 				lines.add("");
 				continue;
