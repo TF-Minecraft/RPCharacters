@@ -68,7 +68,13 @@ public final class HealingInjuries {
 		if (trait == null) {
 			return -1L;
 		}
-		long remaining = remainingMs(character, trait) + Math.max(0L, extraMs);
+		long remaining = remainingMs(character, trait);
+		long extra = Math.max(0L, extraMs);
+		if (extra > Long.MAX_VALUE - remaining) {
+			remaining = Long.MAX_VALUE;
+		} else {
+			remaining += extra;
+		}
 		character.setDurationRemainingMs(trait.getId(), remaining);
 		InjuryHealingService.refreshCharacter(player, character);
 		RPCharacters.getPlayerManager().savePlayer(player);
