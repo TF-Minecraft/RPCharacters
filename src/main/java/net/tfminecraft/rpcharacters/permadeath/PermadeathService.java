@@ -25,6 +25,7 @@ import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.enums.Status;
 
 public final class PermadeathService {
@@ -39,6 +40,10 @@ public final class PermadeathService {
 
 	public static void handleDeath(Player player, Location deathLocation) {
 		if (ignoreNextZoneDeath.remove(player.getUniqueId())) {
+			return;
+		}
+		// A strike replaces the permadeath-zone roll, so the two never stack.
+		if (EvilRpService.handleDeath(player)) {
 			return;
 		}
 		if (ClueAdminModeService.isEnabled(player)) {
@@ -116,16 +121,48 @@ public final class PermadeathService {
 	}
 
 	public static boolean applyRandomInjury(Player player, RPCharacter character) {
+		return giveRandomInjury(player, character) != null;
+	}
+
+	/** Adds a random healing injury from the pool. Returns it, or null when none are left. */
+	public static Trait giveRandomInjury(Player player, RPCharacter character) {
 		Trait picked = InjuryPoolLoader.pickRandom(collectOwnedTraitIds(character));
 		if (picked == null) {
-			return false;
+			return null;
 		}
 		TraitChangeService.addTrait(player, character, picked);
 		TraitChangeService.sendGainedMessage(player, picked);
-		return true;
+		return picked;
+	}
+
+	/**
+	 * Turns one healing injury permanent when it has a progression target, otherwise adds
+	 * a random permanent injury. Returns the permanent injury, or null when none are left.
+	 */
+	public static Trait givePermanentInjury(Player player, RPCharacter character) {
+		Set<String> owned = collectOwnedTraitIds(character);
+		for (Trait healing : listHealingInjuryTraits(character)) {
+			String permanentId = InjuryProgressionLoader.getPermanentId(healing.getId());
+			if (permanentId == null || permanentId.isBlank() || ownsTraitId(owned, permanentId)) {
+				continue;
+			}
+			Trait permanent = TraitLoader.getByString(permanentId);
+			if (permanent == null) {
+				continue;
+			}
+			TraitChangeService.removeTrait(player, character, healing);
+			TraitChangeService.addTrait(player, character, permanent);
+			TraitChangeService.sendGainedMessage(player, permanent);
+			return permanent;
+		}
+		return giveRandomPermanentInjury(player, character);
 	}
 
 	public static boolean applyRandomPermanentInjury(Player player, RPCharacter character) {
+		return giveRandomPermanentInjury(player, character) != null;
+	}
+
+	private static Trait giveRandomPermanentInjury(Player player, RPCharacter character) {
 		Set<String> owned = collectOwnedTraitIds(character);
 		Set<String> targets = new LinkedHashSet<>(InjuryProgressionLoader.getProgressionMap().values());
 		List<Trait> eligible = new ArrayList<>();
@@ -139,12 +176,12 @@ public final class PermadeathService {
 			}
 		}
 		if (eligible.isEmpty()) {
-			return false;
+			return null;
 		}
 		Trait picked = eligible.get(ThreadLocalRandom.current().nextInt(eligible.size()));
 		TraitChangeService.addTrait(player, character, picked);
 		TraitChangeService.sendGainedMessage(player, picked);
-		return true;
+		return picked;
 	}
 
 	public static boolean killCharacter(Player player, RPCharacter character) {
@@ -166,7 +203,9 @@ public final class PermadeathService {
 			return false;
 		}
 
-		boolean fromPermadeathZone = cause == PermakillCause.PERMADEATH_ZONE;
+		// Kills applied inside the death event respawn at world spawn once the player clicks respawn.
+		boolean duringDeath = cause == PermakillCause.PERMADEATH_ZONE
+				|| (cause == PermakillCause.EVIL_RP_STRIKES && player.isDead());
 		boolean wasActive = character.isActive();
 		String killedName = character.getName();
 		character.setStatus(Status.DEAD);
@@ -186,18 +225,18 @@ public final class PermadeathService {
 
 		net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(player);
 
-		if (!player.isDead() && cause != PermakillCause.PERMADEATH_ZONE) {
+		if (!player.isDead() && !duringDeath) {
 			RPCharacters.getPlayerManager().reevaluateFreeze(player);
 		}
 
-		if (fromPermadeathZone) {
+		if (duringDeath) {
 			markPendingPermadeathRespawn(player);
 			PermadeathZoneListener.clearZoneTracking(player);
 			RPCharacters.getPlayerManager().releaseFreeze(player);
 		}
 		if (wasActive) {
 			markPendingPermakillSounds(player);
-			PermadeathTitles.showPermakill(player, killedName, replacementName, fromPermadeathZone);
+			PermadeathTitles.showPermakill(player, killedName, replacementName, cause);
 			if (!player.isDead()) {
 				scheduleEntityDeath(player);
 			}
@@ -221,6 +260,10 @@ public final class PermadeathService {
 	}
 
 	private static void scheduleEntityDeath(Player player) {
+		if (!RPCharacters.plugin.isEnabled()) {
+			// Shutting down: the character is already saved as dead and the player is about to leave.
+			return;
+		}
 		ignoreNextZoneDeath.add(player.getUniqueId());
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			if (!player.isOnline() || player.isDead()) {

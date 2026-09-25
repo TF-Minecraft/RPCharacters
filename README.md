@@ -15,6 +15,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
 - **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.
 - **Consequences and investigation** — support lethal or nonlethal PvP, graves, and discoverable clues left in the world.
+- **Evil RP strikes** — lockpicking, robbing, pickpocketing and grave looting start a timed session; dying during it costs a strike, and the third kills the character.
 
 ## Beyond the game
 

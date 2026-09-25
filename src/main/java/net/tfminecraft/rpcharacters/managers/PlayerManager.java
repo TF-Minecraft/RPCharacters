@@ -443,6 +443,11 @@ public class PlayerManager implements Listener{
 			InventoryManager inv = new InventoryManager();
 			inv.characterView(p, c);
 		} else if(t.equals(ConfirmType.SWITCH)) {
+			if (!Permissions.isAdmin(p) && net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(p)) {
+				net.tfminecraft.rpcharacters.evilrp.EvilRpService.sendSwitchBlocked(p);
+				p.closeInventory();
+				return;
+			}
 			PlayerData pd = get(p);
 			pd.setActiveCharacter(c);
 			net.tfminecraft.rpcharacters.clues.discovery.ClueDiscoveryVisualManager.get().refreshViewer(p);

@@ -93,6 +93,10 @@ public class RPCharacter {
 	/** Default lethal (vanilla death). Missing JSON key loads as true. */
 	private boolean pvpLethal = true;
 
+	private int evilRpStrikes;
+	/** Epoch ms when the evil RP session ends; 0 when there is none. Runs while offline. */
+	private long evilRpSessionEndsAtMs;
+
 	public static final int MAX_FOOD_VALUE = 200;
 	private static final int MAX_DIET_SCORE = 40;
 
@@ -196,6 +200,22 @@ public class RPCharacter {
 
 	public void setPvpLethal(boolean pvpLethal) {
 		this.pvpLethal = pvpLethal;
+	}
+
+	public int getEvilRpStrikes() {
+		return evilRpStrikes;
+	}
+
+	public void setEvilRpStrikes(int evilRpStrikes) {
+		this.evilRpStrikes = Math.max(0, evilRpStrikes);
+	}
+
+	public long getEvilRpSessionEndsAtMs() {
+		return evilRpSessionEndsAtMs;
+	}
+
+	public void setEvilRpSessionEndsAtMs(long evilRpSessionEndsAtMs) {
+		this.evilRpSessionEndsAtMs = Math.max(0L, evilRpSessionEndsAtMs);
 	}
 
 	public int getFoodValue() {

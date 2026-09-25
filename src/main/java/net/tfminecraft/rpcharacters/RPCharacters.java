@@ -90,6 +90,10 @@ import net.tfminecraft.rpcharacters.grave.GraveDeathListener;
 import net.tfminecraft.rpcharacters.grave.GraveInsuranceListener;
 import net.tfminecraft.rpcharacters.grave.GraveInteractListener;
 import net.tfminecraft.rpcharacters.grave.GraveLoader;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpListener;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpLoader;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
+import net.tfminecraft.rpcharacters.tutorial.TutorialLoader;
 import net.tfminecraft.rpcharacters.grave.GraveExpiryService;
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.rpcharacters.grave.GraveVisualManager;
@@ -178,6 +182,8 @@ public class RPCharacters extends JavaPlugin{
 	private PvpLoader pvpLoader;
 	private PartyLoader partyLoader;
 	private GraveLoader graveLoader;
+	private TutorialLoader tutorialLoader;
+	private EvilRpLoader evilRpLoader;
 	private final PvpCommand pvpCommand = new PvpCommand();
 	private final PlayerListCommand playerListCommand = new PlayerListCommand();
 	private final GraveCommand graveCommand = new GraveCommand();
@@ -221,6 +227,8 @@ public class RPCharacters extends JavaPlugin{
 		pvpLoader = new PvpLoader();
 		partyLoader = new PartyLoader();
 		graveLoader = new GraveLoader();
+		tutorialLoader = new TutorialLoader();
+		evilRpLoader = new EvilRpLoader();
 	}
 	
 	@Override
@@ -279,6 +287,7 @@ public class RPCharacters extends JavaPlugin{
 		spawnedClueManager.shutdown();
 		net.tfminecraft.rpcharacters.playtime.PlaytimeService.shutdown();
 		pvpKnockoutManager.shutdown();
+		EvilRpService.shutdown();
 		LastSolidTracker.get().shutdown();
 		GraveManager.get().saveAll();
 		save();
@@ -338,6 +347,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(new GraveDeathListener(), this);
 		getServer().getPluginManager().registerEvents(new GraveInteractListener(), this);
 		getServer().getPluginManager().registerEvents(new GraveInsuranceListener(), this);
+		getServer().getPluginManager().registerEvents(new EvilRpListener(), this);
 	}
 	public void startManagers() {
 		playerManager.start();
@@ -351,6 +361,7 @@ public class RPCharacters extends JavaPlugin{
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.startPeriodicPull(this);
 		WardrobeService.startSoftRefresh(this);
 		pvpKnockoutManager.start();
+		EvilRpService.start();
 		LastSolidTracker.get().start();
 	}
 	public void loadConfigs() {
@@ -403,6 +414,8 @@ public class RPCharacters extends JavaPlugin{
 		pvpLoader.load(new File(getDataFolder(), "pvp.yml"));
 		partyLoader.load(new File(getDataFolder(), "party.yml"));
 		graveLoader.load(new File(getDataFolder(), "graves.yml"));
+		tutorialLoader.load(new File(getDataFolder(), "tutorials.yml"));
+		evilRpLoader.load(new File(getDataFolder(), "evil-rp.yml"));
 		WorldGuardBridge.init();
 		permadeathDependencyListener.registerSimpleFactionsIfPresent();
 		net.tfminecraft.rpcharacters.catalog.CreationCatalogSyncService.pushAsync(this);
@@ -454,7 +467,9 @@ public class RPCharacters extends JavaPlugin{
 				"kits.yml",
 				"pvp.yml",
 				"party.yml",
-				"graves.yml"
+				"graves.yml",
+				"tutorials.yml",
+				"evil-rp.yml"
 				};
 		for(String s : files) {
 			File newConfigFile = new File(getDataFolder(), s);

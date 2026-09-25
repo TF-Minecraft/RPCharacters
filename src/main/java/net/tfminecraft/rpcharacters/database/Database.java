@@ -120,9 +120,7 @@ public class Database {
 				}
 				loadAccountProfessionPoints(pd, json);
 				loadInvestigationPoints(pd, json);
-				if (json.containsKey("permadeath-tutorial-dismissed")) {
-					pd.setPermadeathTutorialDismissed(Boolean.parseBoolean((String) json.get("permadeath-tutorial-dismissed")));
-				}
+				PlayerTutorialFields.load(pd, json);
 				if (json.containsKey("last-kit-claims")) {
 					loadLastKitClaims(pd, json.get("last-kit-claims"));
 				} else if (json.containsKey("last-kit-grant-ms")) {
@@ -192,9 +190,7 @@ public class Database {
 			}
 			loadAccountProfessionPoints(pd, json);
 			loadInvestigationPoints(pd, json);
-			if (json.containsKey("permadeath-tutorial-dismissed")) {
-				pd.setPermadeathTutorialDismissed(Boolean.parseBoolean((String) json.get("permadeath-tutorial-dismissed")));
-			}
+			PlayerTutorialFields.load(pd, json);
 			if (json.containsKey("last-kit-claims")) {
 				loadLastKitClaims(pd, json.get("last-kit-claims"));
 			} else if (json.containsKey("last-kit-grant-ms")) {
@@ -314,6 +310,7 @@ public class Database {
 				loadTraitState(c, json);
 				loadLastLocation(c, json);
 				loadPvpLethal(c, json);
+				CharacterEvilRpFields.load(c, json);
 				loadNutritionFields(c, json);
 				c.ensureTraitStateDefaults();
     				if (c.getSlug() == null || c.getSlug().isBlank()) {
@@ -379,9 +376,7 @@ public class Database {
 			if (pd.getLastInvestigationRegenMs() != null) {
 				defaults.put("investigation-regen-ms", pd.getLastInvestigationRegenMs());
 			}
-			if (pd.hasDismissedPermadeathTutorial()) {
-				defaults.put("permadeath-tutorial-dismissed", "true");
-			}
+			PlayerTutorialFields.save(defaults, pd);
 			if (!pd.getLastKitClaimAtMsMap().isEmpty()) {
 				JSONObject claims = new JSONObject();
 				for (var entry : pd.getLastKitClaimAtMsMap().entrySet()) {
@@ -461,6 +456,7 @@ public class Database {
 			saveTraitState(defaults, c);
 			saveLastLocation(defaults, c);
 			defaults.put("pvp-lethal", String.valueOf(c.isPvpLethal()));
+			CharacterEvilRpFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
         	save(file, defaults);
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);

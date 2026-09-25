@@ -73,7 +73,7 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("discordgate");
 				completions.add("setworldspawn");
 			}
-			completions.add("dismisspdwarning");
+			completions.add("strikes");
 			if (sender.hasPermission(Cache.personaTempaliasPermission)) {
 				completions.add("tempalias");
 			}
@@ -89,6 +89,10 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 		if (sub.equals(PartyCommand.SUBCOMMAND)) {
 			return PartyCommand.tabComplete(sender, args);
+		}
+		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
+				&& (args[1].equalsIgnoreCase("strikes") || args[1].equalsIgnoreCase("tutorial"))) {
+			return completeAdminEvilRp(args);
 		}
 
 		List<String> completions = new ArrayList<>();
@@ -144,6 +148,8 @@ public class CommandTabCompleter implements TabCompleter {
 			} else if (args[0].equalsIgnoreCase("admin") && Permissions.isAdmin(sender)) {
 				completions.add("injure");
 				completions.add("permakill");
+				completions.add("strikes");
+				completions.add("tutorial");
 			} else if (args[0].equalsIgnoreCase("addtrait") || args[0].equalsIgnoreCase("removetrait")
 					|| args[0].equalsIgnoreCase("injure")) {
 				for (Player online : Bukkit.getOnlinePlayers()) {
@@ -290,6 +296,50 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 
 		return Collections.emptyList();
+	}
+
+	/** {@code admin strikes <action> <player> ...} and {@code admin tutorial reset <player> [tutorial]}. */
+	private List<String> completeAdminEvilRp(String[] args) {
+		String last = args[args.length - 1];
+		boolean tutorial = args[1].equalsIgnoreCase("tutorial");
+		if (args.length == 3) {
+			return filter(tutorial ? List.of("reset")
+					: List.of("view", "add", "remove", "set", "endsession"), last);
+		}
+		if (args.length == 4) {
+			return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList()), last);
+		}
+		if (tutorial) {
+			return args.length == 5
+					? filter(new ArrayList<>(net.tfminecraft.rpcharacters.tutorial.TutorialLoader.getIds()), last)
+					: Collections.emptyList();
+		}
+		List<String> completions = new ArrayList<>();
+		boolean set = args[2].equalsIgnoreCase("set");
+		if (set && args.length == 5) {
+			return filter(List.of("0", "1", "2"), last);
+		}
+		if (args.length == (set ? 6 : 5)) {
+			completions.addAll(characterNames(args[3]));
+		}
+		if (args[2].equalsIgnoreCase("add") && args.length <= 6) {
+			completions.add("quiet");
+		}
+		return filter(completions, last);
+	}
+
+	private static List<String> characterNames(String playerName) {
+		List<String> names = new ArrayList<>();
+		Player target = Bukkit.getPlayerExact(playerName);
+		PlayerData pd = target != null ? PlayerManager.get(target) : null;
+		if (pd != null) {
+			for (RPCharacter character : pd.getCharacters()) {
+				if (character.getSlug() != null) {
+					names.add(character.getSlug());
+				}
+			}
+		}
+		return names;
 	}
 
 	private List<String> completePersona(CommandSender sender, String sub, String[] args) {

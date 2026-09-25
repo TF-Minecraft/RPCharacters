@@ -3,8 +3,11 @@ package net.tfminecraft.rpcharacters.objects;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
@@ -33,7 +36,7 @@ public class PlayerData {
 	private String tempAlias;
 	private int investigationPoints = -1;
 	private Long lastInvestigationRegenMs;
-	private boolean permadeathTutorialDismissed;
+	private final Set<String> dismissedTutorials = new LinkedHashSet<>();
 	/** Per grant-kit id → last successful claim epoch ms. */
 	private final Map<String, Long> lastKitClaimAtMs = new HashMap<>();
 	/** Creation-layer MMO subtracts from JSON {@code to remove}; applied after MMOCore loads. */
@@ -364,12 +367,28 @@ public class PlayerData {
 		this.lastInvestigationRegenMs = lastInvestigationRegenMs;
 	}
 
-	public boolean hasDismissedPermadeathTutorial() {
-		return permadeathTutorialDismissed;
+	public boolean hasDismissedTutorial(String tutorialId) {
+		return tutorialId != null && dismissedTutorials.contains(tutorialId.toLowerCase(Locale.ROOT));
 	}
 
-	public void setPermadeathTutorialDismissed(boolean permadeathTutorialDismissed) {
-		this.permadeathTutorialDismissed = permadeathTutorialDismissed;
+	public void setTutorialDismissed(String tutorialId, boolean dismissed) {
+		if (tutorialId == null || tutorialId.isBlank()) {
+			return;
+		}
+		String key = tutorialId.toLowerCase(Locale.ROOT);
+		if (dismissed) {
+			dismissedTutorials.add(key);
+		} else {
+			dismissedTutorials.remove(key);
+		}
+	}
+
+	public void clearDismissedTutorials() {
+		dismissedTutorials.clear();
+	}
+
+	public Set<String> getDismissedTutorials() {
+		return java.util.Collections.unmodifiableSet(dismissedTutorials);
 	}
 
 	public void addCharacter(RPCharacter c) {
