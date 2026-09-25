@@ -87,8 +87,10 @@ public final class EvilRpCommands {
 					return true;
 				}
 				if (quiet) {
+					long now = System.currentTimeMillis();
+					EvilRpService.applyDecay(character, now);
 					character.setEvilRpStrikes(character.getEvilRpStrikes() + 1);
-					character.setLastStrikeAtMs(System.currentTimeMillis());
+					character.setLastStrikeAtMs(now);
 					RPCharacters.getPlayerManager().savePlayer(player);
 					RPTexts.send(sender, RPTexts.SUCCESS + "Added a strike to " + RPTexts.WARN + character.getName()
 							+ RPTexts.SUCCESS + " without any injury or death. They now have "
