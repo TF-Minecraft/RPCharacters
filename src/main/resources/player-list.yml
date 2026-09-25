@@ -27,9 +27,10 @@ quick-action:
   enabled: true
   label: "Who's online"
 
-# LuckPerms groups in priority order. A player shows the tag of the first group
-# they belong to, and the list is sorted in this order. Players in none of these
-# groups are listed last without a tag.
+# Tags for LuckPerms primary groups, matching TAB's primary-group assignment.
+# This order controls sorting, not which role wins over the primary group.
+# Unlisted primary groups show no tag and sort last. Without LuckPerms, the
+# first matching group.<name> permission is used as a fallback.
 ranks:
   staff: "#f1c40f[Staff]"
   staff_inactive: "&7[Staff]"

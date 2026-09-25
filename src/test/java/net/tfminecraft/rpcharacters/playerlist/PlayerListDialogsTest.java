@@ -1,17 +1,60 @@
 package net.tfminecraft.rpcharacters.playerlist;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.bukkit.entity.Player;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.model.user.UserManager;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ObjectComponent;
 import net.kyori.adventure.text.TextComponent;
 
 class PlayerListDialogsTest {
+
+	@Test
+	void primaryGroupWinsOverInheritedStaffPermission() {
+		Player player = mock(Player.class);
+		UUID id = UUID.randomUUID();
+		when(player.getUniqueId()).thenReturn(id);
+		when(player.isPermissionSet("group.staff")).thenReturn(true);
+		when(player.hasPermission("group.staff")).thenReturn(true);
+		Map<String, String> tags = new LinkedHashMap<>();
+		tags.put("staff", "[Staff]");
+		tags.put("staff_player", "[Commoner]");
+		var settings = new PlayerListSettings("p", true, true, "t", "h", "q", tags);
+		LuckPerms api = mock(LuckPerms.class);
+		UserManager users = mock(UserManager.class);
+		User user = mock(User.class);
+		when(api.getUserManager()).thenReturn(users);
+		when(users.getUser(id)).thenReturn(user);
+		try (var provider = mockStatic(LuckPermsProvider.class)) {
+			provider.when(LuckPermsProvider::get).thenReturn(api);
+			when(user.getPrimaryGroup()).thenReturn("staff_player");
+			assertEquals("[Commoner]", settings.tag(PlayerListDialogs.rank(player, settings)));
+			// An unlisted primary group must not promote an inherited staff role.
+			when(user.getPrimaryGroup()).thenReturn("unlisted");
+			assertNull(PlayerListDialogs.rank(player, settings));
+			when(users.getUser(id)).thenReturn(null);
+			assertNull(PlayerListDialogs.rank(player, settings));
+			// Permission matching is retained only when the provider is unavailable.
+			provider.when(LuckPermsProvider::get).thenThrow(new IllegalStateException("Unavailable"));
+			assertEquals("staff", PlayerListDialogs.rank(player, settings));
+		}
+	}
 
 	@Test
 	void profileTextCannotChangePortraitRows() {
