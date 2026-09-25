@@ -44,11 +44,3 @@ magnifying-glasses:
     requires:
       wisdom: 14
       intelligence: 12
-
-remedies:
-  healing_draught:
-    item: v.potion
-    traits:
-      - broken_arm
-      - broken_leg
-      - half_blind

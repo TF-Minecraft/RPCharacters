@@ -13,7 +13,7 @@ broken_arm:
   description:
     - "§7A healing arm injury. Penalties worsen as it heals."
     - "§7May become permanent if you die again in a permadeath zone."
-    - "§7Remedies can cure this injury."
+    - "§7A physician can treat this with surgery."
 
 one_handed:
   name: "#d65c5cOne-Handed"
@@ -42,7 +42,7 @@ broken_leg:
   description:
     - "§7A healing leg injury. Penalties worsen as it heals."
     - "§7May become permanent if you die again in a permadeath zone."
-    - "§7Remedies can cure this injury."
+    - "§7A physician can treat this with surgery."
 
 one_legged:
   name: "#d65c5cOne-Legged"
@@ -67,7 +67,7 @@ half_blind:
   description:
     - "§7A healing eye injury. Penalties worsen as it heals."
     - "§7May become permanent if you die again in a permadeath zone."
-    - "§7Remedies can cure this injury."
+    - "§7A physician can treat this with surgery."
 
 blind:
   name: "#d65c5cBlind"

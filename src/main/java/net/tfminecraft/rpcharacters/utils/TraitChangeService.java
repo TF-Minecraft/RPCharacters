@@ -71,10 +71,6 @@ public final class TraitChangeService {
 		return RPTexts.ERROR + "You lost the trait " + trait.getName() + RPTexts.ERROR + ".";
 	}
 
-	public static void sendRemedyCuredMessage(Player player, Trait trait) {
-		RPTexts.send(player, resolveLostMessage(trait));
-	}
-
 	public static boolean replaceInjuryWithProsthetic(Player player, RPCharacter character, String injuryId,
 			String prostheticId) {
 		Trait injury = findOwnedTrait(character, injuryId);

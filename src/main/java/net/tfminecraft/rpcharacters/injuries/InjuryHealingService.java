@@ -96,7 +96,7 @@ public final class InjuryHealingService {
 		}
 	}
 
-	private static void refreshCharacter(Player player, RPCharacter character) {
+	public static void refreshCharacter(Player player, RPCharacter character) {
 		if (character.isActive()) {
 			Integrator integrator = new Integrator();
 			integrator.remove(player, character, false);
