@@ -2,6 +2,10 @@
 start-radius: 16
 start-warn-seconds: 10
 start-countdown-from: 5
+# After the countdown, how long those players are still in that PvP start.
+# 0 disables it. A death in this window, by a player who cannot loot graves,
+# keeps the victim's items. Their coin pouch still drops. Dying or logging out ends it early.
+start-active-minutes: 30
 knockout-seconds: 30
 # Minecraft effect level 5 = amplifier 4
 blindness-amplifier: 4

@@ -14,6 +14,7 @@ public final class PvpLoader implements LoaderInterface {
 	private static int startRadius = 16;
 	private static int startWarnSeconds = 10;
 	private static int startCountdownFrom = 5;
+	private static int startActiveMinutes = 30;
 	private static int knockoutSeconds = 30;
 	private static int blindnessAmplifier = 4;
 	private static long freezePeriodTicks = 1L;
@@ -40,6 +41,7 @@ public final class PvpLoader implements LoaderInterface {
 		startRadius = Math.max(0, config.getInt("start-radius", 16));
 		startWarnSeconds = Math.max(1, config.getInt("start-warn-seconds", 10));
 		startCountdownFrom = Math.max(1, config.getInt("start-countdown-from", 5));
+		startActiveMinutes = Math.max(0, config.getInt("start-active-minutes", 30));
 		knockoutSeconds = Math.max(1, config.getInt("knockout-seconds", 30));
 		blindnessAmplifier = Math.max(0, config.getInt("blindness-amplifier", 4));
 		freezePeriodTicks = Math.max(1L, config.getLong("freeze-period-ticks", 1L));
@@ -65,6 +67,10 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static int getStartCountdownFrom() {
 		return startCountdownFrom;
+	}
+
+	public static long getStartActiveMs() {
+		return startActiveMinutes * 60_000L;
 	}
 
 	public static int getKnockoutSeconds() {
