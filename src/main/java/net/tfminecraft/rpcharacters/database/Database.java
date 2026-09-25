@@ -475,6 +475,10 @@ public class Database {
 	      Object o = defaults.get(s);
 	      if (o instanceof String) {
 	        toSave.put(s, getString(s, defaults));
+	      } else if (o instanceof Boolean) {
+	        toSave.put(s, getBoolean(s, defaults));
+	      } else if (o instanceof Long) {
+	        toSave.put(s, Long.parseLong(getRawData(s, defaults)));
 	      } else if (o instanceof Double) {
 	        toSave.put(s, getDouble(s, defaults));
 	      } else if (o instanceof Integer) {
