@@ -25,6 +25,7 @@ class EvilRpPersistenceTest {
         RPCharacter character = new RPCharacter(null);
         character.setEvilRpStrikes(2);
         character.setEvilRpSessionEndsAtMs(1_790_000_000_123L);
+        character.setLastStrikeAtMs(1_789_000_000_456L);
 
         HashMap<String, Object> saved = new HashMap<>();
         CharacterEvilRpFields.save(saved, character);
@@ -35,6 +36,7 @@ class EvilRpPersistenceTest {
         CharacterEvilRpFields.load(loaded, reparsed);
         assertEquals(2, loaded.getEvilRpStrikes());
         assertEquals(1_790_000_000_123L, loaded.getEvilRpSessionEndsAtMs());
+        assertEquals(1_789_000_000_456L, loaded.getLastStrikeAtMs());
     }
 
     @Test

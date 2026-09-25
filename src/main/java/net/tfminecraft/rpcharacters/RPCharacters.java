@@ -100,6 +100,7 @@ import net.tfminecraft.rpcharacters.playerlist.PlayerListCommand;
 import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
 import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
+import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.party.PartyChatRecipientResolver;
 import net.tfminecraft.rpcharacters.party.PartyListener;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolverRegistry;
@@ -285,6 +286,7 @@ public class RPCharacters extends JavaPlugin{
 		net.tfminecraft.rpcharacters.playtime.PlaytimeService.shutdown();
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
+		PvpStrikeService.shutdown();
 		LastSolidTracker.get().shutdown();
 		GraveManager.get().saveAll();
 		save();
@@ -358,6 +360,7 @@ public class RPCharacters extends JavaPlugin{
 		WardrobeService.startSoftRefresh(this);
 		pvpKnockoutManager.start();
 		EvilRpService.start();
+		PvpStrikeService.start();
 		LastSolidTracker.get().start();
 	}
 	public void loadConfigs() {

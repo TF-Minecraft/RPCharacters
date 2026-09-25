@@ -11,12 +11,13 @@ import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
-/** {@code /rpcharacter strikes}, {@code /rpcharacter spare} and {@code /rpcharacter admin strikes}. */
+/** {@code /rpcharacter strikes}, the spare/strike buttons and {@code /rpcharacter admin strikes}. */
 public final class EvilRpCommands {
 
-	public static final String ADMIN_USAGE = "/rpcharacter admin strikes <view|add|remove|set|endsession> <player> ...";
+	public static final String ADMIN_USAGE = "/rpcharacter admin strikes <view|add|remove|set|startsession|endsession> <player> ...";
 
 	private EvilRpCommands() {
 	}
@@ -31,9 +32,10 @@ public final class EvilRpCommands {
 		return true;
 	}
 
-	public static boolean handleSpare(Player player, String[] args) {
+	/** {@code /rpcharacter spare|strike|kill <victim>}, run from the buttons after a /pvp start win. */
+	public static boolean handleDecision(Player player, String[] args, boolean strike) {
 		if (args.length != 2) {
-			RPTexts.send(player, RPTexts.ERROR + "Use the [Spare] button in chat after knocking someone out.");
+			RPTexts.send(player, RPTexts.ERROR + "Use the buttons in chat after defeating someone in a /pvp start fight.");
 			return true;
 		}
 		UUID victimId;
@@ -43,7 +45,7 @@ public final class EvilRpCommands {
 			Player victim = Bukkit.getPlayerExact(args[1]);
 			victimId = victim != null ? victim.getUniqueId() : null;
 		}
-		EvilRpService.spare(player, victimId);
+		PvpStrikeService.choose(player, victimId, strike);
 		return true;
 	}
 
@@ -85,7 +87,10 @@ public final class EvilRpCommands {
 					return true;
 				}
 				if (quiet) {
+					long now = System.currentTimeMillis();
+					EvilRpService.applyDecay(character, now);
 					character.setEvilRpStrikes(character.getEvilRpStrikes() + 1);
+					character.setLastStrikeAtMs(now);
 					RPCharacters.getPlayerManager().savePlayer(player);
 					RPTexts.send(sender, RPTexts.SUCCESS + "Added a strike to " + RPTexts.WARN + character.getName()
 							+ RPTexts.SUCCESS + " without any injury or death. They now have "
@@ -106,7 +111,7 @@ public final class EvilRpCommands {
 					RPTexts.send(sender, RPTexts.ERROR + character.getName() + " has no strikes.");
 					return true;
 				}
-				setStrikes(sender, player, character, character.getEvilRpStrikes() - 1);
+				setStrikes(sender, player, character, character.getEvilRpStrikes() - 1, false);
 			}
 			case "set" -> {
 				if (args.length < playerIndex + 2) {
@@ -127,8 +132,16 @@ public final class EvilRpCommands {
 				}
 				RPCharacter character = resolveCharacter(sender, pd, player, args, playerIndex + 2, args.length);
 				if (character != null) {
-					setStrikes(sender, player, character, count);
+					setStrikes(sender, player, character, count, true);
 				}
+			}
+			case "startsession" -> {
+				if (!EvilRpService.recordPlay(player)) {
+					RPTexts.send(sender, RPTexts.ERROR + player.getName() + " has no living active character.");
+					return true;
+				}
+				RPTexts.send(sender, RPTexts.SUCCESS + "Started an evil RP session for " + RPTexts.WARN
+						+ pd.getActiveCharacter().getName() + RPTexts.SUCCESS + ".");
 			}
 			case "endsession" -> {
 				RPCharacter character = resolveCharacter(sender, pd, player, args, playerIndex + 1, args.length);
@@ -146,6 +159,7 @@ public final class EvilRpCommands {
 	}
 
 	private static void sendSummary(CommandSender sender, RPCharacter character, String subject) {
+		EvilRpService.applyDecay(character, System.currentTimeMillis());
 		RPTexts.send(sender, RPTexts.MUTED + subject + " " + RPTexts.WARN + character.getEvilRpStrikes() + "/"
 				+ StrikeOutcome.MAX_STRIKES + RPTexts.MUTED + " strikes.");
 		if (EvilRpService.isInSession(character)) {
@@ -156,8 +170,13 @@ public final class EvilRpCommands {
 		}
 	}
 
-	private static void setStrikes(CommandSender sender, Player player, RPCharacter character, int count) {
+	/** {@code resetStrikeAge} starts the decay clock over, so staff-set strikes don't wear off at once. */
+	private static void setStrikes(CommandSender sender, Player player, RPCharacter character, int count,
+			boolean resetStrikeAge) {
 		character.setEvilRpStrikes(count);
+		if (count > 0 && (resetStrikeAge || character.getLastStrikeAtMs() <= 0L)) {
+			character.setLastStrikeAtMs(System.currentTimeMillis());
+		}
 		RPCharacters.getPlayerManager().savePlayer(player);
 		RPTexts.send(sender, RPTexts.SUCCESS + "Set " + RPTexts.WARN + character.getName() + RPTexts.SUCCESS
 				+ " to " + RPTexts.WARN + count + RPTexts.SUCCESS + " strikes. Injuries were not changed.");

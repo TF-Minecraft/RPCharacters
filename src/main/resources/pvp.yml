@@ -3,8 +3,11 @@ start-radius: 16
 start-warn-seconds: 10
 start-countdown-from: 5
 # After the countdown, how long those players are still in that PvP start.
-# 0 disables it. A death in this window, by a player who cannot loot graves,
-# keeps the victim's items. Their coin pouch still drops. Dying or logging out ends it early.
+# 0 disables it. Dying, being knocked out, or logging out ends it early.
+# A death or knockout in this window by another player lets the killer spare
+# or strike the victim (see strikes below). A death to a player who cannot
+# loot graves keeps the victim's items unless the victim was in an evil RP
+# session. Their coin pouch still drops.
 start-active-minutes: 30
 knockout-seconds: 30
 # Minecraft effect level 5 = amplifier 4
@@ -12,8 +15,19 @@ blindness-amplifier: 4
 # 1 tick = 20Hz freeze loop (only knocks out players)
 freeze-period-ticks: 1
 
+# Strikes from deaths and knockouts during a PvP start. SimpleFactions battles never
+# give strikes. The first strike is a healing injury, the second a permanent one,
+# and the third kills the character. In an evil RP session any strike kills.
+strikes:
+  # How long the killer has to click [Spare] or [Strike]/[Kill]. No choice means spare.
+  decision-seconds: 30
+  # When enabled, one strike wears off after this many days without a new one.
+  decay:
+    enabled: false
+    days: 14
+
 messages:
-  start-warning: "&ePvP will start in {seconds} seconds!"
+  start-warning: "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes."
   countdown: "&c{count}"
   started-title: "&cPVP STARTED"
   lethal: "&aThis character is now in lethal PvP."

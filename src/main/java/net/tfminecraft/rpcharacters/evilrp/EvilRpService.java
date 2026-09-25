@@ -1,45 +1,38 @@
 package net.tfminecraft.rpcharacters.evilrp;
 
-import java.util.Iterator;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.event.HoverEvent;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.enums.Status;
-import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
+import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathService;
 import net.tfminecraft.rpcharacters.permadeath.PermakillCause;
+import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 
 /**
- * Evil RP sessions and the three-strike rule. Any evil play (lockpicking, robbing,
- * pickpocketing, grave looting) starts or resets a timed session on the active character.
- * Dying, or being knocked out and not spared, before it runs out costs a strike.
+ * Evil RP sessions and strikes. Any evil play (lockpicking, robbing, pickpocketing,
+ * looting a locked grave) starts or resets a timed session on the active character.
+ * Strikes come from {@code /pvp start} fights; while a session runs, any strike kills.
  */
 public final class EvilRpService {
 
 	/** Only players online when their session ran out are told; stale timestamps clear quietly. */
 	private static final long END_NOTICE_WINDOW_MS = 5_000L;
+	private static final int DECAY_CHECK_TICKS = 60;
 
-	private static final Map<UUID, PendingSpare> pendingSpares = new ConcurrentHashMap<>();
 	private static BukkitTask tickTask;
+	private static int ticksSinceDecayCheck;
 
 	private EvilRpService() {
 	}
@@ -54,17 +47,7 @@ public final class EvilRpService {
 			tickTask.cancel();
 			tickTask = null;
 		}
-		// Nobody can spare them once the server stops, so the strikes land now.
-		for (Map.Entry<UUID, PendingSpare> entry : pendingSpares.entrySet()) {
-			Player victim = Bukkit.getPlayer(entry.getKey());
-			RPCharacter character = victim != null ? characterById(victim, entry.getValue().characterId) : null;
-			if (character != null) {
-				applyStrike(victim, character);
-			}
-		}
-		pendingSpares.clear();
 	}
-
 	/**
 	 * Records an evil play by the player's active character, starting a session or resetting
 	 * it to full length. Returns false when there is no living active character.
@@ -116,92 +99,20 @@ public final class EvilRpService {
 		return Math.max(0L, character.getEvilRpSessionEndsAtMs() - System.currentTimeMillis());
 	}
 
-	/** Switching characters mid-session, or while waiting to be spared, would dodge the strike. */
+	/** Switching characters mid-session, or while a killer decides, would dodge the strike. */
 	public static boolean blocksCharacterSwitch(Player player) {
-		return isInSession(player) || (player != null && pendingSpares.containsKey(player.getUniqueId()));
+		return isInSession(player) || PvpStrikeService.hasPendingDecision(player);
 	}
 
 	public static void sendSwitchBlocked(Player player) {
+		if (!isInSession(player) && PvpStrikeService.hasPendingDecision(player)) {
+			RPTexts.send(player, RPTexts.ERROR + "You can't switch characters while your killer decides whether to strike you.");
+			return;
+		}
 		RPTexts.send(player, RPTexts.ERROR + "You can't switch characters during an evil RP session"
 				+ (isInSession(player)
 						? " (" + formatRemaining(remainingMs(activeCharacter(player))) + " left)."
 						: "."));
-	}
-
-	/**
-	 * Called from the death event. Ends the session and applies a strike when one was running.
-	 * Returns true when a strike was taken, so permadeath-zone consequences are skipped.
-	 */
-	public static boolean handleDeath(Player player) {
-		PendingSpare pending = pendingSpares.remove(player.getUniqueId());
-		if (pending != null) {
-			// Dying while knocked out settles the strike; there is nobody left to spare.
-			RPCharacter knockedOut = characterById(player, pending.characterId);
-			if (knockedOut != null) {
-				applyStrike(player, knockedOut);
-				return true;
-			}
-		}
-		RPCharacter character = activeCharacter(player);
-		if (!isInSession(character)) {
-			return false;
-		}
-		character.setEvilRpSessionEndsAtMs(0L);
-		applyStrike(player, character);
-		return true;
-	}
-
-	/**
-	 * A nonlethal knockout during a session counts as a death, but the player who knocked
-	 * them out gets a short window to spare them first.
-	 */
-	public static void handleKnockout(Player victim, Player attacker) {
-		RPCharacter character = activeCharacter(victim);
-		if (!isInSession(character)) {
-			return;
-		}
-		character.setEvilRpSessionEndsAtMs(0L);
-		if (attacker == null || attacker.getUniqueId().equals(victim.getUniqueId())) {
-			applyStrike(victim, character);
-			return;
-		}
-
-		int seconds = EvilRpLoader.getSpareSeconds();
-		pendingSpares.put(victim.getUniqueId(), new PendingSpare(
-				character.getId(), attacker.getUniqueId(), System.currentTimeMillis() + EvilRpLoader.getSpareMs()));
-		RPCharacters.getPlayerManager().savePlayer(victim);
-
-		RPTexts.send(victim, RPTexts.ERROR + "You were knocked out during your evil RP session. "
-				+ RPTexts.MUTED + "Unless you're spared in the next " + seconds + " seconds, you get a strike.");
-		sendSpareOffer(attacker, victim, seconds);
-	}
-
-	/** The attacker's choice to let a knocked-out player off without a strike. */
-	public static boolean spare(Player attacker, UUID victimId) {
-		PendingSpare pending = victimId != null ? pendingSpares.get(victimId) : null;
-		if (pending == null || !pending.attackerId.equals(attacker.getUniqueId())) {
-			RPTexts.send(attacker, RPTexts.ERROR + "There's no one for you to spare right now.");
-			return false;
-		}
-		pendingSpares.remove(victimId);
-		Player victim = Bukkit.getPlayer(victimId);
-		RPTexts.send(attacker, RPTexts.SUCCESS + "You spared them. They won't get a strike for this.");
-		if (victim != null) {
-			RPTexts.send(victim, RPTexts.SUCCESS + "You were spared. No strike this time.");
-		}
-		return true;
-	}
-
-	/** Victims who log out while waiting on a spare get the strike straight away. */
-	public static void handleQuit(Player player) {
-		PendingSpare pending = pendingSpares.remove(player.getUniqueId());
-		if (pending == null) {
-			return;
-		}
-		RPCharacter character = characterById(player, pending.characterId);
-		if (character != null) {
-			applyStrike(player, character);
-		}
 	}
 
 	public static void sendJoinReminder(Player player) {
@@ -215,10 +126,20 @@ public final class EvilRpService {
 
 	/** Adds a strike and applies what it costs: a healing injury, a permanent one, then death. */
 	public static StrikeOutcome applyStrike(Player player, RPCharacter character) {
+		return applyStrike(player, character, null, true);
+	}
+
+	/**
+	 * Same as {@link #applyStrike(Player, RPCharacter)}. {@code killEntity} is false when the
+	 * player already died for this strike, so a killing strike doesn't kill them a second time.
+	 */
+	public static StrikeOutcome applyStrike(Player player, RPCharacter character, Player killer, boolean killEntity) {
+		applyDecay(character, System.currentTimeMillis());
 		int strike = character.getEvilRpStrikes() + 1;
 		character.setEvilRpStrikes(strike);
+		character.setLastStrikeAtMs(System.currentTimeMillis());
 		StrikeOutcome outcome = StrikeOutcome.forStrike(strike);
-		RPCharacters.plugin.getLogger().info("Evil RP strike " + strike + " for " + player.getName()
+		RPCharacters.plugin.getLogger().info("Strike " + strike + " for " + player.getName()
 				+ " (" + character.getName() + "): " + outcome);
 
 		switch (outcome) {
@@ -231,15 +152,39 @@ public final class EvilRpService {
 				showStrike(player, strike, injury, "You got a permanent injury. One more strike and "
 						+ character.getName() + " dies.");
 			}
-			case DEATH -> {
-				if (!PermadeathService.killCharacter(player, character, PermakillCause.EVIL_RP_STRIKES)) {
-					RPCharacters.plugin.getLogger().warning("Third evil RP strike for " + player.getName()
-							+ " (" + character.getName() + ") did not kill the character; the permakill was cancelled.");
-				}
-			}
+			case DEATH -> killByStrike(player, character, killer, killEntity);
 		}
 		RPCharacters.getPlayerManager().savePlayer(player);
 		return outcome;
+	}
+
+	/** Kills the character for a strike: the third one, or any strike during an evil RP session. */
+	public static boolean killByStrike(Player player, RPCharacter character, Player killer, boolean killEntity) {
+		if (PermadeathService.killCharacter(player, character, PermakillCause.STRIKES, killer, killEntity)) {
+			return true;
+		}
+		RPCharacters.plugin.getLogger().warning("Killing strike for " + player.getName()
+				+ " (" + character.getName() + ") did not kill the character; the permakill was cancelled.");
+		return false;
+	}
+
+	/**
+	 * Takes off any strikes that have worn off, when decay is enabled in pvp.yml.
+	 * Returns true when the character changed and needs saving.
+	 */
+	public static boolean applyDecay(RPCharacter character, long nowMs) {
+		if (character == null || !PvpLoader.isStrikeDecayEnabled()) {
+			return false;
+		}
+		StrikeDecay.Result result = StrikeDecay.apply(character.getEvilRpStrikes(), character.getLastStrikeAtMs(),
+				nowMs, PvpLoader.getStrikeDecayMs());
+		if (result.strikes() == character.getEvilRpStrikes()
+				&& result.lastStrikeAtMs() == character.getLastStrikeAtMs()) {
+			return false;
+		}
+		character.setEvilRpStrikes(result.strikes());
+		character.setLastStrikeAtMs(result.lastStrikeAtMs());
+		return true;
 	}
 
 	public static String formatRemaining(long remainingMs) {
@@ -249,21 +194,14 @@ public final class EvilRpService {
 
 	private static void tick() {
 		long now = System.currentTimeMillis();
-		Iterator<Map.Entry<UUID, PendingSpare>> it = pendingSpares.entrySet().iterator();
-		while (it.hasNext()) {
-			Map.Entry<UUID, PendingSpare> entry = it.next();
-			if (now < entry.getValue().expiresAtMs) {
-				continue;
-			}
-			it.remove();
-			Player victim = Bukkit.getPlayer(entry.getKey());
-			RPCharacter character = victim != null ? characterById(victim, entry.getValue().characterId) : null;
-			if (character != null) {
-				applyStrike(victim, character);
-			}
+		boolean checkDecay = ++ticksSinceDecayCheck >= DECAY_CHECK_TICKS;
+		if (checkDecay) {
+			ticksSinceDecayCheck = 0;
 		}
-
 		for (Player player : Bukkit.getOnlinePlayers()) {
+			if (checkDecay) {
+				decayAll(player, now);
+			}
 			RPCharacter character = activeCharacter(player);
 			if (character == null) {
 				continue;
@@ -279,25 +217,26 @@ public final class EvilRpService {
 		}
 	}
 
+	private static void decayAll(Player player, long now) {
+		PlayerData pd = PlayerManager.get(player);
+		if (pd == null) {
+			return;
+		}
+		boolean changed = false;
+		for (RPCharacter character : pd.getCharacters(Status.ALIVE)) {
+			changed |= applyDecay(character, now);
+		}
+		if (changed) {
+			RPCharacters.getPlayerManager().savePlayer(player);
+		}
+	}
+
 	private static void showStrike(Player player, int strike, Trait injury, String detail) {
 		String subtitle = injury != null ? TraitChangeService.resolveGainedMessage(injury) : " ";
 		RPTexts.longTitle(player, RPTexts.ERROR + "Strike " + strike, subtitle);
 		String outcome = injury != null ? detail : "There were no injuries left to give.";
 		RPTexts.send(player, RPTexts.ERROR + "Strike " + strike + " of " + StrikeOutcome.MAX_STRIKES + ". "
 				+ RPTexts.MUTED + outcome);
-	}
-
-	private static void sendSpareOffer(Player attacker, Player victim, int seconds) {
-		String victimName = RPTexts.formatGui(DisplayIdentityService.resolveDisplay(victim));
-		Component spare = Component.text("[Spare]", NamedTextColor.GREEN)
-				.decorate(TextDecoration.BOLD)
-				.clickEvent(ClickEvent.runCommand("/rpcharacter spare " + victim.getUniqueId()))
-				.hoverEvent(HoverEvent.showText(Component.text("Let them off without a strike", NamedTextColor.GRAY)));
-		attacker.sendMessage(Component.empty()
-				.append(LegacyComponentSerializer.legacySection().deserialize(victimName))
-				.append(Component.text(" was in the middle of evil RP. If you don't spare them in the next "
-						+ seconds + " seconds, they get a strike. ", NamedTextColor.GRAY))
-				.append(spare));
 	}
 
 	private static RPCharacter activeCharacter(Player player) {
@@ -310,17 +249,5 @@ public final class EvilRpService {
 		}
 		RPCharacter character = pd.getActiveCharacter();
 		return character.getStatus() == Status.ALIVE ? character : null;
-	}
-
-	private static RPCharacter characterById(Player player, String characterId) {
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
-			return null;
-		}
-		RPCharacter character = pd.getCharacterById(characterId);
-		return character != null && character.getStatus() == Status.ALIVE ? character : null;
-	}
-
-	private record PendingSpare(String characterId, UUID attackerId, long expiresAtMs) {
 	}
 }

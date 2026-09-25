@@ -9,21 +9,26 @@ class PvpStartDeathPolicyTest {
 
 	@Test
 	void unlootableKillerDuringPvpStartKeepsInventory() {
-		assertTrue(PvpStartDeathPolicy.keepInventory(true, true, false));
+		assertTrue(PvpStartDeathPolicy.keepInventory(true, true, false, false));
 	}
 
 	@Test
 	void aKillerWhoCanLootStillMakesAGrave() {
-		assertFalse(PvpStartDeathPolicy.keepInventory(true, true, true));
+		assertFalse(PvpStartDeathPolicy.keepInventory(true, true, true, false));
 	}
 
 	@Test
 	void outsidePvpStartAGraveIsMade() {
-		assertFalse(PvpStartDeathPolicy.keepInventory(false, true, false));
+		assertFalse(PvpStartDeathPolicy.keepInventory(false, true, false, false));
 	}
 
 	@Test
 	void mobsAndSelfKillsStillMakeAGrave() {
-		assertFalse(PvpStartDeathPolicy.keepInventory(true, false, false));
+		assertFalse(PvpStartDeathPolicy.keepInventory(true, false, false, false));
+	}
+
+	@Test
+	void evilRpVictimsLeaveAnUnlockedGraveInstead() {
+		assertFalse(PvpStartDeathPolicy.keepInventory(true, true, false, true));
 	}
 }

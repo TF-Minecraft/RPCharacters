@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -20,6 +21,7 @@ import org.bukkit.inventory.PlayerInventory;
 
 import net.tfminecraft.rpcharacters.pvp.PvpStartDeathPolicy;
 import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
+import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 
 public final class GraveDeathListener implements Listener {
@@ -33,19 +35,22 @@ public final class GraveDeathListener implements Listener {
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	public void onPlayerDeath(PlayerDeathEvent event) {
 		Player victim = event.getEntity();
-		boolean inPvpStart = PvpStartSessions.isActive(victim.getUniqueId(), System.currentTimeMillis());
-		PvpStartSessions.end(victim.getUniqueId());
 		if (!GraveLoader.isEnabled()) {
 			return;
 		}
 		if (event.getKeepInventory()) {
 			return;
 		}
-		Player killerPlayer = victim.getKiller();
-		boolean killedByOther = killerPlayer != null
-				&& !killerPlayer.getUniqueId().equals(victim.getUniqueId());
-		boolean killerCanLoot = killedByOther && GraveLootRules.canLootGrave(killerPlayer);
-		if (PvpStartDeathPolicy.keepInventory(inPvpStart, killedByOther, killerCanLoot)) {
+		// The PvP start mark itself ends later, in PermadeathService at MONITOR.
+		PvpStrikeService.GraveContext context = PvpStrikeService.graveContext(victim,
+				PvpStartSessions.isActive(victim.getUniqueId(), System.currentTimeMillis()));
+		UUID killerId = context.killerId() != null ? context.killerId()
+				: victim.getKiller() != null ? victim.getKiller().getUniqueId() : null;
+		Player killerPlayer = killerId != null ? Bukkit.getPlayer(killerId) : null;
+		boolean killedByOther = killerId != null && !killerId.equals(victim.getUniqueId());
+		boolean killerCanLoot = killerPlayer != null && killedByOther && GraveLootRules.canLootGrave(killerPlayer);
+		boolean unlocked = context.inPvpStart() && killedByOther && context.evilVictim();
+		if (PvpStartDeathPolicy.keepInventory(context.inPvpStart(), killedByOther, killerCanLoot, unlocked)) {
 			// Set on MONITOR, after DenarEconomy's NORMAL handler has dropped the pouch.
 			keepInventory.add(victim.getUniqueId());
 			return;
@@ -65,9 +70,7 @@ public final class GraveDeathListener implements Listener {
 			return;
 		}
 
-		UUID killer = killerPlayer != null && !killerPlayer.getUniqueId().equals(victim.getUniqueId())
-				? killerPlayer.getUniqueId()
-				: null;
+		UUID killer = killedByOther ? killerId : null;
 		boolean protect = GraveLoader.isProtectByDefault() || victim.hasPermission(PROTECT_PERMISSION);
 		int experience = event.getDroppedExp();
 		String killerDisplay = GraveKillerDisplay.build(victim, killerPlayer);
@@ -77,11 +80,16 @@ public final class GraveDeathListener implements Listener {
 		if (grave == null) {
 			return;
 		}
+		if (unlocked) {
+			// Evil RP victims killed in a PvP start leave their items for anyone to take.
+			grave.setLocked(false);
+			grave.flush();
+		}
 
 		if (!stash.isEmpty()) {
 			excludedStash.put(victim.getUniqueId(), stash);
 		}
-		sendPlaced(victim, chestBlock);
+		sendPlaced(victim, chestBlock, unlocked);
 		event.setDroppedExp(0);
 		event.getDrops().clear();
 	}
@@ -178,7 +186,7 @@ public final class GraveDeathListener implements Listener {
 		return item != null ? item.clone() : null;
 	}
 
-	private void sendPlaced(Player player, Block chest) {
+	private void sendPlaced(Player player, Block chest, boolean unlocked) {
 		if (player == null || chest == null) {
 			return;
 		}
@@ -193,7 +201,7 @@ public final class GraveDeathListener implements Listener {
 					.replace("{world}", world);
 			notices.add(StringFormatter.formatHex(text.replace('&', '\u00A7')));
 		}
-		String hint = GraveLoader.getMessageUnlockHint();
+		String hint = unlocked ? GraveLoader.getMessageUnlockedByStrike() : GraveLoader.getMessageUnlockHint();
 		if (hint != null && !hint.isBlank()) {
 			notices.add(StringFormatter.formatHex(hint.replace('&', '\u00A7')));
 		}
