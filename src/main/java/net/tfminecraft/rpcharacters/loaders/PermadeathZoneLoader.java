@@ -2,7 +2,6 @@ package net.tfminecraft.rpcharacters.loaders;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +25,6 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 	private static File configFile;
 	private static int chancePerInjury = 10;
 	private static int zoneCheckCooldownMs = 100;
-	private static List<String> tutorialLines = new ArrayList<>();
 	private static final Map<String, PermadeathZoneDefinition> zones = new HashMap<>();
 	private static Location worldSpawn;
 
@@ -42,7 +40,6 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 
 		chancePerInjury = Math.max(0, config.getInt("permadeath-chance-per-injury", 10));
 		zoneCheckCooldownMs = Math.max(0, config.getInt("zone-check-cooldown-ms", 100));
-		tutorialLines = new ArrayList<>(config.getStringList("tutorial"));
 		worldSpawn = parseWorldSpawn(config.getConfigurationSection("world-spawn"));
 
 		zones.clear();
@@ -88,10 +85,6 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 
 	public static int getZoneCheckCooldownMs() {
 		return zoneCheckCooldownMs;
-	}
-
-	public static List<String> getTutorialLines() {
-		return Collections.unmodifiableList(tutorialLines);
 	}
 
 	public static PermadeathZoneDefinition getZone(String regionId) {

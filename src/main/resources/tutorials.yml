@@ -1,0 +1,27 @@
+# Chat tutorials. Each one shows until the player clicks [Got It] under it.
+# Lines take & or § colour codes and #rrggbb hex. Some tutorials fill in
+# {placeholders}; those are listed above the tutorial.
+tutorials:
+  # Shown when entering a permadeath zone.
+  permadeath-zone:
+    lines:
+      - "#d65c5cPermadeath Zone"
+      - "§7Death here might permakill your character."
+      - "§7If you are lucky you might gain a healing injury instead."
+      - "§7Healing injuries recover over time while you are active online."
+      - "§7Another death here can turn healing injuries permanent."
+      - "§7Remedies cure healing injuries only."
+      - "§7Prosthetics can replace some permanent injuries."
+      - "§7More injuries raise your permakill chance."
+
+  # Shown when an evil RP session starts. {minutes} is the session length,
+  # {strikes} the character's current strikes.
+  evil-rp:
+    lines:
+      - "#d65c5cEvil RP"
+      - "§7You've started an evil RP session. It lasts {minutes} minutes."
+      - "§7Picking a lock, robbing, pickpocketing or looting a grave sets it back to {minutes}."
+      - "§7Die before it runs out and you get a strike. You have {strikes} so far."
+      - "§7Getting knocked out counts too, unless whoever downed you spares you."
+      - "§7First strike is a healing injury, the second a permanent one. The third kills your character."
+      - "§7You can't switch characters until it's over. Check with §a/rpcharacter strikes§7."

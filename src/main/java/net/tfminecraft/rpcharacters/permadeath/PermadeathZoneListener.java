@@ -17,9 +17,8 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
-import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PermadeathZoneDefinition;
-import net.tfminecraft.rpcharacters.objects.PlayerData;
+import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 public final class PermadeathZoneListener implements Listener {
@@ -112,11 +111,7 @@ public final class PermadeathZoneListener implements Listener {
 	public static void onZoneEnter(Player player, PermadeathZoneDefinition zone) {
 		RPTexts.title(player, RPTexts.enterTitle(zone.getName()), RPTexts.ERROR + "Permadeath Zone");
 
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null || pd.hasDismissedPermadeathTutorial()) {
-			return;
-		}
-		PermadeathTutorialMessages.send(player);
+		TutorialService.show(player, TutorialService.PERMADEATH_ZONE);
 	}
 
 	public static void onZoneLeave(Player player, PermadeathZoneDefinition zone) {

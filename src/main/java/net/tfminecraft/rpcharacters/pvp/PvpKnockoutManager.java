@@ -29,6 +29,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathService;
 
 public final class PvpKnockoutManager implements Listener {
@@ -77,6 +78,7 @@ public final class PvpKnockoutManager implements Listener {
 
 		event.setCancelled(true);
 		applyKnockout(player);
+		EvilRpService.handleKnockout(player, attackingPlayer(event));
 	}
 
 	static boolean usesNonlethalMode(EntityDamageEvent event, Player player) {

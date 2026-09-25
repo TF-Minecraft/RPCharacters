@@ -15,19 +15,23 @@ public final class PermadeathTitles {
 		RPTexts.longTitle(player, TraitChangeService.resolveGainedMessage(trait), " ");
 	}
 
-	public static void showPermakill(Player player, String killedName, String replacementName, boolean fromZone) {
+	public static void showPermakill(Player player, String killedName, String replacementName, PermakillCause cause) {
 		RPTexts.longTitle(player, buildPermakillTitle(killedName), buildReplacementSubtitle(replacementName));
-		RPTexts.send(player, buildPermakillChat(killedName, fromZone));
+		RPTexts.send(player, buildPermakillChat(killedName, cause));
 	}
 
 	private static String buildPermakillTitle(String killedName) {
 		return RPTexts.ERROR + killedName + RPTexts.ERROR + " has died!";
 	}
 
-	private static String buildPermakillChat(String killedName, boolean fromZone) {
-		if (fromZone) {
+	private static String buildPermakillChat(String killedName, PermakillCause cause) {
+		if (cause == PermakillCause.PERMADEATH_ZONE) {
 			return RPTexts.ERROR + "Your character " + RPTexts.WARN + killedName
 					+ RPTexts.ERROR + " has been permanently killed in a permadeath zone.";
+		}
+		if (cause == PermakillCause.EVIL_RP_STRIKES) {
+			return RPTexts.ERROR + "That was your third strike. " + RPTexts.WARN + killedName
+					+ RPTexts.ERROR + " has been permanently killed.";
 		}
 		return RPTexts.ERROR + "Your character " + RPTexts.WARN + killedName
 				+ RPTexts.ERROR + " has been permanently killed.";

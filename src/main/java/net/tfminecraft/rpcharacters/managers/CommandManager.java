@@ -37,7 +37,10 @@ import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
+import net.tfminecraft.rpcharacters.tutorial.TutorialCommands;
+import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 
 public class CommandManager implements Listener, CommandExecutor{
@@ -429,15 +432,14 @@ public class CommandManager implements Listener, CommandExecutor{
 				}
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("dismisspdwarning")) {
-				PlayerData pd = PlayerManager.get(p);
-				if (pd == null) {
-					return true;
-				}
-				pd.setPermadeathTutorialDismissed(true);
-				RPCharacters.getPlayerManager().savePlayer(p);
-				RPTexts.sendPrefixed(p, RPTexts.SUCCESS + "Got it! " + RPTexts.MUTED
-						+ "You won't see the permadeath tutorial again.");
-				return true;
+				// Old [Got It] buttons still in players' chat history run this.
+				return TutorialCommands.dismiss(p, TutorialService.PERMADEATH_ZONE);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("tutorial")) {
+				return TutorialCommands.handle(p, args);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("strikes") && args.length == 1) {
+				return EvilRpCommands.handleOwnStrikes(p);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("spare")) {
+				return EvilRpCommands.handleSpare(p, args);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("setworldspawn")) {
 				if (!Permissions.isAdmin(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
@@ -693,7 +695,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -703,7 +705,13 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase("permakill")) {
 			return PermadeathAdminCommands.handlePermakill(sender, args, 2, "permakill");
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill> ...");
+		if (args[1].equalsIgnoreCase("strikes")) {
+			return EvilRpCommands.handleAdmin(sender, args, 2);
+		}
+		if (args[1].equalsIgnoreCase("tutorial")) {
+			return TutorialCommands.handleAdmin(sender, args, 2);
+		}
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial> ...");
 		return true;
 	}
 

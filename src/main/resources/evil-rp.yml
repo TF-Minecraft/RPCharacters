@@ -1,0 +1,11 @@
+# Evil RP sessions and strikes.
+# Lockpicking, robbing, pickpocketing and grave looting (from Thievery) start a
+# session, or reset it to full length. Dying during it costs a strike: first a
+# healing injury, then a permanent one, then the character dies.
+
+# How long a session lasts after the latest evil play. Keeps counting while offline.
+session-minutes: 30
+
+# After a nonlethal knockout mid-session, how long the attacker has to click
+# [Spare] before the strike lands.
+spare-seconds: 30

@@ -6,8 +6,12 @@ import org.bukkit.entity.Player;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.identity.PersonaService;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.PlayerData;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 public final class RpCharactersExpansion extends PlaceholderExpansion {
 
@@ -85,6 +89,19 @@ public final class RpCharactersExpansion extends PlaceholderExpansion {
 				return PersonaService.resolveBirthday(player);
 			case "description":
 				return PersonaService.resolveDescription(player);
+			case "evilrp_strikes": {
+				PlayerData pd = PlayerManager.get(player);
+				return pd != null && pd.hasActiveCharacter()
+						? String.valueOf(pd.getActiveCharacter().getEvilRpStrikes()) : "0";
+			}
+			case "evilrp_in_session":
+				return String.valueOf(EvilRpService.isInSession(player));
+			case "evilrp_session_left": {
+				PlayerData pd = PlayerManager.get(player);
+				RPCharacter active = pd != null && pd.hasActiveCharacter() ? pd.getActiveCharacter() : null;
+				return EvilRpService.isInSession(active)
+						? EvilRpService.formatRemaining(EvilRpService.remainingMs(active)) : "";
+			}
 			default:
 				return null;
 		}

@@ -19,6 +19,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Dependency;
@@ -64,6 +65,11 @@ public class CreationManager implements Listener{
 		);
 		if(PermissionGroupService.hasCharacterSwitchCooldown(p, pd) && pd.getCharacters(Status.ALIVE).size() > 0 && !p.hasPermission("rpcharacters.no_cooldown")) {
 			RPTexts.send(p, RPTexts.ERROR + "You are on cooldown from switching characters");
+			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+			return;
+		}
+		if (!Permissions.isAdmin(p) && net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(p)) {
+			net.tfminecraft.rpcharacters.evilrp.EvilRpService.sendSwitchBlocked(p);
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 			return;
 		}

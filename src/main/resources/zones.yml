@@ -3,16 +3,6 @@ zone-check-cooldown-ms: 100
 
 world-spawn: null
 
-tutorial:
-  - "#d65c5cPermadeath Zone"
-  - "§7Death here might permakill your character."
-  - "§7If you are lucky you might gain a healing injury instead."
-  - "§7Healing injuries recover over time while you are active online."
-  - "§7Another death here can turn healing injuries permanent."
-  - "§7Remedies cure healing injuries only."
-  - "§7Prosthetics can replace some permanent injuries."
-  - "§7More injuries raise your permakill chance."
-
 # Keys under permadeath-zones are WorldGuard region ids or SimpleFactions
 # map-region ids from Input/regions.json (for example REGION_1).
 permadeath-zones:

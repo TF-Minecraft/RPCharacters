@@ -5,5 +5,6 @@ public enum PermakillCause {
 	COMMAND,
 	CHARACTER_MENU,
 	SACRIFICE,
+	EVIL_RP_STRIKES,
 	OTHER
 }
