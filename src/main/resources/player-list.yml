@@ -14,7 +14,14 @@ header: "&7Online players: &f&l{online}\n&8Hover a name to see who is playing th
 # image is downloaded from Mojang's texture server the first time it is shown.
 portrait: true
 
-# Adds a "Who's online" button to the vanilla Quick Actions key (G) by keeping
+# Adds "Who's online" and "Playtime leaderboard" buttons to the Quick Actions key (G).
+# Playtime ranks all players in the RPCharacters playtime index by most time played,
+# including offline players. It shows time played on their current RP character,
+# not character age or lifetime account playtime. Players enter the index on login.
+# A green dot marks online players who are visible to the viewer.
+# Hover a row for position, exact playtime and status; visible online players
+# also show their safe character display and ping.
+# Both pages use the permission above. This is provided by keeping
 # a small data pack in the main world's datapacks folder. Data packs load at
 # startup, so turning this on or off takes effect after the next restart.
 quick-action:

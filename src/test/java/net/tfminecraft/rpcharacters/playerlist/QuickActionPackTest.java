@@ -36,6 +36,12 @@ class QuickActionPackTest {
 		assertEquals("minecraft:custom", button.getAsJsonObject("action").get("type").getAsString());
 		assertEquals(PlayerListDialogs.OPEN_ACTION.asString(),
 				button.getAsJsonObject("action").get("id").getAsString());
+		assertEquals(2, dialog.getAsJsonArray("actions").size());
+		JsonObject playtime = dialog.getAsJsonArray("actions").get(1).getAsJsonObject();
+		assertEquals("Playtime leaderboard", playtime.get("label").getAsString());
+		assertEquals("minecraft:custom", playtime.getAsJsonObject("action").get("type").getAsString());
+		assertEquals(PlaytimeDialogs.OPEN_ACTION.asString(),
+				playtime.getAsJsonObject("action").get("id").getAsString());
 
 		JsonObject meta = JsonParser.parseString(files.get("pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack");
 		assertEquals(QuickActionPack.PACK_FORMAT, meta.get("min_format").getAsInt());
