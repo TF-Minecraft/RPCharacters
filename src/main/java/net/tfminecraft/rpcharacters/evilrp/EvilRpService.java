@@ -105,6 +105,10 @@ public final class EvilRpService {
 	}
 
 	public static void sendSwitchBlocked(Player player) {
+		if (!isInSession(player) && PvpStrikeService.hasPendingDecision(player)) {
+			RPTexts.send(player, RPTexts.ERROR + "You can't switch characters while your killer decides whether to strike you.");
+			return;
+		}
 		RPTexts.send(player, RPTexts.ERROR + "You can't switch characters during an evil RP session"
 				+ (isInSession(player)
 						? " (" + formatRemaining(remainingMs(activeCharacter(player))) + " left)."

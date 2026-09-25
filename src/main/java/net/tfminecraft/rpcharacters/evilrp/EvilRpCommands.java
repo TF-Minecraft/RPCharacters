@@ -108,7 +108,7 @@ public final class EvilRpCommands {
 					RPTexts.send(sender, RPTexts.ERROR + character.getName() + " has no strikes.");
 					return true;
 				}
-				setStrikes(sender, player, character, character.getEvilRpStrikes() - 1);
+				setStrikes(sender, player, character, character.getEvilRpStrikes() - 1, false);
 			}
 			case "set" -> {
 				if (args.length < playerIndex + 2) {
@@ -129,7 +129,7 @@ public final class EvilRpCommands {
 				}
 				RPCharacter character = resolveCharacter(sender, pd, player, args, playerIndex + 2, args.length);
 				if (character != null) {
-					setStrikes(sender, player, character, count);
+					setStrikes(sender, player, character, count, true);
 				}
 			}
 			case "startsession" -> {
@@ -167,9 +167,11 @@ public final class EvilRpCommands {
 		}
 	}
 
-	private static void setStrikes(CommandSender sender, Player player, RPCharacter character, int count) {
+	/** {@code resetStrikeAge} starts the decay clock over, so staff-set strikes don't wear off at once. */
+	private static void setStrikes(CommandSender sender, Player player, RPCharacter character, int count,
+			boolean resetStrikeAge) {
 		character.setEvilRpStrikes(count);
-		if (count > 0 && character.getLastStrikeAtMs() <= 0L) {
+		if (count > 0 && (resetStrikeAge || character.getLastStrikeAtMs() <= 0L)) {
 			character.setLastStrikeAtMs(System.currentTimeMillis());
 		}
 		RPCharacters.getPlayerManager().savePlayer(player);

@@ -219,9 +219,14 @@ public final class PvpStrikeService {
 		} else {
 			EvilRpService.applyStrike(victim, character, killer, killEntity);
 		}
+		// A CharacterPermakillEvent listener can cancel the kill.
+		boolean killed = character.getStatus() != Status.ALIVE;
+		if (!killed) {
+			executions.remove(victim.getUniqueId());
+		}
 		if (killer != null && killer.isOnline()) {
-			RPTexts.send(killer, RPTexts.ERROR + (kills ? "You killed " : "You struck ") + RPTexts.WARN + victimName
-					+ RPTexts.ERROR + ".");
+			String outcome = killed ? "You killed " : kills ? "You couldn't kill " : "You struck ";
+			RPTexts.send(killer, RPTexts.ERROR + outcome + RPTexts.WARN + victimName + RPTexts.ERROR + ".");
 		}
 	}
 
