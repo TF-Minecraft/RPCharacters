@@ -52,6 +52,33 @@ class DatabaseSaveTest {
 		assertEquals(1_790_000_000_123L, saved.get("timestamp"));
 	}
 
+	@ParameterizedTest
+	@ValueSource(doubles = {1000.0, 1.79e12, -1000.0, -0x1.0p63, 0x1.fffffffffffffp62})
+	@SuppressWarnings("unchecked")
+	void acceptsExistingIntegralNumericTimestamps(double value) throws Exception {
+		JSONObject existing = new JSONObject();
+		existing.put("timestamp", value);
+		HashMap<String, Object> defaults = new HashMap<>();
+		defaults.put("timestamp", 0L);
+		assertEquals((long) value, saveAndRead(existing, defaults).get("timestamp"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(doubles = {1.5, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+			0x1.0p63, -0x1.0000000000001p63})
+	@SuppressWarnings("unchecked")
+	void rejectsUnsafeTimestampsWithoutOverwritingFile(double value) throws Exception {
+		JSONObject existing = new JSONObject();
+		existing.put("timestamp", value);
+		HashMap<String, Object> defaults = new HashMap<>();
+		defaults.put("timestamp", 0L);
+		Path file = directory.resolve("data.json");
+		String original = "{\"timestamp\":123}";
+		Files.writeString(file, original);
+		assertFalse(databaseWith(existing).save(file.toFile(), defaults));
+		assertEquals(original, Files.readString(file));
+	}
+
 	@Test
 	@SuppressWarnings("unchecked")
 	void preservesLegacyStringsAndSupportedValues() throws Exception {
@@ -77,12 +104,16 @@ class DatabaseSaveTest {
 	}
 
 	private JSONObject saveAndRead(JSONObject existing, HashMap<String, Object> defaults) throws Exception {
+		Path file = directory.resolve("data.json");
+		assertTrue(databaseWith(existing).save(file.toFile(), defaults));
+		return (JSONObject) new JSONParser().parse(Files.readString(file));
+	}
+
+	private Database databaseWith(JSONObject existing) throws Exception {
 		Database database = new Database();
 		Field json = Database.class.getDeclaredField("json");
 		json.setAccessible(true);
 		json.set(database, existing);
-		Path file = directory.resolve("data.json");
-		assertTrue(database.save(file.toFile(), defaults));
-		return (JSONObject) new JSONParser().parse(Files.readString(file));
+		return database;
 	}
 }

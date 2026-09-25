@@ -6,6 +6,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -478,7 +479,7 @@ public class Database {
 	      } else if (o instanceof Boolean) {
 	        toSave.put(s, getBoolean(s, defaults));
 	      } else if (o instanceof Long) {
-	        toSave.put(s, Long.parseLong(getRawData(s, defaults)));
+	        toSave.put(s, getLong(s, defaults));
 	      } else if (o instanceof Double) {
 	        toSave.put(s, getDouble(s, defaults));
 	      } else if (o instanceof Integer) {
@@ -521,6 +522,14 @@ public class Database {
 	
 	  public boolean getBoolean(String key, HashMap<String, Object> defaults) {
 	    return Boolean.valueOf(getRawData(key, defaults));
+	  }
+
+	  private long getLong(String key, HashMap<String, Object> defaults) {
+	    Object value = json.containsKey(key) ? json.get(key) : defaults.get(key);
+	    // Check the exact floating-point value, including the long-range boundaries.
+	    BigDecimal number = value instanceof Double floating
+	        ? new BigDecimal(floating.doubleValue()) : new BigDecimal(value.toString());
+	    return number.longValueExact();
 	  }
 	
 	  public double getDouble(String key, HashMap<String, Object> defaults) {
