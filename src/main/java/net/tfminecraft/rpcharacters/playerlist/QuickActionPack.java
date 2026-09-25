@@ -22,9 +22,9 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 
 /**
- * Keeps a small data pack in the main world that puts "Who's online" on the
+ * Keeps a small data pack in the main world that puts player lists on the
  * vanilla Quick Actions key (G). The key opens a fixed dialog from the pack;
- * its button sends {@link PlayerListDialogs#OPEN_ACTION} back to the server.
+ * its buttons send custom actions back to the server for online players or playtime.
  * Data packs load at startup, so changes apply after the next restart.
  */
 public final class QuickActionPack {
@@ -60,6 +60,14 @@ public final class QuickActionPack {
 		button.add("action", action);
 		JsonArray actions = new JsonArray();
 		actions.add(button);
+		JsonObject playtimeAction = new JsonObject();
+		playtimeAction.addProperty("type", "minecraft:custom");
+		playtimeAction.addProperty("id", PlaytimeDialogs.OPEN_ACTION.asString());
+		JsonObject playtimeButton = new JsonObject();
+		playtimeButton.addProperty("label", "Playtime leaderboard");
+		playtimeButton.addProperty("width", 160);
+		playtimeButton.add("action", playtimeAction);
+		actions.add(playtimeButton);
 		JsonObject exit = new JsonObject();
 		exit.addProperty("label", "Close");
 		exit.addProperty("width", 160);

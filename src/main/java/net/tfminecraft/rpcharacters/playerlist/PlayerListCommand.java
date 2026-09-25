@@ -31,14 +31,19 @@ public final class PlayerListCommand implements CommandExecutor, Listener {
 
 	@EventHandler
 	public void onCustomClick(PlayerCustomClickEvent event) {
-		if (!PlayerListDialogs.OPEN_ACTION.equals(event.getIdentifier())
+		boolean playtime = PlaytimeDialogs.OPEN_ACTION.equals(event.getIdentifier());
+		if ((!PlayerListDialogs.OPEN_ACTION.equals(event.getIdentifier()) && !playtime)
 				|| !(event.getCommonConnection() instanceof PlayerGameConnection connection)) {
 			return;
 		}
 		Player player = connection.getPlayer();
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			if (player.isOnline()) {
-				open(player);
+				if (playtime) {
+					PlaytimeDialogs.open(player);
+				} else {
+					open(player);
+				}
 			}
 		});
 	}
