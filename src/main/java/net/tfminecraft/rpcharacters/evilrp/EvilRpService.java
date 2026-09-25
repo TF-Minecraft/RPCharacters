@@ -79,15 +79,21 @@ public final class EvilRpService {
 		character.setEvilRpSessionEndsAtMs(now + EvilRpLoader.getSessionMs());
 		RPCharacters.getPlayerManager().savePlayer(player);
 
+		// Chat rather than the action bar, which the MMOCore HUD redraws every tick.
 		int minutes = EvilRpLoader.getSessionMinutes();
 		if (continuing) {
-			actionBar(player, RPTexts.MUTED + "Evil RP session reset to " + RPTexts.WARN + minutes + " minutes");
+			RPTexts.send(player, RPTexts.MUTED + "Evil RP session reset to " + RPTexts.WARN + minutes + " minutes"
+					+ RPTexts.MUTED + ".");
 			return true;
 		}
-		actionBar(player, RPTexts.ERROR + "Evil RP session started: " + RPTexts.WARN + minutes + " minutes");
-		TutorialService.show(player, TutorialService.EVIL_RP, Map.of(
+		boolean shown = TutorialService.show(player, TutorialService.EVIL_RP, Map.of(
 				"minutes", String.valueOf(minutes),
 				"strikes", String.valueOf(character.getEvilRpStrikes())));
+		if (!shown) {
+			RPTexts.send(player, RPTexts.ERROR + "Evil RP session started: " + RPTexts.WARN + minutes + " minutes"
+					+ RPTexts.MUTED + " (" + character.getEvilRpStrikes() + "/" + StrikeOutcome.MAX_STRIKES
+					+ " strikes).");
+		}
 		return true;
 	}
 
@@ -292,10 +298,6 @@ public final class EvilRpService {
 				.append(Component.text(" was in the middle of evil RP. If you don't spare them in the next "
 						+ seconds + " seconds, they get a strike. ", NamedTextColor.GRAY))
 				.append(spare));
-	}
-
-	private static void actionBar(Player player, String legacyText) {
-		player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(legacyText));
 	}
 
 	private static RPCharacter activeCharacter(Player player) {
