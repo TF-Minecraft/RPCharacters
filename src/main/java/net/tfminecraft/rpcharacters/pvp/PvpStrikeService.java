@@ -164,8 +164,11 @@ public final class PvpStrikeService {
 			if (!player.isOnline()) {
 				return;
 			}
-			if (PlayerManager.get(player) == null && retriesLeft > 0) {
-				applyVerdictLater(player, retriesLeft - 1);
+			if (PlayerManager.get(player) == null) {
+				// Keep the verdict for their next join if their data never loads.
+				if (retriesLeft > 0) {
+					applyVerdictLater(player, retriesLeft - 1);
+				}
 				return;
 			}
 			Decision verdict = verdicts.remove(player.getUniqueId());
