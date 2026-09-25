@@ -54,9 +54,13 @@ public final class EvilRpService {
 			tickTask.cancel();
 			tickTask = null;
 		}
-		if (!pendingSpares.isEmpty() && RPCharacters.plugin != null) {
-			RPCharacters.plugin.getLogger().warning("Dropped " + pendingSpares.size()
-					+ " evil RP strike(s) still waiting on a spare decision at shutdown.");
+		// Nobody can spare them once the server stops, so the strikes land now.
+		for (Map.Entry<UUID, PendingSpare> entry : pendingSpares.entrySet()) {
+			Player victim = Bukkit.getPlayer(entry.getKey());
+			RPCharacter character = victim != null ? characterById(victim, entry.getValue().characterId) : null;
+			if (character != null) {
+				applyStrike(victim, character);
+			}
 		}
 		pendingSpares.clear();
 	}

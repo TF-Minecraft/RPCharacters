@@ -260,6 +260,10 @@ public final class PermadeathService {
 	}
 
 	private static void scheduleEntityDeath(Player player) {
+		if (!RPCharacters.plugin.isEnabled()) {
+			// Shutting down: the character is already saved as dead and the player is about to leave.
+			return;
+		}
 		ignoreNextZoneDeath.add(player.getUniqueId());
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			if (!player.isOnline() || player.isDead()) {

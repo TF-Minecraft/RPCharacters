@@ -26,6 +26,8 @@ public final class TutorialLoader implements LoaderInterface {
 			config.load(file);
 		} catch (IOException | InvalidConfigurationException e) {
 			e.printStackTrace();
+			// Keep the tutorials from the last good load.
+			return;
 		}
 
 		tutorials.clear();
