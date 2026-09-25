@@ -218,7 +218,7 @@ public class ProfessionEffectService implements Listener {
 			String type = spec.split("\\.")[0];
 			int exp = Integer.parseInt(spec.split("\\.")[1]);
 			if (entityType.equalsIgnoreCase(type)) {
-				Bukkit.dispatchCommand(console, "mmocore admin exp give " + player.getName() + " agriculturist " + exp);
+				Bukkit.dispatchCommand(console, "mmocore admin exp give " + player.getName() + " forager " + exp);
 				return;
 			}
 		}
