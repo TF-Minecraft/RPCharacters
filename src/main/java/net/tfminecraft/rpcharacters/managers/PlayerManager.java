@@ -27,7 +27,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import net.Indyuce.mmocore.api.event.PlayerChangeClassEvent;
-import net.Indyuce.mmocore.api.event.PlayerLevelUpEvent;
+import net.Indyuce.mmocore.api.event.PlayerLevelChangeEvent;
 import net.Indyuce.mmocore.api.event.PlayerExperienceGainEvent;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
@@ -842,7 +842,10 @@ public class PlayerManager implements Listener{
 	}
 
 	@EventHandler
-	public void levelUp(PlayerLevelUpEvent e) {
+	public void levelUp(PlayerLevelChangeEvent e) {
+		if (e.getReason() != PlayerLevelChangeEvent.Reason.LEVEL_UP) {
+			return;
+		}
 		ClassService.trackFromPlayer(e.getPlayer());
 	}
 

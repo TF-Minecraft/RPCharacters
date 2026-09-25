@@ -4,7 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import net.Indyuce.mmocore.MMOCore;
-import net.Indyuce.mmocore.api.event.PlayerLevelUpEvent;
+import net.Indyuce.mmocore.api.event.PlayerLevelChangeEvent;
 import net.Indyuce.mmocore.experience.Profession;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -49,7 +49,10 @@ public final class ProfessionPointService {
 		RPCharacters.getPlayerManager().savePlayer(player);
 	}
 
-	public static void onProfessionLevelUp(PlayerLevelUpEvent event) {
+	public static void onProfessionLevelUp(PlayerLevelChangeEvent event) {
+		if (event.getReason() != PlayerLevelChangeEvent.Reason.LEVEL_UP) {
+			return;
+		}
 		Profession profession = event.getProfession();
 		if (profession == null) {
 			return;

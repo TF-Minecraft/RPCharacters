@@ -14,7 +14,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import net.Indyuce.mmocore.api.event.PlayerLevelUpEvent;
+import net.Indyuce.mmocore.api.event.PlayerLevelChangeEvent;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -151,7 +151,7 @@ public class ProfessionListener implements Listener {
 	}
 
 	@EventHandler
-	public void onProfessionLevelUp(PlayerLevelUpEvent event) {
+	public void onProfessionLevelUp(PlayerLevelChangeEvent event) {
 		ProfessionPointService.onProfessionLevelUp(event);
 	}
 }
