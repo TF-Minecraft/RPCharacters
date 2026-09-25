@@ -18,7 +18,10 @@ public final class GraveLootRules {
 		if (player == null || grave == null) {
 			return false;
 		}
-		return grave.isOwner(player.getUniqueId()) || player.hasPermission(ADMIN_PERMISSION);
+		if (grave.isOwner(player.getUniqueId()) || player.hasPermission(ADMIN_PERMISSION)) {
+			return true;
+		}
+		return !grave.isLocked();
 	}
 
 	/** Whether this player could take items from a grave they had just made by killing someone. */
@@ -36,11 +39,8 @@ public final class GraveLootRules {
 		if (player == null || grave == null || canRecover(player, grave)) {
 			return false;
 		}
-		if (!hasCanLootGravesTrait(player)) {
+		if (!grave.isLocked() || !hasCanLootGravesTrait(player)) {
 			return false;
-		}
-		if (!grave.isLocked()) {
-			return true;
 		}
 		return grave.getKiller() != null && grave.getKiller().equals(player.getUniqueId());
 	}

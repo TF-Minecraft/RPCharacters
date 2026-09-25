@@ -41,6 +41,7 @@ public final class GraveLoader implements LoaderInterface {
 
 	private static String messageLocked = "&cThis grave is locked.";
 	private static String messageRecovered = "&aYou recovered your belongings.";
+	private static String messageLooted = "&aYou looted this grave.";
 	private static String messageInventoryFull = "&eSome items did not fit and were dropped.";
 	private static String messageEmpty = "&7There is nothing left here.";
 	private static String messagePlaced = "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}.";
@@ -83,6 +84,7 @@ public final class GraveLoader implements LoaderInterface {
 
 		messageLocked = config.getString("messages.locked", messageLocked);
 		messageRecovered = config.getString("messages.recovered", messageRecovered);
+		messageLooted = config.getString("messages.looted", messageLooted);
 		messageInventoryFull = config.getString("messages.inventory-full", messageInventoryFull);
 		messageEmpty = config.getString("messages.empty", messageEmpty);
 		messagePlaced = config.getString("messages.placed", messagePlaced);
@@ -228,6 +230,10 @@ public final class GraveLoader implements LoaderInterface {
 
 	public static String getMessageRecovered() {
 		return messageRecovered;
+	}
+
+	public static String getMessageLooted() {
+		return messageLooted;
 	}
 
 	public static String getMessageInventoryFull() {
