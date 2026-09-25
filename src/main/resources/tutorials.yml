@@ -25,3 +25,14 @@ tutorials:
       - "§7During a session any strike kills your character, no matter how many strikes you have ({strikes} so far)."
       - "§7If another player kills you, your grave is left unlocked and anyone can loot it."
       - "§7You can't switch characters until it's over. Check with §a/rpcharacter strikes§7."
+
+  # Shown to everyone caught in a /pvp start. {seconds} is how long a killer has to choose.
+  pvp-strikes:
+    lines:
+      - "#d65c5cPvP Strikes"
+      - "§7Someone started a fight near you. If another player kills you or knocks you out in it, they decide your fate."
+      - "§7They have {seconds} seconds to §aspare §7you or give you a §cstrike§7. If they don't choose, you're spared."
+      - "§7First strike is a healing injury, the second a permanent one. The third kills your character."
+      - "§7When a strike would kill you, they can also §ewound §7(healing injury) or §6maim §7(permanent injury) you instead, with no strike."
+      - "§7In an evil RP session any strike kills, and if a player kills you your grave is left unlocked."
+      - "§7Deaths with no player to blame don't count. Check your strikes with §a/rpcharacter strikes§7."

@@ -27,6 +27,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 public final class PvpCommand implements CommandExecutor, TabCompleter, Listener {
@@ -111,6 +112,13 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		String warning = PvpLoader.getStartWarning()
 				.replace("{seconds}", String.valueOf(PvpLoader.getStartWarnSeconds()));
 		broadcast(targets, warning);
+		for (UUID id : targets) {
+			Player online = Bukkit.getPlayer(id);
+			if (online != null) {
+				TutorialService.show(online, TutorialService.PVP_STRIKES, Map.of(
+						"seconds", String.valueOf(PvpLoader.getDecisionSeconds())));
+			}
+		}
 
 		int warnSeconds = PvpLoader.getStartWarnSeconds();
 		int from = Math.min(PvpLoader.getStartCountdownFrom(), warnSeconds);
