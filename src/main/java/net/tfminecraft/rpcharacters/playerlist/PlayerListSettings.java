@@ -8,9 +8,9 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 /**
- * Settings from {@code player-list.yml}. Rank tags are ordered: a player shows
- * the tag of the first listed group they belong to, and the list is sorted in
- * that order.
+ * Settings from {@code player-list.yml}. Rank tags use the player's primary
+ * LuckPerms group. Their configured order controls player-list sorting and
+ * permission matching when LuckPerms is unavailable.
  */
 public final class PlayerListSettings {
 

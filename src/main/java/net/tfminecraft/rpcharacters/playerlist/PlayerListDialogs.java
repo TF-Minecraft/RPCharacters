@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -19,6 +20,8 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.model.user.User;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -153,8 +156,16 @@ public final class PlayerListDialogs {
 		return online;
 	}
 
-	/** First configured LuckPerms group the player is in, via its {@code group.<name>} node. */
+	/** Match TAB's primary-group mode; permission matching is only a fallback without LuckPerms. */
 	static String rank(Player player, PlayerListSettings settings) {
+		try {
+			User user = LuckPermsProvider.get().getUserManager().getUser(player.getUniqueId());
+			if (user == null) return null;
+			String group = user.getPrimaryGroup().toLowerCase(Locale.ROOT);
+			return settings.rankTags().containsKey(group) ? group : null;
+		} catch (IllegalStateException | NoClassDefFoundError unavailable) {
+			// LuckPerms is optional; preserve permission-based ranks when it is absent.
+		}
 		return settings.rank(group -> {
 			String node = "group." + group;
 			// isPermissionSet skips operators' blanket permissions.
