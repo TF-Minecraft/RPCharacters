@@ -136,8 +136,11 @@ public final class CharacterWipeService {
 				activeRemoved = true;
 			}
 			pd.getCharacters().remove(c);
-			deleteCharacterFile(uuid, c.getId());
+			boolean deleted = deleteCharacterFile(uuid, c.getId());
 			MailRecipientDirectory.remove(c.getId());
+			if (deleted) {
+				net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(uuid, c.getId());
+			}
 			deletedIds.add(c.getId());
 		}
 
@@ -165,13 +168,17 @@ public final class CharacterWipeService {
 		return doomed.size();
 	}
 
-	private static void deleteCharacterFile(UUID uuid, String characterId) {
+	private static boolean deleteCharacterFile(UUID uuid, String characterId) {
 		File file = new File(new File(CHARACTER_DATA_PATH, uuid.toString()), characterId + ".json");
-		if (file.exists() && !file.delete() && RPCharacters.plugin != null) {
+		if (!file.exists() || file.delete()) {
+			return true;
+		}
+		if (RPCharacters.plugin != null) {
 			RPCharacters.plugin.getLogger().warning(
 				"[wipe] could not delete character file " + file.getPath()
 			);
 		}
+		return false;
 	}
 
 	private static UUID parseUuid(String raw) {

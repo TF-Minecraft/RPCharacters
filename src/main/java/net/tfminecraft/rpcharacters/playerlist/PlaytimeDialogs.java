@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -22,12 +21,15 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.tfminecraft.rpcharacters.Cache;
-import net.tfminecraft.rpcharacters.database.PlaytimeIndexDatabase.Entry;
-import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
-import net.tfminecraft.rpcharacters.playtime.PlaytimeService;
+import net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory;
+import net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.Entry;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.PlayerData;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
-/** Active-character online playtime, including players who are currently offline. */
+/** Per-character playtime, including inactive and deceased characters. */
 public final class PlaytimeDialogs {
 
 	public static final Key OPEN_ACTION = Key.key("rpcharacters", "playtime_list");
@@ -39,14 +41,15 @@ public final class PlaytimeDialogs {
 
 	public static void open(Player viewer) {
 		if (!allowed(viewer)) return;
-		openPage(viewer, sortedPlayers(PlaytimeService.getAll()), 0);
+		openPage(viewer, sortedPlayers(CharacterPlaytimeDirectory.getAll()), 0);
 	}
 
 	static List<Entry> sortedPlayers(List<Entry> players) {
 		return players.stream()
-				.sorted(Comparator.comparingInt(Entry::getSeconds).reversed()
-						.thenComparing(Entry::getName, String.CASE_INSENSITIVE_ORDER)
-						.thenComparing(Entry::getUuid))
+				.sorted(Comparator.comparingInt(Entry::seconds).reversed()
+						.thenComparing(Entry::name, String.CASE_INSENSITIVE_ORDER)
+						.thenComparing(Entry::ownerId)
+						.thenComparing(Entry::characterId))
 				.toList();
 	}
 
@@ -61,19 +64,19 @@ public final class PlaytimeDialogs {
 		int pages = Math.max(1, (players.size() + PAGE_SIZE - 1) / PAGE_SIZE);
 		int page = Math.max(0, Math.min(requestedPage, pages - 1));
 		List<DialogBody> body = new ArrayList<>();
-		body.add(DialogBody.plainMessage(Component.text("Current RP character playtime", NamedTextColor.GRAY)
+		body.add(DialogBody.plainMessage(Component.text("Character playtime", NamedTextColor.GRAY)
 				.append(Component.newline()).append(Component.text(players.size()
-						+ " players • Page " + (page + 1) + "/" + pages, NamedTextColor.DARK_GRAY))
-				.append(Component.newline()).append(Component.text("Hover a player for details", NamedTextColor.GRAY)), 420));
+						+ " characters • Page " + (page + 1) + "/" + pages, NamedTextColor.DARK_GRAY))
+				.append(Component.newline()).append(Component.text("Hover a character for player details", NamedTextColor.GRAY)), 420));
 		if (players.isEmpty()) {
-			body.add(DialogBody.plainMessage(Component.text("No players recorded yet."), 420));
+			body.add(DialogBody.plainMessage(Component.text("No characters recorded yet."), 420));
 		}
 		Component rows = GuiText.padded("§7#", 32)
 				.append(GuiText.padded("", 14))
-				.append(GuiText.padded("§7Player", 150))
+				.append(GuiText.padded("§7Character", 150))
 				.append(GuiText.padded("§7Playtime", 112));
 		int position = page * PAGE_SIZE;
-		// Entries include offline players; no per-player files need to be loaded.
+		// Entries include saved offline characters; no character files are read here.
 		for (Entry player : pagePlayers(players, page)) {
 			int rank = ++position;
 			TextColor colour = switch (rank) {
@@ -84,9 +87,9 @@ public final class PlaytimeDialogs {
 			};
 			Component row = Component.text()
 					.append(GuiText.padded(Integer.toString(rank), 32).color(colour))
-					.append(GuiText.padded(onlineMarker(viewer, player.getUuid()), 14))
-					.append(GuiText.padded(player.getName(), 150).color(NamedTextColor.WHITE))
-					.append(GuiText.padded(formatSeconds(player.getSeconds()), 112).color(colour))
+					.append(GuiText.padded(onlineMarker(viewer, player), 14))
+					.append(GuiText.padded(shortName(player.name()), 150).color(NamedTextColor.WHITE))
+					.append(GuiText.padded(formatSeconds(player.seconds()), 112).color(colour))
 					.hoverEvent(tooltip(viewer, player, rank)).build();
 			rows = rows.append(Component.newline()).append(row);
 		}
@@ -125,28 +128,48 @@ public final class PlaytimeDialogs {
 		return (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m";
 	}
 
-	static String onlineMarker(Player viewer, UUID subject) {
-		return visibleOnlinePlayer(viewer, subject) != null ? "§a●" : "";
+	static String shortName(String name) {
+		if (GuiText.width(name) <= 146) return name;
+		int end = name.length();
+		while (end > 0 && GuiText.width(name.substring(0, end) + "...") > 146) {
+			end = name.offsetByCodePoints(end, -1);
+		}
+		return name.substring(0, end) + "...";
 	}
 
-	private static Player visibleOnlinePlayer(Player viewer, UUID subject) {
-		Player online = Bukkit.getPlayer(subject);
-		return online != null && (online.equals(viewer) || viewer.canSee(online)) ? online : null;
+	static String onlineMarker(Player viewer, Entry entry) {
+		return visibleActivePlayer(viewer, entry) != null ? "§a●" : "";
+	}
+
+	private static Player visibleActivePlayer(Player viewer, Entry entry) {
+		if (entry.status() != Status.ALIVE || entry.hidden()) return null;
+		Player online = Bukkit.getPlayer(entry.ownerId());
+		if (online == null || (!online.equals(viewer) && !viewer.canSee(online))) return null;
+		PlayerData owner = PlayerManager.get(online);
+		RPCharacter active = owner == null ? null : owner.getActiveCharacter();
+		return active != null && !active.isHidden() && entry.characterId().equals(active.getId()) ? online : null;
 	}
 
 	static Component tooltip(Player viewer, Entry entry, int rank) {
-		Player online = visibleOnlinePlayer(viewer, entry.getUuid());
-		Component details = Component.text(entry.getName(), NamedTextColor.WHITE)
+		Player online = visibleActivePlayer(viewer, entry);
+		String playerName = Bukkit.getOfflinePlayer(entry.ownerId()).getName();
+		if (playerName == null || playerName.isBlank()) playerName = entry.ownerId().toString();
+		String status = switch (entry.status()) {
+			case ALIVE -> "Alive";
+			case DEAD -> "Deceased";
+			case MISSING -> "Missing";
+		};
+		Component details = Component.text(entry.name(), NamedTextColor.WHITE)
+				.append(Component.newline()).append(Component.text("Player: " + playerName, NamedTextColor.GRAY))
 				.append(Component.newline()).append(Component.text("Leaderboard: #" + rank, NamedTextColor.GOLD))
-				.append(Component.newline()).append(Component.text("Current character playtime: "
-						+ formatSeconds(entry.getSeconds()) + " " + (entry.getSeconds() % 60) + "s", NamedTextColor.GRAY))
-				.append(Component.newline()).append(Component.text(online == null ? "Offline" : "● Online",
+				.append(Component.newline()).append(Component.text("Character playtime: "
+						+ formatSeconds(entry.seconds()) + " " + (entry.seconds() % 60) + "s", NamedTextColor.GRAY))
+				.append(Component.newline()).append(Component.text("Character status: " + status, NamedTextColor.GRAY))
+				.append(Component.newline()).append(Component.text(online == null ? "Not currently played" : "● Currently playing",
 						online == null ? NamedTextColor.GRAY : NamedTextColor.GREEN));
 		if (online != null) {
 			details = details.append(Component.newline())
-					.append(Component.text("Character: ", NamedTextColor.GRAY))
-					.append(GuiText.component(DisplayIdentityService.resolveDisplaySafe(online)))
-					.append(Component.newline()).append(Component.text("Ping: " + online.getPing() + "ms", NamedTextColor.GRAY));
+					.append(Component.text("Ping: " + online.getPing() + "ms", NamedTextColor.GRAY));
 		}
 		return details;
 	}
