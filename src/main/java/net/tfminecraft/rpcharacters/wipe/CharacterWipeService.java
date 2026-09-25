@@ -138,6 +138,7 @@ public final class CharacterWipeService {
 			pd.getCharacters().remove(c);
 			deleteCharacterFile(uuid, c.getId());
 			MailRecipientDirectory.remove(c.getId());
+			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(uuid, c.getId());
 			deletedIds.add(c.getId());
 		}
 

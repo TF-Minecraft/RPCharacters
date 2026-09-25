@@ -459,6 +459,7 @@ public class Database {
 			CharacterEvilRpFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
         	save(file, defaults);
+			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
         } catch (Throwable ex) {
 			ex.printStackTrace();
