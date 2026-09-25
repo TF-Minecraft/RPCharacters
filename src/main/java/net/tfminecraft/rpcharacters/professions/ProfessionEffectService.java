@@ -2,16 +2,16 @@ package net.tfminecraft.rpcharacters.professions;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityBreedEvent;
 import org.bukkit.inventory.ItemStack;
@@ -181,24 +181,16 @@ public class ProfessionEffectService implements Listener {
 		}
 	}
 
-	@EventHandler
+	@EventHandler(ignoreCancelled = true)
 	public void breedEvent(EntityBreedEvent event) {
 		if (!(event.getBreeder() instanceof Player player)) {
 			return;
 		}
-		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(player)) {
-			if (!"breeding".equalsIgnoreCase(upgrade.getType())) {
-				continue;
-			}
-			for (String unlock : upgrade.getUnlocks()) {
-				if (!unlock.equalsIgnoreCase(event.getEntityType().toString().toLowerCase())) {
-					continue;
-				}
-				giveBreedingExp(player, event.getEntityType().toString().toLowerCase());
-				return;
-			}
+		String entityType = event.getEntityType().name().toLowerCase(Locale.ROOT);
+		if (hasBreedingUnlock(player, entityType)) {
+			return;
 		}
-		if (Cache.professionLockedBreeding.contains(event.getEntityType().toString().toLowerCase())) {
+		if (Cache.professionLockedBreeding.contains(entityType)) {
 			event.setCancelled(true);
 			if (event.getMother() instanceof Animals mother) {
 				mother.setLoveModeTicks(0);
@@ -207,20 +199,30 @@ public class ProfessionEffectService implements Listener {
 				father.setLoveModeTicks(0);
 			}
 			RPTexts.send(player, RPTexts.ERROR + "You are not allowed to breed this animal");
-			return;
 		}
-		giveBreedingExp(player, "generic");
 	}
 
-	private static void giveBreedingExp(Player player, String entityType) {
-		ConsoleCommandSender console = Bukkit.getServer().getConsoleSender();
-		for (String spec : Cache.professionBreedingExp) {
-			String type = spec.split("\\.")[0];
-			int exp = Integer.parseInt(spec.split("\\.")[1]);
-			if (entityType.equalsIgnoreCase(type)) {
-				Bukkit.dispatchCommand(console, "mmocore admin exp give " + player.getName() + " forager " + exp);
-				return;
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void awardBreedingExperience(EntityBreedEvent event) {
+		if (event.isCancelled() || !(event.getBreeder() instanceof Player player)
+				|| Cache.professionBreedingExperience == null) {
+			return;
+		}
+		String entityType = event.getEntityType().name().toLowerCase(Locale.ROOT);
+		Cache.professionBreedingExperience.award(player, hasBreedingUnlock(player, entityType) ? entityType : "generic");
+	}
+
+	private static boolean hasBreedingUnlock(Player player, String entityType) {
+		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(player)) {
+			if (!"breeding".equalsIgnoreCase(upgrade.getType())) {
+				continue;
+			}
+			for (String unlock : upgrade.getUnlocks()) {
+				if (unlock.equalsIgnoreCase(entityType)) {
+					return true;
+				}
 			}
 		}
+		return false;
 	}
 }

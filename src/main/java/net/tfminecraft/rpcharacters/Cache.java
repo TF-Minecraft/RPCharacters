@@ -142,7 +142,7 @@ public class Cache {
 	public static int professionMaxSpendingPoints = 40;
 	public static String professionPermContext = "main";
 	public static List<String> professionLockedBreeding = new ArrayList<>();
-	public static List<String> professionBreedingExp = new ArrayList<>();
+	public static net.tfminecraft.rpcharacters.professions.BreedingExperienceService professionBreedingExperience;
 	public static boolean professionAdminDebugMessages = false;
 	public static List<net.tfminecraft.rpcharacters.professions.ProfessionItemType> professionItemTypes = new ArrayList<>();
 }
