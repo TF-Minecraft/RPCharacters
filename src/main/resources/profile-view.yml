@@ -15,3 +15,13 @@ format:
   - ""
   - "&fDescription:"
   - "&7{description}"
+
+# G-menu character sheet; the character name is already in the dialog title.
+sheet-format:
+  - "&fGender: &e{gender}"
+  - "&fAge: &e{age}"
+  - "&fBirthday: &e{birthday}"
+  - "&fRace: &e{race}"
+  - ""
+  - "&fDescription:"
+  - "&7{description}"

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import net.tfminecraft.rpcharacters.playerlist.PlayerListSettings;
+import net.tfminecraft.rpcharacters.profile.ProfileFormatter;
 
 public class Cache {
 	public static List<String> attributes = new ArrayList<>();
@@ -120,6 +121,7 @@ public class Cache {
 	public static boolean profileRequireEmptyHand = true;
 	public static int profileViewCooldownSeconds = 0;
 	public static List<String> profileFormatLines = new ArrayList<>();
+	public static List<String> profileSheetFormatLines = ProfileFormatter.DEFAULT_SHEET_FORMAT;
 
 	public static PlayerListSettings playerList = PlayerListSettings.defaults();
 

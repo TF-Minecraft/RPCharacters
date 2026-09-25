@@ -1,7 +1,5 @@
 package net.tfminecraft.rpcharacters.profile;
 
-import java.util.List;
-
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -127,11 +125,11 @@ public final class ProfileManager implements Listener {
 			return;
 		}
 
-		List<String> lines = ProfileFormatter.format(event.getTargetCharacter());
 		if (event.getPresentation() == CharacterProfileViewEvent.Presentation.SHEET) {
-			PlayerListDialogs.openCharacterSheet(viewer, target, lines);
+			PlayerListDialogs.openCharacterSheet(viewer, target,
+					ProfileFormatter.formatSheet(event.getTargetCharacter()));
 		} else {
-			for (String line : lines) {
+			for (String line : ProfileFormatter.format(event.getTargetCharacter())) {
 				RPTexts.send(viewer, line);
 			}
 		}
