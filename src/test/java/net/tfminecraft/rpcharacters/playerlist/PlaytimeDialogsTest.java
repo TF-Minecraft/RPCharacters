@@ -28,23 +28,21 @@ class PlaytimeDialogsTest {
 
 	@Test
 	void tooltipShowsCharacterAndOwningAccountIncludingDeceasedCharacters() {
-		Player viewer = mock(Player.class);
 		OfflinePlayer owner = mock(OfflinePlayer.class);
 		when(owner.getName()).thenReturn("PlayerOne");
 		Entry entry = entry("dead", "Sir Rowan", 3661, Status.DEAD);
 		try (var bukkit = mockStatic(Bukkit.class)) {
 			bukkit.when(() -> Bukkit.getOfflinePlayer(OWNER)).thenReturn(owner);
-			assertEquals("Sir Rowan\nPlayer: PlayerOne\nLeaderboard: #2\nCharacter playtime: 0d 1h 1m 1s\nCharacter status: Deceased\nNot currently played",
-					PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(viewer, entry, 2)));
+			assertEquals("Sir Rowan\nPlayer: PlayerOne\nCharacter playtime: 0d 1h 1m 1s\nCharacter status: Deceased",
+					PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(entry)));
 		}
 	}
 
 	@Test
-	void onlyCurrentlyPlayedVisibleCharacterGetsDotAndPing() {
+	void onlyCurrentlyPlayedVisibleCharacterGetsDot() {
 		Player viewer = mock(Player.class);
 		Player target = mock(Player.class);
 		when(target.getName()).thenReturn("PlayerOne");
-		when(target.getPing()).thenReturn(42);
 		PlayerData data = mock(PlayerData.class);
 		RPCharacter active = mock(RPCharacter.class);
 		when(active.getId()).thenReturn("active");
@@ -56,11 +54,11 @@ class PlaytimeDialogsTest {
 			bukkit.when(() -> Bukkit.getPlayer(OWNER)).thenReturn(target);
 			manager.when(() -> PlayerManager.get(target)).thenReturn(data);
 			assertEquals("", PlaytimeDialogs.onlineMarker(viewer, entry));
-			assertFalse(PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(viewer, entry, 1)).contains("Ping:"));
+			assertFalse(PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(entry)).contains("Ping:"));
 			when(viewer.canSee(target)).thenReturn(true);
 			assertEquals("§a●", PlaytimeDialogs.onlineMarker(viewer, entry));
-			assertEquals("Lady Wren\nPlayer: PlayerOne\nLeaderboard: #1\nCharacter playtime: 0d 0h 1m 0s\nCharacter status: Alive\n● Currently playing\nPing: 42ms",
-					PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(viewer, entry, 1)));
+			assertEquals("Lady Wren\nPlayer: PlayerOne\nCharacter playtime: 0d 0h 1m 0s\nCharacter status: Alive",
+					PlainTextComponentSerializer.plainText().serialize(PlaytimeDialogs.tooltip(entry)));
 			assertEquals("", PlaytimeDialogs.onlineMarker(viewer, entry("inactive", "Other", 90, Status.ALIVE)));
 			assertEquals("", PlaytimeDialogs.onlineMarker(viewer, entry("dead", "Former", 90, Status.DEAD)));
 			when(active.isHidden()).thenReturn(true);
