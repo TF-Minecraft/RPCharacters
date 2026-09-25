@@ -14,6 +14,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.professions.BreedingExperienceService;
+import net.Indyuce.mmocore.MMOCore;
 import net.tfminecraft.rpcharacters.professions.ProfessionItemType;
 import net.tfminecraft.rpcharacters.professions.ProfessionRegistry;
 
@@ -30,7 +33,8 @@ public class ProfessionsGlobalLoader implements LoaderInterface {
 		Cache.professionMaxSpendingPoints = config.getInt("max_spending_points", 40);
 		Cache.professionPermContext = config.getString("perm_context", "main");
 		Cache.professionLockedBreeding = config.getStringList("lock_breeding");
-		Cache.professionBreedingExp = config.getStringList("breeding_exp");
+		Cache.professionBreedingExperience = new BreedingExperienceService(
+				config.getStringList("breeding_exp"), MMOCore.plugin.professionManager, RPCharacters.plugin.getLogger());
 		Cache.professionAdminDebugMessages = config.getBoolean("admin-debug-messages", false);
 
 		List<ProfessionItemType> types = new ArrayList<>();
