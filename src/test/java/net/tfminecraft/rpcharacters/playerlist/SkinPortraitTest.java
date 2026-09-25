@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.awt.image.BufferedImage;
 import java.nio.charset.StandardCharsets;
@@ -13,7 +14,11 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.ObjectComponent;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.ShadowColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.object.SpriteObjectContents;
 
 class SkinPortraitTest {
 
@@ -85,14 +90,41 @@ class SkinPortraitTest {
 	}
 
 	@Test
-	void rowsMergeRunsOfOneColour() {
+	void colouredAndTransparentRowsUseEqualSizeImageCells() {
 		BufferedImage front = new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB);
 		fill(front, 0, 0, 16, 1, BODY);
-		Component row = SkinPortrait.rows(front).get(0);
-		assertEquals(1, row.children().size());
-		assertEquals(SkinPortrait.PIXEL.repeat(16), ((TextComponent) row.children().get(0)).content());
-		Component blank = SkinPortrait.rows(front).get(1);
-		assertEquals(SkinPortrait.BLANK.repeat(16), ((TextComponent) blank.children().get(0)).content());
+		var rows = SkinPortrait.rows(front);
+		assertEquals(32, rows.size());
+		for (int y = 0; y < 32; y++) {
+			var children = rows.get(y).children();
+			assertEquals(18, children.size());
+			assertEquals(children.getFirst(), children.getLast());
+			assertEquals("\u3000", assertInstanceOf(TextComponent.class, children.getFirst()).content());
+			assertEquals("minecraft:uniform", children.getFirst().font().asString());
+			for (Component cell : children.subList(1, 17)) {
+				ObjectComponent object = assertInstanceOf(ObjectComponent.class, cell);
+				SpriteObjectContents sprite = assertInstanceOf(SpriteObjectContents.class, object.contents());
+				assertEquals("minecraft:blocks", sprite.atlas().asString());
+				assertEquals(y == 0 ? "minecraft:block/lightning_rod_on" : "minecraft:block/redstone_dust_overlay",
+						sprite.sprite().asString());
+				assertEquals(TextDecoration.State.TRUE, cell.decoration(TextDecoration.BOLD));
+				assertEquals(ShadowColor.none(), cell.shadowColor());
+				if (y == 0) assertEquals(BODY & 0xFFFFFF, cell.color().value());
+			}
+		}
+	}
+
+	@Test
+	void adjacentImageCellsKeepTheirOwnColoursAndTransparency() {
+		BufferedImage front = new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB);
+		front.setRGB(0, 0, HEAD);
+		front.setRGB(1, 0, BODY);
+		front.setRGB(2, 0, 0x00123456);
+		var cells = SkinPortrait.row(front, 0).children().subList(1, 17);
+		assertEquals(HEAD & 0xFFFFFF, cells.get(0).color().value());
+		assertEquals(BODY & 0xFFFFFF, cells.get(1).color().value());
+		SpriteObjectContents blank = (SpriteObjectContents) ((ObjectComponent) cells.get(2)).contents();
+		assertEquals("minecraft:block/redstone_dust_overlay", blank.sprite().asString());
 	}
 
 	private static String textures(String url, boolean slim) {
