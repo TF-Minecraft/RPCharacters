@@ -47,7 +47,7 @@ public final class PermadeathRisk {
 		}
 
 		lore.add(RPTexts.formatGui(RPTexts.MUTED + "Healing injuries may become permanent on death."));
-		lore.add(RPTexts.formatGui(RPTexts.MUTED + "Remedies cure healing injuries only."));
+		lore.add(RPTexts.formatGui(RPTexts.MUTED + "Surgery treats healing injuries only."));
 		lore.add(RPTexts.formatGui(RPTexts.MUTED + "Prosthetics replace some permanent injuries."));
 
 		return lore;

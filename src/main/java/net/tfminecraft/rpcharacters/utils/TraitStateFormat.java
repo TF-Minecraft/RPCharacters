@@ -47,6 +47,19 @@ public final class TraitStateFormat {
 		return out.toString();
 	}
 
+	/**
+	 * Short form for trait lists, rounded up to whole hours ("37h"), or minutes under an hour ("45m").
+	 */
+	public static String formatHoursRemaining(long remainingMs) {
+		if (remainingMs <= 0L) {
+			return "0m";
+		}
+		if (remainingMs < MS_PER_HOUR) {
+			return ((remainingMs + MS_PER_MINUTE - 1L) / MS_PER_MINUTE) + "m";
+		}
+		return ((remainingMs + MS_PER_HOUR - 1L) / MS_PER_HOUR) + "h";
+	}
+
 	public static String formatFuel(double current, double capacity) {
 		return Math.round(current) + "/" + Math.round(capacity);
 	}

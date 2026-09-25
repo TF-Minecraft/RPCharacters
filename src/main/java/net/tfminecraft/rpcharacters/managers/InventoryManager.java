@@ -980,7 +980,15 @@ public class InventoryManager {
 			String displayName = injuryOrProsthetic
 					? TraitEffectResolver.resolveDisplayName(c, trait)
 					: trait.getName();
-			lore.add(displayName + RPTexts.mutedParenthetical(WordUtils.capitalize(key)));
+			String remaining = "";
+			if (trait.hasDuration()) {
+				long remainingMs = c.getDurationRemainingMs(trait.getId());
+				if (remainingMs < 0L) {
+					remainingMs = trait.getDurationMs();
+				}
+				remaining = RPTexts.mutedParenthetical(TraitStateFormat.formatHoursRemaining(remainingMs));
+			}
+			lore.add(displayName + remaining + RPTexts.mutedParenthetical(WordUtils.capitalize(key)));
 		}
 		if (c.getStatus().equals(Status.ALIVE)) {
 			lore.addAll(PermadeathService.computeRisk(c).toLoreLines());

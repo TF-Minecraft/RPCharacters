@@ -17,7 +17,6 @@ import net.tfminecraft.rpcharacters.loaders.ChatLoader;
 import net.tfminecraft.rpcharacters.loaders.ConfigLoader;
 import net.tfminecraft.rpcharacters.loaders.MaskLoader;
 import net.tfminecraft.rpcharacters.loaders.AttributePointTomeLoader;
-import net.tfminecraft.rpcharacters.loaders.RemedyLoader;
 import net.tfminecraft.rpcharacters.loaders.SkillPointTomeLoader;
 import net.tfminecraft.rpcharacters.loaders.PermissionGroupsLoader;
 import net.tfminecraft.rpcharacters.loaders.WebCreatorLoader;
@@ -53,7 +52,6 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.managers.AttributePointCommandListener;
 import net.tfminecraft.rpcharacters.managers.AttributePointSpendListener;
 import net.tfminecraft.rpcharacters.managers.AttributePointTomeListener;
-import net.tfminecraft.rpcharacters.managers.RemedyListener;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathDependencyListener;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathZoneListener;
 import net.tfminecraft.rpcharacters.permadeath.WorldGuardBridge;
@@ -131,7 +129,6 @@ public class RPCharacters extends JavaPlugin{
 	private final SkillPointTomeListener skillPointTomeListener = new SkillPointTomeListener();
 	private final SkillPointCommandListener skillPointCommandListener = new SkillPointCommandListener();
 	private final AttributePointTomeListener attributePointTomeListener = new AttributePointTomeListener();
-	private final RemedyListener remedyListener = new RemedyListener();
 	private final ProstheticRefuelListener prostheticRefuelListener = new ProstheticRefuelListener();
 	private final ProstheticInstallListener prostheticInstallListener = new ProstheticInstallListener();
 	private final PermadeathZoneListener permadeathZoneListener = new PermadeathZoneListener();
@@ -162,7 +159,6 @@ public class RPCharacters extends JavaPlugin{
 	private MaskLoader maskLoader;
 	private SkillPointTomeLoader skillPointTomeLoader;
 	private AttributePointTomeLoader attributePointTomeLoader;
-	private RemedyLoader remedyLoader;
 	private ChatLoader chatLoader;
 	private ProfileViewLoader profileViewLoader;
 	private PlayerListLoader playerListLoader;
@@ -207,7 +203,6 @@ public class RPCharacters extends JavaPlugin{
 		maskLoader = new MaskLoader();
 		skillPointTomeLoader = new SkillPointTomeLoader();
 		attributePointTomeLoader = new AttributePointTomeLoader();
-		remedyLoader = new RemedyLoader();
 		chatLoader = new ChatLoader();
 		profileViewLoader = new ProfileViewLoader();
 		playerListLoader = new PlayerListLoader();
@@ -318,7 +313,6 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(skillPointTomeListener, this);
 		getServer().getPluginManager().registerEvents(skillPointCommandListener, this);
 		getServer().getPluginManager().registerEvents(attributePointTomeListener, this);
-		getServer().getPluginManager().registerEvents(remedyListener, this);
 		getServer().getPluginManager().registerEvents(prostheticRefuelListener, this);
 		getServer().getPluginManager().registerEvents(prostheticInstallListener, this);
 		getServer().getPluginManager().registerEvents(permadeathZoneListener, this);
@@ -409,7 +403,6 @@ public class RPCharacters extends JavaPlugin{
 		injuryProgressionLoader.load(new File(getDataFolder(), "injury-progression.yml"));
 		prostheticLoader.load(new File(getDataFolder(), "prosthetics.yml"));
 		injuryPoolLoader.load(new File(getDataFolder(), "injuries.yml"));
-		remedyLoader.load(new File(getDataFolder(), "items.yml"));
 		StageLoader.oList.clear();
 		stageLoader.load(new File(getDataFolder(), "stages.yml"));
 		kitLoader.loadPreferred(getDataFolder());
