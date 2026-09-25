@@ -27,7 +27,6 @@ import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
-import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathService;
@@ -81,18 +80,21 @@ public final class PvpKnockoutManager implements Listener {
 		EvilRpService.handleKnockout(player, attackingPlayer(event));
 	}
 
+	/**
+	 * Nonlethal applies only when another player lands the killing blow.
+	 * The victim's mode never matters, and lava, mobs, and other non-player
+	 * damage always stay lethal.
+	 */
 	static boolean usesNonlethalMode(EntityDamageEvent event, Player player) {
 		Player attacker = attackingPlayer(event);
-		// In PvP the attacker's choice controls whether their blow can kill.
-		// Keep the existing victim-mode behaviour for non-PvP damage.
-		Player modeOwner = attacker != null && !attacker.getUniqueId().equals(player.getUniqueId())
-				? attacker : player;
-		PlayerData pd = PlayerManager.get(modeOwner);
+		if (attacker == null || attacker.getUniqueId().equals(player.getUniqueId())) {
+			return false;
+		}
+		PlayerData pd = PlayerManager.get(attacker);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			return false;
 		}
-		RPCharacter character = pd.getActiveCharacter();
-		return !character.isPvpLethal();
+		return !pd.getActiveCharacter().isPvpLethal();
 	}
 
 	static Player attackingPlayer(EntityDamageEvent event) {
