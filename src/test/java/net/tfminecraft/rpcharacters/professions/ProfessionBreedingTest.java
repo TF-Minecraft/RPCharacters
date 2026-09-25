@@ -94,6 +94,18 @@ class ProfessionBreedingTest {
     }
 
     @Test
+    void lockedBreedingUncancelledByAnotherPluginStillAwardsNothing() {
+        var event = event();
+        try (var players = mockStatic(PlayerManager.class)) {
+            listener.breedEvent(event);
+            verify(event).setCancelled(true);
+            when(event.isCancelled()).thenReturn(false);
+            listener.awardBreedingExperience(event);
+            verifyNoInteractions(experience);
+        }
+    }
+
+    @Test
     void cancellationByAnotherPluginPreventsXp() {
         var event = event();
         when(event.isCancelled()).thenReturn(true);

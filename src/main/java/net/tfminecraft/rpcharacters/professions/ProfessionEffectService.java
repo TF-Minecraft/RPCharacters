@@ -209,7 +209,11 @@ public class ProfessionEffectService implements Listener {
 			return;
 		}
 		String entityType = event.getEntityType().name().toLowerCase(Locale.ROOT);
-		Cache.professionBreedingExperience.award(player, hasBreedingUnlock(player, entityType) ? entityType : "generic");
+		boolean unlocked = hasBreedingUnlock(player, entityType);
+		if (!unlocked && Cache.professionLockedBreeding.contains(entityType)) {
+			return;
+		}
+		Cache.professionBreedingExperience.award(player, unlocked ? entityType : "generic");
 	}
 
 	private static boolean hasBreedingUnlock(Player player, String entityType) {
