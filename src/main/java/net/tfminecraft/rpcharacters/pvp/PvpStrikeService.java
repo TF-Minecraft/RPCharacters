@@ -142,8 +142,20 @@ public final class PvpStrikeService {
 			RPTexts.send(killer, RPTexts.ERROR + "You can only wound or maim someone whose next strike would kill them.");
 			return false;
 		}
-		pending.remove(victimId);
 		decision = decision.withChoice(choice);
+		boolean injury = choice == StrikeChoice.WOUND || choice == StrikeChoice.MAIM;
+		if (injury && victim != null && victim.isOnline() && PlayerManager.get(victim) != null) {
+			RPCharacter character = characterById(victim, decision.characterId);
+			// Keep the decision open when there's no injury left to give, so they can pick again.
+			if (character != null && !injure(victim, character, choice == StrikeChoice.MAIM, killer)) {
+				RPTexts.send(killer, RPTexts.ERROR + "They have no " + (choice == StrikeChoice.MAIM ? "permanent" : "healing")
+						+ " injuries left to give. Choose another option.");
+				return false;
+			}
+			pending.remove(victimId);
+			return true;
+		}
+		pending.remove(victimId);
 		if (choice == StrikeChoice.SPARE) {
 			RPTexts.send(killer, RPTexts.SUCCESS + "You spared them.");
 			if (victim != null) {
@@ -218,7 +230,10 @@ public final class PvpStrikeService {
 			return;
 		}
 		if (decision.choice == StrikeChoice.WOUND || decision.choice == StrikeChoice.MAIM) {
-			injure(victim, character, decision.choice == StrikeChoice.MAIM, killer);
+			// Chosen while they were offline; if nothing is left to give by now, they get off.
+			if (!injure(victim, character, decision.choice == StrikeChoice.MAIM, killer)) {
+				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared: there were no injuries left to give.");
+			}
 			return;
 		}
 		EvilRpService.applyDecay(character, System.currentTimeMillis());
@@ -247,23 +262,29 @@ public final class PvpStrikeService {
 		}
 	}
 
-	/** Wound or Maim: one healing or permanent injury, and no strike. */
-	private static void injure(Player victim, RPCharacter character, boolean maim, Player killer) {
-		character.setEvilRpSessionEndsAtMs(0L);
+	/**
+	 * Wound or Maim: one healing or permanent injury, and no strike. Returns false, changing
+	 * nothing, when there's no injury of that kind left to give.
+	 */
+	private static boolean injure(Player victim, RPCharacter character, boolean maim, Player killer) {
 		Trait injury = maim
 				? PermadeathService.givePermanentInjury(victim, character)
 				: PermadeathService.giveRandomInjury(victim, character);
+		if (injury == null) {
+			return false;
+		}
+		character.setEvilRpSessionEndsAtMs(0L);
 		RPCharacters.getPlayerManager().savePlayer(victim);
 		String verb = maim ? "maimed" : "wounded";
 		RPTexts.longTitle(victim, RPTexts.ERROR + (maim ? "Maimed" : "Wounded"),
-				injury != null ? TraitChangeService.resolveGainedMessage(injury) : " ");
+				TraitChangeService.resolveGainedMessage(injury));
 		RPTexts.send(victim, RPTexts.ERROR + "You were " + verb + " instead of killed. " + RPTexts.MUTED
-				+ (injury == null ? "There were no injuries left to give."
-						: maim ? "You got a permanent injury." : "You got a healing injury."));
+				+ (maim ? "You got a permanent injury." : "You got a healing injury."));
 		if (killer != null && killer.isOnline()) {
 			RPTexts.send(killer, RPTexts.ERROR + "You " + verb + " " + RPTexts.WARN + character.getName()
-					+ RPTexts.ERROR + "." + (injury == null ? RPTexts.MUTED + " They had no injuries left to give." : ""));
+					+ RPTexts.ERROR + ".");
 		}
+		return true;
 	}
 
 	private static void tick() {

@@ -2,6 +2,10 @@ package net.tfminecraft.rpcharacters.tutorial;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -13,6 +17,7 @@ import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
 
 public final class TutorialLoader implements LoaderInterface {
@@ -31,15 +36,37 @@ public final class TutorialLoader implements LoaderInterface {
 		}
 
 		tutorials.clear();
-		ConfigurationSection section = config.getConfigurationSection("tutorials");
+		addMissing(tutorials, config);
+		// Servers keep their old tutorials.yml, so tutorials added in later versions come from the jar.
+		addMissing(tutorials, bundled());
+	}
+
+	/** Adds each tutorial in {@code config} that {@code into} doesn't have yet. */
+	static void addMissing(Map<String, List<String>> into, FileConfiguration config) {
+		ConfigurationSection section = config != null ? config.getConfigurationSection("tutorials") : null;
 		if (section == null) {
 			return;
 		}
 		for (String id : section.getKeys(false)) {
 			List<String> lines = section.getStringList(id + ".lines");
 			if (!lines.isEmpty()) {
-				tutorials.put(id.toLowerCase(Locale.ROOT), List.copyOf(lines));
+				into.putIfAbsent(id.toLowerCase(Locale.ROOT), List.copyOf(lines));
 			}
+		}
+	}
+
+	private static FileConfiguration bundled() {
+		if (RPCharacters.plugin == null) {
+			return null;
+		}
+		InputStream stream = RPCharacters.plugin.getResource("tutorials.yml");
+		if (stream == null) {
+			return null;
+		}
+		try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+			return YamlConfiguration.loadConfiguration(reader);
+		} catch (IOException e) {
+			return null;
 		}
 	}
 

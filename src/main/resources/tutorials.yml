@@ -2,6 +2,7 @@
 # Lines take & or § colour codes and #rrggbb hex. Some tutorials fill in
 # {placeholders}; those are listed above the tutorial.
 tutorials:
+  # Tutorials missing here are filled in from the plugin's own copy of this file.
   # Shown when entering a permadeath zone.
   permadeath-zone:
     lines:
@@ -21,7 +22,7 @@ tutorials:
       - "#d65c5cEvil RP"
       - "§7You've started an evil RP session. It lasts {minutes} minutes."
       - "§7Picking a lock, robbing, pickpocketing or looting a locked grave sets it back to {minutes}."
-      - "§7If you're killed or knocked out in a §c/pvp start §7fight before it runs out, your killer can spare or kill you."
+      - "§7If you're killed or knocked out in a §c/pvp start §7fight before it runs out, your killer can spare, wound, maim or kill you."
       - "§7During a session any strike kills your character, no matter how many strikes you have ({strikes} so far)."
       - "§7If another player kills you, your grave is left unlocked and anyone can loot it."
       - "§7You can't switch characters until it's over. Check with §a/rpcharacter strikes§7."
