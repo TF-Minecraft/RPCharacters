@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ObjectComponent;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.ShadowColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.object.SpriteObjectContents;
@@ -95,8 +96,12 @@ class SkinPortraitTest {
 		var rows = SkinPortrait.rows(front);
 		assertEquals(32, rows.size());
 		for (int y = 0; y < 32; y++) {
-			assertEquals(16, rows.get(y).children().size());
-			for (Component cell : rows.get(y).children()) {
+			var children = rows.get(y).children();
+			assertEquals(18, children.size());
+			assertEquals(children.getFirst(), children.getLast());
+			assertEquals("\u3000", assertInstanceOf(TextComponent.class, children.getFirst()).content());
+			assertEquals("minecraft:uniform", children.getFirst().font().asString());
+			for (Component cell : children.subList(1, 17)) {
 				ObjectComponent object = assertInstanceOf(ObjectComponent.class, cell);
 				SpriteObjectContents sprite = assertInstanceOf(SpriteObjectContents.class, object.contents());
 				assertEquals("minecraft:blocks", sprite.atlas().asString());
@@ -115,7 +120,7 @@ class SkinPortraitTest {
 		front.setRGB(0, 0, HEAD);
 		front.setRGB(1, 0, BODY);
 		front.setRGB(2, 0, 0x00123456);
-		var cells = SkinPortrait.row(front, 0).children();
+		var cells = SkinPortrait.row(front, 0).children().subList(1, 17);
 		assertEquals(HEAD & 0xFFFFFF, cells.get(0).color().value());
 		assertEquals(BODY & 0xFFFFFF, cells.get(1).color().value());
 		SpriteObjectContents blank = (SpriteObjectContents) ((ObjectComponent) cells.get(2)).contents();

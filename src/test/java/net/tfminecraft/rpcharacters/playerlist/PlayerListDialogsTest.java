@@ -22,7 +22,7 @@ class PlayerListDialogsTest {
 		assertEquals(2, longCard.size());
 		assertEquals(shortCard.get(0), longCard.get(0));
 		assertEquals(512, objects(longCard.get(0)));
-		assertEquals("\n".repeat(31), text(longCard.get(0)));
+		assertEquals(("\u3000\u3000\n").repeat(31) + "\u3000\u3000", text(longCard.get(0)));
 		// No padding or server-estimated wraps: the client lays out its own font.
 		assertEquals("(Name)\n" + longLine, text(longCard.get(1)));
 		assertEquals(0, objects(longCard.get(1)));

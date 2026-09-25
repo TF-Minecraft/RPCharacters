@@ -45,13 +45,20 @@ public final class SkinPortrait {
 
 	public static final int WIDTH = 16;
 	public static final int HEIGHT = 32;
-	/** Rendered width of one portrait row in GUI pixels (8px sprite + 1px gap). */
-	public static final int ROW_WIDTH = WIDTH * 9;
+	/** Rendered row width: 16 cells of 9px plus two invisible 10px edge glyphs. */
+	public static final int ROW_WIDTH = WIDTH * 9 + 20;
 	// These vanilla block-atlas textures are solid white and fully transparent.
 	// Object sprites bypass the player's font. Bold adds a 1px advance to the
 	// fixed 8px sprite, matching the client's 9px line spacing in both axes.
 	private static final ObjectComponent PIXEL = sprite("block/lightning_rod_on");
 	private static final ObjectComponent BLANK = sprite("block/redstone_dust_overlay");
+	// Minecraft 1.21.10 culls sprite-only lines using unpositioned sprite bounds.
+	// Invisible, rasterized glyphs at both edges give each row positioned bounds.
+	// Pin their font, and use the same pair on every row; profile fonts cannot
+	// change the spacing between image cells or move individual rows.
+	// Bold also expands the anchor bounds enough to include the sprite's top edge.
+	private static final Component RENDER_ANCHOR = Component.text("\u3000")
+			.font(Key.key("minecraft", "uniform")).decorate(TextDecoration.BOLD).shadowColor(ShadowColor.none());
 
 	private static final String TEXTURE_HOST = "textures.minecraft.net";
 	private static final int CACHE_SIZE = 256;
@@ -184,14 +191,14 @@ public final class SkinPortrait {
 	}
 
 	static Component row(BufferedImage front, int y) {
-		TextComponent.Builder row = Component.text();
+		TextComponent.Builder row = Component.text().append(RENDER_ANCHOR);
 		for (int x = 0; x < WIDTH; x++) {
 			int argb = pixel(front, x, y);
 			row.append(solid(argb)
 					? PIXEL.color(TextColor.color(argb & 0xFFFFFF))
 					: BLANK);
 		}
-		return row.build();
+		return row.append(RENDER_ANCHOR).build();
 	}
 
 	private static ObjectComponent sprite(String texture) {

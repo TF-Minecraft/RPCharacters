@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
+import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.Cache;
 
 public class PersonaLoader implements LoaderInterface {
@@ -36,7 +37,7 @@ public class PersonaLoader implements LoaderInterface {
 					Cache.personaCharacterHiddenPermission);
 		}
 
-		Cache.personaNoCharacterFallback = config.getString("no-character-fallback", "");
+		Cache.personaNoCharacterFallback = StringFormatter.formatHex(config.getString("no-character-fallback", ""));
 
 		if (config.isConfigurationSection("display-name")) {
 			Cache.personaDisplayNameMinLength = config.getInt("display-name.length-minimum",
