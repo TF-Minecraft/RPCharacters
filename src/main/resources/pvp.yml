@@ -18,8 +18,10 @@ freeze-period-ticks: 1
 # Strikes from deaths and knockouts during a PvP start. SimpleFactions battles never
 # give strikes. The first strike is a healing injury, the second a permanent one,
 # and the third kills the character. In an evil RP session any strike kills.
+# When a strike would kill, the killer can also Wound (healing injury) or Maim
+# (permanent injury) instead, with no strike added.
 strikes:
-  # How long the killer has to click [Spare] or [Strike]/[Kill]. No choice means spare.
+  # How long the killer has to choose. No choice means spare.
   decision-seconds: 30
   # When enabled, one strike wears off after this many days without a new one.
   decay:

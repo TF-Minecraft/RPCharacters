@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.pvp;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,14 +29,18 @@ import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
+import net.tfminecraft.rpcharacters.permadeath.PermadeathService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
+import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 
 /**
  * Strikes from {@code /pvp start} fights. When a tagged player is killed or knocked out by
  * another player, the killer chooses to spare them or strike them. The strike is labelled
  * Kill when it would kill: the character's last strike, or any strike during an evil RP
- * session. Running out of time spares them.
+ * session. Then the killer can also Wound (healing injury) or Maim (permanent injury)
+ * instead, with no strike. Running out of time spares them.
  */
 public final class PvpStrikeService {
 
@@ -125,16 +130,33 @@ public final class PvpStrikeService {
 		return new GraveContext(inPvpStart, evil, null);
 	}
 
-	/** The killer's choice. {@code strike} false spares the victim. */
-	public static boolean choose(Player killer, UUID victimId, boolean strike) {
+	/** The killer's choice. */
+	public static boolean choose(Player killer, UUID victimId, StrikeChoice choice) {
 		Decision decision = victimId != null ? pending.get(victimId) : null;
 		if (decision == null || !decision.killerId.equals(killer.getUniqueId())) {
 			RPTexts.send(killer, RPTexts.ERROR + "There's no one waiting on your decision right now.");
 			return false;
 		}
-		pending.remove(victimId);
 		Player victim = Bukkit.getPlayer(victimId);
-		if (!strike) {
+		if (!choice.isOffered(decision.strikeKills)) {
+			RPTexts.send(killer, RPTexts.ERROR + "You can only wound or maim someone whose next strike would kill them.");
+			return false;
+		}
+		decision = decision.withChoice(choice);
+		boolean injury = choice == StrikeChoice.WOUND || choice == StrikeChoice.MAIM;
+		if (injury && victim != null && victim.isOnline() && PlayerManager.get(victim) != null) {
+			RPCharacter character = characterById(victim, decision.characterId);
+			// Keep the decision open when there's no injury left to give, so they can pick again.
+			if (character != null && !injure(victim, character, choice == StrikeChoice.MAIM, killer)) {
+				RPTexts.send(killer, RPTexts.ERROR + "They have no " + (choice == StrikeChoice.MAIM ? "permanent" : "healing")
+						+ " injuries left to give. Choose another option.");
+				return false;
+			}
+			pending.remove(victimId);
+			return true;
+		}
+		pending.remove(victimId);
+		if (choice == StrikeChoice.SPARE) {
 			RPTexts.send(killer, RPTexts.SUCCESS + "You spared them.");
 			if (victim != null) {
 				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared.");
@@ -189,15 +211,15 @@ public final class PvpStrikeService {
 			RPCharacters.getPlayerManager().savePlayer(victim);
 		}
 		boolean evil = EvilRpService.isInSession(character);
-		Decision decision = new Decision(character.getId(), killer.getUniqueId(), evil, died,
-				System.currentTimeMillis() + PvpLoader.getDecisionMs());
+		boolean kills = StrikeOutcome.nextStrikeKills(character.getEvilRpStrikes(), evil);
+		Decision decision = new Decision(character.getId(), killer.getUniqueId(), evil, died, kills,
+				System.currentTimeMillis() + PvpLoader.getDecisionMs(), StrikeChoice.STRIKE);
 		pending.put(victim.getUniqueId(), decision);
 
 		int seconds = PvpLoader.getDecisionSeconds();
-		boolean kills = StrikeOutcome.nextStrikeKills(character.getEvilRpStrikes(), evil);
 		RPTexts.send(victim, RPTexts.ERROR + "You're at " + RPTexts.formatGui(DisplayIdentityService.resolveDisplay(killer))
-				+ RPTexts.ERROR + "'s mercy. " + RPTexts.MUTED + "They have " + seconds + " seconds to spare you or "
-				+ (kills ? "kill" : "strike") + " you.");
+				+ RPTexts.ERROR + "'s mercy. " + RPTexts.MUTED + "They have " + seconds + " seconds to "
+				+ (kills ? "spare, wound, maim or kill you." : "spare or strike you."));
 		sendPrompt(killer, victim, character, evil, kills, seconds);
 		return true;
 	}
@@ -205,6 +227,13 @@ public final class PvpStrikeService {
 	private static void execute(Player victim, Decision decision, Player killer) {
 		RPCharacter character = characterById(victim, decision.characterId);
 		if (character == null) {
+			return;
+		}
+		if (decision.choice == StrikeChoice.WOUND || decision.choice == StrikeChoice.MAIM) {
+			// Chosen while they were offline; if nothing is left to give by now, they get off.
+			if (!injure(victim, character, decision.choice == StrikeChoice.MAIM, killer)) {
+				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared: there were no injuries left to give.");
+			}
 			return;
 		}
 		EvilRpService.applyDecay(character, System.currentTimeMillis());
@@ -233,6 +262,31 @@ public final class PvpStrikeService {
 		}
 	}
 
+	/**
+	 * Wound or Maim: one healing or permanent injury, and no strike. Returns false, changing
+	 * nothing, when there's no injury of that kind left to give.
+	 */
+	private static boolean injure(Player victim, RPCharacter character, boolean maim, Player killer) {
+		Trait injury = maim
+				? PermadeathService.givePermanentInjury(victim, character)
+				: PermadeathService.giveRandomInjury(victim, character);
+		if (injury == null) {
+			return false;
+		}
+		character.setEvilRpSessionEndsAtMs(0L);
+		RPCharacters.getPlayerManager().savePlayer(victim);
+		String verb = maim ? "maimed" : "wounded";
+		RPTexts.longTitle(victim, RPTexts.ERROR + (maim ? "Maimed" : "Wounded"),
+				TraitChangeService.resolveGainedMessage(injury));
+		RPTexts.send(victim, RPTexts.ERROR + "You were " + verb + " instead of killed. " + RPTexts.MUTED
+				+ (maim ? "You got a permanent injury." : "You got a healing injury."));
+		if (killer != null && killer.isOnline()) {
+			RPTexts.send(killer, RPTexts.ERROR + "You " + verb + " " + RPTexts.WARN + character.getName()
+					+ RPTexts.ERROR + ".");
+		}
+		return true;
+	}
+
 	private static void tick() {
 		long now = System.currentTimeMillis();
 		Iterator<Map.Entry<UUID, Decision>> it = pending.entrySet().iterator();
@@ -258,26 +312,39 @@ public final class PvpStrikeService {
 			int seconds) {
 		String victimName = RPTexts.formatGui(DisplayIdentityService.resolveDisplay(victim));
 		String command = "/rpcharacter %s " + victim.getUniqueId();
-		Component spare = Component.text("[Spare]", NamedTextColor.GREEN)
-				.decorate(TextDecoration.BOLD)
-				.clickEvent(ClickEvent.runCommand(String.format(command, "spare")))
-				.hoverEvent(HoverEvent.showText(Component.text("Let them go with no strike", NamedTextColor.GRAY)));
 		int next = character.getEvilRpStrikes() + 1;
-		Component strike = Component.text(kills ? "[Kill]" : "[Strike " + next + "/" + StrikeOutcome.MAX_STRIKES + "]",
-				NamedTextColor.RED)
-				.decorate(TextDecoration.BOLD)
-				.clickEvent(ClickEvent.runCommand(String.format(command, kills ? "kill" : "strike")))
-				.hoverEvent(HoverEvent.showText(Component.text(kills
-						? "Their character dies"
-						: next == 2 ? "They get a permanent injury" : "They get a healing injury", NamedTextColor.GRAY)));
+		Component buttons = button("[Spare]", NamedTextColor.GREEN, String.format(command, "spare"),
+				"Let them go with no strike");
+		if (kills) {
+			buttons = buttons
+					.append(Component.space())
+					.append(button("[Wound]", NamedTextColor.YELLOW, String.format(command, "wound"),
+							"They get a healing injury, no strike"))
+					.append(Component.space())
+					.append(button("[Maim]", NamedTextColor.GOLD, String.format(command, "maim"),
+							"They get a permanent injury, no strike"))
+					.append(Component.space())
+					.append(button("[Kill]", NamedTextColor.RED, String.format(command, "kill"), "Their character dies"));
+		} else {
+			buttons = buttons
+					.append(Component.space())
+					.append(button("[Strike " + next + "/" + StrikeOutcome.MAX_STRIKES + "]", NamedTextColor.RED,
+							String.format(command, "strike"),
+							next == 2 ? "They get a permanent injury" : "They get a healing injury"));
+		}
 		String reason = evil ? " was in an evil RP session, so any strike kills them." : " is at your mercy.";
 		killer.sendMessage(Component.empty()
 				.append(LegacyComponentSerializer.legacySection().deserialize(victimName))
 				.append(Component.text(reason + " If you don't choose in " + seconds + " seconds, they're spared. ",
 						NamedTextColor.GRAY))
-				.append(spare)
-				.append(Component.space())
-				.append(strike));
+				.append(buttons));
+	}
+
+	private static Component button(String label, NamedTextColor color, String command, String hover) {
+		return Component.text(label, color)
+				.decorate(TextDecoration.BOLD)
+				.clickEvent(ClickEvent.runCommand(command))
+				.hoverEvent(HoverEvent.showText(Component.text(hover, NamedTextColor.GRAY)));
 	}
 
 	private static RPCharacter activeCharacter(Player player) {
@@ -315,9 +382,10 @@ public final class PvpStrikeService {
 				continue;
 			}
 			try {
+				StrikeChoice choice = StrikeChoice.fromCommand(section.getString("choice", "strike"));
 				verdicts.put(UUID.fromString(key), new Decision(section.getString("character"),
 						UUID.fromString(section.getString("killer", "")), section.getBoolean("evil"),
-						section.getBoolean("died"), 0L));
+						section.getBoolean("died"), true, 0L, choice != null ? choice : StrikeChoice.STRIKE));
 			} catch (IllegalArgumentException | NullPointerException ex) {
 				RPCharacters.plugin.getLogger().warning("Skipping bad pending strike for " + key + " in " + VERDICT_FILE);
 			}
@@ -332,6 +400,7 @@ public final class PvpStrikeService {
 			config.set(key + ".killer", entry.getValue().killerId.toString());
 			config.set(key + ".evil", entry.getValue().evil);
 			config.set(key + ".died", entry.getValue().died);
+			config.set(key + ".choice", entry.getValue().choice.name().toLowerCase(Locale.ROOT));
 		}
 		try {
 			config.save(verdictFile());
@@ -344,9 +413,15 @@ public final class PvpStrikeService {
 	public record GraveContext(boolean inPvpStart, boolean evilVictim, UUID killerId) {
 	}
 
-	private record Decision(String characterId, UUID killerId, boolean evil, boolean died, long expiresAtMs) {
+	/** {@code strikeKills} is whether Kill (with Wound and Maim) was offered; {@code choice} is set once picked. */
+	private record Decision(String characterId, UUID killerId, boolean evil, boolean died, boolean strikeKills,
+			long expiresAtMs, StrikeChoice choice) {
 		Decision afterDeath() {
-			return new Decision(characterId, killerId, evil, true, expiresAtMs);
+			return new Decision(characterId, killerId, evil, true, strikeKills, expiresAtMs, choice);
+		}
+
+		Decision withChoice(StrikeChoice picked) {
+			return new Decision(characterId, killerId, evil, died, strikeKills, expiresAtMs, picked);
 		}
 	}
 

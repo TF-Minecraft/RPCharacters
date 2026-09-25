@@ -38,6 +38,7 @@ import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
+import net.tfminecraft.rpcharacters.pvp.StrikeChoice;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
 import net.tfminecraft.rpcharacters.tutorial.TutorialCommands;
 import net.tfminecraft.rpcharacters.tutorial.TutorialService;
@@ -438,11 +439,8 @@ public class CommandManager implements Listener, CommandExecutor{
 				return TutorialCommands.handle(p, args);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("strikes") && args.length == 1) {
 				return EvilRpCommands.handleOwnStrikes(p);
-			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("spare")) {
-				return EvilRpCommands.handleDecision(p, args, false);
-			} else if (cmd.getName().equalsIgnoreCase(cmd1)
-					&& (args[0].equalsIgnoreCase("strike") || args[0].equalsIgnoreCase("kill"))) {
-				return EvilRpCommands.handleDecision(p, args, true);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && StrikeChoice.fromCommand(args[0]) != null) {
+				return EvilRpCommands.handleDecision(p, args, StrikeChoice.fromCommand(args[0]));
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("setworldspawn")) {
 				if (!Permissions.isAdmin(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");

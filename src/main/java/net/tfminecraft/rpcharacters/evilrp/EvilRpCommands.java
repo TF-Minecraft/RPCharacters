@@ -12,6 +12,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
+import net.tfminecraft.rpcharacters.pvp.StrikeChoice;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /** {@code /rpcharacter strikes}, the spare/strike buttons and {@code /rpcharacter admin strikes}. */
@@ -32,8 +33,8 @@ public final class EvilRpCommands {
 		return true;
 	}
 
-	/** {@code /rpcharacter spare|strike|kill <victim>}, run from the buttons after a /pvp start win. */
-	public static boolean handleDecision(Player player, String[] args, boolean strike) {
+	/** {@code /rpcharacter spare|strike|kill|wound|maim <victim>}, run from the buttons after a /pvp start win. */
+	public static boolean handleDecision(Player player, String[] args, StrikeChoice choice) {
 		if (args.length != 2) {
 			RPTexts.send(player, RPTexts.ERROR + "Use the buttons in chat after defeating someone in a /pvp start fight.");
 			return true;
@@ -45,7 +46,7 @@ public final class EvilRpCommands {
 			Player victim = Bukkit.getPlayerExact(args[1]);
 			victimId = victim != null ? victim.getUniqueId() : null;
 		}
-		PvpStrikeService.choose(player, victimId, strike);
+		PvpStrikeService.choose(player, victimId, choice);
 		return true;
 	}
 
