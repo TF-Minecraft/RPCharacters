@@ -24,7 +24,9 @@ final class GraveRecover {
 		}
 		Location dropAt = overflowAt != null ? overflowAt.clone() : graveOverflowLocation(grave, player);
 		GraveLootDrop.TransferResult result = GraveLootDrop.transferToPlayer(player, grave, dropAt);
-		send(player, GraveLoader.getMessageRecovered());
+		send(player, grave.isOwner(player.getUniqueId())
+				? GraveLoader.getMessageRecovered()
+				: GraveLoader.getMessageLooted());
 		if (result.overflowDropped()) {
 			send(player, GraveLoader.getMessageInventoryFull());
 		}

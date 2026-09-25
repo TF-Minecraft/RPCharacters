@@ -37,6 +37,7 @@ insurance:
 messages:
   locked: "&cThis grave is locked."
   recovered: "&aYou recovered your belongings."
+  looted: "&aYou looted this grave."
   inventory-full: "&eSome items did not fit and were dropped."
   empty: "&7There is nothing left here."
   placed: "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}."

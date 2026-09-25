@@ -47,10 +47,17 @@ public final class GraveHologramTexts {
 
 	public static List<String> linesForViewer(Player viewer, Grave grave) {
 		List<String> lines = new ArrayList<>(baseLines(grave));
-		if (viewer != null && GraveLootRules.canSteal(viewer, grave)) {
+		if (showsLootHint(viewer, grave)) {
 			lines.add(formatMessage(GraveLoader.getMessageRobHint()));
 		}
 		return lines;
+	}
+
+	private static boolean showsLootHint(Player viewer, Grave grave) {
+		if (viewer == null || grave == null || grave.isOwner(viewer.getUniqueId())) {
+			return false;
+		}
+		return GraveLootRules.canSteal(viewer, grave) || !grave.isLocked();
 	}
 
 	private static String formatMessage(String message) {
