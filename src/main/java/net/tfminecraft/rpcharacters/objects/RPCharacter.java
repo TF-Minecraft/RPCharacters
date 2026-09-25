@@ -69,6 +69,7 @@ public class RPCharacter {
 	private String alias;
 	private String slug;
 	private boolean hidden;
+	private boolean mailListed = true;
 	/** Throwaway character made in-game while dev-characters is on. */
 	private boolean dev;
 	/** Per grant-kit id. Empty/missing kit = legacy never claim for that kit. */
@@ -505,6 +506,14 @@ public class RPCharacter {
 
 	public void setSlug(String slug) {
 		this.slug = slug;
+	}
+
+	public boolean isMailListed() {
+		return mailListed;
+	}
+
+	public void setMailListed(boolean mailListed) {
+		this.mailListed = mailListed;
 	}
 
 	public boolean isHidden() {
