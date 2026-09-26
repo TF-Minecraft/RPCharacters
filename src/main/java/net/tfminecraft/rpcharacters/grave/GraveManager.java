@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,6 +37,7 @@ public final class GraveManager {
 	private static final GraveManager INSTANCE = new GraveManager();
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final int SEARCH_RADIUS = 2;
+	private static final List<int[]> SEARCH_OFFSETS = searchOffsets(SEARCH_RADIUS);
 
 	private final Map<UUID, Grave> byId = new ConcurrentHashMap<>();
 	private final Map<String, Grave> byBlock = new ConcurrentHashMap<>();
@@ -409,23 +411,30 @@ public final class GraveManager {
 
 	private Block searchNearby(Block origin) {
 		World world = origin.getWorld();
-		int ox = origin.getX();
-		int oy = origin.getY();
-		int oz = origin.getZ();
+		for (int[] offset : SEARCH_OFFSETS) {
+			Block candidate = world.getBlockAt(origin.getX() + offset[0], origin.getY() + offset[1],
+					origin.getZ() + offset[2]);
+			if (canPlace(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	/** Nearest first, so the grave lands next to the death spot rather than in a far corner. */
+	static List<int[]> searchOffsets(int radius) {
+		List<int[]> offsets = new ArrayList<>();
 		for (int dy = 0; dy <= 1; dy++) {
-			for (int dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
-				for (int dz = -SEARCH_RADIUS; dz <= SEARCH_RADIUS; dz++) {
-					if (dx == 0 && dy == 0 && dz == 0) {
-						continue;
-					}
-					Block candidate = world.getBlockAt(ox + dx, oy + dy, oz + dz);
-					if (canPlace(candidate)) {
-						return candidate;
+			for (int dx = -radius; dx <= radius; dx++) {
+				for (int dz = -radius; dz <= radius; dz++) {
+					if (dx != 0 || dy != 0 || dz != 0) {
+						offsets.add(new int[] { dx, dy, dz });
 					}
 				}
 			}
 		}
-		return null;
+		offsets.sort(Comparator.comparingInt(o -> o[0] * o[0] + o[1] * o[1] + o[2] * o[2]));
+		return offsets;
 	}
 
 	private boolean canPlace(Block block) {
