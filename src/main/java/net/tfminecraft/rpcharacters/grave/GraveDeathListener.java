@@ -19,6 +19,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
+import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.pvp.PvpStartDeathPolicy;
 import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
@@ -29,6 +30,7 @@ public final class GraveDeathListener implements Listener {
 	private static final String PROTECT_PERMISSION = "rpchar.grave.protect";
 
 	private final Map<UUID, Map<Integer, ItemStack>> excludedStash = new ConcurrentHashMap<>();
+	private final Map<UUID, ItemStack> splitTicket = new ConcurrentHashMap<>();
 	private final Map<UUID, List<String>> placedNotice = new ConcurrentHashMap<>();
 	private final Set<UUID> keepInventory = ConcurrentHashMap.newKeySet();
 
@@ -86,10 +88,14 @@ public final class GraveDeathListener implements Listener {
 			grave.flush();
 		}
 
+		GraveInsuranceTickets.Binding binding = GraveInsuranceTickets.bind(stash, grave);
+		if (binding.split() != null) {
+			splitTicket.put(victim.getUniqueId(), binding.split());
+		}
 		if (!stash.isEmpty()) {
 			excludedStash.put(victim.getUniqueId(), stash);
 		}
-		sendPlaced(victim, chestBlock, unlocked);
+		sendPlaced(victim, chestBlock, unlocked, binding.bound());
 		event.setDroppedExp(0);
 		event.getDrops().clear();
 	}
@@ -116,6 +122,11 @@ public final class GraveDeathListener implements Listener {
 				inventory.setItem(entry.getKey(), entry.getValue());
 			}
 		}
+		ItemStack ticket = splitTicket.remove(player.getUniqueId());
+		if (ticket != null) {
+			// Wait a tick: later respawn listeners (permadeath) can still move the player.
+			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> giveTicket(player, ticket));
+		}
 		List<String> notices = placedNotice.remove(player.getUniqueId());
 		if (notices != null) {
 			for (String notice : notices) {
@@ -123,6 +134,15 @@ public final class GraveDeathListener implements Listener {
 					player.sendMessage(notice);
 				}
 			}
+		}
+	}
+
+	private static void giveTicket(Player player, ItemStack ticket) {
+		if (!player.isOnline()) {
+			return;
+		}
+		for (ItemStack overflow : player.getInventory().addItem(ticket).values()) {
+			player.getWorld().dropItem(player.getLocation(), overflow);
 		}
 	}
 
@@ -186,7 +206,7 @@ public final class GraveDeathListener implements Listener {
 		return item != null ? item.clone() : null;
 	}
 
-	private void sendPlaced(Player player, Block chest, boolean unlocked) {
+	private void sendPlaced(Player player, Block chest, boolean unlocked, boolean insured) {
 		if (player == null || chest == null) {
 			return;
 		}
@@ -204,6 +224,10 @@ public final class GraveDeathListener implements Listener {
 		String hint = unlocked ? GraveLoader.getMessageUnlockedByStrike() : GraveLoader.getMessageUnlockHint();
 		if (hint != null && !hint.isBlank()) {
 			notices.add(StringFormatter.formatHex(hint.replace('&', '\u00A7')));
+		}
+		String bound = GraveLoader.getMessageInsuranceBound();
+		if (insured && bound != null && !bound.isBlank()) {
+			notices.add(StringFormatter.formatHex(bound.replace('&', '\u00A7')));
 		}
 		if (!notices.isEmpty()) {
 			placedNotice.put(player.getUniqueId(), notices);

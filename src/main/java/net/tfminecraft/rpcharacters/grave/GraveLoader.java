@@ -38,6 +38,7 @@ public final class GraveLoader implements LoaderInterface {
 
 	private static String insuranceItemPath = "m.miscellanea.grave_insurance";
 	private static boolean insuranceConsume = true;
+	private static String insuranceBoundLore = "&7Bound to your grave at &f{x}, {y}, {z}";
 
 	private static String messageLocked = "&cThis grave is locked.";
 	private static String messageRecovered = "&aYou recovered your belongings.";
@@ -46,7 +47,9 @@ public final class GraveLoader implements LoaderInterface {
 	private static String messageEmpty = "&7There is nothing left here.";
 	private static String messagePlaced = "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}.";
 	private static String messageUnlockHint = "&eRun &f/grave unlock &eto let others loot this grave.";
-	private static String messageInsuranceNone = "&eYou have no grave to recover.";
+	private static String messageInsuranceNone = "&eThis ticket is not bound to a grave. Carry it when you die to insure that grave.";
+	private static String messageInsuranceGone = "&eThe grave this ticket was bound to is gone.";
+	private static String messageInsuranceBound = "&aOne of your insurance tickets is now bound to this grave. Right click it to recover your items.";
 	private static String messageUnlockedByStrike = "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it.";
 	private static String messageUnlockNone = "&eYou have no grave to unlock.";
 	private static String messageUnlockAlready = "&eYour grave is already unlocked.";
@@ -82,6 +85,7 @@ public final class GraveLoader implements LoaderInterface {
 		String configuredInsurance = config.getString("insurance.item", insuranceItemPath);
 		insuranceItemPath = configuredInsurance != null ? configuredInsurance.trim() : "";
 		insuranceConsume = config.getBoolean("insurance.consume", true);
+		insuranceBoundLore = config.getString("insurance.bound-lore", insuranceBoundLore);
 
 		messageLocked = config.getString("messages.locked", messageLocked);
 		messageRecovered = config.getString("messages.recovered", messageRecovered);
@@ -91,6 +95,8 @@ public final class GraveLoader implements LoaderInterface {
 		messagePlaced = config.getString("messages.placed", messagePlaced);
 		messageUnlockHint = config.getString("messages.unlock-hint", messageUnlockHint);
 		messageInsuranceNone = config.getString("messages.insurance-none", messageInsuranceNone);
+		messageInsuranceGone = config.getString("messages.insurance-gone", messageInsuranceGone);
+		messageInsuranceBound = config.getString("messages.insurance-bound", messageInsuranceBound);
 		messageUnlockedByStrike = config.getString("messages.unlocked-evil-rp", messageUnlockedByStrike);
 		messageUnlockNone = config.getString("messages.unlock-none", messageUnlockNone);
 		messageUnlockAlready = config.getString("messages.unlock-already", messageUnlockAlready);
@@ -151,7 +157,7 @@ public final class GraveLoader implements LoaderInterface {
 		if (Grave.isBlank(item)) {
 			return false;
 		}
-		if (isExcludedSlot(slot) || isExcludedItem(item)) {
+		if (isExcludedSlot(slot) || isExcludedItem(item) || isInsuranceItem(item)) {
 			return true;
 		}
 		List<String> paths = excludedSlotItems.get(slot);
@@ -273,8 +279,20 @@ public final class GraveLoader implements LoaderInterface {
 		return TLibs.getItemAPI().getChecker().checkItemWithPath(item, insuranceItemPath);
 	}
 
+	public static String getInsuranceBoundLore() {
+		return insuranceBoundLore;
+	}
+
 	public static String getMessageInsuranceNone() {
 		return messageInsuranceNone;
+	}
+
+	public static String getMessageInsuranceGone() {
+		return messageInsuranceGone;
+	}
+
+	public static String getMessageInsuranceBound() {
+		return messageInsuranceBound;
 	}
 
 	public static String getMessageUnlockNone() {
