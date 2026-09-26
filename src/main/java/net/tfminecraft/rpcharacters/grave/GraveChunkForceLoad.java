@@ -17,7 +17,11 @@ final class GraveChunkForceLoad {
 	}
 
 	static void withForcedChunk(Location location, Runnable action) {
-		if (location == null || location.getWorld() == null || action == null) {
+		if (action == null) {
+			return;
+		}
+		if (location == null || location.getWorld() == null) {
+			action.run();
 			return;
 		}
 		Chunk chunk = location.getChunk();

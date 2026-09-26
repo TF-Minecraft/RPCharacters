@@ -65,6 +65,10 @@ public final class GraveManager {
 		return byBlock.get(blockKey(block));
 	}
 
+	public Grave getById(UUID id) {
+		return id != null ? byId.get(id) : null;
+	}
+
 	public boolean isGrave(Block block) {
 		return getAt(block) != null;
 	}

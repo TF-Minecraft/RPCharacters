@@ -29,6 +29,7 @@ public final class GraveDeathListener implements Listener {
 	private static final String PROTECT_PERMISSION = "rpchar.grave.protect";
 
 	private final Map<UUID, Map<Integer, ItemStack>> excludedStash = new ConcurrentHashMap<>();
+	private final Map<UUID, ItemStack> splitTicket = new ConcurrentHashMap<>();
 	private final Map<UUID, List<String>> placedNotice = new ConcurrentHashMap<>();
 	private final Set<UUID> keepInventory = ConcurrentHashMap.newKeySet();
 
@@ -86,10 +87,14 @@ public final class GraveDeathListener implements Listener {
 			grave.flush();
 		}
 
+		GraveInsuranceTickets.Binding binding = GraveInsuranceTickets.bind(stash, grave);
+		if (binding.split() != null) {
+			splitTicket.put(victim.getUniqueId(), binding.split());
+		}
 		if (!stash.isEmpty()) {
 			excludedStash.put(victim.getUniqueId(), stash);
 		}
-		sendPlaced(victim, chestBlock, unlocked);
+		sendPlaced(victim, chestBlock, unlocked, binding.bound());
 		event.setDroppedExp(0);
 		event.getDrops().clear();
 	}
@@ -114,6 +119,12 @@ public final class GraveDeathListener implements Listener {
 			PlayerInventory inventory = player.getInventory();
 			for (Map.Entry<Integer, ItemStack> entry : stashed.entrySet()) {
 				inventory.setItem(entry.getKey(), entry.getValue());
+			}
+		}
+		ItemStack ticket = splitTicket.remove(player.getUniqueId());
+		if (ticket != null) {
+			for (ItemStack overflow : player.getInventory().addItem(ticket).values()) {
+				player.getWorld().dropItem(event.getRespawnLocation(), overflow);
 			}
 		}
 		List<String> notices = placedNotice.remove(player.getUniqueId());
@@ -186,7 +197,7 @@ public final class GraveDeathListener implements Listener {
 		return item != null ? item.clone() : null;
 	}
 
-	private void sendPlaced(Player player, Block chest, boolean unlocked) {
+	private void sendPlaced(Player player, Block chest, boolean unlocked, boolean insured) {
 		if (player == null || chest == null) {
 			return;
 		}
@@ -204,6 +215,10 @@ public final class GraveDeathListener implements Listener {
 		String hint = unlocked ? GraveLoader.getMessageUnlockedByStrike() : GraveLoader.getMessageUnlockHint();
 		if (hint != null && !hint.isBlank()) {
 			notices.add(StringFormatter.formatHex(hint.replace('&', '\u00A7')));
+		}
+		String bound = GraveLoader.getMessageInsuranceBound();
+		if (insured && bound != null && !bound.isBlank()) {
+			notices.add(StringFormatter.formatHex(bound.replace('&', '\u00A7')));
 		}
 		if (!notices.isEmpty()) {
 			placedNotice.put(player.getUniqueId(), notices);

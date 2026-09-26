@@ -29,10 +29,15 @@ excluded-slot-items:
 excluded-items:
   - m.miscellanea.grave_insurance
 
-# Right-click to recover your newest grave from anywhere (consumes one charge on success).
+# Carry a ticket when you die and one ticket is bound to that grave. Right-click the
+# bound ticket to recover that grave from anywhere, even in an unloaded chunk
+# (consumes the ticket on success). Unbound tickets, or tickets bound to another grave,
+# do nothing. Tickets never go into a grave.
 insurance:
   item: m.miscellanea.grave_insurance
   consume: true
+  # Lore line added to the bound ticket. Placeholders: {x} {y} {z} {world}. Empty = none.
+  bound-lore: "&7Bound to your grave at &f{x}, {y}, {z}"
 
 messages:
   locked: "&cThis grave is locked."
@@ -44,7 +49,10 @@ messages:
   unlock-hint: "&eRun &f/grave unlock &eto let others loot this grave."
   # Shown instead of unlock-hint when an evil RP victim dies in a /pvp start fight.
   unlocked-evil-rp: "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it."
-  insurance-none: "&eYou have no grave to recover."
+  insurance-none: "&eThis ticket is not bound to a grave. Carry it when you die to insure that grave."
+  insurance-gone: "&eThe grave this ticket was bound to is gone."
+  # Shown after respawn when a ticket was bound to the new grave.
+  insurance-bound: "&aOne of your insurance tickets is now bound to this grave. Right click it to recover your items."
   unlock-none: "&eYou have no grave to unlock."
   unlock-already: "&eYour grave is already unlocked."
   unlock-success: "&aYour grave is now unlocked. Anyone can loot it."
