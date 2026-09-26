@@ -96,6 +96,7 @@ import net.tfminecraft.rpcharacters.grave.GraveExpiryService;
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.rpcharacters.grave.GraveVisualManager;
 import net.tfminecraft.rpcharacters.grave.LastSolidTracker;
+import net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener;
 import net.tfminecraft.rpcharacters.playerlist.PlayerListCommand;
 import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
@@ -347,6 +348,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(new GraveInteractListener(), this);
 		getServer().getPluginManager().registerEvents(new GraveInsuranceListener(), this);
 		getServer().getPluginManager().registerEvents(new EvilRpListener(), this);
+		getServer().getPluginManager().registerEvents(new JoinUnstuckListener(), this);
 	}
 	public void startManagers() {
 		playerManager.start();
