@@ -56,7 +56,9 @@ public final class JoinUnstuckListener implements Listener {
 		if (target == null) {
 			return;
 		}
-		player.teleport(target);
+		if (!player.teleport(target)) {
+			return;
+		}
 		// PlayerManager froze no-character players in the wall on join; let it re-capture here.
 		RPCharacters.getPlayerManager().releaseFreeze(player);
 		player.sendMessage(MOVED_MESSAGE);
@@ -108,13 +110,14 @@ public final class JoinUnstuckListener implements Listener {
 		}
 		int[] spot = SafeSpotSearch.find(from.getBlockX(), from.getBlockY(), from.getBlockZ(),
 				(x, y, z) -> canStand(world, x, y, z));
-		Location target;
-		if (spot != null) {
-			target = new Location(world, spot[0] + 0.5, spot[1], spot[2] + 0.5);
-		} else {
+		if (spot == null) {
 			Block top = world.getHighestBlockAt(from.getBlockX(), from.getBlockZ());
-			target = new Location(world, top.getX() + 0.5, top.getY() + 1, top.getZ() + 0.5);
+			if (!canStand(world, top.getX(), top.getY() + 1, top.getZ())) {
+				return null;
+			}
+			spot = new int[] { top.getX(), top.getY() + 1, top.getZ() };
 		}
+		Location target = new Location(world, spot[0] + 0.5, spot[1], spot[2] + 0.5);
 		target.setYaw(from.getYaw());
 		target.setPitch(from.getPitch());
 		return target;
