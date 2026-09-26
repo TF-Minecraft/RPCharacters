@@ -284,6 +284,7 @@ public class RPCharacters extends JavaPlugin{
 		net.tfminecraft.rpcharacters.clues.discovery.ClueDiscoveryVisualManager.get().shutdown();
 		spawnedClueManager.shutdown();
 		net.tfminecraft.rpcharacters.playtime.PlaytimeService.shutdown();
+		pvpCommand.shutdown();
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
 		PvpStrikeService.shutdown();

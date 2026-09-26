@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,8 +18,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
 
@@ -35,6 +38,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	public static final String COMMAND = "pvp";
 
 	private final Map<UUID, Long> armorBlockUntil = new HashMap<>();
+	private final Map<PvpSituation, List<BukkitTask>> tasksBySituation = new IdentityHashMap<>();
 
 	@Override
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -53,6 +57,10 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		switch (sub) {
 			case "start" -> {
 				startWarning(player);
+				return true;
+			}
+			case "end" -> {
+				endSituation(player);
 				return true;
 			}
 			case "lethal" -> {
@@ -109,9 +117,22 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				armorBlockUntil.put(id, expiry);
 			}
 		}
+		PvpSituation previous = PvpSituations.openFor(player.getUniqueId());
+		if (previous != null) {
+			finish(previous);
+		}
+		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets);
+		PvpSituations.track(situation);
+		tasksBySituation.put(situation, new ArrayList<>());
+
 		String warning = PvpLoader.getStartWarning()
 				.replace("{seconds}", String.valueOf(PvpLoader.getStartWarnSeconds()));
 		broadcast(targets, warning);
+		int situationMinutes = PvpLoader.getStartActiveMinutes();
+		if (situationMinutes > 0) {
+			broadcast(targets, PvpLoader.getSituationDuration()
+					.replace("{minutes}", String.valueOf(situationMinutes)));
+		}
 		for (UUID id : targets) {
 			Player online = Bukkit.getPlayer(id);
 			if (online != null) {
@@ -125,20 +146,88 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		for (int count = from; count >= 1; count--) {
 			int delaySeconds = warnSeconds - count;
 			int n = count;
-			new BukkitRunnable() {
+			schedule(situation, new BukkitRunnable() {
 				@Override
 				public void run() {
+					if (!situation.isOpen()) {
+						return;
+					}
 					broadcast(targets, PvpLoader.getCountdown().replace("{count}", String.valueOf(n)));
 				}
-			}.runTaskLater(RPCharacters.plugin, delaySeconds * 20L);
+			}.runTaskLater(RPCharacters.plugin, delaySeconds * 20L));
 		}
 
-		new BukkitRunnable() {
+		schedule(situation, new BukkitRunnable() {
 			@Override
 			public void run() {
-				broadcastStartedTitle(targets);
+				if (!situation.isOpen()) {
+					return;
+				}
+				broadcastStartedTitle(targets, situation);
 			}
-		}.runTaskLater(RPCharacters.plugin, warnSeconds * 20L);
+		}.runTaskLater(RPCharacters.plugin, warnSeconds * 20L));
+	}
+
+	private void endSituation(Player player) {
+		PvpSituation situation = PvpSituations.openFor(player.getUniqueId());
+		if (situation == null) {
+			RPTexts.send(player, PvpLoader.getNoSituation());
+			return;
+		}
+		boolean started = situation.hasStarted();
+		List<UUID> participants = List.copyOf(situation.participants());
+		finish(situation);
+		if (!started) {
+			broadcast(participants, PvpLoader.getStartCancelled());
+		}
+	}
+
+	/** Drop scheduled warnings. After the fight has started, title anyone who has not died. */
+	private void finish(PvpSituation situation) {
+		List<UUID> recipients = situation.close();
+		List<BukkitTask> tasks = tasksBySituation.remove(situation);
+		if (tasks != null) {
+			for (BukkitTask task : tasks) {
+				task.cancel();
+			}
+		}
+		PvpSituations.untrack(situation);
+		if (recipients.isEmpty()) {
+			return;
+		}
+		String title = PvpLoader.getEndedTitle();
+		String subtitle = PvpLoader.getEndedSubtitle();
+		for (UUID id : recipients) {
+			Player online = Bukkit.getPlayer(id);
+			if (online != null && online.isOnline()) {
+				RPTexts.longTitle(online, title, subtitle);
+			}
+			if (!PvpSituations.remainsActiveElsewhere(id, situation)) {
+				PvpStartSessions.end(id);
+			}
+		}
+	}
+
+	public void shutdown() {
+		for (PvpSituation situation : new ArrayList<>(tasksBySituation.keySet())) {
+			situation.close();
+			List<BukkitTask> tasks = tasksBySituation.remove(situation);
+			if (tasks != null) {
+				for (BukkitTask task : tasks) {
+					task.cancel();
+				}
+			}
+			PvpSituations.untrack(situation);
+		}
+	}
+
+	private void schedule(PvpSituation situation, BukkitTask task) {
+		List<BukkitTask> tasks = tasksBySituation.get(situation);
+		if (tasks == null || !situation.isOpen()) {
+			task.cancel();
+			return;
+		}
+		tasks.add(task);
 	}
 
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -171,7 +260,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		}
 	}
 
-	private void broadcastStartedTitle(List<UUID> targets) {
+	private void broadcastStartedTitle(List<UUID> targets, PvpSituation situation) {
 		String title = PvpLoader.getStartedTitle();
 		List<UUID> started = new ArrayList<>();
 		for (UUID id : targets) {
@@ -181,7 +270,25 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				started.add(id);
 			}
 		}
+		situation.markStarted();
 		PvpStartSessions.begin(started, System.currentTimeMillis(), PvpLoader.getStartActiveMs());
+		long activeMs = PvpLoader.getStartActiveMs();
+		if (activeMs <= 0L) {
+			return;
+		}
+		schedule(situation, new BukkitRunnable() {
+			@Override
+			public void run() {
+				if (situation.isOpen()) {
+					finish(situation);
+				}
+			}
+		}.runTaskLater(RPCharacters.plugin, activeMs / 50L)); // 50 ms per tick
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onDeath(PlayerDeathEvent event) {
+		PvpSituations.markDeath(event.getEntity().getUniqueId());
 	}
 
 	@EventHandler
@@ -194,7 +301,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		if (args.length == 1) {
 			String prefix = args[0].toLowerCase(Locale.ROOT);
 			List<String> out = new ArrayList<>();
-			for (String opt : new String[] { "start", "lethal", "nonlethal" }) {
+			for (String opt : new String[] { "start", "end", "lethal", "nonlethal" }) {
 				if (opt.startsWith(prefix)) {
 					out.add(opt);
 				}

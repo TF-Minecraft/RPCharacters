@@ -29,8 +29,8 @@ commands:
     usage: /<command> <channel>
     description: Toggle visibility of a chat channel
   pvp:
-    usage: /<command> <start|lethal|nonlethal>
-    description: PvP start warning and lethal or nonlethal mode
+    usage: /<command> <start|end|lethal|nonlethal>
+    description: PvP start warning, situation timeout, and lethal or nonlethal mode
     permission: rpchar.pvp
   grave:
     usage: /<command> unlock

@@ -2,13 +2,15 @@
 start-radius: 16
 start-warn-seconds: 10
 start-countdown-from: 5
-# After the countdown, how long those players are still in that PvP start.
-# 0 disables it. Dying, being knocked out, or logging out ends it early.
-# A death or knockout in this window by another player lets the killer spare
-# or strike the victim (see strikes below). A death to a player who cannot
-# loot graves keeps the victim's items unless the victim was in an evil RP
-# session. Their coin pouch still drops.
-start-active-minutes: 30
+# After the countdown, how long the situation lasts. When it runs out, players
+# who have not died see a title that it has ended and a new RP interaction is
+# needed. The player who ran /pvp start can end it sooner with /pvp end.
+# 0 disables the timeout. Dying, being knocked out, or logging out ends strike
+# eligibility early. A death or knockout in this window by another player lets
+# the killer spare or strike the victim (see strikes below). A death to a player
+# who cannot loot graves keeps the victim's items unless the victim was in an
+# evil RP session. Their coin pouch still drops.
+start-active-minutes: 15
 knockout-seconds: 30
 # Minecraft effect level 5 = amplifier 4
 blindness-amplifier: 4
@@ -32,9 +34,14 @@ messages:
   start-warning: "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes."
   countdown: "&c{count}"
   started-title: "&cPVP STARTED"
+  situation-duration: "&eThis PvP situation lasts {minutes} minutes. &7After that, a new RP interaction is needed."
+  ended-title: "&c&lPVP SITUATION ENDED"
+  ended-subtitle: "&eA new RP interaction is needed"
+  start-cancelled: "&7The PvP start was cancelled."
+  no-situation: "&cYou have no PvP situation to end."
   lethal: "&aThis character is now in lethal PvP."
   nonlethal: "&aThis character is now in nonlethal PvP."
-  usage: "&7Usage: /pvp start | lethal | nonlethal"
+  usage: "&7Usage: /pvp start | end | lethal | nonlethal"
   no-character: "&cYou need an active character to set PvP mode."
   current: "&7This character's PvP mode: {mode}"
   players-only: "&cPlayers only."
