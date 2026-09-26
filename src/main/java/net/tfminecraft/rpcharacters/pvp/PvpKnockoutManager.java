@@ -11,12 +11,13 @@ import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
-import org.bukkit.entity.Pose;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -34,8 +35,15 @@ public final class PvpKnockoutManager implements Listener {
 
 	private final Map<UUID, Knockout> knockouts = new ConcurrentHashMap<>();
 	private BukkitTask tickTask;
+	private KnockoutCrawl crawl;
 
 	public void start() {
+		if (crawl == null && Bukkit.getPluginManager().isPluginEnabled("GSit")) {
+			crawl = new KnockoutCrawl(this::isKnockedOut);
+			Bukkit.getPluginManager().registerEvents(crawl, RPCharacters.plugin);
+		} else if (crawl == null) {
+			RPCharacters.plugin.getLogger().warning("GSit is not enabled; knockout freeze and blindness will work, but the downed crawl pose is unavailable.");
+		}
 		if (tickTask != null) {
 			tickTask.cancel();
 		}
@@ -52,7 +60,17 @@ public final class PvpKnockoutManager implements Listener {
 			tickTask.cancel();
 			tickTask = null;
 		}
+		for (UUID id : knockouts.keySet()) {
+			Player player = Bukkit.getPlayer(id);
+			if (player != null) {
+				releaseKnockout(player);
+			}
+		}
 		knockouts.clear();
+		if (crawl != null) {
+			HandlerList.unregisterAll(crawl);
+			crawl = null;
+		}
 	}
 
 	/**
@@ -115,7 +133,23 @@ public final class PvpKnockoutManager implements Listener {
 
 	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
-		knockouts.remove(event.getPlayer().getUniqueId());
+		releaseKnockout(event.getPlayer());
+	}
+
+	@EventHandler
+	public void onDeath(PlayerDeathEvent event) {
+		releaseKnockout(event.getEntity());
+	}
+
+	private void releaseKnockout(Player player) {
+		if (knockouts.remove(player.getUniqueId()) != null && crawl != null) {
+			crawl.release(player);
+		}
+	}
+
+	private boolean isKnockedOut(Player player) {
+		Knockout knockout = knockouts.get(player.getUniqueId());
+		return knockout != null && System.currentTimeMillis() < knockout.untilMs && !shouldSkipTick(player);
 	}
 
 	private void applyKnockout(Player player) {
@@ -126,7 +160,6 @@ public final class PvpKnockoutManager implements Listener {
 		}
 		player.setHealth(Math.max(0.1, Math.min(1.0, maxHealth)));
 
-		player.performCommand("crawl");
 		int durationTicks = PvpLoader.getKnockoutSeconds() * 20;
 		player.addPotionEffect(new PotionEffect(
 				PotionEffectType.BLINDNESS,
@@ -139,6 +172,9 @@ public final class PvpKnockoutManager implements Listener {
 		knockouts.put(player.getUniqueId(), new Knockout(
 				player.getLocation().clone(),
 				System.currentTimeMillis() + PvpLoader.getKnockoutSeconds() * 1000L));
+		if (crawl != null) {
+			crawl.enforce(player);
+		}
 	}
 
 	private void tick() {
@@ -147,17 +183,17 @@ public final class PvpKnockoutManager implements Listener {
 		while (it.hasNext()) {
 			Map.Entry<UUID, Knockout> entry = it.next();
 			Player player = Bukkit.getPlayer(entry.getKey());
-			if (player == null || !player.isOnline()) {
+			if (player == null) {
 				it.remove();
 				continue;
 			}
-			if (now >= entry.getValue().untilMs || shouldSkipTick(player)) {
-				it.remove();
+			if (!player.isOnline() || now >= entry.getValue().untilMs || shouldSkipTick(player)) {
+				releaseKnockout(player);
 				continue;
 			}
 			enforceFreeze(player, entry.getValue().location);
-			if (!isCrawling(player)) {
-				player.performCommand("crawl");
+			if (crawl != null) {
+				crawl.enforce(player);
 			}
 		}
 	}
@@ -196,14 +232,6 @@ public final class PvpKnockoutManager implements Listener {
 		dest.setYaw(here.getYaw());
 		dest.setPitch(here.getPitch());
 		player.teleport(dest);
-	}
-
-	private boolean isCrawling(Player player) {
-		Pose pose = player.getPose();
-		if ("CRAWLING".equals(pose.name())) {
-			return true;
-		}
-		return pose == Pose.SWIMMING && !player.isInWater();
 	}
 
 	private static final class Knockout {
