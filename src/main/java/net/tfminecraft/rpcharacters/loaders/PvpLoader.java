@@ -14,7 +14,7 @@ public final class PvpLoader implements LoaderInterface {
 	private static int startRadius = 16;
 	private static int startWarnSeconds = 10;
 	private static int startCountdownFrom = 5;
-	private static int startActiveMinutes = 30;
+	private static int startActiveMinutes = 15;
 	private static int knockoutSeconds = 30;
 	private static int blindnessAmplifier = 4;
 	private static long freezePeriodTicks = 1L;
@@ -25,9 +25,14 @@ public final class PvpLoader implements LoaderInterface {
 	private static String startWarning = "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes.";
 	private static String countdown = "&c{count}";
 	private static String startedTitle = "&cPVP STARTED";
+	private static String situationDuration = "&eThis PvP situation lasts {minutes} minutes. &7After that, a new RP interaction is needed.";
+	private static String endedTitle = "&c&lPVP SITUATION ENDED";
+	private static String endedSubtitle = "&eA new RP interaction is needed";
+	private static String startCancelled = "&7The PvP start was cancelled.";
+	private static String noSituation = "&cYou have no PvP situation to end.";
 	private static String lethal = "&aThis character is now in lethal PvP.";
 	private static String nonlethal = "&aThis character is now in nonlethal PvP.";
-	private static String usage = "&7Usage: /pvp start | lethal | nonlethal";
+	private static String usage = "&7Usage: /pvp start | end | lethal | nonlethal";
 	private static String noCharacter = "&cYou need an active character to set PvP mode.";
 	private static String current = "&7This character's PvP mode: {mode}";
 	private static String playersOnly = "&cPlayers only.";
@@ -44,7 +49,7 @@ public final class PvpLoader implements LoaderInterface {
 		startRadius = Math.max(0, config.getInt("start-radius", 16));
 		startWarnSeconds = Math.max(1, config.getInt("start-warn-seconds", 10));
 		startCountdownFrom = Math.max(1, config.getInt("start-countdown-from", 5));
-		startActiveMinutes = Math.max(0, config.getInt("start-active-minutes", 30));
+		startActiveMinutes = Math.max(0, config.getInt("start-active-minutes", 15));
 		knockoutSeconds = Math.max(1, config.getInt("knockout-seconds", 30));
 		blindnessAmplifier = Math.max(0, config.getInt("blindness-amplifier", 4));
 		freezePeriodTicks = Math.max(1L, config.getLong("freeze-period-ticks", 1L));
@@ -55,6 +60,11 @@ public final class PvpLoader implements LoaderInterface {
 		startWarning = config.getString("messages.start-warning", startWarning);
 		countdown = config.getString("messages.countdown", countdown);
 		startedTitle = config.getString("messages.started-title", startedTitle);
+		situationDuration = config.getString("messages.situation-duration", situationDuration);
+		endedTitle = config.getString("messages.ended-title", endedTitle);
+		endedSubtitle = config.getString("messages.ended-subtitle", endedSubtitle);
+		startCancelled = config.getString("messages.start-cancelled", startCancelled);
+		noSituation = config.getString("messages.no-situation", noSituation);
 		lethal = config.getString("messages.lethal", lethal);
 		nonlethal = config.getString("messages.nonlethal", nonlethal);
 		usage = config.getString("messages.usage", usage);
@@ -73,6 +83,10 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static int getStartCountdownFrom() {
 		return startCountdownFrom;
+	}
+
+	public static int getStartActiveMinutes() {
+		return startActiveMinutes;
 	}
 
 	public static long getStartActiveMs() {
@@ -117,6 +131,26 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static String getStartedTitle() {
 		return startedTitle;
+	}
+
+	public static String getSituationDuration() {
+		return situationDuration;
+	}
+
+	public static String getEndedTitle() {
+		return endedTitle;
+	}
+
+	public static String getEndedSubtitle() {
+		return endedSubtitle;
+	}
+
+	public static String getStartCancelled() {
+		return startCancelled;
+	}
+
+	public static String getNoSituation() {
+		return noSituation;
 	}
 
 	public static String getLethal() {

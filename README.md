@@ -16,7 +16,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Progression and rolls** — bring professions, attributes, and dice rolls into character gameplay.
 - **Injuries and recovery** — represent injuries and prosthetics, with related treatment and progression systems.
 - **Consequences and investigation** — support lethal or nonlethal PvP, graves, and discoverable clues left in the world.
-- **PvP strikes** — after `/pvp start`, whoever kills or knocks out a player chooses to spare them or give a strike; the third strike kills the character, though a killer can wound or maim instead of killing. Lockpicking, robbing, pickpocketing and looting locked graves start a timed evil RP session, during which any strike kills and a death leaves an unlocked grave.
+- **PvP strikes** — after `/pvp start`, the fight lasts 15 minutes unless the player who started it runs `/pvp end`. When it ends, players who have not died see a title that a new RP interaction is needed. Whoever kills or knocks someone out chooses to spare them or give a strike; the third strike kills the character, though a killer can wound or maim instead of killing. Lockpicking, robbing, pickpocketing and looting locked graves start a timed evil RP session, during which any strike kills and a death leaves an unlocked grave.
 
 ## Beyond the game
 
