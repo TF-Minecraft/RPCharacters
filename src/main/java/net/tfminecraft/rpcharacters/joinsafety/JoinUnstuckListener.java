@@ -59,8 +59,9 @@ public final class JoinUnstuckListener implements Listener {
 		if (!player.teleport(target)) {
 			return;
 		}
-		// PlayerManager froze no-character players in the wall on join; let it re-capture here.
+		// PlayerManager froze no-character players in the wall on join; re-capture it here.
 		RPCharacters.getPlayerManager().releaseFreeze(player);
+		RPCharacters.getPlayerManager().reevaluateFreeze(player);
 		player.sendMessage(MOVED_MESSAGE);
 		RPCharacters.plugin.getLogger().info("Moved " + player.getName() + " out of blocks on join: "
 				+ describe(from) + " -> " + describe(target));
