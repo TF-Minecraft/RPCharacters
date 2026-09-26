@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.joinsafety;
 import java.util.EnumSet;
 import java.util.Set;
 
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -10,7 +11,6 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.util.BoundingBox;
@@ -24,17 +24,25 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 public final class JoinUnstuckListener implements Listener {
 
 	private static final String MOVED_MESSAGE =
-			"§eYou logged in inside a block, so you were moved to a safe spot nearby.";
+			"\u00A7eYou logged in inside a block, so you were moved to a safe spot nearby.";
 
 	private static final Set<Material> HAZARDS = EnumSet.of(
 			Material.LAVA, Material.FIRE, Material.SOUL_FIRE, Material.MAGMA_BLOCK,
 			Material.CAMPFIRE, Material.SOUL_CAMPFIRE, Material.CACTUS, Material.SWEET_BERRY_BUSH,
 			Material.POWDER_SNOW, Material.WITHER_ROSE, Material.POINTED_DRIPSTONE);
 
-	// LOWEST so PlayerManager (NORMAL) stores the no-character freeze spot after the move.
-	@EventHandler(priority = EventPriority.LOWEST)
+	@EventHandler
 	public void onJoin(PlayerJoinEvent event) {
 		Player player = event.getPlayer();
+		// A teleport inside the join event is lost when the client's first position syncs.
+		// Scheduled tasks run before players tick, so this still lands before suffocation damage.
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> unstick(player));
+	}
+
+	private static void unstick(Player player) {
+		if (!player.isOnline()) {
+			return;
+		}
 		GameMode mode = player.getGameMode();
 		if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR || player.isInsideVehicle()) {
 			return;
@@ -49,6 +57,8 @@ public final class JoinUnstuckListener implements Listener {
 			return;
 		}
 		player.teleport(target);
+		// PlayerManager froze no-character players in the wall on join; let it re-capture here.
+		RPCharacters.getPlayerManager().releaseFreeze(player);
 		player.sendMessage(MOVED_MESSAGE);
 		RPCharacters.plugin.getLogger().info("Moved " + player.getName() + " out of blocks on join: "
 				+ describe(from) + " -> " + describe(target));
