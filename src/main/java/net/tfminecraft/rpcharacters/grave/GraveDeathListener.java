@@ -19,6 +19,7 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
+import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.pvp.PvpStartDeathPolicy;
 import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
@@ -123,9 +124,8 @@ public final class GraveDeathListener implements Listener {
 		}
 		ItemStack ticket = splitTicket.remove(player.getUniqueId());
 		if (ticket != null) {
-			for (ItemStack overflow : player.getInventory().addItem(ticket).values()) {
-				player.getWorld().dropItem(event.getRespawnLocation(), overflow);
-			}
+			// Wait a tick: later respawn listeners (permadeath) can still move the player.
+			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> giveTicket(player, ticket));
 		}
 		List<String> notices = placedNotice.remove(player.getUniqueId());
 		if (notices != null) {
@@ -134,6 +134,15 @@ public final class GraveDeathListener implements Listener {
 					player.sendMessage(notice);
 				}
 			}
+		}
+	}
+
+	private static void giveTicket(Player player, ItemStack ticket) {
+		if (!player.isOnline()) {
+			return;
+		}
+		for (ItemStack overflow : player.getInventory().addItem(ticket).values()) {
+			player.getWorld().dropItem(player.getLocation(), overflow);
 		}
 	}
 
