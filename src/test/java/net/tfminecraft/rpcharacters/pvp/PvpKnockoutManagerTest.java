@@ -16,7 +16,6 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import dev.geco.gsit.api.GSitAPI;
-import dev.geco.gsit.api.event.PrePlayerCrawlEvent;
 import dev.geco.gsit.api.event.PrePlayerStopCrawlEvent;
 import dev.geco.gsit.model.Crawl;
 import dev.geco.gsit.model.StopReason;
@@ -126,6 +125,7 @@ class PvpKnockoutManagerTest {
                 var handlers = mockStatic(HandlerList.class)) {
             bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
             gsit.when(() -> GSitAPI.getCrawlByPlayer(victim)).thenReturn(crawl);
+            gsit.when(() -> GSitAPI.startCrawl(victim)).thenReturn(crawl);
             invoke(manager, "applyKnockout", victim);
             switch (reason) {
                 case "expiry" -> expire(manager, victim);
@@ -162,18 +162,37 @@ class PvpKnockoutManagerTest {
         }
     }
 
-    @Test void onlyKnockoutsOverrideVoluntaryCrawlRestrictions() throws Exception {
+    @Test void recoveryPreservesCrawlThatPredatesKnockout() throws Exception {
         Player victim = knockoutPlayer();
         var manager = new PvpKnockoutManager();
-        var integration = attachCrawl(manager);
-        var blocked = new PrePlayerCrawlEvent(victim);
-        blocked.setCancelled(true);
-        integration.onStartCrawl(blocked);
-        assertTrue(blocked.isCancelled());
-        try (var gsit = mockStatic(GSitAPI.class)) {
+        attachCrawl(manager);
+        Crawl existing = mock(Crawl.class);
+        try (var bukkit = mockStatic(Bukkit.class); var gsit = mockStatic(GSitAPI.class)) {
+            bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
+            gsit.when(() -> GSitAPI.isPlayerCrawling(victim)).thenReturn(true);
+            gsit.when(() -> GSitAPI.getCrawlByPlayer(victim)).thenReturn(existing);
             invoke(manager, "applyKnockout", victim);
-            integration.onStartCrawl(blocked);
-            assertFalse(blocked.isCancelled());
+            expire(manager, victim);
+            invoke(manager, "tick");
+            gsit.verify(() -> GSitAPI.startCrawl(victim), never());
+            gsit.verify(() -> GSitAPI.stopCrawl(existing, StopReason.PLUGIN), never());
+        }
+    }
+
+    @Test void recoveryDoesNotStopReplacementOwnedByAnotherPlugin() throws Exception {
+        Player victim = knockoutPlayer();
+        var manager = new PvpKnockoutManager();
+        attachCrawl(manager);
+        Crawl owned = mock(Crawl.class), replacement = mock(Crawl.class);
+        try (var bukkit = mockStatic(Bukkit.class); var gsit = mockStatic(GSitAPI.class)) {
+            bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
+            gsit.when(() -> GSitAPI.startCrawl(victim)).thenReturn(owned);
+            invoke(manager, "applyKnockout", victim);
+            gsit.when(() -> GSitAPI.getCrawlByPlayer(victim)).thenReturn(replacement);
+            expire(manager, victim);
+            invoke(manager, "tick");
+            gsit.verify(() -> GSitAPI.stopCrawl(owned, StopReason.PLUGIN), never());
+            gsit.verify(() -> GSitAPI.stopCrawl(replacement, StopReason.PLUGIN), never());
         }
     }
 

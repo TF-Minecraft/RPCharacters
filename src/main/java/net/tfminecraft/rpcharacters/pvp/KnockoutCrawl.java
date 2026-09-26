@@ -1,6 +1,9 @@
 package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.function.Predicate;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -8,7 +11,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
 import dev.geco.gsit.api.GSitAPI;
-import dev.geco.gsit.api.event.PrePlayerCrawlEvent;
 import dev.geco.gsit.api.event.PrePlayerStopCrawlEvent;
 import dev.geco.gsit.model.Crawl;
 import dev.geco.gsit.model.StopReason;
@@ -17,6 +19,7 @@ import dev.geco.gsit.model.StopReason;
 final class KnockoutCrawl implements Listener {
 
 	private final Predicate<Player> knockedOut;
+	private final Map<UUID, Crawl> ownedCrawls = new HashMap<>();
 
 	KnockoutCrawl(Predicate<Player> knockedOut) {
 		this.knockedOut = knockedOut;
@@ -26,22 +29,17 @@ final class KnockoutCrawl implements Listener {
 		// The command checks permissions/ground state and toggles an existing crawl off.
 		// The API starts the pose directly and also handles the player's client-side crawl.
 		if (!GSitAPI.isPlayerCrawling(player)) {
-			GSitAPI.startCrawl(player);
+			Crawl crawl = GSitAPI.startCrawl(player);
+			if (crawl != null) {
+				ownedCrawls.put(player.getUniqueId(), crawl);
+			}
 		}
 	}
 
 	void release(Player player) {
-		Crawl crawl = GSitAPI.getCrawlByPlayer(player);
-		if (crawl != null) {
+		Crawl crawl = ownedCrawls.remove(player.getUniqueId());
+		if (crawl != null && GSitAPI.getCrawlByPlayer(player) == crawl) {
 			GSitAPI.stopCrawl(crawl, StopReason.PLUGIN);
-		}
-	}
-
-	@EventHandler(priority = EventPriority.HIGHEST)
-	public void onStartCrawl(PrePlayerCrawlEvent event) {
-		// Being knocked down is compulsory, even where voluntary crawling is blocked.
-		if (knockedOut.test(event.getPlayer())) {
-			event.setCancelled(false);
 		}
 	}
 
