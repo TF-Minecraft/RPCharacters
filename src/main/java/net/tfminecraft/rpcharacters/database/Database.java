@@ -314,6 +314,9 @@ public class Database {
 				CharacterEvilRpFields.load(c, json);
 				loadNutritionFields(c, json);
 				c.ensureTraitStateDefaults();
+				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
+					c.update();
+				}
     				if (c.getSlug() == null || c.getSlug().isBlank()) {
     					pd.assignSlug(c);
     				}
