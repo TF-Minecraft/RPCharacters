@@ -63,6 +63,12 @@ public final class GraveDeathListener implements Listener {
 		ItemStack offhand = cloneItem(inventory.getItemInOffHand());
 		Map<Integer, ItemStack> stash = new HashMap<>();
 		offhand = stripKept(storage, armor, offhand, stash);
+		ItemStack[] offhandSlot = new ItemStack[] { offhand };
+		ItemStack bundledTicket = null;
+		if (GraveLoader.isInsuranceEnabled() && GraveInsuranceTickets.bindableSlot(stash) == null) {
+			bundledTicket = GraveInsuranceExtract.pull(storage, armor, offhandSlot, stash.values());
+			offhand = offhandSlot[0];
+		}
 		if (!hasStoreableItems(storage, armor, offhand) && event.getDroppedExp() <= 0) {
 			return;
 		}
@@ -89,6 +95,12 @@ public final class GraveDeathListener implements Listener {
 		}
 
 		GraveInsuranceTickets.Binding binding = GraveInsuranceTickets.bind(stash, grave);
+		if (!binding.bound() && bundledTicket != null) {
+			ItemStack bound = GraveInsuranceTickets.bindTicket(bundledTicket, grave);
+			if (bound != null) {
+				binding = new GraveInsuranceTickets.Binding(true, bound);
+			}
+		}
 		if (binding.split() != null) {
 			splitTicket.put(victim.getUniqueId(), binding.split());
 		}
