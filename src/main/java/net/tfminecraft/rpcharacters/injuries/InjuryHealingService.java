@@ -34,7 +34,6 @@ public final class InjuryHealingService {
 	}
 
 	static void tick() {
-		long intervalMs = InjuryPoolLoader.getHealingTickIntervalMs();
 		for (Player player : Bukkit.getOnlinePlayers()) {
 			if (player.isDead() || PermadeathService.isAwaitingPermakillRespawn(player)) {
 				continue;
@@ -50,11 +49,15 @@ public final class InjuryHealingService {
 				continue;
 			}
 
-			processCharacter(player, character, intervalMs);
+			processCharacter(player, character);
 		}
 	}
 
-	private static void processCharacter(Player player, RPCharacter character, long intervalMs) {
+	/**
+	 * Durations count down in real time, including while offline, so the tick only removes injuries whose time
+	 * has run out and refreshes the rest, whose effects fade as they heal.
+	 */
+	private static void processCharacter(Player player, RPCharacter character) {
 		List<Trait> healingTraits = new ArrayList<>();
 		for (Trait trait : character.getTraits()) {
 			if (trait.hasDuration()) {
@@ -65,29 +68,27 @@ public final class InjuryHealingService {
 			return;
 		}
 
-		boolean needsRefresh = false;
+		boolean initialized = false;
 		List<Trait> toRemove = new ArrayList<>();
-
 		for (Trait trait : healingTraits) {
 			String traitId = trait.getId();
 			long remaining = character.getDurationRemainingMs(traitId);
 			if (remaining < 0L) {
-				remaining = trait.getDurationMs();
-				character.setDurationRemainingMs(traitId, remaining);
+				character.setDurationRemainingMs(traitId, trait.getDurationMs());
+				initialized = true;
+				continue;
 			}
-
-			long newRemaining = remaining - intervalMs;
-			if (newRemaining <= 0L) {
+			if (remaining == 0L) {
 				toRemove.add(trait);
-			} else {
-				character.setDurationRemainingMs(traitId, newRemaining);
-				needsRefresh = true;
 			}
 		}
 
-		if (needsRefresh && toRemove.isEmpty()) {
+		if (toRemove.isEmpty()) {
 			refreshCharacter(player, character);
-			RPCharacters.getPlayerManager().savePlayer(player);
+			if (initialized) {
+				RPCharacters.getPlayerManager().savePlayer(player);
+			}
+			return;
 		}
 
 		for (Trait trait : toRemove) {

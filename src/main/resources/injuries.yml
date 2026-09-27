@@ -1,3 +1,4 @@
+# How often healing injuries are checked. Their durations count down in real time, online or offline.
 healing-tick-interval: 1m
 
 injuries:

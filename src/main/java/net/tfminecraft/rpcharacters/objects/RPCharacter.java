@@ -415,6 +415,35 @@ public class RPCharacter {
 				.setDurationRemainingMs(Math.max(0L, durationRemainingMs));
 	}
 
+	public void setDurationExpiresAtMs(String traitId, long expiresAtMs) {
+		if (traitId == null) {
+			return;
+		}
+		traitState.computeIfAbsent(normalizeTraitStateKey(traitId), ignored -> new TraitInstanceState())
+				.setExpiresAtMs(Math.max(0L, expiresAtMs));
+	}
+
+	/**
+	 * Drops duration traits whose time ran out, for characters the healing tick does not see (inactive ones).
+	 *
+	 * @return true when a trait was removed, so the caller can {@link #update()} the character
+	 */
+	public boolean removeExpiredDurationTraits(long nowMs) {
+		boolean removed = false;
+		for (Trait trait : new ArrayList<>(traits)) {
+			if (trait == null || !trait.hasDuration()) {
+				continue;
+			}
+			TraitInstanceState state = getTraitState(trait.getId());
+			if (state != null && state.hasDuration() && state.getDurationRemainingMs(nowMs) == 0L) {
+				traits.remove(trait);
+				removeTraitState(trait.getId());
+				removed = true;
+			}
+		}
+		return removed;
+	}
+
 	public double getFuel(String traitId) {
 		TraitInstanceState state = getTraitState(traitId);
 		return state != null && state.hasFuel() ? state.getFuel() : -1D;
