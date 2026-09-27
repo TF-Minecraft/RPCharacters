@@ -994,11 +994,11 @@ public class Database {
 			if (!(entryObj instanceof JSONObject entry)) {
 				continue;
 			}
-			if (entry.containsKey("duration-remaining-ms")) {
-				Object durationValue = entry.get("duration-remaining-ms");
-				if (durationValue instanceof Number number) {
-					character.setDurationRemainingMs(traitId, number.longValue());
-				}
+			if (entry.get("expires-at-ms") instanceof Number expiresAt) {
+				character.setDurationExpiresAtMs(traitId, expiresAt.longValue());
+			} else if (entry.get("duration-remaining-ms") instanceof Number remaining) {
+				// Saved before durations ran in real time: the remaining time starts counting from now.
+				character.setDurationRemainingMs(traitId, remaining.longValue());
 			}
 			if (entry.containsKey("fuel")) {
 				Object fuelValue = entry.get("fuel");
@@ -1019,6 +1019,7 @@ public class Database {
 			}
 			JSONObject traitStateJson = new JSONObject();
 			if (state.hasDuration()) {
+				traitStateJson.put("expires-at-ms", state.getExpiresAtMs());
 				traitStateJson.put("duration-remaining-ms", state.getDurationRemainingMs());
 			}
 			if (state.hasFuel()) {

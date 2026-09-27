@@ -415,6 +415,14 @@ public class RPCharacter {
 				.setDurationRemainingMs(Math.max(0L, durationRemainingMs));
 	}
 
+	public void setDurationExpiresAtMs(String traitId, long expiresAtMs) {
+		if (traitId == null) {
+			return;
+		}
+		traitState.computeIfAbsent(normalizeTraitStateKey(traitId), ignored -> new TraitInstanceState())
+				.setExpiresAtMs(Math.max(0L, expiresAtMs));
+	}
+
 	public double getFuel(String traitId) {
 		TraitInstanceState state = getTraitState(traitId);
 		return state != null && state.hasFuel() ? state.getFuel() : -1D;
