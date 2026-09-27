@@ -29,6 +29,27 @@ final class GraveInsuranceTickets {
 
 	private GraveInsuranceTickets() {}
 
+	/** The stash slot that {@link #bind} would use, or null when no loose ticket can be bound. */
+	static Integer bindableSlot(Map<Integer, ItemStack> stash) {
+		if (stash == null || stash.isEmpty()) {
+			return null;
+		}
+		List<Integer> slots = new ArrayList<>(stash.keySet());
+		slots.sort(null);
+		return pickSlot(slots, slot -> GraveLoader.isInsuranceItem(stash.get(slot)),
+				slot -> boundToLiveGrave(stash.get(slot)));
+	}
+
+	/** Tags one already-separated ticket and returns the bound copy. */
+	static ItemStack bindTicket(ItemStack ticket, Grave grave) {
+		if (Grave.isBlank(ticket) || grave == null) {
+			return null;
+		}
+		ItemStack single = ticket.clone();
+		single.setAmount(1);
+		return tag(single, grave);
+	}
+
 	/**
 	 * Binds one ticket from the death stash to {@code grave}. A stacked ticket is split:
 	 * the rest of the stack stays in its slot and the bound ticket is returned in
@@ -38,10 +59,7 @@ final class GraveInsuranceTickets {
 		if (stash == null || stash.isEmpty() || grave == null) {
 			return Binding.NONE;
 		}
-		List<Integer> slots = new ArrayList<>(stash.keySet());
-		slots.sort(null);
-		Integer slot = pickSlot(slots, s -> GraveLoader.isInsuranceItem(stash.get(s)),
-				s -> isBoundToLiveGrave(stash.get(s)));
+		Integer slot = bindableSlot(stash);
 		if (slot == null) {
 			return Binding.NONE;
 		}
@@ -105,7 +123,7 @@ final class GraveInsuranceTickets {
 		item.setItemMeta(meta);
 	}
 
-	private static boolean isBoundToLiveGrave(ItemStack item) {
+	static boolean boundToLiveGrave(ItemStack item) {
 		UUID id = boundGrave(item);
 		return id != null && GraveManager.get().getById(id) != null;
 	}

@@ -32,7 +32,8 @@ excluded-items:
 # Carry a ticket when you die and one ticket is bound to that grave. Right-click the
 # bound ticket to recover that grave from anywhere, even in an unloaded chunk
 # (consumes the ticket on success). Unbound tickets, or tickets bound to another grave,
-# do nothing. Tickets never go into a grave.
+# do nothing. Loose tickets never go into a grave. A ticket inside a bundle still
+# counts: one is taken out, bound, and returned on respawn. The bundle goes in the grave.
 insurance:
   item: m.miscellanea.grave_insurance
   consume: true
