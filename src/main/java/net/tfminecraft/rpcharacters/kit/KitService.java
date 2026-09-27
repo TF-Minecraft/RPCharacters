@@ -15,7 +15,6 @@ import org.bukkit.inventory.ItemStack;
 import org.json.simple.JSONObject;
 
 import net.tfminecraft.tlibs.TLibs;
-import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.loaders.KitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -148,27 +147,25 @@ public final class KitService {
 				}
 
 				List<JSONObject> pendingItems = List.of();
-				if (!Cache.devCharacters) {
-					ProvinceSystemClient.SimpleResult pending =
-							ProvinceSystemClient.fetchPendingLoreItems();
-					if (!pending.ok) {
-						RPCharacters.plugin.getLogger().warning(
-								"[kit-customise] claim-pull failed: " + pending.error
+				ProvinceSystemClient.SimpleResult pending =
+						ProvinceSystemClient.fetchPendingLoreItems();
+				if (!pending.ok) {
+					RPCharacters.plugin.getLogger().warning(
+							"[kit-customise] claim-pull failed: " + pending.error
+					);
+				} else {
+					String body = pending.body != null ? pending.body : "";
+					if (body.isBlank()) {
+						RPCharacters.plugin.getLogger().info(
+								"[kit-customise] claim-pull empty body char=" + characterId
+										+ " uuid=" + playerId
 						);
 					} else {
-						String body = pending.body != null ? pending.body : "";
-						if (body.isBlank()) {
-							RPCharacters.plugin.getLogger().info(
-									"[kit-customise] claim-pull empty body char=" + characterId
-											+ " uuid=" + playerId
-							);
-						} else {
-							RPCharacters.plugin.getLogger().info(
-									"[kit-customise] claim-pull body=" + body
-							);
-						}
-						pendingItems = ProvinceSystemClient.parsePendingLoreItems(pending.body);
+						RPCharacters.plugin.getLogger().info(
+								"[kit-customise] claim-pull body=" + body
+						);
 					}
+					pendingItems = ProvinceSystemClient.parsePendingLoreItems(pending.body);
 				}
 
 				List<JSONObject> itemsForMain = pendingItems;

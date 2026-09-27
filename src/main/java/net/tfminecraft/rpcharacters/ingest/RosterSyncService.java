@@ -41,14 +41,14 @@ public final class RosterSyncService {
 	private RosterSyncService() {}
 
 	public static void pushRosterAsync(UUID playerUuid) {
-		if (playerUuid == null || RPCharacters.plugin == null || Cache.devCharacters) {
+		if (playerUuid == null || RPCharacters.plugin == null) {
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> pushRosterNow(playerUuid));
 	}
 
 	public static void pushRosterForPlayer(Player player) {
-		if (player == null || Cache.devCharacters) {
+		if (player == null) {
 			return;
 		}
 		pushRosterAsync(player.getUniqueId());
@@ -56,7 +56,7 @@ public final class RosterSyncService {
 
 	/** Push roster for every online player (e.g. after {@code /rpcharacter reload}). */
 	public static void pushAllOnlineAsync() {
-		if (RPCharacters.plugin == null || Cache.devCharacters) {
+		if (RPCharacters.plugin == null) {
 			return;
 		}
 		for (Player player : Bukkit.getOnlinePlayers()) {
@@ -68,7 +68,7 @@ public final class RosterSyncService {
 
 	@SuppressWarnings("unchecked")
 	public static void pushRosterNow(UUID playerUuid) {
-		if (playerUuid == null || Cache.devCharacters) {
+		if (playerUuid == null) {
 			return;
 		}
 		PlayerData pd = null;
@@ -104,7 +104,7 @@ public final class RosterSyncService {
 		root.put("player_uuid", playerUuid.toString());
 		JSONArray characters = new JSONArray();
 		for (RPCharacter c : pd.getCharacters()) {
-			if (c == null || c.getId() == null || c.isDev()) {
+			if (c == null || c.getId() == null) {
 				continue;
 			}
 			JSONObject row = new JSONObject();

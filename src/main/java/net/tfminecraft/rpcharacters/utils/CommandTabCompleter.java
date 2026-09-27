@@ -110,7 +110,7 @@ public class CommandTabCompleter implements TabCompleter {
 				return filter(List.of("sync"), args[1]);
 			}
 			if (args[0].equalsIgnoreCase("wipe") && Permissions.isAdmin(sender)) {
-				return filter(List.of("website", "tagged"), args[1]);
+				return filter(List.of("website"), args[1]);
 			}
 			if (args[0].equalsIgnoreCase("stage") && Permissions.isAdmin(sender)) {
 				return filter(List.of("preview"), args[1]);
@@ -193,7 +193,7 @@ public class CommandTabCompleter implements TabCompleter {
 					}
 				}
 			} else if (args[0].equalsIgnoreCase("wipe") && Permissions.isAdmin(sender)
-					&& (args[1].equalsIgnoreCase("website") || args[1].equalsIgnoreCase("tagged"))) {
+					&& args[1].equalsIgnoreCase("website")) {
 				completions.add("confirm");
 			} else if (args[0].equalsIgnoreCase("discordgate") && Permissions.isAdmin(sender)) {
 				completions.add("on");

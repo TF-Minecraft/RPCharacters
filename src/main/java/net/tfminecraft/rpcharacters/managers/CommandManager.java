@@ -124,11 +124,6 @@ public class CommandManager implements Listener, CommandExecutor{
 				RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter pending sync");
 				return true;
 			}
-			if (Cache.devCharacters) {
-				RPTexts.send(sender, RPTexts.ERROR + "Website character sync is off while "
-						+ RPTexts.WARN + "dev-characters" + RPTexts.ERROR + " is enabled.");
-				return true;
-			}
 			RPTexts.send(sender, RPTexts.COMMAND + "Pulling pending web character creates…");
 			net.tfminecraft.rpcharacters.ingest.CharacterIngestService.forcePullAsync(RPCharacters.plugin);
 			RPTexts.send(sender, RPTexts.SUCCESS + "Pending sync started (see console for results).");
