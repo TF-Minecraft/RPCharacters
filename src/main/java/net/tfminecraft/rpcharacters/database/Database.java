@@ -910,6 +910,13 @@ public class Database {
 	}
 
 	private void loadProfessionFields(RPCharacter character, JSONObject characterJson) {
+		if (characterJson.get("forfeited-profession-points") instanceof JSONObject forfeitedJson) {
+			for (Object key : forfeitedJson.keySet()) {
+				if (forfeitedJson.get(key) instanceof Number amount) {
+					character.addForfeitedProfessionPoints(key.toString(), amount.intValue());
+				}
+			}
+		}
 		if (!characterJson.containsKey("profession-upgrades")) {
 			return;
 		}
@@ -923,6 +930,11 @@ public class Database {
 
 	@SuppressWarnings("unchecked")
 	private void saveProfessionFields(HashMap<String, Object> defaults, RPCharacter character) {
+		if (!character.getForfeitedProfessionPoints().isEmpty()) {
+			JSONObject forfeitedJson = new JSONObject();
+			forfeitedJson.putAll(character.getForfeitedProfessionPoints());
+			defaults.put("forfeited-profession-points", forfeitedJson);
+		}
 		if (character.getProfessionUpgrades().isEmpty()) {
 			return;
 		}

@@ -104,7 +104,7 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 					RPTexts.send(sender, RPTexts.ERROR + "Invalid player or upgrade.");
 					return true;
 				}
-				removeUpgradeFromActiveCharacter(target, upgrade);
+				removeUpgradeFromActiveCharacter(target, upgrade, false);
 				RPTexts.send(sender, RPTexts.ERROR + "Removed upgrade " + upgrade.getId() + " from " + target.getName());
 				return true;
 			}
@@ -176,7 +176,7 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 					RPTexts.send(player, RPTexts.ERROR + "Nothing to confirm.");
 					return true;
 				}
-				removeUpgradeFromActiveCharacter(player, upgrade);
+				removeUpgradeFromActiveCharacter(player, upgrade, true);
 				RPTexts.send(player, RPTexts.ERROR + "Lost the " + RPTexts.WARN
 						+ upgrade.getMenuItem().getItemMeta().getDisplayName() + RPTexts.ERROR + " upgrade!");
 				return true;
@@ -207,7 +207,12 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 		}
 	}
 
-	public static void removeUpgradeFromActiveCharacter(Player player, ProfessionUpgradeDefinition upgrade) {
+	/**
+	 * @param forfeitPoints true for a player's own removal, which keeps the upgrade's cost spent so
+	 *                      removing and re-buying cannot be used to respec
+	 */
+	public static void removeUpgradeFromActiveCharacter(Player player, ProfessionUpgradeDefinition upgrade,
+			boolean forfeitPoints) {
 		PlayerData pd = PlayerManager.get(player);
 		if (pd == null) {
 			return;
@@ -217,7 +222,11 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 			return;
 		}
 		ProfessionIntegrator.removeUpgrade(player, upgrade);
-		character.removeProfessionUpgrade(upgrade.getId());
+		if (forfeitPoints) {
+			character.forfeitProfessionUpgrade(upgrade);
+		} else {
+			character.removeProfessionUpgrade(upgrade.getId());
+		}
 		RPCharacters.getPlayerManager().savePlayer(player);
 	}
 
@@ -248,6 +257,10 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 		resetActiveCharacterUpgrades(player, true);
 		PlayerData pd = PlayerManager.get(player);
 		if (pd != null) {
+			RPCharacter character = pd.getActiveCharacter();
+			if (character != null) {
+				character.clearForfeitedProfessionPoints();
+			}
 			pd.clearAccountProfessionPoints();
 			pd.setProfessionPointsInitialized(false);
 		}
