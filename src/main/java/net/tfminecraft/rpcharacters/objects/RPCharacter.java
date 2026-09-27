@@ -84,6 +84,8 @@ public class RPCharacter {
 	private String birthday;
 
 	private final Set<String> professionUpgrades = new LinkedHashSet<>();
+	/** Points lost by removing upgrades, per lowercase profession id. They stay spent. */
+	private final Map<String, Integer> forfeitedProfessionPoints = new HashMap<>();
 	private final Map<String, Integer> extraAttributeAllocation = new HashMap<>();
 
 	private String lastLocationWorld;
@@ -868,8 +870,41 @@ public class RPCharacter {
 		return resolved;
 	}
 
+	public Map<String, Integer> getForfeitedProfessionPoints() {
+		return Collections.unmodifiableMap(forfeitedProfessionPoints);
+	}
+
+	public void setForfeitedProfessionPoints(Map<String, Integer> points) {
+		forfeitedProfessionPoints.clear();
+		if (points != null) {
+			for (Map.Entry<String, Integer> entry : points.entrySet()) {
+				addForfeitedProfessionPoints(entry.getKey(), entry.getValue() != null ? entry.getValue() : 0);
+			}
+		}
+	}
+
+	public void addForfeitedProfessionPoints(String professionId, int amount) {
+		if (professionId == null || professionId.isBlank() || amount <= 0) {
+			return;
+		}
+		forfeitedProfessionPoints.merge(professionId.toLowerCase(), amount, Integer::sum);
+	}
+
+	public void clearForfeitedProfessionPoints() {
+		forfeitedProfessionPoints.clear();
+	}
+
+	/** Removes a held upgrade without giving its cost back to the profession's free points. */
+	public void forfeitProfessionUpgrade(ProfessionUpgradeDefinition upgrade) {
+		if (upgrade == null || !professionUpgrades.remove(upgrade.getId())) {
+			return;
+		}
+		addForfeitedProfessionPoints(upgrade.getProfessionId(), upgrade.getCost());
+	}
+
+	/** Held upgrade costs plus forfeited points; what the profession's lifetime points pay for. */
 	public int getSpentPointsOnProfession(String professionId) {
-		int spent = 0;
+		int spent = professionId != null ? forfeitedProfessionPoints.getOrDefault(professionId.toLowerCase(), 0) : 0;
 		for (ProfessionUpgradeDefinition upgrade : resolveProfessionUpgrades()) {
 			if (upgrade.getProfessionId().equalsIgnoreCase(professionId)) {
 				spent += upgrade.getCost();
