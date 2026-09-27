@@ -126,6 +126,43 @@ class MailRecipientDirectoryTest {
         }
     }
 
+    @Test void characterAddedDuringARefreshIsLookedUpBeforeCallbacksRun() throws Exception {
+        String later = UUID.randomUUID().toString();
+        RPCharacters previous = RPCharacters.plugin;
+        RPCharacters plugin = mock(RPCharacters.class);
+        when(plugin.isEnabled()).thenReturn(true);
+        when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getAnonymousLogger());
+        RPCharacters.plugin = plugin;
+        List<Runnable> async = new ArrayList<>();
+        List<Runnable> sync = new ArrayList<>();
+        BukkitScheduler scheduler = mock(BukkitScheduler.class);
+        when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class)))
+            .thenAnswer(call -> { async.add(call.getArgument(1)); return null; });
+        when(scheduler.runTask(eq(plugin), any(Runnable.class)))
+            .thenAnswer(call -> { sync.add(call.getArgument(1)); return null; });
+        int[] callbacks = {0};
+        try (var bukkit = mockStatic(Bukkit.class); var client = mockStatic(ProvinceSystemClient.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            client.when(() -> ProvinceSystemClient.fetchWardrobe(anyString(), anyString()))
+                .thenReturn(ProvinceSystemClient.SimpleResult.fail("Read timed out"));
+            loadDirectory(new JSONObject(Map.of("id", id, "name", "Recipient", "status", "ALIVE")));
+
+            MailRecipientDirectory.refreshMissingTexturesAsync(() -> { throw new IllegalStateException("boom"); });
+            loadDirectory(new JSONObject(Map.of("id", later, "name", "Later", "status", "ALIVE")));
+            MailRecipientDirectory.refreshMissingTexturesAsync(() -> callbacks[0]++);
+            async.removeFirst().run();
+            assertTrue(sync.isEmpty(), "callbacks wait for the follow-up pass");
+            assertEquals(1, async.size());
+            async.removeFirst().run();
+            client.verify(() -> ProvinceSystemClient.fetchWardrobe(owner.toString(), later), times(1));
+            sync.forEach(Runnable::run);
+            assertEquals(1, callbacks[0], "a failing callback does not stop the others");
+        } finally {
+            RPCharacters.plugin = previous;
+            MailRecipientDirectory.remove(later);
+        }
+    }
+
     @Test void preferenceRoundTripsThroughCharacterPersistenceAndLegacyDefaultsToListed() throws Exception {
         RPCharacter original = new RPCharacter(null);
         assertTrue(original.isMailListed());

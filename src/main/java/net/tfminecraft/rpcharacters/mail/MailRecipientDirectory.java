@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -38,6 +39,7 @@ public final class MailRecipientDirectory {
 	private static final Map<String, Long> TEXTURE_ATTEMPTS = new ConcurrentHashMap<>();
 	private static final List<Runnable> TEXTURE_WAITERS = new ArrayList<>();
 	private static boolean textureRefreshRunning;
+	private static boolean textureRefreshAgain;
 
 	private MailRecipientDirectory() {}
 
@@ -143,6 +145,21 @@ public final class MailRecipientDirectory {
 		if (RPCharacters.plugin == null || !RPCharacters.plugin.isEnabled()) {
 			return;
 		}
+		synchronized (TEXTURE_WAITERS) {
+			if (onComplete != null) {
+				TEXTURE_WAITERS.add(onComplete);
+			}
+			if (textureRefreshRunning) {
+				// Entries added since the running pass started get a follow-up pass.
+				textureRefreshAgain = true;
+				return;
+			}
+			textureRefreshRunning = true;
+		}
+		runTexturePass();
+	}
+
+	private static void runTexturePass() {
 		long now = System.currentTimeMillis();
 		List<Entry> missing = new ArrayList<>();
 		for (Entry entry : ENTRIES.values()) {
@@ -158,18 +175,9 @@ public final class MailRecipientDirectory {
 			}
 			missing.add(entry);
 		}
-		synchronized (TEXTURE_WAITERS) {
-			if (onComplete != null) {
-				TEXTURE_WAITERS.add(onComplete);
-			}
-			if (textureRefreshRunning) {
-				return;
-			}
-			if (missing.isEmpty()) {
-				runWaiters();
-				return;
-			}
-			textureRefreshRunning = true;
+		if (missing.isEmpty()) {
+			finishTexturePass();
+			return;
 		}
 		for (Entry entry : missing) {
 			TEXTURE_ATTEMPTS.put(entry.characterId, now);
@@ -187,12 +195,21 @@ public final class MailRecipientDirectory {
 					cacheBaseTextureFromSnapshot(entry.ownerUuid, snapshot);
 				}
 			} finally {
-				synchronized (TEXTURE_WAITERS) {
-					textureRefreshRunning = false;
-					runWaiters();
-				}
+				finishTexturePass();
 			}
 		});
+	}
+
+	private static void finishTexturePass() {
+		synchronized (TEXTURE_WAITERS) {
+			if (!textureRefreshAgain) {
+				textureRefreshRunning = false;
+				runWaiters();
+				return;
+			}
+			textureRefreshAgain = false;
+		}
+		runTexturePass();
 	}
 
 	/** Caller holds the {@link #TEXTURE_WAITERS} lock. */
@@ -202,7 +219,16 @@ public final class MailRecipientDirectory {
 		}
 		List<Runnable> waiters = new ArrayList<>(TEXTURE_WAITERS);
 		TEXTURE_WAITERS.clear();
-		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> waiters.forEach(Runnable::run));
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			for (Runnable waiter : waiters) {
+				try {
+					waiter.run();
+				} catch (RuntimeException error) {
+					RPCharacters.plugin.getLogger().log(
+							Level.WARNING, "Mail texture refresh callback failed", error);
+				}
+			}
+		});
 	}
 
 	public static void cacheWardrobeSnapshot(UUID ownerUuid, WardrobeSnapshot snapshot) {
