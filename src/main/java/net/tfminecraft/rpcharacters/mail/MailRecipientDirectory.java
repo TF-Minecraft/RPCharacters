@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -33,6 +35,11 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeSnapshot;
 public final class MailRecipientDirectory {
 
 	private static final Map<String, Entry> ENTRIES = new ConcurrentHashMap<>();
+	static final long TEXTURE_RETRY_MILLIS = TimeUnit.MINUTES.toMillis(10);
+	private static final Map<String, Long> TEXTURE_ATTEMPTS = new ConcurrentHashMap<>();
+	private static final List<Runnable> TEXTURE_WAITERS = new ArrayList<>();
+	private static boolean textureRefreshRunning;
+	private static boolean textureRefreshAgain;
 
 	private MailRecipientDirectory() {}
 
@@ -131,11 +138,29 @@ public final class MailRecipientDirectory {
 	/**
 	 * Pull base wardrobe textures from ProvinceSystem for directory entries that
 	 * do not have a cached texture yet (offline characters, non-active alts, etc.).
+	 * Overlapping calls share one refresh, and a character whose lookup found no
+	 * texture is not retried until {@link #TEXTURE_RETRY_MILLIS} has passed.
 	 */
 	public static void refreshMissingTexturesAsync(Runnable onComplete) {
 		if (RPCharacters.plugin == null || !RPCharacters.plugin.isEnabled()) {
 			return;
 		}
+		synchronized (TEXTURE_WAITERS) {
+			if (onComplete != null) {
+				TEXTURE_WAITERS.add(onComplete);
+			}
+			if (textureRefreshRunning) {
+				// Entries added since the running pass started get a follow-up pass.
+				textureRefreshAgain = true;
+				return;
+			}
+			textureRefreshRunning = true;
+		}
+		runTexturePass();
+	}
+
+	private static void runTexturePass() {
+		long now = System.currentTimeMillis();
 		List<Entry> missing = new ArrayList<>();
 		for (Entry entry : ENTRIES.values()) {
 			if (entry == null || entry.characterId == null) {
@@ -144,27 +169,64 @@ public final class MailRecipientDirectory {
 			if (entry.baseTextureValue != null && !entry.baseTextureValue.isBlank()) {
 				continue;
 			}
+			Long attempted = TEXTURE_ATTEMPTS.get(entry.characterId);
+			if (attempted != null && now - attempted < TEXTURE_RETRY_MILLIS) {
+				continue;
+			}
 			missing.add(entry);
 		}
 		if (missing.isEmpty()) {
-			if (onComplete != null) {
-				Bukkit.getScheduler().runTask(RPCharacters.plugin, onComplete);
-			}
+			finishTexturePass();
 			return;
 		}
+		for (Entry entry : missing) {
+			TEXTURE_ATTEMPTS.put(entry.characterId, now);
+		}
 		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
-			for (Entry entry : missing) {
-				ProvinceSystemClient.SimpleResult result = ProvinceSystemClient.fetchWardrobe(
-						entry.ownerUuid.toString(),
-						entry.characterId);
-				if (!result.ok) {
-					continue;
+			try {
+				for (Entry entry : missing) {
+					ProvinceSystemClient.SimpleResult result = ProvinceSystemClient.fetchWardrobe(
+							entry.ownerUuid.toString(),
+							entry.characterId);
+					if (!result.ok) {
+						continue;
+					}
+					WardrobeSnapshot snapshot = WardrobeSnapshot.parse(result.body);
+					cacheBaseTextureFromSnapshot(entry.ownerUuid, snapshot);
 				}
-				WardrobeSnapshot snapshot = WardrobeSnapshot.parse(result.body);
-				cacheBaseTextureFromSnapshot(entry.ownerUuid, snapshot);
+			} finally {
+				finishTexturePass();
 			}
-			if (onComplete != null) {
-				Bukkit.getScheduler().runTask(RPCharacters.plugin, onComplete);
+		});
+	}
+
+	private static void finishTexturePass() {
+		synchronized (TEXTURE_WAITERS) {
+			if (!textureRefreshAgain) {
+				textureRefreshRunning = false;
+				runWaiters();
+				return;
+			}
+			textureRefreshAgain = false;
+		}
+		runTexturePass();
+	}
+
+	/** Caller holds the {@link #TEXTURE_WAITERS} lock. */
+	private static void runWaiters() {
+		if (TEXTURE_WAITERS.isEmpty()) {
+			return;
+		}
+		List<Runnable> waiters = new ArrayList<>(TEXTURE_WAITERS);
+		TEXTURE_WAITERS.clear();
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			for (Runnable waiter : waiters) {
+				try {
+					waiter.run();
+				} catch (RuntimeException error) {
+					RPCharacters.plugin.getLogger().log(
+							Level.WARNING, "Mail texture refresh callback failed", error);
+				}
 			}
 		});
 	}
@@ -195,6 +257,7 @@ public final class MailRecipientDirectory {
 	public static void remove(String characterId) {
 		if (characterId != null) {
 			ENTRIES.remove(characterId);
+			TEXTURE_ATTEMPTS.remove(characterId);
 		}
 	}
 
