@@ -70,8 +70,6 @@ public class RPCharacter {
 	private String slug;
 	private boolean hidden;
 	private boolean mailListed = true;
-	/** Throwaway character made in-game while dev-characters is on. */
-	private boolean dev;
 	/** Per grant-kit id. Empty/missing kit = legacy never claim for that kit. */
 	private final Map<String, net.tfminecraft.rpcharacters.kit.KitStatus> kitStatuses =
 			new HashMap<>();
@@ -553,14 +551,6 @@ public class RPCharacter {
 
 	public void setHidden(boolean hidden) {
 		this.hidden = hidden;
-	}
-
-	public boolean isDev() {
-		return dev;
-	}
-
-	public void setDev(boolean dev) {
-		this.dev = dev;
 	}
 
 	public Map<String, net.tfminecraft.rpcharacters.kit.KitStatus> getKitStatuses() {

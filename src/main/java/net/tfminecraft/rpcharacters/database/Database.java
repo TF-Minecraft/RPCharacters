@@ -702,9 +702,6 @@ public class Database {
 		if (characterJson.containsKey("hidden")) {
 			character.setHidden(Boolean.parseBoolean(characterJson.get("hidden").toString()));
 		}
-		if (characterJson.containsKey("dev")) {
-			character.setDev(Boolean.parseBoolean(characterJson.get("dev").toString()));
-		}
 		if (characterJson.containsKey("kit-statuses")) {
 			Object raw = characterJson.get("kit-statuses");
 			if (raw instanceof JSONObject statuses) {
@@ -806,9 +803,6 @@ public class Database {
 		defaults.put("mail-listed", String.valueOf(character.isMailListed()));
 		if (character.isHidden()) {
 			defaults.put("hidden", "true");
-		}
-		if (character.isDev()) {
-			defaults.put("dev", "true");
 		}
 		if (!character.getKitStatuses().isEmpty()) {
 			JSONObject statuses = new JSONObject();

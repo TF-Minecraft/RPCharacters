@@ -16,7 +16,6 @@ import org.bukkit.scheduler.BukkitTask;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient;
 import net.tfminecraft.rpcharacters.calendar.AgeCalculator;
@@ -53,7 +52,7 @@ public final class CharacterIngestService {
 	 * Pull if the 15s cooldown has elapsed. Used by join, reload, and the timer.
 	 */
 	public static void tryPullAsync(JavaPlugin plugin) {
-		if (plugin == null || Cache.devCharacters) {
+		if (plugin == null) {
 			return;
 		}
 		long now = System.currentTimeMillis();
@@ -74,12 +73,6 @@ public final class CharacterIngestService {
 		if (plugin == null) {
 			return;
 		}
-		if (Cache.devCharacters) {
-			plugin.getLogger().warning(
-				"[character-ingest] skipped: dev-characters is on, website characters are not synced"
-			);
-			return;
-		}
 		lastPullAtMs.set(System.currentTimeMillis());
 		pullAsync(plugin);
 	}
@@ -89,7 +82,7 @@ public final class CharacterIngestService {
 	 * (or immediately if the pull is skipped).
 	 */
 	public static void tryPullForPlayerAsync(JavaPlugin plugin, UUID playerUuid) {
-		if (plugin == null || playerUuid == null || Cache.devCharacters) {
+		if (plugin == null || playerUuid == null) {
 			return;
 		}
 		long now = System.currentTimeMillis();
@@ -127,7 +120,7 @@ public final class CharacterIngestService {
 	}
 
 	public static void pullAsync(JavaPlugin plugin) {
-		if (plugin == null || Cache.devCharacters) {
+		if (plugin == null) {
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -153,7 +146,7 @@ public final class CharacterIngestService {
 	}
 
 	public static void pullForPlayerAsync(JavaPlugin plugin, UUID playerUuid) {
-		if (plugin == null || playerUuid == null || Cache.devCharacters) {
+		if (plugin == null || playerUuid == null) {
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

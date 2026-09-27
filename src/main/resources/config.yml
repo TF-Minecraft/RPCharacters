@@ -37,10 +37,6 @@ base-profession-factor: -10
 
 require-character: true
 
-# When true: in-game creates are tagged as dev, and this server does not pull
-# website characters. Keep false on a live world.
-dev-characters: false
-
 # Verbose RPCharacters feedback when /mmocore admin skill-points give|set runs (sync breakdown, stripped skills).
 skill-points-admin-debug-messages: false
 

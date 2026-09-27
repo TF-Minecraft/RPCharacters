@@ -34,7 +34,6 @@ import net.tfminecraft.rpcharacters.creation.stages.SummaryStage;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
 
-import net.tfminecraft.rpcharacters.Cache;
 
 import net.tfminecraft.rpcharacters.loaders.StageLoader;
 
@@ -827,12 +826,6 @@ public class CharacterCreation {
 		ProstheticTraitRules.stripReplacedInjuries(character);
 
 		character.update();
-
-		if (Cache.devCharacters) {
-
-			character.setDev(true);
-
-		}
 
 		pd.addCharacter(character);
 

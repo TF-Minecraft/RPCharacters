@@ -13,7 +13,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient;
 import net.tfminecraft.rpcharacters.database.Database;
@@ -43,7 +42,7 @@ public final class KitCustomiseIngestService {
 	 * Safe to call from {@link CharacterIngestService} after creates pull.
 	 */
 	public static void pullNow(JavaPlugin plugin) {
-		if (plugin == null || Cache.devCharacters) {
+		if (plugin == null) {
 			return;
 		}
 		ProvinceSystemClient.SimpleResult pending =
@@ -83,7 +82,7 @@ public final class KitCustomiseIngestService {
 			RPCharacter character,
 			List<JSONObject> all
 	) {
-		if (player == null || character == null || Cache.devCharacters) {
+		if (player == null || character == null) {
 			return List.of();
 		}
 		String characterId = character.getId();
