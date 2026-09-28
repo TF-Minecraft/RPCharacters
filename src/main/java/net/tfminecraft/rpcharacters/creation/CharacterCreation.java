@@ -48,6 +48,7 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
+import net.tfminecraft.rpcharacters.paidchange.PendingPaidChange;
 
 import net.tfminecraft.rpcharacters.objects.attributes.AttributeData;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
@@ -95,8 +96,6 @@ public class CharacterCreation {
 	private boolean editingFromSummary = false;
 
 	private Stage editStage = null;
-	/** Denars held while a paid stage is open; settled when the player leaves that stage. */
-	private PaidChangeService.Pending pendingPaidChange;
 
 	private final String summaryStageId = "creation_summary_stage";
 
@@ -416,19 +415,9 @@ public class CharacterCreation {
 		return p;
 	}
 
-	public PaidChangeService.Pending getPendingPaidChange() {
-		return pendingPaidChange;
-	}
-
-	public void setPendingPaidChange(PaidChangeService.Pending pending) {
-		this.pendingPaidChange = pending;
-	}
-
-	/** Returns and clears the held payment so it is settled only once. */
-	public PaidChangeService.Pending takePendingPaidChange() {
-		PaidChangeService.Pending pending = pendingPaidChange;
-		pendingPaidChange = null;
-		return pending;
+	/** Denars held while a paid stage is open; kept on the character so they are saved. */
+	public PendingPaidChange getPendingPaidChange() {
+		return character == null ? null : character.getPendingPaidChange();
 	}
 
 

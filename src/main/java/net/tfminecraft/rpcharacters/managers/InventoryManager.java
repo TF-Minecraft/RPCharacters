@@ -909,10 +909,10 @@ public class InventoryManager {
 		ItemStack i = new ItemStack(Material.BARRIER, 1);
 		ItemMeta meta = i.getItemMeta();
 		List<String> lore = new ArrayList<>();
-		PaidChangeService.Pending pending = cc != null ? cc.getPendingPaidChange() : null;
+		net.tfminecraft.rpcharacters.paidchange.PendingPaidChange pending = cc != null ? cc.getPendingPaidChange() : null;
 		if (pending != null) {
 			meta.setDisplayName(t(RPTexts.ERROR + "Cancel"));
-			lore.add(t(RPTexts.MUTED + "Keep your " + pending.rule().getLabel()));
+			lore.add(t(RPTexts.MUTED + "Keep your " + pending.label()));
 			if (pending.amount() > 0.0) {
 				lore.add(t(RPTexts.MUTED + "and get " + RPTexts.GUI_WARN + PaidChangeService.formatDenars(pending.amount())
 						+ RPTexts.MUTED + " back"));

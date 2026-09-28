@@ -101,6 +101,8 @@ public class RPCharacter {
 	private long lastStrikeAtMs;
 	/** Paid changes made so far, keyed by stage id. Sets the next price. */
 	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
+	/** Denars held for an open paid stage, saved so a crash can't lose the refund or the count. */
+	private net.tfminecraft.rpcharacters.paidchange.PendingPaidChange pendingPaidChange;
 	/** Stage revision each stage's lock window was last opened for, keyed by stage id. */
 	private final Map<String, Integer> stageRevisions = new HashMap<>();
 	/** Epoch seconds a revision reset opened each stage's window; 0 counts from creation. */
@@ -228,6 +230,14 @@ public class RPCharacter {
 
 	public Map<String, Integer> getPaidChangeCounts() {
 		return Collections.unmodifiableMap(paidChangeCounts);
+	}
+
+	public net.tfminecraft.rpcharacters.paidchange.PendingPaidChange getPendingPaidChange() {
+		return pendingPaidChange;
+	}
+
+	public void setPendingPaidChange(net.tfminecraft.rpcharacters.paidchange.PendingPaidChange pending) {
+		this.pendingPaidChange = pending;
 	}
 
 	public int getStageRevision(String stageId) {

@@ -17,9 +17,7 @@ import java.util.TreeMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import net.tfminecraft.rpcharacters.creation.StageRevisions;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
-import net.tfminecraft.rpcharacters.loaders.StageLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
@@ -315,7 +313,6 @@ public class Database {
 				loadPvpLethal(c, json);
 				CharacterEvilRpFields.load(c, json);
 				CharacterStageChangeFields.load(c, json);
-				StageRevisions.refresh(c, StageLoader.oList);
 				loadNutritionFields(c, json);
 				c.ensureTraitStateDefaults();
 				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {

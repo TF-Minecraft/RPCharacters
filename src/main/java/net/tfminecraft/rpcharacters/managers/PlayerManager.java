@@ -379,7 +379,18 @@ public class PlayerManager implements Listener{
 			}
 			final PlayerData loaded = pd;
 			data.add(loaded);
-			if (ProstheticTraitRules.sanitize(loaded)) {
+			boolean dirty = ProstheticTraitRules.sanitize(loaded);
+			// On join only, not on offline loads: a refund or a fresh window here is saved at once.
+			for (RPCharacter c : loaded.getCharacters()) {
+				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
+						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
+				String recovered = net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c);
+				if (recovered != null) {
+					dirty = true;
+					RPTexts.send(p, recovered);
+				}
+			}
+			if (dirty) {
 				savePlayer(p);
 			}
 			if(!loaded.hasActiveCharacter() && loaded.getCharacters(Status.ALIVE).size() > 0) {

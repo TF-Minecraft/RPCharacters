@@ -29,16 +29,22 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  */
 public final class PaidChangeService {
 
-	/** Denars held for an open paid stage. {@code account} is null when the change was free. */
-	public record Pending(PaidChangeRule rule, UUID payerId, Account account, double amount, String before) {}
-
 	public enum ChargeStatus {
 		PAID,
 		UNAVAILABLE,
 		INSUFFICIENT_FUNDS
 	}
 
-	public record ChargeResult(ChargeStatus status, Pending pending, double cost) {}
+	public record ChargeResult(ChargeStatus status, PendingPaidChange pending, double cost) {}
+
+	public enum Outcome {
+		/** The character changed: the payment stays and the change is counted. */
+		KEPT,
+		/** Nothing changed and the denars went back. */
+		REFUNDED,
+		/** Nothing changed but the refund failed; the payment stays held for a later retry. */
+		REFUND_FAILED
+	}
 
 	private static final Logger LOG = Logger.getLogger("RPCharacters");
 
@@ -80,47 +86,64 @@ public final class PaidChangeService {
 		double cost = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 		String before = snapshot(character);
 		if (cost <= 0.0) {
-			return new ChargeResult(ChargeStatus.PAID, new Pending(rule, payerId, null, 0.0, before), 0.0);
+			return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, null, 0.0, before), 0.0);
 		}
 		if (!wallet.available()) {
 			return new ChargeResult(ChargeStatus.UNAVAILABLE, null, cost);
 		}
 		for (Account account : accountOrder) {
 			if (wallet.balance(payerId, account) >= cost && wallet.withdraw(payerId, account, cost)) {
-				return new ChargeResult(ChargeStatus.PAID, new Pending(rule, payerId, account, cost, before), cost);
+				return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, account, cost, before), cost);
 			}
 		}
 		return new ChargeResult(ChargeStatus.INSUFFICIENT_FUNDS, null, cost);
 	}
 
+	private static PendingPaidChange pending(PaidChangeRule rule, UUID payerId, Account account, double amount,
+			String before) {
+		return new PendingPaidChange(rule.getStageId(), rule.getLabel(), payerId, account, amount, before);
+	}
+
 	/**
-	 * Keeps the payment and counts the change when the character changed; otherwise refunds it.
-	 * Returns true when the payment was kept.
+	 * Settles the payment held on the character. A changed character keeps it and counts the
+	 * change; an unchanged one is refunded. The hold is cleared only once one of those happened,
+	 * so the caller must save the character after any outcome.
 	 */
-	public static boolean resolve(Pending pending, RPCharacter character) {
-		if (character != null && !snapshot(character).equals(pending.before())) {
-			String stageId = pending.rule().getStageId();
-			character.setPaidChangeCount(stageId, character.getPaidChangeCount(stageId) + 1);
-			return true;
+	public static Outcome resolve(RPCharacter character) {
+		PendingPaidChange pending = character.getPendingPaidChange();
+		if (pending == null) {
+			return null;
+		}
+		if (!snapshot(character).equals(pending.before())) {
+			character.setPaidChangeCount(pending.stageId(), character.getPaidChangeCount(pending.stageId()) + 1);
+			character.setPendingPaidChange(null);
+			return Outcome.KEPT;
 		}
 		if (pending.account() != null && pending.amount() > 0.0
 				&& !wallet.deposit(pending.payerId(), pending.account(), pending.amount())) {
-			LOG.log(Level.SEVERE, "Could not refund " + pending.amount() + " denars to "
-					+ pending.payerId() + " (" + pending.account() + ") for a " + pending.rule().getId()
-					+ " change they backed out of. Refund them by hand.");
+			LOG.log(Level.WARNING, "[RPCharacters] Could not refund " + pending.amount() + " denars to "
+					+ pending.payerId() + " (" + pending.account() + ") for a " + pending.label()
+					+ " change; keeping it held to retry.");
+			return Outcome.REFUND_FAILED;
 		}
-		return false;
+		character.setPendingPaidChange(null);
+		return Outcome.REFUNDED;
 	}
 
-	/** Charges for a locked stage and holds the payment on the session. False leaves the stage shut. */
+	/** Charges for a locked stage and holds the payment on the character. False leaves the stage shut. */
 	public static boolean payToOpen(Player player, CharacterCreation cc, Stage stage) {
 		settle(cc);
+		RPCharacter character = cc.getCharacter();
+		if (character.getPendingPaidChange() != null) {
+			RPTexts.send(player, RPTexts.ERROR + "Your last refund hasn't gone through yet. Try again later.");
+			return false;
+		}
 		PaidChangeRule rule = ruleFor(stage);
 		if (rule == null) {
 			RPTexts.send(player, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
 			return false;
 		}
-		ChargeResult result = charge(player.getUniqueId(), rule, cc.getCharacter());
+		ChargeResult result = charge(player.getUniqueId(), rule, character);
 		switch (result.status()) {
 			case UNAVAILABLE -> {
 				RPTexts.send(player, RPTexts.ERROR + "You can't pay to change your " + rule.getLabel()
@@ -137,8 +160,10 @@ public final class PaidChangeService {
 			default -> {
 			}
 		}
-		Pending pending = result.pending();
-		cc.setPendingPaidChange(pending);
+		PendingPaidChange pending = result.pending();
+		character.setPendingPaidChange(pending);
+		// Saved now, so a crash before the player leaves the stage still refunds or counts it.
+		save(player);
 		if (pending.amount() > 0.0) {
 			RPTexts.send(player, RPTexts.SUCCESS + "Paid " + formatDenars(pending.amount()) + " from your "
 					+ pending.account().displayName() + " to change your " + rule.getLabel() + ".");
@@ -147,33 +172,62 @@ public final class PaidChangeService {
 		return true;
 	}
 
-	/** Keeps or refunds the payment held on this session, if any. Safe to call more than once. */
+	/** Keeps or refunds the payment held on this session's character, if any. Safe to call more than once. */
 	public static void settle(CharacterCreation cc) {
-		if (cc == null) {
+		if (cc == null || cc.getCharacter() == null) {
 			return;
 		}
-		Pending pending = cc.takePendingPaidChange();
-		if (pending == null) {
+		RPCharacter character = cc.getCharacter();
+		PendingPaidChange pending = character.getPendingPaidChange();
+		Outcome outcome = resolve(character);
+		if (outcome == null) {
 			return;
 		}
 		Player player = cc.getPlayer();
-		RPCharacter character = cc.getCharacter();
-		PaidChangeRule rule = pending.rule();
-		if (resolve(pending, character)) {
-			double next = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
-			tell(player, RPTexts.SUCCESS + "Your " + rule.getLabel() + " change is paid for. The next one costs "
-					+ formatDenars(next) + ".");
-			if (player != null && RPCharacters.getPlayerManager() != null) {
-				RPCharacters.getPlayerManager().savePlayer(player);
+		tell(player, outcomeMessage(pending, outcome, character));
+		save(player);
+	}
+
+	/**
+	 * Settles a payment left held by a crash or a failed refund. Run when the owner joins, before
+	 * any edit session exists. Returns the player message, or null when there was nothing to settle.
+	 */
+	public static String recover(RPCharacter character) {
+		PendingPaidChange pending = character == null ? null : character.getPendingPaidChange();
+		Outcome outcome = pending == null ? null : resolve(character);
+		return outcome == null ? null : outcomeMessage(pending, outcome, character);
+	}
+
+	private static String outcomeMessage(PendingPaidChange pending, Outcome outcome, RPCharacter character) {
+		switch (outcome) {
+			case KEPT -> {
+				PaidChangeRule rule = rulesByStage.get(pending.stageId());
+				String next = rule == null ? ""
+						: " The next one costs " + formatDenars(rule.costAfter(character.getPaidChangeCount(pending.stageId()))) + ".";
+				return RPTexts.SUCCESS + "Your " + pending.label() + " change is paid for." + next;
 			}
-		} else if (pending.amount() > 0.0) {
-			tell(player, RPTexts.SUCCESS + "Your " + rule.getLabel() + " is unchanged, so "
-					+ formatDenars(pending.amount()) + " went back to your " + pending.account().displayName() + ".");
+			case REFUNDED -> {
+				if (pending.amount() <= 0.0) {
+					return null;
+				}
+				return RPTexts.SUCCESS + "Your " + pending.label() + " is unchanged, so "
+						+ formatDenars(pending.amount()) + " went back to your " + pending.account().displayName() + ".";
+			}
+			default -> {
+				return RPTexts.ERROR + "Your " + formatDenars(pending.amount()) + " refund couldn't go through yet. "
+						+ "It will be retried when you next join.";
+			}
+		}
+	}
+
+	private static void save(Player player) {
+		if (player != null && RPCharacters.getPlayerManager() != null) {
+			RPCharacters.getPlayerManager().savePlayer(player);
 		}
 	}
 
 	private static void tell(Player player, String message) {
-		if (player != null) {
+		if (player != null && message != null) {
 			RPTexts.send(player, message);
 		}
 	}

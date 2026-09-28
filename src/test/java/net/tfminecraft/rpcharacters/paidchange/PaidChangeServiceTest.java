@@ -102,20 +102,66 @@ class PaidChangeServiceTest {
 		RPCharacter character = characterWithClass("WARRIOR");
 		ChargeResult result = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
 		assertEquals(0.0, wallet.get(Account.POUCH));
+		character.setPendingPaidChange(result.pending());
 
-		assertFalse(PaidChangeService.resolve(result.pending(), character));
+		assertEquals(PaidChangeService.Outcome.REFUNDED, PaidChangeService.resolve(character));
 		assertEquals(100.0, wallet.get(Account.POUCH));
 		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
+		assertNull(character.getPendingPaidChange());
+	}
+
+	@Test
+	void aFailedRefundStaysHeldAndIsRetried() {
+		wallet.set(Account.POUCH, 100);
+		RPCharacter character = characterWithClass("WARRIOR");
+		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
+
+		wallet.depositsFail = true;
+		assertEquals(PaidChangeService.Outcome.REFUND_FAILED, PaidChangeService.resolve(character));
+		assertEquals(0.0, wallet.get(Account.POUCH));
+		assertTrue(character.getPendingPaidChange() != null);
+
+		wallet.depositsFail = false;
+		String message = PaidChangeService.recover(character);
+		assertTrue(message.contains("100 denars went back to your pouch"), message);
+		assertEquals(100.0, wallet.get(Account.POUCH));
+		assertNull(character.getPendingPaidChange());
+		assertNull(PaidChangeService.recover(character));
+	}
+
+	@Test
+	void aSavedHoldSurvivesACrashAndSettlesOnRecovery() throws Exception {
+		wallet.set(Account.BANK, 1000);
+		RPCharacter character = characterWithClass("WARRIOR");
+		character.setPaidChangeCount(CLASS_STAGE, 1);
+		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
+		character.setMMOClass("mage");
+
+		HashMap<String, Object> saved = new HashMap<>();
+		CharacterStageChangeFields.save(saved, character);
+		JSONObject reparsed = (JSONObject) new JSONParser().parse(new JSONObject(saved).toJSONString());
+		RPCharacter loaded = characterWithClass("MAGE");
+		CharacterStageChangeFields.load(loaded, reparsed);
+		PendingPaidChange held = loaded.getPendingPaidChange();
+		assertEquals(Account.BANK, held.account());
+		assertEquals(1000.0, held.amount());
+		assertEquals(PLAYER, held.payerId());
+
+		String message = PaidChangeService.recover(loaded);
+		assertTrue(message.contains("class change is paid for. The next one costs 3,000 denars"), message);
+		assertEquals(2, loaded.getPaidChangeCount(CLASS_STAGE));
+		assertEquals(0.0, wallet.get(Account.BANK));
+		assertNull(loaded.getPendingPaidChange());
 	}
 
 	@Test
 	void keepingTheChangeKeepsThePaymentAndRaisesTheNextPrice() {
 		wallet.set(Account.BANK, 100);
 		RPCharacter character = characterWithClass("WARRIOR");
-		ChargeResult result = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
+		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
 
 		character.setMMOClass("mage");
-		assertTrue(PaidChangeService.resolve(result.pending(), character));
+		assertEquals(PaidChangeService.Outcome.KEPT, PaidChangeService.resolve(character));
 		assertEquals(0.0, wallet.get(Account.BANK));
 		assertEquals(1, character.getPaidChangeCount(CLASS_STAGE));
 		assertEquals(1000.0, CLASS_RULE.costAfter(character.getPaidChangeCount(CLASS_STAGE)));
@@ -264,6 +310,7 @@ class PaidChangeServiceTest {
 	private static final class FakeWallet implements DenarWallet {
 		private final Map<Account, Double> balances = new EnumMap<>(Account.class);
 		boolean available = true;
+		boolean depositsFail;
 
 		void set(Account account, double amount) {
 			balances.put(account, amount);
@@ -294,6 +341,9 @@ class PaidChangeServiceTest {
 
 		@Override
 		public boolean deposit(UUID playerId, Account account, double amount) {
+			if (depositsFail) {
+				return false;
+			}
 			balances.put(account, get(account) + amount);
 			return true;
 		}
