@@ -99,6 +99,8 @@ public class RPCharacter {
 	private long evilRpSessionEndsAtMs;
 	/** When the latest strike landed, so strikes can wear off. 0 when unknown. */
 	private long lastStrikeAtMs;
+	/** Paid changes made so far per paid-change rule, keyed by rule id. Sets the next price. */
+	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
 
 	public static final int MAX_FOOD_VALUE = 200;
 	private static final int MAX_DIET_SCORE = 40;
@@ -203,6 +205,25 @@ public class RPCharacter {
 
 	public void setPvpLethal(boolean pvpLethal) {
 		this.pvpLethal = pvpLethal;
+	}
+
+	public int getPaidChangeCount(String ruleId) {
+		return ruleId == null ? 0 : paidChangeCounts.getOrDefault(ruleId, 0);
+	}
+
+	public void setPaidChangeCount(String ruleId, int count) {
+		if (ruleId == null) {
+			return;
+		}
+		if (count <= 0) {
+			paidChangeCounts.remove(ruleId);
+		} else {
+			paidChangeCounts.put(ruleId, count);
+		}
+	}
+
+	public Map<String, Integer> getPaidChangeCounts() {
+		return Collections.unmodifiableMap(paidChangeCounts);
 	}
 
 	public int getEvilRpStrikes() {

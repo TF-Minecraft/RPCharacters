@@ -11,6 +11,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <denareconomy.version>0.2.7</denareconomy.version>
         <simplefactions.version>3.0.1</simplefactions.version>
         <tlibs.version>2.0.0</tlibs.version>
         <worldguard.version>7.0.9</worldguard.version>
@@ -114,6 +115,18 @@
             <artifactId>worldguard-bukkit</artifactId>
             <version>${worldguard.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.tfminecraft</groupId>
+            <artifactId>denareconomy</artifactId>
+            <version>${denareconomy.version}</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>net.tfminecraft</groupId>

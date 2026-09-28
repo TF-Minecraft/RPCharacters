@@ -16,6 +16,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeConfig;
 
 public class ConfigLoader implements LoaderInterface{
 
@@ -105,6 +106,7 @@ public class ConfigLoader implements LoaderInterface{
             Cache.rpInjureRange = 10;
             Cache.rpInjureTimeoutSeconds = 30;
         }
+        PaidChangeConfig.load(config.getConfigurationSection("paid-changes"));
         validateClueConfig();
 	}
 

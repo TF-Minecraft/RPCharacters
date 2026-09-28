@@ -25,6 +25,7 @@ import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Dependency;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.creation.StageEditLock;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.creation.stages.AttributesStage;
 import net.tfminecraft.rpcharacters.creation.stages.SelectionStage;
 import net.tfminecraft.rpcharacters.creation.stages.SummaryStage;
@@ -209,8 +210,8 @@ public class InventoryManager {
 			}
 			ItemMeta meta = item.getItemMeta();
 			if (meta != null) {
-				boolean locked = isSummaryEntryLocked(player, character, stageId);
-				if (!locked) {
+				boolean locked = editing && isSummaryEntryLocked(player, character, stageId);
+				if (!locked || PaidChangeService.canPayToOpen(StageLoader.getById(stageId))) {
 					String action = "clues".equalsIgnoreCase(stageId) ? "clues" : "edit:" + stageId;
 					meta.getPersistentDataContainer().set(actionKey, PersistentDataType.STRING, action);
 				}
@@ -295,14 +296,19 @@ public class InventoryManager {
 		String label = WordUtils.capitalize(entryKey.replace('_', ' '));
 		List<String> lore = new ArrayList<>();
 		boolean locked = editing && isSummaryEntryLocked(player, character, stageId);
-		if (locked) {
-			lore.add(summaryValue(RPTexts.ERROR + "Locked"));
+		Stage editedStage = editing && !"clues".equalsIgnoreCase(stageId) ? StageLoader.getById(stageId) : null;
+		List<String> paidLore = PaidChangeService.summaryLore(editedStage, character, locked);
+		if (paidLore != null) {
+			for (String line : paidLore) {
+				lore.add(summaryValue(line));
+			}
 		} else {
-			lore.add(summaryValue(RPTexts.MUTED + "Click to change"));
-		}
-		if (editing && !"clues".equalsIgnoreCase(stageId)) {
-			Stage stage = StageLoader.getById(stageId);
-			String lockLore = StageEditLock.lockLore(stage, character);
+			if (locked) {
+				lore.add(summaryValue(RPTexts.ERROR + "Locked"));
+			} else {
+				lore.add(summaryValue(RPTexts.MUTED + "Click to change"));
+			}
+			String lockLore = StageEditLock.lockLore(editedStage, character);
 			if (lockLore != null && !locked) {
 				lore.add(summaryValue(lockLore));
 			}
@@ -903,7 +909,15 @@ public class InventoryManager {
 		ItemStack i = new ItemStack(Material.BARRIER, 1);
 		ItemMeta meta = i.getItemMeta();
 		List<String> lore = new ArrayList<>();
-		if(cc != null) {
+		PaidChangeService.Pending pending = cc != null ? cc.getPendingPaidChange() : null;
+		if (pending != null) {
+			meta.setDisplayName(t(RPTexts.ERROR + "Cancel"));
+			lore.add(t(RPTexts.MUTED + "Keep your " + pending.rule().getLabel()));
+			if (pending.amount() > 0.0) {
+				lore.add(t(RPTexts.MUTED + "and get " + RPTexts.GUI_WARN + PaidChangeService.formatDenars(pending.amount())
+						+ RPTexts.MUTED + " back"));
+			}
+		} else if(cc != null) {
 			meta.setDisplayName(t(RPTexts.ERROR + "Cancel Creation"));
 		
 			lore.add(t(RPTexts.MUTED + "Cancel the current character creation"));

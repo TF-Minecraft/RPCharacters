@@ -312,6 +312,7 @@ public class Database {
 				loadLastLocation(c, json);
 				loadPvpLethal(c, json);
 				CharacterEvilRpFields.load(c, json);
+				CharacterPaidChangeFields.load(c, json);
 				loadNutritionFields(c, json);
 				c.ensureTraitStateDefaults();
 				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
@@ -461,6 +462,7 @@ public class Database {
 			saveLastLocation(defaults, c);
 			defaults.put("pvp-lethal", String.valueOf(c.isPvpLethal()));
 			CharacterEvilRpFields.save(defaults, c);
+			CharacterPaidChangeFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
 			if (save(file, defaults)) {
 				net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);

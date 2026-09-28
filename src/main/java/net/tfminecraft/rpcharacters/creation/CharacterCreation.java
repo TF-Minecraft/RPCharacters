@@ -47,6 +47,8 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
+
 import net.tfminecraft.rpcharacters.objects.attributes.AttributeData;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.objects.trait.TraitEffectResolver;
@@ -93,6 +95,8 @@ public class CharacterCreation {
 	private boolean editingFromSummary = false;
 
 	private Stage editStage = null;
+	/** Denars held while a paid stage is open; settled when the player leaves that stage. */
+	private PaidChangeService.Pending pendingPaidChange;
 
 	private final String summaryStageId = "creation_summary_stage";
 
@@ -408,6 +412,25 @@ public class CharacterCreation {
 
 	}
 
+	public Player getPlayer() {
+		return p;
+	}
+
+	public PaidChangeService.Pending getPendingPaidChange() {
+		return pendingPaidChange;
+	}
+
+	public void setPendingPaidChange(PaidChangeService.Pending pending) {
+		this.pendingPaidChange = pending;
+	}
+
+	/** Returns and clears the held payment so it is settled only once. */
+	public PaidChangeService.Pending takePendingPaidChange() {
+		PaidChangeService.Pending pending = pendingPaidChange;
+		pendingPaidChange = null;
+		return pending;
+	}
+
 
 
 	public void openSummary() {
@@ -490,9 +513,9 @@ public class CharacterCreation {
 
 		}
 
-		if (!StageEditLock.canEdit(p, template, character)) {
+		PaidChangeService.settle(this);
 
-			RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
+		if (!StageEditLock.canEdit(p, template, character) && !PaidChangeService.payToOpen(p, this, template)) {
 
 			return;
 
@@ -503,6 +526,8 @@ public class CharacterCreation {
 		if (fresh == null) {
 
 			RPTexts.send(p, RPTexts.ERROR + "Could not open editor for that choice.");
+
+			PaidChangeService.settle(this);
 
 			return;
 
@@ -542,6 +567,8 @@ public class CharacterCreation {
 
 			RPTexts.send(p, RPTexts.ERROR + "That choice cannot be edited from the summary.");
 
+			PaidChangeService.settle(this);
+
 		}
 
 	}
@@ -561,6 +588,8 @@ public class CharacterCreation {
 		editingFromSummary = false;
 
 		editStage = null;
+
+		PaidChangeService.settle(this);
 
 		if (isEditing()) {
 
@@ -857,6 +886,8 @@ public class CharacterCreation {
 
 	public void closeEditSession() {
 
+		PaidChangeService.settle(this);
+
 		persistEdits();
 
 		CreationManager.activeCreators.remove(p);
@@ -1062,6 +1093,8 @@ public class CharacterCreation {
 		}
 
 		if (isEditing()) {
+
+			PaidChangeService.settle(this);
 
 			CreationManager.activeCreators.remove(p);
 

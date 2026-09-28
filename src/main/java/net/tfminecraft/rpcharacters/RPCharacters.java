@@ -44,7 +44,9 @@ import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.loaders.PartyLoader;
 import net.tfminecraft.rpcharacters.managers.CommandManager;
+import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.managers.ClueDisturbanceListener;
 import net.tfminecraft.rpcharacters.managers.MagnifyingGlassListener;
 import net.tfminecraft.rpcharacters.managers.PlaceClueManager;
@@ -291,6 +293,9 @@ public class RPCharacters extends JavaPlugin{
 		PvpStrikeService.shutdown();
 		LastSolidTracker.get().shutdown();
 		GraveManager.get().saveAll();
+		for (CharacterCreation cc : new java.util.ArrayList<>(CreationManager.activeCreators.values())) {
+			PaidChangeService.settle(cc);
+		}
 		save();
 	}
 	
