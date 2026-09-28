@@ -12,7 +12,6 @@ import java.util.logging.Logger;
 
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.creation.StageEditLock;
@@ -106,8 +105,7 @@ public final class PaidChangeService {
 
 	/**
 	 * Settles the payment held on the character. A changed character keeps it and counts the
-	 * change; an unchanged one is refunded. The hold is cleared only once one of those happened,
-	 * so the caller must save the character after any outcome.
+	 * change; an unchanged one is refunded. The hold is cleared only once one of those happened.
 	 */
 	public static Outcome resolve(RPCharacter character) {
 		PendingPaidChange pending = character.getPendingPaidChange();
@@ -161,9 +159,10 @@ public final class PaidChangeService {
 			}
 		}
 		PendingPaidChange pending = result.pending();
+		// Saved with the character on the normal schedule, not forced here. DenarEconomy keeps online
+		// balances in memory until its own save, so after a crash it rolls the withdrawal back; a hold
+		// forced to disk now would then be refunded a second time on the next join.
 		character.setPendingPaidChange(pending);
-		// Saved now, so a crash before the player leaves the stage still refunds or counts it.
-		save(player);
 		if (pending.amount() > 0.0) {
 			RPTexts.send(player, RPTexts.SUCCESS + "Paid " + formatDenars(pending.amount()) + " from your "
 					+ pending.account().displayName() + " to change your " + rule.getLabel() + ".");
@@ -183,9 +182,7 @@ public final class PaidChangeService {
 		if (outcome == null) {
 			return;
 		}
-		Player player = cc.getPlayer();
-		tell(player, outcomeMessage(pending, outcome, character));
-		save(player);
+		tell(cc.getPlayer(), outcomeMessage(pending, outcome, character));
 	}
 
 	/**
@@ -217,12 +214,6 @@ public final class PaidChangeService {
 				return RPTexts.ERROR + "Your " + formatDenars(pending.amount()) + " refund couldn't go through yet. "
 						+ "It will be retried when you next join.";
 			}
-		}
-	}
-
-	private static void save(Player player) {
-		if (player != null && RPCharacters.getPlayerManager() != null) {
-			RPCharacters.getPlayerManager().savePlayer(player);
 		}
 	}
 

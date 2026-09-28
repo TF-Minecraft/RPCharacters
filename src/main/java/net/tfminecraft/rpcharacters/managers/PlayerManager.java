@@ -380,13 +380,13 @@ public class PlayerManager implements Listener{
 			final PlayerData loaded = pd;
 			data.add(loaded);
 			boolean dirty = ProstheticTraitRules.sanitize(loaded);
-			// On join only, not on offline loads: a refund or a fresh window here is saved at once.
+			// On join only, not on offline loads, which may never be saved. A settled hold is saved on
+			// the normal schedule, the same way DenarEconomy saves the online balance it changed.
 			for (RPCharacter c : loaded.getCharacters()) {
 				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
 						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
 				String recovered = net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c);
 				if (recovered != null) {
-					dirty = true;
 					RPTexts.send(p, recovered);
 				}
 			}
