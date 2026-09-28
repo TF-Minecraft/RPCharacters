@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -11,6 +12,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import net.tfminecraft.rpcharacters.RPCharacters;
 
 public final class FocusConfigLoader {
+
+    static final String DEFAULT_RESTORE_ITEM = "m.medicines.MINOR_FOCUS_POTION";
+    static final int DEFAULT_RESTORE_POINTS = 50;
 
     private FocusConfigLoader() {}
 
@@ -41,6 +45,27 @@ public final class FocusConfigLoader {
                 FocusConfig.regenBonuses.add(new FocusConfig.RegenBonus(id, extra));
             }
         }
+        loadRestoreItems(config, logger);
         return true;
+    }
+
+    private static void loadRestoreItems(FileConfiguration config, java.util.logging.Logger logger) {
+        FocusConfig.restoreItems.clear();
+        if (!config.contains("restore_items")) {
+            // focus.yml files written before restore_items existed keep the Focus Potion working.
+            FocusConfig.restoreItems.add(new FocusConfig.RestoreItem(DEFAULT_RESTORE_ITEM, DEFAULT_RESTORE_POINTS));
+            return;
+        }
+        ConfigurationSection section = config.getConfigurationSection("restore_items");
+        if (section == null) return;
+        for (String key : section.getKeys(false)) {
+            String item = section.getString(key + ".item", "");
+            int points = section.getInt(key + ".points", 0);
+            if (item.isBlank() || points < 1) {
+                logger.warning("[RPCharacters] Focus restore item '" + key + "' needs an item and points above 0; skipped.");
+                continue;
+            }
+            FocusConfig.restoreItems.add(new FocusConfig.RestoreItem(item, points));
+        }
     }
 }

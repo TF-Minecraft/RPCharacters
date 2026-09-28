@@ -142,6 +142,51 @@ class FocusLifecycleTest {
     }
 
     @Test
+    void restoreByReportsPointsAddedUpToTheCap() {
+        var service = new FocusService(plugin, store);
+        assertEquals(-1, service.restoreBy(player, 50));
+        active.set(character("alice"));
+        service.activate(player, active.get());
+        assertEquals(0, service.restoreBy(player, 50));
+        service.trySpend(player, 120);
+        assertEquals(50, service.restoreBy(player, 50));
+        assertEquals(80, service.getPoints(player));
+        service.trySpend(player, 10);
+        assertEquals(80, service.restoreBy(player, 500));
+        assertEquals(150, service.getPoints(player));
+    }
+
+    @Test
+    void restoreItemsLoadFromConfigAndDefaultToTheFocusPotion() throws Exception {
+        Path config = root.resolve("focus.yml");
+        Logger logger = mock(Logger.class);
+        Files.writeString(config, "max: 150\n");
+        assertTrue(FocusConfigLoader.load(config.toFile(), logger));
+        assertEquals(1, FocusConfig.restoreItems.size());
+        assertEquals("m.medicines.MINOR_FOCUS_POTION", FocusConfig.restoreItems.get(0).item);
+        assertEquals(50, FocusConfig.restoreItems.get(0).points);
+
+        Files.writeString(config, """
+                restore_items:
+                  major:
+                    item: m.medicines.MAJOR_FOCUS_POTION
+                    points: 75
+                  broken:
+                    item: m.medicines.OTHER
+                    points: 0
+                """);
+        assertTrue(FocusConfigLoader.load(config.toFile(), logger));
+        assertEquals(1, FocusConfig.restoreItems.size());
+        assertEquals("m.medicines.MAJOR_FOCUS_POTION", FocusConfig.restoreItems.get(0).item);
+        assertEquals(75, FocusConfig.restoreItems.get(0).points);
+        verify(logger).warning(contains("'broken'"));
+
+        Files.writeString(config, "restore_items: {}\n");
+        assertTrue(FocusConfigLoader.load(config.toFile(), logger));
+        assertTrue(FocusConfig.restoreItems.isEmpty());
+    }
+
+    @Test
     void aDifferentActiveCharacterCannotSpendTheCachedCharactersFocus() {
         var service = new FocusService(plugin, store);
         var alice = character("alice");

@@ -73,6 +73,17 @@ public final class FocusService {
         }
     }
 
+    /** Adds up to {@code amount} points and returns how many were added, or -1 without an active character. */
+    public int restoreBy(Player player, int amount) {
+        FocusData data = dataFor(player);
+        if (data == null) {
+            return -1;
+        }
+        int before = data.getPoints();
+        data.grant(amount);
+        return data.getPoints() - before;
+    }
+
     public int getMax() {
         return FocusConfig.max;
     }
