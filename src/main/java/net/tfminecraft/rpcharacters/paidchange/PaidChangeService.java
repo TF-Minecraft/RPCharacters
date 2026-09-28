@@ -77,7 +77,7 @@ public final class PaidChangeService {
 
 	/** Takes the next price from the first account that covers it. */
 	public static ChargeResult charge(UUID payerId, PaidChangeRule rule, RPCharacter character) {
-		double cost = rule.costAfter(character.getPaidChangeCount(rule.getId()));
+		double cost = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 		String before = snapshot(character);
 		if (cost <= 0.0) {
 			return new ChargeResult(ChargeStatus.PAID, new Pending(rule, payerId, null, 0.0, before), 0.0);
@@ -99,8 +99,8 @@ public final class PaidChangeService {
 	 */
 	public static boolean resolve(Pending pending, RPCharacter character) {
 		if (character != null && !snapshot(character).equals(pending.before())) {
-			String ruleId = pending.rule().getId();
-			character.setPaidChangeCount(ruleId, character.getPaidChangeCount(ruleId) + 1);
+			String stageId = pending.rule().getStageId();
+			character.setPaidChangeCount(stageId, character.getPaidChangeCount(stageId) + 1);
 			return true;
 		}
 		if (pending.account() != null && pending.amount() > 0.0
@@ -160,7 +160,7 @@ public final class PaidChangeService {
 		RPCharacter character = cc.getCharacter();
 		PaidChangeRule rule = pending.rule();
 		if (resolve(pending, character)) {
-			double next = rule.costAfter(character.getPaidChangeCount(rule.getId()));
+			double next = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 			tell(player, RPTexts.SUCCESS + "Your " + rule.getLabel() + " change is paid for. The next one costs "
 					+ formatDenars(next) + ".");
 			if (player != null && RPCharacters.getPlayerManager() != null) {
@@ -188,7 +188,7 @@ public final class PaidChangeService {
 		if (rule == null || character == null) {
 			return null;
 		}
-		int paid = character.getPaidChangeCount(rule.getId());
+		int paid = character.getPaidChangeCount(rule.getStageId());
 		String next = formatDenars(rule.costAfter(paid));
 		String after = formatDenars(rule.costAfter(paid + 1));
 		List<String> lines = new ArrayList<>();

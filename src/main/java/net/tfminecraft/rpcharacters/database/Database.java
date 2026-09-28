@@ -17,7 +17,9 @@ import java.util.TreeMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import net.tfminecraft.rpcharacters.creation.StageRevisions;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
+import net.tfminecraft.rpcharacters.loaders.StageLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
@@ -312,7 +314,8 @@ public class Database {
 				loadLastLocation(c, json);
 				loadPvpLethal(c, json);
 				CharacterEvilRpFields.load(c, json);
-				CharacterPaidChangeFields.load(c, json);
+				CharacterStageChangeFields.load(c, json);
+				StageRevisions.refresh(c, StageLoader.oList);
 				loadNutritionFields(c, json);
 				c.ensureTraitStateDefaults();
 				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
@@ -462,7 +465,7 @@ public class Database {
 			saveLastLocation(defaults, c);
 			defaults.put("pvp-lethal", String.valueOf(c.isPvpLethal()));
 			CharacterEvilRpFields.save(defaults, c);
-			CharacterPaidChangeFields.save(defaults, c);
+			CharacterStageChangeFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
 			if (save(file, defaults)) {
 				net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);

@@ -28,7 +28,7 @@ public final class StageEditLock {
 		if (lockMs < 0) {
 			return true;
 		}
-		return character.getAgeSeconds() * 1000L < lockMs;
+		return StageRevisions.secondsIntoWindow(stage, character) * 1000L < lockMs;
 	}
 
 	public static long lockRemainingMs(Stage stage, RPCharacter character) {
@@ -39,7 +39,7 @@ public final class StageEditLock {
 		if (lockMs < 0) {
 			return 0L;
 		}
-		long remaining = lockMs - (character.getAgeSeconds() * 1000L);
+		long remaining = lockMs - (StageRevisions.secondsIntoWindow(stage, character) * 1000L);
 		return Math.max(0L, remaining);
 	}
 

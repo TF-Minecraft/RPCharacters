@@ -99,8 +99,12 @@ public class RPCharacter {
 	private long evilRpSessionEndsAtMs;
 	/** When the latest strike landed, so strikes can wear off. 0 when unknown. */
 	private long lastStrikeAtMs;
-	/** Paid changes made so far per paid-change rule, keyed by rule id. Sets the next price. */
+	/** Paid changes made so far, keyed by stage id. Sets the next price. */
 	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
+	/** Stage revision each stage's lock window was last opened for, keyed by stage id. */
+	private final Map<String, Integer> stageRevisions = new HashMap<>();
+	/** Epoch seconds a revision reset opened each stage's window; 0 counts from creation. */
+	private final Map<String, Long> stageRevisionSince = new HashMap<>();
 
 	public static final int MAX_FOOD_VALUE = 200;
 	private static final int MAX_DIET_SCORE = 40;
@@ -224,6 +228,30 @@ public class RPCharacter {
 
 	public Map<String, Integer> getPaidChangeCounts() {
 		return Collections.unmodifiableMap(paidChangeCounts);
+	}
+
+	public int getStageRevision(String stageId) {
+		return stageId == null ? 0 : stageRevisions.getOrDefault(stageId, 0);
+	}
+
+	public long getStageRevisionSince(String stageId) {
+		return stageId == null ? 0L : stageRevisionSince.getOrDefault(stageId, 0L);
+	}
+
+	public void setStageRevision(String stageId, int revision, long sinceEpochSeconds) {
+		if (stageId == null) {
+			return;
+		}
+		stageRevisions.put(stageId, revision);
+		if (sinceEpochSeconds > 0L) {
+			stageRevisionSince.put(stageId, sinceEpochSeconds);
+		} else {
+			stageRevisionSince.remove(stageId);
+		}
+	}
+
+	public Map<String, Integer> getStageRevisions() {
+		return Collections.unmodifiableMap(stageRevisions);
 	}
 
 	public int getEvilRpStrikes() {

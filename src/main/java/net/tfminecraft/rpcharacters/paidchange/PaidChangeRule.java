@@ -14,16 +14,16 @@ public final class PaidChangeRule {
 
 	public PaidChangeRule(String id, String stageId, String label, List<Double> costs) {
 		this.id = id;
-		this.stageId = stageId;
+		this.stageId = stageId.toLowerCase(java.util.Locale.ROOT);
 		this.label = label == null || label.isBlank() ? id : label;
 		this.costs = List.copyOf(costs);
 	}
 
-	/** Key for the per-character paid change count. */
 	public String getId() {
 		return id;
 	}
 
+	/** Also the key for the per-character paid change count. */
 	public String getStageId() {
 		return stageId;
 	}

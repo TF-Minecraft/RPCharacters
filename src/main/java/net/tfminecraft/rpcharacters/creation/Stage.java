@@ -27,6 +27,9 @@ public class Stage {
 
 	private long lockTimeMs = -1L;
 
+	/** Raised by hand after a large change; gives every character a fresh lock window. */
+	private int revision;
+
 	/** Inclusive minimum account-age hours, or null if unset. */
 	private Integer requireAccountAgeHoursMin;
 	/** Exclusive maximum account-age hours, or null if unset. */
@@ -34,6 +37,14 @@ public class Stage {
 
 	/** Creation client: both (default), web-only, or game-only. */
 	private String platform = "both";
+
+	public int getRevision() {
+		return revision;
+	}
+
+	public void setRevision(int revision) {
+		this.revision = Math.max(0, revision);
+	}
 
 	public long getLockTimeMs() {
 		return lockTimeMs;
@@ -114,6 +125,7 @@ public class Stage {
 			setDependency(null);
 		}
 		setLockTimeMs(source.getLockTimeMs());
+		setRevision(source.getRevision());
 		setRequireAccountAgeHoursMin(source.getRequireAccountAgeHoursMin());
 		setRequireAccountAgeHoursMax(source.getRequireAccountAgeHoursMax());
 		setPlatform(source.getPlatform());
@@ -172,6 +184,7 @@ public class Stage {
 			s.setDependency(new Dependency(config.getConfigurationSection("dependency")));
 		}
 		s.setLockTimeMs(DurationParser.parseLockTimeMs(config.getString("lock-time", "-1")));
+		s.setRevision(config.getInt("revision", 0));
 		if (config.contains("require-account-age-hours-min")) {
 			s.setRequireAccountAgeHoursMin(config.getInt("require-account-age-hours-min"));
 		}

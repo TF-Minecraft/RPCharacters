@@ -856,6 +856,8 @@ public class CharacterCreation {
 
 		character.update();
 
+		StageRevisions.stampCurrent(character, StageLoader.oList);
+
 		pd.addCharacter(character);
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(p, pd.getUniqueId(), character);

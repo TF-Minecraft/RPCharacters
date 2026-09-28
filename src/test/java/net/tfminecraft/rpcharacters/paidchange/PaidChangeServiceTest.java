@@ -20,7 +20,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import net.tfminecraft.rpcharacters.creation.Stage;
-import net.tfminecraft.rpcharacters.database.CharacterPaidChangeFields;
+import net.tfminecraft.rpcharacters.creation.StageEditLock;
+import net.tfminecraft.rpcharacters.creation.StageRevisions;
+import net.tfminecraft.rpcharacters.database.CharacterStageChangeFields;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeService.ChargeResult;
@@ -30,6 +32,7 @@ class PaidChangeServiceTest {
 
 	private static final long DAY_MS = 86_400_000L;
 	private static final UUID PLAYER = UUID.randomUUID();
+	private static final String CLASS_STAGE = "class_selection_stage";
 	private static final PaidChangeRule CLASS_RULE =
 			new PaidChangeRule("class", "class_selection_stage", "class", List.of(100.0, 1000.0, 3000.0));
 
@@ -65,7 +68,7 @@ class PaidChangeServiceTest {
 		assertEquals(Account.POUCH, first.pending().account());
 		assertEquals(50.0, wallet.get(Account.POUCH));
 
-		character.setPaidChangeCount("class", 1);
+		character.setPaidChangeCount(CLASS_STAGE, 1);
 		ChargeResult second = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
 		assertEquals(Account.BANK, second.pending().account());
 		assertEquals(1000.0, second.pending().amount());
@@ -102,7 +105,7 @@ class PaidChangeServiceTest {
 
 		assertFalse(PaidChangeService.resolve(result.pending(), character));
 		assertEquals(100.0, wallet.get(Account.POUCH));
-		assertEquals(0, character.getPaidChangeCount("class"));
+		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
 	}
 
 	@Test
@@ -114,8 +117,8 @@ class PaidChangeServiceTest {
 		character.setMMOClass("mage");
 		assertTrue(PaidChangeService.resolve(result.pending(), character));
 		assertEquals(0.0, wallet.get(Account.BANK));
-		assertEquals(1, character.getPaidChangeCount("class"));
-		assertEquals(1000.0, CLASS_RULE.costAfter(character.getPaidChangeCount("class")));
+		assertEquals(1, character.getPaidChangeCount(CLASS_STAGE));
+		assertEquals(1000.0, CLASS_RULE.costAfter(character.getPaidChangeCount(CLASS_STAGE)));
 	}
 
 	@Test
@@ -141,12 +144,12 @@ class PaidChangeServiceTest {
 		assertTrue(first.contains("Click to change for 100 denars"), first);
 		assertTrue(first.contains("change after costs §e1,000 denars"), first);
 
-		character.setPaidChangeCount("class", 1);
+		character.setPaidChangeCount(CLASS_STAGE, 1);
 		String second = String.join("\n", PaidChangeService.summaryLore(stage, character, true));
 		assertTrue(second.contains("Click to change for 1,000 denars"), second);
 		assertTrue(second.contains("change after costs §e3,000 denars"), second);
 
-		character.setPaidChangeCount("class", 2);
+		character.setPaidChangeCount(CLASS_STAGE, 2);
 		String third = String.join("\n", PaidChangeService.summaryLore(stage, character, true));
 		assertTrue(third.contains("Click to change for 3,000 denars"), third);
 		assertTrue(third.contains("change after costs §e3,000 denars"), third);
@@ -179,19 +182,61 @@ class PaidChangeServiceTest {
 	}
 
 	@Test
-	void paidChangeCountsSurviveASaveAndLoad() throws Exception {
+	void raisingTheRevisionReopensTheWindowAndResetsPrices() {
+		long now = Instant.now().getEpochSecond();
+		RPCharacter character = characterWithClass("WARRIOR");
+		character.setCreatedAtEpochSeconds((int) (now - 30 * 86_400L));
+		character.setPaidChangeCount(CLASS_STAGE, 2);
+		Stage stage = stage(CLASS_STAGE, 5 * DAY_MS);
+
+		assertFalse(StageRevisions.refresh(character, List.of(stage), now));
+		assertFalse(StageEditLock.canEdit(stage, character));
+
+		stage.setRevision(1);
+		assertTrue(StageRevisions.refresh(character, List.of(stage), now - 3600));
+		assertTrue(StageEditLock.canEdit(stage, character));
+		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
+		String lore = String.join("\n", PaidChangeService.summaryLore(stage, character, false));
+		assertTrue(lore.contains("4d 23h") && lore.contains("Then: §e100 denars"), lore);
+
+		// Same revision on the next load keeps the window where it started.
+		assertFalse(StageRevisions.refresh(character, List.of(stage), now + 10 * 86_400L));
+		assertEquals(now - 3600, character.getStageRevisionSince(CLASS_STAGE));
+	}
+
+	@Test
+	void newCharactersStartOnTheCurrentRevision() {
+		long now = Instant.now().getEpochSecond();
+		Stage stage = stage(CLASS_STAGE, 5 * DAY_MS);
+		stage.setRevision(3);
+		RPCharacter character = characterWithClass("WARRIOR");
+		character.setCreatedAtEpochSeconds((int) (now - 6 * 86_400L));
+
+		StageRevisions.stampCurrent(character, List.of(stage));
+		assertFalse(StageRevisions.refresh(character, List.of(stage), now));
+		assertFalse(StageEditLock.canEdit(stage, character));
+	}
+
+	@Test
+	void stageChangeStateSurvivesASaveAndLoad() throws Exception {
 		RPCharacter character = new RPCharacter(null);
-		character.setPaidChangeCount("class", 2);
+		character.setPaidChangeCount(CLASS_STAGE, 2);
+		character.setStageRevision(CLASS_STAGE, 4, 1_790_000_000L);
+		character.setStageRevision("race_selection_stage", 1, 0L);
 		HashMap<String, Object> saved = new HashMap<>();
-		CharacterPaidChangeFields.save(saved, character);
+		CharacterStageChangeFields.save(saved, character);
 		JSONObject reparsed = (JSONObject) new JSONParser().parse(new JSONObject(saved).toJSONString());
 
 		RPCharacter loaded = new RPCharacter(null);
-		CharacterPaidChangeFields.load(loaded, reparsed);
-		assertEquals(2, loaded.getPaidChangeCount("class"));
+		CharacterStageChangeFields.load(loaded, reparsed);
+		assertEquals(2, loaded.getPaidChangeCount(CLASS_STAGE));
+		assertEquals(4, loaded.getStageRevision(CLASS_STAGE));
+		assertEquals(1_790_000_000L, loaded.getStageRevisionSince(CLASS_STAGE));
+		assertEquals(1, loaded.getStageRevision("race_selection_stage"));
+		assertEquals(0L, loaded.getStageRevisionSince("race_selection_stage"));
 
 		HashMap<String, Object> clean = new HashMap<>();
-		CharacterPaidChangeFields.save(clean, new RPCharacter(null));
+		CharacterStageChangeFields.save(clean, new RPCharacter(null));
 		assertTrue(clean.isEmpty());
 	}
 

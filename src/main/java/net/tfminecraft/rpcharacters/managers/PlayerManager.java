@@ -337,7 +337,12 @@ public class PlayerManager implements Listener{
 		net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService.clear(p);
 		TempAliasService.clear(p);
 		MmoCorePlayerReady.cancel(p.getUniqueId());
-		net.tfminecraft.rpcharacters.paidchange.PaidChangeService.settle(CreationManager.activeCreators.get(p));
+		CharacterCreation session = CreationManager.activeCreators.get(p);
+		net.tfminecraft.rpcharacters.paidchange.PaidChangeService.settle(session);
+		if (session != null && session.isEditing()) {
+			// Edits apply as they are made, so nothing is lost; a kept session would block the next /rpcharacter edit.
+			CreationManager.activeCreators.remove(p, session);
+		}
 		PlayerData pd = get(p);
 		if (pd != null && pd.hasActiveCharacter()) {
 			// Prevent MMOCore from persisting stacked attribute bases for the next login.

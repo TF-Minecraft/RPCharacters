@@ -355,6 +355,8 @@ public final class CharacterIngestService {
 			pd.setEighteen((Boolean) eighteenRaw);
 		}
 
+		net.tfminecraft.rpcharacters.creation.StageRevisions.stampCurrent(
+			character, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
 		pd.addCharacter(character);
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(online, pd.getUniqueId(), character);
