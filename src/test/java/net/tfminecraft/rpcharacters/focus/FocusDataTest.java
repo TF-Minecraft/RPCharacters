@@ -27,6 +27,9 @@ class FocusDataTest {
         assertEquals(10, data.getPoints());
         data.grant(1000);
         assertEquals(150, data.getPoints());
+        data.setPoints(20);
+        data.grant(Integer.MAX_VALUE);
+        assertEquals(150, data.getPoints());
         assertEquals(0, data.applyRegenForElapsed(10, 3_600_000, 99));
         assertEquals(99, data.getLastRegenMs());
     }

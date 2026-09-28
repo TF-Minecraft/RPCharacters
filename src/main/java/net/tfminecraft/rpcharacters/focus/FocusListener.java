@@ -52,12 +52,18 @@ public final class FocusListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
+        // Like vanilla, clicking a chest, door or lever uses the block, not the held potion.
+        if (action == Action.RIGHT_CLICK_BLOCK && !player.isSneaking()
+                && event.useInteractedBlock() != Event.Result.DENY
+                && event.getClickedBlock() != null && event.getClickedBlock().getType().isInteractable()) {
+            return;
+        }
         ItemStack item = player.getInventory().getItemInMainHand();
         FocusConfig.RestoreItem restore = restoreItemFor(item);
         if (restore == null) {
             return;
         }
-        event.setCancelled(true);
+        event.setUseItemInHand(Event.Result.DENY);
 
         int added = service.restoreBy(player, restore.points);
         if (added < 0) {

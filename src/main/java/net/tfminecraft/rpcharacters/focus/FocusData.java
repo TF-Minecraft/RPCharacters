@@ -85,7 +85,7 @@ public final class FocusData {
 
     public void grant(int amount) {
         if (amount > 0) {
-            points = clamp(points + amount);
+            points = (int) Math.min((long) points + amount, FocusConfig.max);
         }
     }
 
