@@ -1,5 +1,6 @@
 package net.tfminecraft.rpcharacters.paidchange;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -49,10 +50,11 @@ public final class PaidChangeConfig {
 			LOG.warning("[RPCharacters] paid-changes.rules." + id + " has no stage; skipped.");
 			return null;
 		}
-		List<Double> costs = new ArrayList<>();
+		List<BigDecimal> costs = new ArrayList<>();
 		for (Object value : rule.getList("costs", List.of())) {
-			if (value instanceof Number number && number.doubleValue() >= 0.0) {
-				costs.add(number.doubleValue());
+			BigDecimal cost = value instanceof Number number ? new BigDecimal(number.toString()) : null;
+			if (cost != null && cost.signum() >= 0) {
+				costs.add(cost);
 			} else {
 				LOG.warning("[RPCharacters] paid-changes.rules." + id + ".costs: ignored '" + value
 						+ "'. Costs must be numbers of 0 or more.");

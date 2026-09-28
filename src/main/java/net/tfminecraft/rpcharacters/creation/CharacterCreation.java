@@ -504,6 +504,16 @@ public class CharacterCreation {
 
 		PaidChangeService.settle(this);
 
+		if (character.getPendingPaidChange() != null) {
+
+			// A refund that failed stays held. Any edit now would look like the paid change was used.
+
+			RPTexts.send(p, RPTexts.ERROR + "Your last refund hasn't gone through yet. Try again after you rejoin.");
+
+			return;
+
+		}
+
 		if (!StageEditLock.canEdit(p, template, character) && !PaidChangeService.payToOpen(p, this, template)) {
 
 			return;

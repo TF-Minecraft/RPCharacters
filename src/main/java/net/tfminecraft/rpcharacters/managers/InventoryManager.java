@@ -913,7 +913,7 @@ public class InventoryManager {
 		if (pending != null) {
 			meta.setDisplayName(t(RPTexts.ERROR + "Cancel"));
 			lore.add(t(RPTexts.MUTED + "Keep your " + pending.label()));
-			if (pending.amount() > 0.0) {
+			if (pending.amount().signum() > 0) {
 				lore.add(t(RPTexts.MUTED + "and get " + RPTexts.GUI_WARN + PaidChangeService.formatDenars(pending.amount())
 						+ RPTexts.MUTED + " back"));
 			}

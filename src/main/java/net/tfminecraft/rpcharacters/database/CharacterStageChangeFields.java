@@ -1,5 +1,6 @@
 package net.tfminecraft.rpcharacters.database;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -72,7 +73,7 @@ public final class CharacterStageChangeFields {
 			if (pending.account() != null) {
 				held.put("account", pending.account().name());
 			}
-			held.put("amount", pending.amount());
+			held.put("amount", pending.amount().toPlainString());
 			held.put("before", pending.before());
 			defaults.put("paid-change-pending", held);
 		}
@@ -81,7 +82,7 @@ public final class CharacterStageChangeFields {
 	private static PendingPaidChange readPending(Map<?, ?> held) {
 		try {
 			Account account = held.get("account") instanceof String name ? Account.valueOf(name) : null;
-			double amount = held.get("amount") instanceof Number n ? n.doubleValue() : 0.0;
+			BigDecimal amount = new BigDecimal(String.valueOf(held.get("amount")));
 			return new PendingPaidChange((String) held.get("stage"), (String) held.get("label"),
 					UUID.fromString((String) held.get("payer")), account, amount, (String) held.get("before"));
 		} catch (RuntimeException e) {

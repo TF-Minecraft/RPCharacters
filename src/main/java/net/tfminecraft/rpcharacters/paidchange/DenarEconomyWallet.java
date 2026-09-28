@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters.paidchange;
 
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,35 +29,38 @@ final class DenarEconomyWallet implements DenarWallet {
 	}
 
 	@Override
-	public double balance(UUID playerId, Account account) {
+	public BigDecimal balance(UUID playerId, Account account) {
 		if (!bind()) {
-			return 0.0;
+			return BigDecimal.ZERO;
 		}
 		try {
-			return ((Number) balance.invoke(null, playerId, toDenar(account))).doubleValue();
+			double value = ((Number) balance.invoke(null, playerId, toDenar(account))).doubleValue();
+			// DenarEconomy stores cents in a BigDecimal and hands back its double value.
+			return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
 		} catch (ReflectiveOperationException | RuntimeException e) {
 			LOG.log(Level.WARNING, "[RPCharacters] Could not read a DenarEconomy balance", e);
-			return 0.0;
+			return BigDecimal.ZERO;
 		}
 	}
 
 	@Override
-	public boolean withdraw(UUID playerId, Account account, double amount) {
-		return amount > 0.0 && apply(playerId, account, -amount);
+	public boolean withdraw(UUID playerId, Account account, BigDecimal amount) {
+		return amount.signum() > 0 && apply(playerId, account, amount.negate());
 	}
 
 	@Override
-	public boolean deposit(UUID playerId, Account account, double amount) {
-		return amount > 0.0 && apply(playerId, account, amount);
+	public boolean deposit(UUID playerId, Account account, BigDecimal amount) {
+		return amount.signum() > 0 && apply(playerId, account, amount);
 	}
 
 	/** OfflineModifier.apply refuses a withdrawal the account can't cover. */
-	private boolean apply(UUID playerId, Account account, double amount) {
+	private boolean apply(UUID playerId, Account account, BigDecimal amount) {
 		if (!bind()) {
 			return false;
 		}
 		try {
-			return Boolean.TRUE.equals(apply.invoke(null, playerId, toDenar(account), amount));
+			// The API takes a double; DenarEconomy turns it back into cents with BigDecimal.valueOf.
+			return Boolean.TRUE.equals(apply.invoke(null, playerId, toDenar(account), amount.doubleValue()));
 		} catch (ReflectiveOperationException | RuntimeException e) {
 			LOG.log(Level.WARNING, "[RPCharacters] Could not change a DenarEconomy balance", e);
 			return false;

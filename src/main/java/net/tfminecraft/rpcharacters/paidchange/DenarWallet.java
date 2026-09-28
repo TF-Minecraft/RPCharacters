@@ -1,8 +1,9 @@
 package net.tfminecraft.rpcharacters.paidchange;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
-/** The denar accounts a paid change is charged to. */
+/** The denar accounts a paid change is charged to. Amounts are exact, in cents (scale 2). */
 public interface DenarWallet {
 	enum Account {
 		POUCH,
@@ -15,10 +16,10 @@ public interface DenarWallet {
 
 	boolean available();
 
-	double balance(UUID playerId, Account account);
+	BigDecimal balance(UUID playerId, Account account);
 
 	/** Takes the whole amount, or nothing when the account cannot cover it. */
-	boolean withdraw(UUID playerId, Account account, double amount);
+	boolean withdraw(UUID playerId, Account account, BigDecimal amount);
 
-	boolean deposit(UUID playerId, Account account, double amount);
+	boolean deposit(UUID playerId, Account account, BigDecimal amount);
 }

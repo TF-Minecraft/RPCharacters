@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.paidchange;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -10,13 +12,13 @@ public final class PaidChangeRule {
 	private final String id;
 	private final String stageId;
 	private final String label;
-	private final List<Double> costs;
+	private final List<BigDecimal> costs;
 
-	public PaidChangeRule(String id, String stageId, String label, List<Double> costs) {
+	public PaidChangeRule(String id, String stageId, String label, List<BigDecimal> costs) {
 		this.id = id;
 		this.stageId = stageId.toLowerCase(java.util.Locale.ROOT);
 		this.label = label == null || label.isBlank() ? id : label;
-		this.costs = List.copyOf(costs);
+		this.costs = costs.stream().map(cost -> cost.setScale(2, RoundingMode.HALF_UP)).toList();
 	}
 
 	public String getId() {
@@ -33,14 +35,14 @@ public final class PaidChangeRule {
 		return label;
 	}
 
-	public List<Double> getCosts() {
+	public List<BigDecimal> getCosts() {
 		return costs;
 	}
 
 	/** Price of a change after {@code paidSoFar} earlier paid changes. */
-	public double costAfter(int paidSoFar) {
+	public BigDecimal costAfter(int paidSoFar) {
 		if (costs.isEmpty()) {
-			return 0.0;
+			return BigDecimal.ZERO.setScale(2);
 		}
 		return costs.get(Math.min(Math.max(0, paidSoFar), costs.size() - 1));
 	}

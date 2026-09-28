@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -34,7 +35,7 @@ class PaidChangeServiceTest {
 	private static final UUID PLAYER = UUID.randomUUID();
 	private static final String CLASS_STAGE = "class_selection_stage";
 	private static final PaidChangeRule CLASS_RULE =
-			new PaidChangeRule("class", "class_selection_stage", "class", List.of(100.0, 1000.0, 3000.0));
+			new PaidChangeRule("class", "class_selection_stage", "class", List.of(d("100"), d("1000"), d("3000")));
 
 	private final FakeWallet wallet = new FakeWallet();
 
@@ -51,46 +52,46 @@ class PaidChangeServiceTest {
 
 	@Test
 	void pricesRiseThenRepeatTheLastCost() {
-		assertEquals(100.0, CLASS_RULE.costAfter(0));
-		assertEquals(1000.0, CLASS_RULE.costAfter(1));
-		assertEquals(3000.0, CLASS_RULE.costAfter(2));
-		assertEquals(3000.0, CLASS_RULE.costAfter(7));
+		assertEquals(d("100"), CLASS_RULE.costAfter(0));
+		assertEquals(d("1000"), CLASS_RULE.costAfter(1));
+		assertEquals(d("3000"), CLASS_RULE.costAfter(2));
+		assertEquals(d("3000"), CLASS_RULE.costAfter(7));
 	}
 
 	@Test
 	void chargesThePouchFirstThenTheBank() {
-		wallet.set(Account.POUCH, 150);
-		wallet.set(Account.BANK, 5000);
+		wallet.set(Account.POUCH, d("150"));
+		wallet.set(Account.BANK, d("5000"));
 		RPCharacter character = characterWithClass("WARRIOR");
 
 		ChargeResult first = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
 		assertEquals(ChargeStatus.PAID, first.status());
 		assertEquals(Account.POUCH, first.pending().account());
-		assertEquals(50.0, wallet.get(Account.POUCH));
+		assertEquals(d("50"), wallet.get(Account.POUCH));
 
 		character.setPaidChangeCount(CLASS_STAGE, 1);
 		ChargeResult second = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
 		assertEquals(Account.BANK, second.pending().account());
-		assertEquals(1000.0, second.pending().amount());
-		assertEquals(4000.0, wallet.get(Account.BANK));
+		assertEquals(d("1000"), second.pending().amount());
+		assertEquals(d("4000"), wallet.get(Account.BANK));
 	}
 
 	@Test
 	void refusesWhenNoAccountCoversTheCost() {
-		wallet.set(Account.POUCH, 60);
-		wallet.set(Account.BANK, 60);
+		wallet.set(Account.POUCH, d("60"));
+		wallet.set(Account.BANK, d("60"));
 
 		ChargeResult result = PaidChangeService.charge(PLAYER, CLASS_RULE, characterWithClass("WARRIOR"));
 		assertEquals(ChargeStatus.INSUFFICIENT_FUNDS, result.status());
-		assertEquals(100.0, result.cost());
-		assertEquals(60.0, wallet.get(Account.POUCH));
-		assertEquals(60.0, wallet.get(Account.BANK));
+		assertEquals(d("100"), result.cost());
+		assertEquals(d("60"), wallet.get(Account.POUCH));
+		assertEquals(d("60"), wallet.get(Account.BANK));
 	}
 
 	@Test
 	void unavailableWithoutDenarEconomy() {
 		wallet.available = false;
-		wallet.set(Account.POUCH, 500);
+		wallet.set(Account.POUCH, d("500"));
 		assertFalse(PaidChangeService.canPayToOpen(stage("class_selection_stage", 5 * DAY_MS)));
 		assertEquals(ChargeStatus.UNAVAILABLE,
 				PaidChangeService.charge(PLAYER, CLASS_RULE, characterWithClass("WARRIOR")).status());
@@ -98,40 +99,40 @@ class PaidChangeServiceTest {
 
 	@Test
 	void backingOutWithoutAChangeRefunds() {
-		wallet.set(Account.POUCH, 100);
+		wallet.set(Account.POUCH, d("100"));
 		RPCharacter character = characterWithClass("WARRIOR");
 		ChargeResult result = PaidChangeService.charge(PLAYER, CLASS_RULE, character);
-		assertEquals(0.0, wallet.get(Account.POUCH));
+		assertEquals(d("0"), wallet.get(Account.POUCH));
 		character.setPendingPaidChange(result.pending());
 
 		assertEquals(PaidChangeService.Outcome.REFUNDED, PaidChangeService.resolve(character));
-		assertEquals(100.0, wallet.get(Account.POUCH));
+		assertEquals(d("100"), wallet.get(Account.POUCH));
 		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
 		assertNull(character.getPendingPaidChange());
 	}
 
 	@Test
 	void aFailedRefundStaysHeldAndIsRetried() {
-		wallet.set(Account.POUCH, 100);
+		wallet.set(Account.POUCH, d("100"));
 		RPCharacter character = characterWithClass("WARRIOR");
 		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
 
 		wallet.depositsFail = true;
 		assertEquals(PaidChangeService.Outcome.REFUND_FAILED, PaidChangeService.resolve(character));
-		assertEquals(0.0, wallet.get(Account.POUCH));
+		assertEquals(d("0"), wallet.get(Account.POUCH));
 		assertTrue(character.getPendingPaidChange() != null);
 
 		wallet.depositsFail = false;
 		String message = PaidChangeService.recover(character);
 		assertTrue(message.contains("100 denars went back to your pouch"), message);
-		assertEquals(100.0, wallet.get(Account.POUCH));
+		assertEquals(d("100"), wallet.get(Account.POUCH));
 		assertNull(character.getPendingPaidChange());
 		assertNull(PaidChangeService.recover(character));
 	}
 
 	@Test
 	void aSavedHoldSurvivesACrashAndSettlesOnRecovery() throws Exception {
-		wallet.set(Account.BANK, 1000);
+		wallet.set(Account.BANK, d("1000"));
 		RPCharacter character = characterWithClass("WARRIOR");
 		character.setPaidChangeCount(CLASS_STAGE, 1);
 		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
@@ -144,27 +145,27 @@ class PaidChangeServiceTest {
 		CharacterStageChangeFields.load(loaded, reparsed);
 		PendingPaidChange held = loaded.getPendingPaidChange();
 		assertEquals(Account.BANK, held.account());
-		assertEquals(1000.0, held.amount());
+		assertEquals(d("1000"), held.amount());
 		assertEquals(PLAYER, held.payerId());
 
 		String message = PaidChangeService.recover(loaded);
 		assertTrue(message.contains("class change is paid for. The next one costs 3,000 denars"), message);
 		assertEquals(2, loaded.getPaidChangeCount(CLASS_STAGE));
-		assertEquals(0.0, wallet.get(Account.BANK));
+		assertEquals(d("0"), wallet.get(Account.BANK));
 		assertNull(loaded.getPendingPaidChange());
 	}
 
 	@Test
 	void keepingTheChangeKeepsThePaymentAndRaisesTheNextPrice() {
-		wallet.set(Account.BANK, 100);
+		wallet.set(Account.BANK, d("100"));
 		RPCharacter character = characterWithClass("WARRIOR");
 		character.setPendingPaidChange(PaidChangeService.charge(PLAYER, CLASS_RULE, character).pending());
 
 		character.setMMOClass("mage");
 		assertEquals(PaidChangeService.Outcome.KEPT, PaidChangeService.resolve(character));
-		assertEquals(0.0, wallet.get(Account.BANK));
+		assertEquals(d("0"), wallet.get(Account.BANK));
 		assertEquals(1, character.getPaidChangeCount(CLASS_STAGE));
-		assertEquals(1000.0, CLASS_RULE.costAfter(character.getPaidChangeCount(CLASS_STAGE)));
+		assertEquals(d("1000"), CLASS_RULE.costAfter(character.getPaidChangeCount(CLASS_STAGE)));
 	}
 
 	@Test
@@ -219,10 +220,10 @@ class PaidChangeServiceTest {
 		assertFalse(PaidChangeService.canPayToOpen(stage("class_selection_stage", 5 * DAY_MS)));
 		PaidChangeRule race = PaidChangeService.ruleFor(stage("race_selection_stage", DAY_MS));
 		assertEquals("race", race.getLabel());
-		assertEquals(75.0, race.costAfter(3));
+		assertEquals(d("75"), race.costAfter(3));
 
-		wallet.set(Account.POUCH, 1000);
-		wallet.set(Account.BANK, 50);
+		wallet.set(Account.POUCH, d("1000"));
+		wallet.set(Account.BANK, d("50"));
 		ChargeResult result = PaidChangeService.charge(PLAYER, race, characterWithClass("WARRIOR"));
 		assertEquals(Account.BANK, result.pending().account());
 	}
@@ -288,10 +289,25 @@ class PaidChangeServiceTest {
 
 	@Test
 	void denarsFormatWithSeparators() {
-		assertEquals("100 denars", PaidChangeService.formatDenars(100));
-		assertEquals("3,000 denars", PaidChangeService.formatDenars(3000));
-		assertEquals("1 denar", PaidChangeService.formatDenars(1));
-		assertEquals("2.50 denars", PaidChangeService.formatDenars(2.5));
+		assertEquals("100 denars", PaidChangeService.formatDenars(d("100")));
+		assertEquals("3,000 denars", PaidChangeService.formatDenars(d("3000")));
+		assertEquals("1 denar", PaidChangeService.formatDenars(d("1")));
+		assertEquals("2.50 denars", PaidChangeService.formatDenars(d("2.5")));
+	}
+
+	private static BigDecimal d(String value) {
+		return new BigDecimal(value).setScale(2);
+	}
+
+	@Test
+	void fractionalPricesStayExact() {
+		PaidChangeRule cheap = new PaidChangeRule("tip", CLASS_STAGE, "class", List.of(d("0.1")));
+		wallet.set(Account.POUCH, d("0.3"));
+		RPCharacter character = characterWithClass("WARRIOR");
+		for (int i = 0; i < 3; i++) {
+			assertEquals(ChargeStatus.PAID, PaidChangeService.charge(PLAYER, cheap, character).status());
+		}
+		assertEquals(d("0"), wallet.get(Account.POUCH));
 	}
 
 	private static RPCharacter characterWithClass(String classId) {
@@ -308,16 +324,16 @@ class PaidChangeServiceTest {
 	}
 
 	private static final class FakeWallet implements DenarWallet {
-		private final Map<Account, Double> balances = new EnumMap<>(Account.class);
+		private final Map<Account, BigDecimal> balances = new EnumMap<>(Account.class);
 		boolean available = true;
 		boolean depositsFail;
 
-		void set(Account account, double amount) {
-			balances.put(account, amount);
+		void set(Account account, BigDecimal amount) {
+			balances.put(account, amount.setScale(2));
 		}
 
-		double get(Account account) {
-			return balances.getOrDefault(account, 0.0);
+		BigDecimal get(Account account) {
+			return balances.getOrDefault(account, d("0"));
 		}
 
 		@Override
@@ -326,25 +342,25 @@ class PaidChangeServiceTest {
 		}
 
 		@Override
-		public double balance(UUID playerId, Account account) {
+		public BigDecimal balance(UUID playerId, Account account) {
 			return get(account);
 		}
 
 		@Override
-		public boolean withdraw(UUID playerId, Account account, double amount) {
-			if (get(account) < amount) {
+		public boolean withdraw(UUID playerId, Account account, BigDecimal amount) {
+			if (get(account).compareTo(amount) < 0) {
 				return false;
 			}
-			balances.put(account, get(account) - amount);
+			balances.put(account, get(account).subtract(amount));
 			return true;
 		}
 
 		@Override
-		public boolean deposit(UUID playerId, Account account, double amount) {
+		public boolean deposit(UUID playerId, Account account, BigDecimal amount) {
 			if (depositsFail) {
 				return false;
 			}
-			balances.put(account, get(account) + amount);
+			balances.put(account, get(account).add(amount));
 			return true;
 		}
 	}

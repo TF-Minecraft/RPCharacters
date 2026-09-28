@@ -1,5 +1,6 @@
 package net.tfminecraft.rpcharacters.paidchange;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -34,7 +35,7 @@ public final class PaidChangeService {
 		INSUFFICIENT_FUNDS
 	}
 
-	public record ChargeResult(ChargeStatus status, PendingPaidChange pending, double cost) {}
+	public record ChargeResult(ChargeStatus status, PendingPaidChange pending, BigDecimal cost) {}
 
 	public enum Outcome {
 		/** The character changed: the payment stays and the change is counted. */
@@ -82,23 +83,23 @@ public final class PaidChangeService {
 
 	/** Takes the next price from the first account that covers it. */
 	public static ChargeResult charge(UUID payerId, PaidChangeRule rule, RPCharacter character) {
-		double cost = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
+		BigDecimal cost = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 		String before = snapshot(character);
-		if (cost <= 0.0) {
-			return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, null, 0.0, before), 0.0);
+		if (cost.signum() <= 0) {
+			return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, null, cost, before), cost);
 		}
 		if (!wallet.available()) {
 			return new ChargeResult(ChargeStatus.UNAVAILABLE, null, cost);
 		}
 		for (Account account : accountOrder) {
-			if (wallet.balance(payerId, account) >= cost && wallet.withdraw(payerId, account, cost)) {
+			if (wallet.balance(payerId, account).compareTo(cost) >= 0 && wallet.withdraw(payerId, account, cost)) {
 				return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, account, cost, before), cost);
 			}
 		}
 		return new ChargeResult(ChargeStatus.INSUFFICIENT_FUNDS, null, cost);
 	}
 
-	private static PendingPaidChange pending(PaidChangeRule rule, UUID payerId, Account account, double amount,
+	private static PendingPaidChange pending(PaidChangeRule rule, UUID payerId, Account account, BigDecimal amount,
 			String before) {
 		return new PendingPaidChange(rule.getStageId(), rule.getLabel(), payerId, account, amount, before);
 	}
@@ -117,7 +118,7 @@ public final class PaidChangeService {
 			character.setPendingPaidChange(null);
 			return Outcome.KEPT;
 		}
-		if (pending.account() != null && pending.amount() > 0.0
+		if (pending.account() != null && pending.amount().signum() > 0
 				&& !wallet.deposit(pending.payerId(), pending.account(), pending.amount())) {
 			LOG.log(Level.WARNING, "[RPCharacters] Could not refund " + pending.amount() + " denars to "
 					+ pending.payerId() + " (" + pending.account() + ") for a " + pending.label()
@@ -163,7 +164,7 @@ public final class PaidChangeService {
 		// balances in memory until its own save, so after a crash it rolls the withdrawal back; a hold
 		// forced to disk now would then be refunded a second time on the next join.
 		character.setPendingPaidChange(pending);
-		if (pending.amount() > 0.0) {
+		if (pending.amount().signum() > 0) {
 			RPTexts.send(player, RPTexts.SUCCESS + "Paid " + formatDenars(pending.amount()) + " from your "
 					+ pending.account().displayName() + " to change your " + rule.getLabel() + ".");
 			RPTexts.send(player, RPTexts.MUTED + "Leave without changing it and you get the denars back.");
@@ -204,7 +205,7 @@ public final class PaidChangeService {
 				return RPTexts.SUCCESS + "Your " + pending.label() + " change is paid for." + next;
 			}
 			case REFUNDED -> {
-				if (pending.amount() <= 0.0) {
+				if (pending.amount().signum() <= 0) {
 					return null;
 				}
 				return RPTexts.SUCCESS + "Your " + pending.label() + " is unchanged, so "
@@ -255,11 +256,12 @@ public final class PaidChangeService {
 		return lines;
 	}
 
-	public static String formatDenars(double amount) {
-		String number = amount == Math.rint(amount)
-				? String.format(Locale.ROOT, "%,d", (long) amount)
+	public static String formatDenars(BigDecimal amount) {
+		BigDecimal whole = amount.stripTrailingZeros();
+		String number = whole.scale() <= 0
+				? String.format(Locale.ROOT, "%,d", whole.toBigInteger())
 				: String.format(Locale.ROOT, "%,.2f", amount);
-		return number + (amount == 1.0 ? " denar" : " denars");
+		return number + (amount.compareTo(BigDecimal.ONE) == 0 ? " denar" : " denars");
 	}
 
 	/** Everything a creation stage can change, so any edit made after paying shows up. */

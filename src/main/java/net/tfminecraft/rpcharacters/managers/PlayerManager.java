@@ -383,12 +383,13 @@ public class PlayerManager implements Listener{
 			// On join only, not on offline loads, which may never be saved. A settled hold is saved on
 			// the normal schedule, the same way DenarEconomy saves the online balance it changed.
 			for (RPCharacter c : loaded.getCharacters()) {
-				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
-						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
+				// Settle an old hold first, so it counts toward the old revision, not the fresh window.
 				String recovered = net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c);
 				if (recovered != null) {
 					RPTexts.send(p, recovered);
 				}
+				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
+						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
 			}
 			if (dirty) {
 				savePlayer(p);
