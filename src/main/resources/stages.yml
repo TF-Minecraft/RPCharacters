@@ -97,6 +97,9 @@ class_info_stage:
 class_selection_stage:
   type: selection
   lock-time: 5d
+  # Raise by hand after a large change to this stage. Every character then gets a fresh
+  # lock-time window from when it next loads, and paid-change prices start over.
+  revision: 0
   repeat: true
   target: class
   min-select: 1

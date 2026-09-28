@@ -337,6 +337,12 @@ public class PlayerManager implements Listener{
 		net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService.clear(p);
 		TempAliasService.clear(p);
 		MmoCorePlayerReady.cancel(p.getUniqueId());
+		CharacterCreation session = CreationManager.activeCreators.get(p);
+		net.tfminecraft.rpcharacters.paidchange.PaidChangeService.settle(session);
+		if (session != null && session.isEditing()) {
+			// Edits apply as they are made, so nothing is lost; a kept session would block the next /rpcharacter edit.
+			CreationManager.activeCreators.remove(p, session);
+		}
 		PlayerData pd = get(p);
 		if (pd != null && pd.hasActiveCharacter()) {
 			// Prevent MMOCore from persisting stacked attribute bases for the next login.
@@ -373,7 +379,19 @@ public class PlayerManager implements Listener{
 			}
 			final PlayerData loaded = pd;
 			data.add(loaded);
-			if (ProstheticTraitRules.sanitize(loaded)) {
+			boolean dirty = ProstheticTraitRules.sanitize(loaded);
+			// On join only, not on offline loads, which may never be saved. A settled hold is saved on
+			// the normal schedule, the same way DenarEconomy saves the online balance it changed.
+			for (RPCharacter c : loaded.getCharacters()) {
+				// Settle an old hold first, so it counts toward the old revision, not the fresh window.
+				String recovered = net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c);
+				if (recovered != null) {
+					RPTexts.send(p, recovered);
+				}
+				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
+						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
+			}
+			if (dirty) {
 				savePlayer(p);
 			}
 			if(!loaded.hasActiveCharacter() && loaded.getCharacters(Status.ALIVE).size() > 0) {

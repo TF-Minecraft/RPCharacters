@@ -79,3 +79,15 @@ conversation:
 rp-injure:
   range: 10
   timeout-seconds: 30
+
+# Pay to change a choice after its stage's lock-time runs out (class is locked after 5d).
+# Players pay when they open the choice, and get the denars back if they leave without changing it.
+# costs: the first paid change, the second, and so on. The last cost repeats after that.
+# accounts: where to take the denars from, tried in order. The whole cost comes from one account.
+paid-changes:
+  accounts: [pouch, bank]
+  rules:
+    class:
+      stage: class_selection_stage
+      label: class
+      costs: [100, 1000, 3000]

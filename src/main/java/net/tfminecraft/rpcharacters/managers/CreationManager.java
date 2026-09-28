@@ -40,6 +40,7 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.SelectableItem;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.utils.PlaytimeGate;
 import net.tfminecraft.rpcharacters.utils.ProstheticTraitRules;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -141,7 +142,8 @@ public class CreationManager implements Listener{
 			RPTexts.send(p, RPTexts.ERROR + "You have no active character to edit.");
 			return;
 		}
-		if (stage != null && !StageEditLock.canEdit(p, stage, pd.getActiveCharacter())) {
+		if (stage != null && !StageEditLock.canEdit(p, stage, pd.getActiveCharacter())
+				&& !PaidChangeService.canPayToOpen(stage)) {
 			RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
 			return;
 		}
@@ -149,6 +151,10 @@ public class CreationManager implements Listener{
 			CharacterCreation cc = CharacterCreation.forEdit(p, pd.getActiveCharacter());
 			activeCreators.put(p, cc);
 			cc.jumpToStageForEdit(stageId);
+			if (!cc.isEditingFromSummary()) {
+				// Nothing opened (e.g. the player could not pay), so don't leave a session with no GUI.
+				activeCreators.remove(p, cc);
+			}
 			return;
 		}
 		CharacterCreation existing = activeCreators.get(p);
@@ -505,7 +511,8 @@ public class CreationManager implements Listener{
 			}
 			String stageId = action.substring("edit:".length());
 			Stage stage = StageLoader.getById(stageId);
-			if (stage != null && !StageEditLock.canEdit(p, stage, cc.getCharacter())) {
+			if (stage != null && !StageEditLock.canEdit(p, stage, cc.getCharacter())
+					&& !PaidChangeService.canPayToOpen(stage)) {
 				RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
 				return;
 			}

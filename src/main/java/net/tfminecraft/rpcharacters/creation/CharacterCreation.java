@@ -47,6 +47,9 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
+import net.tfminecraft.rpcharacters.paidchange.PendingPaidChange;
+
 import net.tfminecraft.rpcharacters.objects.attributes.AttributeData;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.objects.trait.TraitEffectResolver;
@@ -408,6 +411,15 @@ public class CharacterCreation {
 
 	}
 
+	public Player getPlayer() {
+		return p;
+	}
+
+	/** Denars held while a paid stage is open; kept on the character so they are saved. */
+	public PendingPaidChange getPendingPaidChange() {
+		return character == null ? null : character.getPendingPaidChange();
+	}
+
 
 
 	public void openSummary() {
@@ -490,9 +502,19 @@ public class CharacterCreation {
 
 		}
 
-		if (!StageEditLock.canEdit(p, template, character)) {
+		PaidChangeService.settle(this);
 
-			RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
+		if (character.getPendingPaidChange() != null) {
+
+			// A refund that failed stays held. Any edit now would look like the paid change was used.
+
+			RPTexts.send(p, RPTexts.ERROR + "Your last refund hasn't gone through yet. Try again after you rejoin.");
+
+			return;
+
+		}
+
+		if (!StageEditLock.canEdit(p, template, character) && !PaidChangeService.payToOpen(p, this, template)) {
 
 			return;
 
@@ -503,6 +525,8 @@ public class CharacterCreation {
 		if (fresh == null) {
 
 			RPTexts.send(p, RPTexts.ERROR + "Could not open editor for that choice.");
+
+			PaidChangeService.settle(this);
 
 			return;
 
@@ -542,6 +566,8 @@ public class CharacterCreation {
 
 			RPTexts.send(p, RPTexts.ERROR + "That choice cannot be edited from the summary.");
 
+			PaidChangeService.settle(this);
+
 		}
 
 	}
@@ -561,6 +587,8 @@ public class CharacterCreation {
 		editingFromSummary = false;
 
 		editStage = null;
+
+		PaidChangeService.settle(this);
 
 		if (isEditing()) {
 
@@ -827,6 +855,8 @@ public class CharacterCreation {
 
 		character.update();
 
+		StageRevisions.stampCurrent(character, StageLoader.oList);
+
 		pd.addCharacter(character);
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(p, pd.getUniqueId(), character);
@@ -856,6 +886,8 @@ public class CharacterCreation {
 
 
 	public void closeEditSession() {
+
+		PaidChangeService.settle(this);
 
 		persistEdits();
 
@@ -1062,6 +1094,8 @@ public class CharacterCreation {
 		}
 
 		if (isEditing()) {
+
+			PaidChangeService.settle(this);
 
 			CreationManager.activeCreators.remove(p);
 

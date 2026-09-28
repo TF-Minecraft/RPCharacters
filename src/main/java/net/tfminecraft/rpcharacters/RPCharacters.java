@@ -45,6 +45,7 @@ import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.loaders.PartyLoader;
 import net.tfminecraft.rpcharacters.managers.CommandManager;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeListener;
 import net.tfminecraft.rpcharacters.managers.ClueDisturbanceListener;
 import net.tfminecraft.rpcharacters.managers.MagnifyingGlassListener;
 import net.tfminecraft.rpcharacters.managers.PlaceClueManager;
@@ -291,6 +292,7 @@ public class RPCharacters extends JavaPlugin{
 		PvpStrikeService.shutdown();
 		LastSolidTracker.get().shutdown();
 		GraveManager.get().saveAll();
+		PaidChangeListener.settleAll();
 		save();
 	}
 	
@@ -310,6 +312,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(playerManager, this);
 		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady(), this);
 		getServer().getPluginManager().registerEvents(creationManager, this);
+		getServer().getPluginManager().registerEvents(new PaidChangeListener(), this);
 		getServer().getPluginManager().registerEvents(clueInputManager, this);
 		getServer().getPluginManager().registerEvents(placeClueManager, this);
 		getServer().getPluginManager().registerEvents(magnifyingGlassListener, this);
@@ -532,6 +535,7 @@ public class RPCharacters extends JavaPlugin{
 
 	private boolean reloadWithFocusStatus() {
 		loadConfigs();
+		refreshStageRevisionsOnline();
 		boolean focusReloaded = reloadFocusConfig();
 		if (!focusReloaded) {
 			getLogger().warning("Focus did not reload; see the preceding focus error. "
@@ -544,7 +548,25 @@ public class RPCharacters extends JavaPlugin{
 		return focusReloaded;
 	}
 
-	public void reloadConfigs(CommandSender sender) {
+	/** A raised stage revision opens a fresh lock window for online characters straight away. */
+	private void refreshStageRevisionsOnline() {
+		for (Player p : Bukkit.getOnlinePlayers()) {
+			net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(p);
+			if (pd == null) {
+				continue;
+			}
+			boolean changed = false;
+			for (net.tfminecraft.rpcharacters.objects.RPCharacter c : pd.getCharacters()) {
+				changed |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
+						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
+			}
+			if (changed) {
+				playerManager.savePlayer(p);
+			}
+		}
+	}
+
+		public void reloadConfigs(CommandSender sender) {
 		String name = sender != null ? sender.getName() : "unknown";
 		getLogger().info("Config reload requested by " + name);
 		if (sender != null) {
