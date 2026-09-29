@@ -12,3 +12,10 @@ regen_bonuses:
     extra_per_hour_per_point: 0.5
   - mmocore_id: intelligence
     extra_per_hour_per_point: 0.25
+
+# Items that restore focus on right-click (TLibs item paths). One item is used
+# per click; nothing is used while focus is already full.
+restore_items:
+  minor_focus_potion:
+    item: m.medicines.MINOR_FOCUS_POTION
+    points: 50
