@@ -198,7 +198,7 @@ public class ProfessionEffectService implements Listener {
 			if (event.getFather() instanceof Animals father) {
 				father.setLoveModeTicks(0);
 			}
-			RPTexts.send(player, RPTexts.ERROR + "You are not skilled enough to breed this animal.");
+			RPTexts.send(player, RPTexts.ERROR + "You have not yet learned how to breed this animal.");
 		}
 	}
 
