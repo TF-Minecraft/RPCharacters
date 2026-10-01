@@ -245,7 +245,8 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 				continue;
 			}
 			if (message) {
-				RPTexts.send(player, RPTexts.ERROR + "You lost the upgrade " + upgrade.getId());
+				RPTexts.send(player, RPTexts.ERROR + "You lost the " + RPTexts.WARN
+						+ upgrade.getMenuItem().getItemMeta().getDisplayName() + RPTexts.ERROR + " upgrade.");
 			}
 			ProfessionIntegrator.removeUpgrade(player, upgrade);
 		}

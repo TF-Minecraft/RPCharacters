@@ -83,7 +83,7 @@ public final class ProstheticInstallListener implements Listener {
 			}
 			case ALREADY_OWNED -> RPTexts.send(player, RPTexts.MUTED + "You already have that prosthetic.");
 			case REPLACE -> openReplaceConfirm(player, character, ownedId, match);
-			case NONE -> RPTexts.send(player, RPTexts.MUTED + "No injury on this character can use that item.");
+			case NONE -> RPTexts.send(player, RPTexts.MUTED + "You see no injury that would require this.");
 		}
 	}
 
@@ -181,7 +181,7 @@ public final class ProstheticInstallListener implements Listener {
 		if (match == null
 				|| !match.getTraitId().equalsIgnoreCase(pending.toTraitId())
 				|| !match.getItemPath().equalsIgnoreCase(pending.itemPath())) {
-			RPTexts.send(player, RPTexts.ERROR + "You need to keep holding the prosthetic item to install it.");
+			RPTexts.send(player, RPTexts.ERROR + "You need to keep holding the prosthetic to install it.");
 			return;
 		}
 		if (!ownsTrait(character, pending.fromTraitId())) {

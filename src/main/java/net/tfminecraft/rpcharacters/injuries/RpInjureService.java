@@ -255,7 +255,7 @@ public final class RpInjureService {
 			return "You cannot injure yourself.";
 		}
 		if (!attacker.hasPermission("rpchar.injure")) {
-			return "You do not have access to this command.";
+			return "You cannot injure anyone right now.";
 		}
 		PlayerData attackerData = PlayerManager.get(attacker);
 		if (attackerData == null || !attackerData.hasActiveCharacter()
