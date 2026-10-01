@@ -105,7 +105,7 @@ public final class ChatManager implements Listener {
 			if (SpeechBubbleDebug.isEnabled() && channel.hasSpeechBubble()) {
 				SpeechBubbleDebug.logSkip("chat-dispatch", "missing use permission " + channel.getUsePermission());
 			}
-			RPTexts.send(player, RPTexts.ERROR + "You do not have permission to use this chat channel.");
+			RPTexts.send(player, RPTexts.ERROR + "You cannot use this chat channel.");
 			return;
 		}
 

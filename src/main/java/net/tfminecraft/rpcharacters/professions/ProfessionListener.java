@@ -133,7 +133,7 @@ public class ProfessionListener implements Listener {
 		}
 		for (String requirement : upgrade.getRequirements()) {
 			if (!character.hasProfessionUpgrade(requirement)) {
-				RPTexts.send(player, RPTexts.ERROR + "You dont have the required upgrades!");
+				RPTexts.send(player, RPTexts.ERROR + "You have not yet unlocked the upgrades this requires!");
 				player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 				return;
 			}

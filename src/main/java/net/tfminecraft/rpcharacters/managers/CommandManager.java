@@ -446,7 +446,7 @@ public class CommandManager implements Listener, CommandExecutor{
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("injure")) {
 				if (!p.hasPermission("rpchar.injure")) {
-					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You cannot injure anyone right now.");
 					return true;
 				}
 				if (args.length != 2) {
