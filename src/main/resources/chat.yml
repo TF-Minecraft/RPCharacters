@@ -172,6 +172,18 @@ channels:
     bubble: false
     smart-messages: false
 
+  rooc:
+    commands: [rooc]
+    use-perm: rpchar.chat.use
+    read-perm: rpchar.chat.use
+    color-code-perm: rpchar.chat.colors
+    require-character: false
+    format: '&f[&dROOC&f] &f{player}: &7{message}'
+    recipient-resolver: simplefactions:realm
+    cooldown: 3
+    bubble: false
+    smart-messages: false
+
   pooc:
     commands: [pooc]
     use-perm: rpchar.chat.use

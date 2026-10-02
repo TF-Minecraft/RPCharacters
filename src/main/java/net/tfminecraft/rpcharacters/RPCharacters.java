@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters;
 
 import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -8,6 +10,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -106,6 +109,7 @@ import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.party.PartyChatRecipientResolver;
 import net.tfminecraft.rpcharacters.party.PartyListener;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolverRegistry;
+import net.tfminecraft.rpcharacters.factions.RealmOocChatRecipientResolver;
 import net.tfminecraft.rpcharacters.roll.RollManager;
 import net.tfminecraft.rpcharacters.placeholder.RpCharactersExpansion;
 import net.tfminecraft.rpcharacters.speechbubble.SpeechBubbleListener;
@@ -270,6 +274,9 @@ public class RPCharacters extends JavaPlugin{
 		ChatRecipientResolverRegistry.register(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID,
 				partyChatRecipientResolver);
+		if (Bukkit.getPluginManager().isPluginEnabled("SimpleFactions")) {
+			ChatRecipientResolverRegistry.register("simplefactions:realm", new RealmOocChatRecipientResolver());
+		}
 		registerPlaceholderApi();
 	}
 	@Override
@@ -277,6 +284,7 @@ public class RPCharacters extends JavaPlugin{
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID);
+		ChatRecipientResolverRegistry.unregister("simplefactions:realm");
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.stopPeriodicPull();
 		WardrobeService.stopSoftRefresh();
 		ProtocolLibBridge.shutdown();
@@ -482,6 +490,7 @@ public class RPCharacters extends JavaPlugin{
 	            saveResource(s, false);
 	        }
 		}
+		migrateRoocChannel();
 		File knifeSkin = new File(getDataFolder(), "assets/knife_skin.png");
 		if (!knifeSkin.exists()) {
 			knifeSkin.getParentFile().mkdirs();
@@ -526,6 +535,27 @@ public class RPCharacters extends JavaPlugin{
 				traitConfig.getParentFile().mkdirs();
 				saveResource("traits/" + traitFile, false);
 			}
+		}
+	}
+
+	private void migrateRoocChannel() {
+		File chatFile = new File(getDataFolder(), "chat.yml");
+		YamlConfiguration current = YamlConfiguration.loadConfiguration(chatFile);
+		if (current.contains("channels.rooc")) {
+			return;
+		}
+
+		try (InputStreamReader reader = new InputStreamReader(getResource("chat.yml"), StandardCharsets.UTF_8)) {
+			YamlConfiguration defaults = YamlConfiguration.loadConfiguration(reader);
+			var roocDefaults = defaults.getConfigurationSection("channels.rooc");
+			if (roocDefaults == null) {
+				getLogger().warning("ROOC defaults are missing from bundled chat.yml; existing chat config was left unchanged.");
+				return;
+			}
+			current.set("channels.rooc", roocDefaults.getValues(false));
+			current.save(chatFile);
+		} catch (Exception e) {
+			getLogger().warning("Could not add ROOC to chat.yml: " + e.getMessage());
 		}
 	}
 	
