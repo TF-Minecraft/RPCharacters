@@ -106,6 +106,7 @@ import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.party.PartyChatRecipientResolver;
 import net.tfminecraft.rpcharacters.party.PartyListener;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolverRegistry;
+import net.tfminecraft.rpcharacters.factions.RealmOocChatRecipientResolver;
 import net.tfminecraft.rpcharacters.roll.RollManager;
 import net.tfminecraft.rpcharacters.placeholder.RpCharactersExpansion;
 import net.tfminecraft.rpcharacters.speechbubble.SpeechBubbleListener;
@@ -270,6 +271,9 @@ public class RPCharacters extends JavaPlugin{
 		ChatRecipientResolverRegistry.register(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID,
 				partyChatRecipientResolver);
+		if (Bukkit.getPluginManager().isPluginEnabled("SimpleFactions")) {
+			ChatRecipientResolverRegistry.register("simplefactions:realm", new RealmOocChatRecipientResolver());
+		}
 		registerPlaceholderApi();
 	}
 	@Override
@@ -277,6 +281,7 @@ public class RPCharacters extends JavaPlugin{
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID);
+		ChatRecipientResolverRegistry.unregister("simplefactions:realm");
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.stopPeriodicPull();
 		WardrobeService.stopSoftRefresh();
 		ProtocolLibBridge.shutdown();
