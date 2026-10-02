@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters;
 
 import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -8,6 +10,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -487,6 +490,7 @@ public class RPCharacters extends JavaPlugin{
 	            saveResource(s, false);
 	        }
 		}
+		migrateRoocChannel();
 		File knifeSkin = new File(getDataFolder(), "assets/knife_skin.png");
 		if (!knifeSkin.exists()) {
 			knifeSkin.getParentFile().mkdirs();
@@ -531,6 +535,27 @@ public class RPCharacters extends JavaPlugin{
 				traitConfig.getParentFile().mkdirs();
 				saveResource("traits/" + traitFile, false);
 			}
+		}
+	}
+
+	private void migrateRoocChannel() {
+		File chatFile = new File(getDataFolder(), "chat.yml");
+		YamlConfiguration current = YamlConfiguration.loadConfiguration(chatFile);
+		if (current.contains("channels.rooc")) {
+			return;
+		}
+
+		try (InputStreamReader reader = new InputStreamReader(getResource("chat.yml"), StandardCharsets.UTF_8)) {
+			YamlConfiguration defaults = YamlConfiguration.loadConfiguration(reader);
+			var roocDefaults = defaults.getConfigurationSection("channels.rooc");
+			if (roocDefaults == null) {
+				getLogger().warning("ROOC defaults are missing from bundled chat.yml; existing chat config was left unchanged.");
+				return;
+			}
+			current.set("channels.rooc", roocDefaults.getValues(false));
+			current.save(chatFile);
+		} catch (Exception e) {
+			getLogger().warning("Could not add ROOC to chat.yml: " + e.getMessage());
 		}
 	}
 	
