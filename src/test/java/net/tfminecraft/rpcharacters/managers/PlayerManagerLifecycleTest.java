@@ -500,6 +500,8 @@ abstract class PlayerManagerFixture {
         when(data.getCharacterById("character")).thenReturn(character);
         when(data.takePendingMmoAttributeRemoves()).thenReturn(List.of("strength"));
         tracked = field(null, "data"); tracked.clear(); tracked.add(data);
+        // Initialize the ingest singleton with a real database before constructor mocking.
+        ingestion = boundary(CharacterIngestService.class);
         var databases = mockConstruction(Database.class, (db, context) -> {
             when(db.loadPlayerData(id)).thenReturn(data);
         });
@@ -524,7 +526,7 @@ abstract class PlayerManagerFixture {
         deaths = boundary(PermadeathService.class); sanitizing = boundary(ProstheticTraitRules.class);
         paid = boundary(PaidChangeService.class); revisions = boundary(StageRevisions.class);
         groups = boundary(PermissionGroupService.class); investigations = boundary(InvestigationPointService.class);
-        wardrobe = boundary(WardrobeService.class); ingestion = boundary(CharacterIngestService.class);
+        wardrobe = boundary(WardrobeService.class);
         lifecycle = boundary(CharacterLifecycle.class); mail = boundary(MailRecipientDirectory.class);
         injuries = boundary(InjuryHealingService.class); offhand = boundary(OffhandBlockService.class);
         fuel = boundary(ProstheticFuelService.class); potions = boundary(TraitEffectResolver.class);
