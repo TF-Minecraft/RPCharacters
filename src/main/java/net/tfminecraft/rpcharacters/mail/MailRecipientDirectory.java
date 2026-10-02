@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +45,10 @@ public final class MailRecipientDirectory {
 	private MailRecipientDirectory() {}
 
 	public static void scanFromDisk() {
-		File root = new File("plugins/RPCharacters/data/characterdata");
+		scanFromDisk(new File("plugins/RPCharacters/data/characterdata"));
+	}
+
+	static void scanFromDisk(File root) {
 		if (!root.exists() || !root.isDirectory()) {
 			return;
 		}
@@ -92,7 +96,6 @@ public final class MailRecipientDirectory {
 			ENTRIES.remove(character.getId());
 			return;
 		}
-		Entry existing = ENTRIES.get(character.getId());
 		Entry entry = new Entry();
 		entry.ownerUuid = ownerUuid;
 		entry.characterId = character.getId();
@@ -106,11 +109,19 @@ public final class MailRecipientDirectory {
 			entry.y = character.getLastLocationY();
 			entry.z = character.getLastLocationZ();
 		}
-		if (existing != null) {
-			entry.baseTextureValue = existing.baseTextureValue;
-			entry.baseTextureSignature = existing.baseTextureSignature;
-		}
-		ENTRIES.put(character.getId(), entry);
+		publishEntry(entry);
+	}
+
+	private static void publishEntry(Entry entry) {
+		ENTRIES.compute(entry.characterId, (id, existing) -> {
+			if (existing != null && entry.ownerUuid.equals(existing.ownerUuid)) {
+				// Metadata saves preserve pending lookups; removal or a new owner starts a new generation.
+				entry.textureGeneration = existing.textureGeneration;
+				entry.baseTextureValue = existing.baseTextureValue;
+				entry.baseTextureSignature = existing.baseTextureSignature;
+			}
+			return entry;
+		});
 	}
 
 	public static void updateWardrobeTexture(
@@ -124,15 +135,17 @@ public final class MailRecipientDirectory {
 		if (textureValue == null || textureValue.isBlank()) {
 			return;
 		}
-		Entry entry = ENTRIES.get(characterId);
-		if (entry == null || !ownerUuid.equals(entry.ownerUuid)) {
-			entry = new Entry();
-			entry.ownerUuid = ownerUuid;
-			entry.characterId = characterId;
-			ENTRIES.put(characterId, entry);
-		}
-		entry.baseTextureValue = textureValue;
-		entry.baseTextureSignature = textureSignature;
+		ENTRIES.compute(characterId, (id, existing) -> {
+			Entry entry = existing;
+			if (entry == null || !ownerUuid.equals(entry.ownerUuid)) {
+				entry = new Entry();
+				entry.ownerUuid = ownerUuid;
+				entry.characterId = characterId;
+			}
+			entry.baseTextureValue = textureValue;
+			entry.baseTextureSignature = textureSignature;
+			return entry;
+		});
 	}
 
 	/**
@@ -163,9 +176,6 @@ public final class MailRecipientDirectory {
 		long now = System.currentTimeMillis();
 		List<Entry> missing = new ArrayList<>();
 		for (Entry entry : ENTRIES.values()) {
-			if (entry == null || entry.characterId == null) {
-				continue;
-			}
 			if (entry.baseTextureValue != null && !entry.baseTextureValue.isBlank()) {
 				continue;
 			}
@@ -179,12 +189,11 @@ public final class MailRecipientDirectory {
 			finishTexturePass();
 			return;
 		}
-		for (Entry entry : missing) {
-			TEXTURE_ATTEMPTS.put(entry.characterId, now);
-		}
+		try {
 		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
 			try {
 				for (Entry entry : missing) {
+					TEXTURE_ATTEMPTS.put(entry.characterId, System.currentTimeMillis());
 					ProvinceSystemClient.SimpleResult result = ProvinceSystemClient.fetchWardrobe(
 							entry.ownerUuid.toString(),
 							entry.characterId);
@@ -192,12 +201,33 @@ public final class MailRecipientDirectory {
 						continue;
 					}
 					WardrobeSnapshot snapshot = WardrobeSnapshot.parse(result.body);
-					cacheBaseTextureFromSnapshot(entry.ownerUuid, snapshot);
+					if (snapshot == null || !entry.characterId.equalsIgnoreCase(snapshot.getCharacterId())) {
+						continue;
+					}
+					WardrobeSlotData base = snapshot.getSlot(WardrobeSnapshot.SLOT_BASE);
+					if (base == null || !base.isFilled() || base.getTextureValue() == null || base.getTextureValue().isBlank()) {
+						continue;
+					}
+					ENTRIES.computeIfPresent(entry.characterId, (id, current) -> {
+						if (current.textureGeneration == entry.textureGeneration
+								&& (current.baseTextureValue == null || current.baseTextureValue.isBlank())) {
+							current.baseTextureValue = base.getTextureValue();
+							current.baseTextureSignature = base.getTextureSignature();
+						}
+						return current;
+					});
 				}
 			} finally {
 				finishTexturePass();
 			}
 		});
+		} catch (RuntimeException | Error failure) {
+			synchronized (TEXTURE_WAITERS) {
+				textureRefreshRunning = false;
+				textureRefreshAgain = false;
+			}
+			throw failure;
+		}
 	}
 
 	private static void finishTexturePass() {
@@ -326,7 +356,7 @@ public final class MailRecipientDirectory {
 		Object statusRaw = json.get("status");
 		if (statusRaw != null) {
 			try {
-				status = Status.valueOf(statusRaw.toString().toUpperCase());
+				status = Status.valueOf(statusRaw.toString().toUpperCase(Locale.ROOT));
 			} catch (IllegalArgumentException ignored) {
 				return;
 			}
@@ -365,7 +395,7 @@ public final class MailRecipientDirectory {
 				entry.z = ((Number) zRaw).doubleValue();
 			}
 		}
-		ENTRIES.put(characterId, entry);
+		publishEntry(entry);
 	}
 
 	private static Entry fromLive(UUID ownerUuid, RPCharacter character) {
@@ -464,6 +494,7 @@ public final class MailRecipientDirectory {
 	}
 
 	private static final class Entry {
+		private Object textureGeneration = new Object();
 		private UUID ownerUuid;
 		private String characterId;
 		// Texture-only cache entries must not become recipients.
@@ -475,7 +506,7 @@ public final class MailRecipientDirectory {
 		private Double x;
 		private Double y;
 		private Double z;
-		private String baseTextureValue;
-		private String baseTextureSignature;
+		private volatile String baseTextureValue;
+		private volatile String baseTextureSignature;
 	}
 }

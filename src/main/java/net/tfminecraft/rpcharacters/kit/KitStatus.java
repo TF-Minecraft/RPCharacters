@@ -14,13 +14,13 @@ public enum KitStatus {
 			return null;
 		}
 		try {
-			return KitStatus.valueOf(raw.trim().toUpperCase());
+			return KitStatus.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
 		} catch (IllegalArgumentException e) {
 			return null;
 		}
 	}
 
 	public String toStorage() {
-		return name().toLowerCase();
+		return name().toLowerCase(java.util.Locale.ROOT);
 	}
 }

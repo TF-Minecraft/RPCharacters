@@ -18,10 +18,8 @@ public final class AttributeRollResolver {
 		if (data == null) {
 			return 0;
 		}
+		attributeId = attributeId.toLowerCase(java.util.Locale.ROOT);
 		AttributeInstance instance = data.getAttributes().getInstance(attributeId);
-		if (instance == null) {
-			return 0;
-		}
 		int value = (int) Math.round(instance.getBase());
 		return RollLoader.getModifier(attributeId, value);
 	}

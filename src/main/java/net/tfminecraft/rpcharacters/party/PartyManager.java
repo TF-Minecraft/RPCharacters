@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.loaders.PartyLoader;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
+import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 public final class PartyManager {
 
@@ -32,7 +33,7 @@ public final class PartyManager {
 		return INSTANCE;
 	}
 
-	public void load(Path file) {
+	public synchronized void load(Path file) {
 		PartyStore nextStore = new PartyStore(file);
 		try {
 			List<Party> loaded = nextStore.load();
@@ -49,23 +50,26 @@ public final class PartyManager {
 		}
 	}
 
-	private void save() {
+	private void save(Party original, Party replacement) {
 		if (store == null) return;
+		List<Party> proposed = new ArrayList<>(partiesById.values());
+		proposed.remove(original);
+		if (replacement != null) proposed.add(replacement);
 		try {
-			store.save(partiesById.values());
+			store.save(proposed);
 		} catch (IOException e) {
 			throw new UncheckedIOException("Unable to save persistent parties", e);
 		}
 	}
 
-	public Party getParty(UUID memberId) {
+	public synchronized Party getParty(UUID memberId) {
 		if (memberId == null) {
 			return null;
 		}
 		return memberIndex.get(memberId);
 	}
 
-	public PartyInvite getPendingInvite(UUID targetId) {
+	public synchronized PartyInvite getPendingInvite(UUID targetId) {
 		if (targetId == null) {
 			return null;
 		}
@@ -80,7 +84,7 @@ public final class PartyManager {
 		return invite;
 	}
 
-	public PartyResult create(UUID leaderId, String rawName) {
+	public synchronized PartyResult create(UUID leaderId, String rawName) {
 		if (leaderId == null) {
 			return PartyResult.fail(PartyLoader.getInvalidName());
 		}
@@ -94,13 +98,13 @@ public final class PartyManager {
 		}
 
 		Party party = new Party(UUID.randomUUID(), name, leaderId);
+		save(null, party);
 		partiesById.put(party.getId(), party);
 		memberIndex.put(leaderId, party);
-		save();
 		return PartyResult.ok(PartyLoader.getCreated().replace("{name}", name));
 	}
 
-	public PartyResult invite(UUID leaderId, UUID targetId) {
+	public synchronized PartyResult invite(UUID leaderId, UUID targetId) {
 		if (leaderId == null || targetId == null) {
 			return PartyResult.fail(PartyLoader.getTargetNotFound().replace("{player}", ""));
 		}
@@ -134,7 +138,7 @@ public final class PartyManager {
 				List.of(targetId));
 	}
 
-	public PartyResult join(UUID targetId) {
+	public synchronized PartyResult join(UUID targetId) {
 		if (targetId == null) {
 			return PartyResult.fail(PartyLoader.getNoInvite());
 		}
@@ -152,21 +156,15 @@ public final class PartyManager {
 		}
 
 		Party party = partiesById.get(invite.getPartyId());
-		if (party == null) {
-			pendingInvites.remove(targetId);
-			return PartyResult.fail(PartyLoader.getInviteExpired());
-		}
-		if (!party.isLeader(invite.getLeaderId())) {
-			pendingInvites.remove(targetId);
-			return PartyResult.fail(PartyLoader.getInviteExpired());
-		}
-
+		// All membership mutations are synchronized; disband/load also remove their invitations.
+		Party proposed = copyParty(party);
+		proposed.addMember(targetId);
+		save(party, proposed);
 		party.addMember(targetId);
 		memberIndex.put(targetId, party);
 		pendingInvites.remove(targetId);
 
 		List<UUID> notify = new ArrayList<>(party.getMemberIds());
-		save();
 		notify.remove(targetId);
 		return PartyResult.withNotify(
 				PartyResult.Kind.MEMBER_JOINED,
@@ -174,7 +172,8 @@ public final class PartyManager {
 				notify);
 	}
 
-	public PartyResult leave(UUID memberId) {
+	public synchronized PartyResult leave(UUID memberId) {
+		if (memberId == null) return PartyResult.fail(PartyLoader.getNotInParty());
 		Party party = memberIndex.get(memberId);
 		if (party == null) {
 			return PartyResult.fail(PartyLoader.getNotInParty());
@@ -192,7 +191,7 @@ public final class PartyManager {
 				notify);
 	}
 
-	public PartyResult kick(UUID leaderId, UUID targetId) {
+	public synchronized PartyResult kick(UUID leaderId, UUID targetId) {
 		if (leaderId == null || targetId == null) {
 			return PartyResult.fail(PartyLoader.getTargetNotFound().replace("{player}", ""));
 		}
@@ -225,7 +224,7 @@ public final class PartyManager {
 		handleQuit(player.getUniqueId());
 	}
 
-	public void handleQuit(UUID memberId) {
+	public synchronized void handleQuit(UUID memberId) {
 		if (memberId == null) {
 			return;
 		}
@@ -234,7 +233,7 @@ public final class PartyManager {
 		// Membership and leadership survive disconnects. Only explicit leave/kick removes them.
 	}
 
-	public List<String> buildInfoLines(Party party) {
+	public synchronized List<String> buildInfoLines(Party party) {
 		List<String> lines = new ArrayList<>();
 		if (party == null) {
 			return lines;
@@ -257,29 +256,34 @@ public final class PartyManager {
 
 	private PartyResult disband(Party party, String leaderMessage) {
 		List<UUID> notify = new ArrayList<>(party.getMemberIds());
+		save(party, null);
 		for (UUID memberId : party.getMemberIds()) {
 			memberIndex.remove(memberId);
 		}
 		partiesById.remove(party.getId());
 		pendingInvites.entrySet().removeIf(entry -> entry.getValue().getPartyId().equals(party.getId()));
-		save();
 		return PartyResult.withNotify(PartyResult.Kind.DISBANDED, leaderMessage, notify);
 	}
 
 	private void removeMember(Party party, UUID memberId) {
+		Party proposed = copyParty(party);
+		proposed.removeMember(memberId);
+		save(party, proposed);
 		party.removeMember(memberId);
 		memberIndex.remove(memberId);
-		if (party.getMemberIds().isEmpty()) {
-			partiesById.remove(party.getId());
-		}
-		save();
+	}
+
+	private static Party copyParty(Party party) {
+		Party copy = new Party(party.getId(), party.getName(), party.getLeaderId());
+		for (UUID memberId : party.getMemberIds()) copy.addMember(memberId);
+		return copy;
 	}
 
 	private static String sanitizeName(String rawName) {
 		if (rawName == null) {
 			return null;
 		}
-		String trimmed = ClueFormatter.stripColor(rawName.trim());
+		String trimmed = ClueFormatter.stripColor(RPTexts.formatGui(rawName.trim()));
 		if (trimmed.isEmpty() || trimmed.length() > PartyLoader.getMaxNameLength()) {
 			return null;
 		}

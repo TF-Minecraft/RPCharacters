@@ -48,8 +48,11 @@ public class SetterStage extends Stage{
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")
 	public void runMessage(Player p, String message) {
-		String type = message.split("\\(")[0];
-		String info = RPTexts.formatGui(message.split("\\(")[1].replace(")", ""));
+		if (message == null) return;
+		int open = message.indexOf('(');
+		if (open < 0 || !message.endsWith(")")) return;
+		String type = message.substring(0, open);
+		String info = RPTexts.formatGui(message.substring(open + 1, message.length() - 1));
 		if(type.equalsIgnoreCase("title")) {
 			p.sendTitle(info, " ", 5, 50, 5);
 			p.sendMessage(info);
@@ -77,7 +80,7 @@ public class SetterStage extends Stage{
 	public String capitalizeWords(String input) {
 		if (input == null || input.isEmpty()) return input;
 		
-		String[] words = input.toLowerCase().split("\\s+");
+		String[] words = input.toLowerCase(java.util.Locale.ROOT).split("\\s+");
 		StringBuilder sb = new StringBuilder();
 		
 		for (String word : words) {

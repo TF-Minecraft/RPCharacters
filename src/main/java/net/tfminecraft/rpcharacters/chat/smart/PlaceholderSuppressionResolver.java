@@ -23,9 +23,6 @@ public final class PlaceholderSuppressionResolver {
 			return false;
 		}
 		RPCharacter character = data.getActiveCharacter();
-		if (character == null) {
-			return false;
-		}
 		return ConversationManager.isInActiveConversation(character, System.currentTimeMillis());
 	}
 
@@ -38,9 +35,6 @@ public final class PlaceholderSuppressionResolver {
 			return 0;
 		}
 		RPCharacter character = data.getActiveCharacter();
-		if (character == null) {
-			return 0;
-		}
 		return ConversationManager.countActiveSessions(character, System.currentTimeMillis());
 	}
 }

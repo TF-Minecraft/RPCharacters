@@ -123,8 +123,9 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 			config.save(configFile);
 		} catch (IOException e) {
 			RPCharacters.plugin.getLogger().severe("Failed to save world spawn to zones.yml: " + e.getMessage());
+			return;
 		}
-		worldSpawn = location;
+		worldSpawn = location == null || location.getWorld() == null ? null : location;
 	}
 
 	private static String stripLegacyDisplayName(String displayName) {

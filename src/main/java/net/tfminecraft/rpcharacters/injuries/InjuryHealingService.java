@@ -45,9 +45,6 @@ public final class InjuryHealingService {
 			}
 
 			RPCharacter character = pd.getActiveCharacter();
-			if (!character.isActive()) {
-				continue;
-			}
 
 			processCharacter(player, character);
 		}

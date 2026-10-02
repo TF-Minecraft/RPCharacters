@@ -26,8 +26,8 @@ public class PotionData {
 			}
 		}
 
-		id = effectId.toLowerCase();
-		type = PotionEffectType.getByName(effectId.toUpperCase());
+		id = effectId.toLowerCase(java.util.Locale.ROOT);
+		type = effectId.isEmpty() ? null : PotionEffectType.getByName(effectId.toUpperCase(java.util.Locale.ROOT));
 		amplifier = Math.max(0, effectAmplifier);
 	}
 

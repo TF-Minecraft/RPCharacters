@@ -55,9 +55,6 @@ public final class OffhandBlockService {
 			}
 
 			RPCharacter character = pd.getActiveCharacter();
-			if (character == null || !character.isActive()) {
-				continue;
-			}
 			if (!blocksOffhand(character)) {
 				continue;
 			}
@@ -89,8 +86,13 @@ public final class OffhandBlockService {
 		if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) {
 			return false;
 		}
-		Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), stack.clone());
+		ItemStack expected = stack.clone();
+		Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), expected.clone());
 		dropped.setPickupDelay(PICKUP_DELAY_TICKS);
+		ItemStack current = offhand ? player.getInventory().getItemInOffHand() : player.getInventory().getItemInMainHand();
+		if (!expected.equals(current)) {
+			return true;
+		}
 		ItemStack empty = new ItemStack(Material.AIR);
 		if (offhand) {
 			player.getInventory().setItemInOffHand(empty);

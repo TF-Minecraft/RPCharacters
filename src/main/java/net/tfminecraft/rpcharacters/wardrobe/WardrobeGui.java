@@ -19,6 +19,9 @@ import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.objects.PermissionGroupDefinition;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.PlayerData;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
@@ -47,14 +50,25 @@ public final class WardrobeGui {
 		}
 		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		if (snapshot == null) {
+			Inventory expectedInventory = player.getOpenInventory().getTopInventory();
+			PlayerData owner = PlayerManager.get(player);
+			RPCharacter expectedCharacter = owner != null ? owner.getActiveCharacter() : null;
 			RPTexts.send(
 				player,
 				RPTexts.WARN + "Loading wardrobe… Opening when ready."
 			);
 			WardrobeService.refreshActiveAsync(player, () -> {
-				if (player.isOnline() && WardrobeCache.get(player) != null) {
+				if (!player.isOnline()
+						|| player.getOpenInventory().getTopInventory() != expectedInventory) {
+					return;
+				}
+				PlayerData current = PlayerManager.get(player);
+				if (current == null || current.getActiveCharacter() != expectedCharacter) {
+					return;
+				}
+				if (WardrobeCache.get(player) != null) {
 					openNow(player);
-				} else if (player.isOnline()) {
+				} else {
 					RPTexts.send(
 						player,
 						RPTexts.ERROR + "Could not load wardrobe. Try again."

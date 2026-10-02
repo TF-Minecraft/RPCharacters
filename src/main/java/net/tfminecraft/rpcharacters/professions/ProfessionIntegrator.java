@@ -82,11 +82,9 @@ public final class ProfessionIntegrator {
 		}
 		LuckPerms api = provider.getProvider();
 		User user = api.getPlayerAdapter(Player.class).getUser(player);
-		if (player.hasPermission(perm)) {
-			user.data().remove(Node.builder(perm)
-					.withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext)
-					.build());
-		}
+		user.data().remove(Node.builder(perm)
+				.withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext)
+				.build());
 		api.getUserManager().saveUser(user);
 	}
 }

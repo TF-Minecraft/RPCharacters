@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.permadeath;
 
 import java.util.Objects;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,7 +28,9 @@ public final class PermadeathZoneListener implements Listener {
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onPlayerMove(PlayerMoveEvent event) {
-		if (event.getFrom().getBlockX() == event.getTo().getBlockX()
+		if (event.getTo() == null) return;
+		if (Objects.equals(event.getFrom().getWorld(), event.getTo().getWorld())
+				&& event.getFrom().getBlockX() == event.getTo().getBlockX()
 				&& event.getFrom().getBlockY() == event.getTo().getBlockY()
 				&& event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
 			return;
@@ -73,7 +76,7 @@ public final class PermadeathZoneListener implements Listener {
 		}
 		PermadeathZoneDefinition zone = PermadeathAreaLookup.getPermadeathZoneAt(player, location);
 		if (zone != null) {
-			currentZoneId.put(player.getUniqueId(), zone.getRegionId().toLowerCase());
+			currentZoneId.put(player.getUniqueId(), zone.getRegionId().toLowerCase(Locale.ROOT));
 		} else {
 			currentZoneId.remove(player.getUniqueId());
 		}
@@ -87,7 +90,7 @@ public final class PermadeathZoneListener implements Listener {
 		UUID uuid = player.getUniqueId();
 		String previousId = currentZoneId.get(uuid);
 		PermadeathZoneDefinition toZone = PermadeathAreaLookup.getPermadeathZoneAt(player, to);
-		String toId = toZone != null ? toZone.getRegionId().toLowerCase() : null;
+		String toId = toZone != null ? toZone.getRegionId().toLowerCase(Locale.ROOT) : null;
 
 		if (Objects.equals(previousId, toId)) {
 			return;

@@ -36,9 +36,6 @@ public final class TextWrapUtil {
 		StringBuilder current = new StringBuilder();
 
 		for (String word : words) {
-			if (word.isEmpty()) {
-				continue;
-			}
 			if (current.length() == 0) {
 				current.append(word);
 				continue;

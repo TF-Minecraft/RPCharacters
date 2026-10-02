@@ -63,6 +63,7 @@ class CharacterPlaytimeDirectoryTest {
 
 	@Test
 	void malformedRecordDoesNotDiscardOtherCharacters() throws Exception {
+		Files.createDirectories(root.resolve("not-a-uuid"));
 		save("valid", """
 				{"id":"valid","name":"Valid","status":"ALIVE","online-playtime-seconds":60}
 				""");
@@ -73,6 +74,24 @@ class CharacterPlaytimeDirectoryTest {
 			assertEquals(1, CharacterPlaytimeDirectory.getAll().size());
 		}
 		assertEquals(1, warnings.size());
+	}
+
+	@Test
+	void unavailableOwnerAndRootDirectoriesProduceWarningsWithoutLosingOtherOwners() throws Exception {
+		save("valid", "{\"id\":\"a\",\"name\":\"Aria\",\"status\":\"ALIVE\"}");
+		for (Path unavailable : List.of(root, root.resolve(owner.toString()))) {
+			List<String> warnings = new ArrayList<>();
+			try (var files = mockStatic(Files.class, call -> {
+				if (call.getMethod().getName().equals("list") && unavailable.equals(call.getArgument(0))) {
+					throw new java.io.IOException("directory unavailable");
+				}
+				return call.callRealMethod();
+			})) {
+				CharacterPlaytimeDirectory.loadFromDisk(root, warnings::add);
+			}
+			assertEquals(1, warnings.size());
+			assertTrue(warnings.getFirst().contains("directory unavailable"));
+		}
 	}
 
 	@Test

@@ -93,8 +93,7 @@ public class SelectableItem {
 		return false;
 	}
 	public boolean isExclusive(String s) {
-		if(exclusive.contains(s)) return true;
-		return false;
+		return exclusive.stream().anyMatch(id -> id.equalsIgnoreCase(s));
 	}
 	public List<String> getExclusives(){
 		return exclusive;

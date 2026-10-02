@@ -53,7 +53,7 @@ public final class FocusStore {
             try (Writer writer = new FileWriter(temp.toFile())) {
                 GSON.toJson(data, writer);
             }
-            Files.move(temp, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temp, target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException | RuntimeException ex) {
             throw failure("save", target, ex);
         } finally {

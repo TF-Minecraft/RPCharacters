@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.placeholder;
 
+import java.util.Locale;
+
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
@@ -48,7 +50,7 @@ public final class RpCharactersExpansion extends PlaceholderExpansion {
 	}
 
 	private String resolveOffline(String params) {
-		switch (params.toLowerCase()) {
+		switch (params.toLowerCase(Locale.ROOT)) {
 			case "name":
 			case "display":
 			case "display_tab":
@@ -68,7 +70,7 @@ public final class RpCharactersExpansion extends PlaceholderExpansion {
 	}
 
 	private String resolve(Player player, String params) {
-		switch (params.toLowerCase()) {
+		switch (params.toLowerCase(Locale.ROOT)) {
 			case "name": {
 				String name = DisplayIdentityService.resolveCharacterName(player);
 				return name.isEmpty() ? Cache.personaNoCharacterFallback : name;

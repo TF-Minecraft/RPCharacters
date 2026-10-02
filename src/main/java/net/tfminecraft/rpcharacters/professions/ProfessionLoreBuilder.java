@@ -58,30 +58,19 @@ public final class ProfessionLoreBuilder {
 			}
 			description.add(line);
 		}
-		trimTrailingBlankLines(description);
 		return description;
 	}
 
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")
 	private static boolean isLegacyDynamicLine(String line) {
-		if (line == null) {
-			return true;
-		}
+		// ItemMeta normalizes null lore entries into empty text.
 		String plain = ChatColor.stripColor(line).trim();
 		if (plain.isEmpty()) {
 			return true;
 		}
 		return LEGACY_COST_LINE.matcher(plain).matches()
 				|| LEGACY_REQUIRES_LINE.matcher(plain).matches();
-	}
-
-	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
-	@SuppressWarnings("deprecation")
-	private static void trimTrailingBlankLines(List<String> lore) {
-		while (!lore.isEmpty() && ChatColor.stripColor(lore.get(lore.size() - 1)).trim().isEmpty()) {
-			lore.remove(lore.size() - 1);
-		}
 	}
 
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
@@ -112,4 +101,3 @@ public final class ProfessionLoreBuilder {
 		lore.add(t(RPTexts.GUI_WARN + "Cost: " + RPTexts.GUI_SUCCESS + upgrade.getCost() + " " + pointLabel));
 	}
 }
-

@@ -3,8 +3,7 @@ package net.tfminecraft.rpcharacters.api;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Locale;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -14,13 +13,6 @@ import org.json.simple.parser.JSONParser;
  * Characters plugin routes via TFMCWeb {@link GatewayClient}.
  */
 public final class ProvinceSystemClient {
-
-	private static final Pattern INT_FIELD = Pattern.compile(
-		"\"(\\w+)\"\\s*:\\s*(-?\\d+)"
-	);
-	private static final Pattern STRING_FIELD = Pattern.compile(
-		"\"(\\w+)\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\""
-	);
 
 	private ProvinceSystemClient() {}
 
@@ -124,7 +116,7 @@ public final class ProvinceSystemClient {
 		if (!raw.ok) {
 			return CatalogPushResult.fail(raw.error);
 		}
-		String response = raw.body;
+		JSONObject response = parseObject(raw.body);
 		return CatalogPushResult.success(
 			jsonInt(response, "stages"),
 			jsonInt(response, "races"),
@@ -206,23 +198,10 @@ public final class ProvinceSystemClient {
 		return claimStatusFlagTrue(body, "pending_pack");
 	}
 
-	/** Cheap JSON flag parse: {@code "flag": true}. */
+	/** Reads a boolean flag from the response object, never a nested value or string. */
 	static boolean claimStatusFlagTrue(String body, String flag) {
-		if (body == null || body.isBlank() || flag == null || flag.isBlank()) {
-			return false;
-		}
-		String lower = body.toLowerCase();
-		String key = "\"" + flag.toLowerCase() + "\"";
-		int idx = lower.indexOf(key);
-		if (idx < 0) {
-			return false;
-		}
-		int colon = lower.indexOf(':', idx);
-		if (colon < 0) {
-			return false;
-		}
-		String rest = lower.substring(colon + 1).trim();
-		return rest.startsWith("true");
+		if (flag == null || flag.isBlank()) return false;
+		return Boolean.TRUE.equals(parseObject(body).get(flag));
 	}
 
 	/** POST /characters/plugin/lore-items/applied */
@@ -253,11 +232,12 @@ public final class ProvinceSystemClient {
 		if (!raw.ok) {
 			return RealmWipeResult.fail(raw.error);
 		}
-		String realmId = jsonString(raw.body, "realm_id");
+		JSONObject response = parseObject(raw.body);
+		String realmId = jsonString(response, "realm_id");
 		return RealmWipeResult.success(
 			realmId == null ? realm.trim() : realmId,
-			jsonInt(raw.body, "total"),
-			jsonInt(raw.body, "pngs_deleted")
+			jsonInt(response, "total"),
+			jsonInt(response, "pngs_deleted")
 		);
 	}
 
@@ -317,7 +297,7 @@ public final class ProvinceSystemClient {
 		if (slot == null || slot.isBlank()) {
 			body = "{\"slot\":null}";
 		} else {
-			String safe = slot.trim().toLowerCase();
+			String safe = slot.trim().toLowerCase(Locale.ROOT);
 			body = "{\"slot\":\"" + jsonEscape(safe) + "\"}";
 		}
 		return request(
@@ -352,7 +332,7 @@ public final class ProvinceSystemClient {
 					sb.append(',');
 				}
 				first = false;
-				sb.append('"').append(jsonEscape(slot.trim().toLowerCase())).append('"');
+				sb.append('"').append(jsonEscape(slot.trim().toLowerCase(Locale.ROOT))).append('"');
 			}
 		}
 		sb.append("]}");
@@ -375,12 +355,7 @@ public final class ProvinceSystemClient {
 	}
 
 	private static String jsonEscape(String raw) {
-		if (raw == null) {
-			return "";
-		}
-		return raw
-			.replace("\\", "\\\\")
-			.replace("\"", "\\\"");
+		return JSONObject.escape(raw);
 	}
 
 	/**
@@ -423,7 +398,7 @@ public final class ProvinceSystemClient {
 			return null;
 		}
 		String raw = name.trim();
-		if (raw.toLowerCase().endsWith(".png")) {
+		if (raw.toLowerCase(Locale.ROOT).endsWith(".png")) {
 			raw = raw.substring(0, raw.length() - 4).trim();
 		}
 		if (raw.isEmpty() || raw.contains("/") || raw.contains("\\") || raw.contains("..")) {
@@ -524,45 +499,24 @@ public final class ProvinceSystemClient {
 		return SimpleResult.fail(raw.error);
 	}
 
-	private static int jsonInt(String json, String key) {
-		if (json == null || key == null) {
-			return 0;
+	private static JSONObject parseObject(String json) {
+		if (json == null || json.isBlank()) return new JSONObject();
+		try {
+			Object parsed = new JSONParser().parse(json);
+			return parsed instanceof JSONObject object ? object : new JSONObject();
+		} catch (Exception malformed) {
+			return new JSONObject();
 		}
-		Matcher m = INT_FIELD.matcher(json);
-		while (m.find()) {
-			if (key.equals(m.group(1))) {
-				try {
-					return Integer.parseInt(m.group(2));
-				} catch (NumberFormatException ignored) {
-					return 0;
-				}
-			}
-		}
-		return 0;
 	}
 
-	private static String jsonString(String json, String key) {
-		if (json == null || key == null) {
-			return null;
-		}
-		Matcher m = STRING_FIELD.matcher(json);
-		while (m.find()) {
-			if (key.equals(m.group(1))) {
-				return unescape(m.group(2));
-			}
-		}
-		return null;
+	private static int jsonInt(JSONObject json, String key) {
+		Object value = json.get(key);
+		return value instanceof Long number && number >= Integer.MIN_VALUE && number <= Integer.MAX_VALUE
+			? number.intValue() : 0;
 	}
 
-	private static String unescape(String raw) {
-		if (raw == null) {
-			return null;
-		}
-		return raw
-			.replace("\\\"", "\"")
-			.replace("\\\\", "\\")
-			.replace("\\n", "\n")
-			.replace("\\r", "\r")
-			.replace("\\t", "\t");
+	private static String jsonString(JSONObject json, String key) {
+		Object value = json.get(key);
+		return value instanceof String text ? text : null;
 	}
 }

@@ -29,6 +29,15 @@ public final class RpInjureListener implements Listener {
 		}
 		ItemStack item = event.getCurrentItem();
 		if (holder.getKind() == RpInjureGui.Kind.PICKER) {
+			String action = RpInjureGui.readAction(item);
+			if ("next".equals(action)) {
+				RpInjureService.changePickerPage(player, 1);
+				return;
+			}
+			if ("previous".equals(action)) {
+				RpInjureService.changePickerPage(player, -1);
+				return;
+			}
 			String traitId = RpInjureGui.readTraitId(item);
 			if (traitId == null || traitId.isBlank()) {
 				return;

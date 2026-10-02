@@ -132,9 +132,6 @@ final class GraveInsuranceTickets {
 		ItemStack tagged = ticket.clone();
 		unbind(tagged);
 		ItemMeta meta = tagged.getItemMeta();
-		if (meta == null) {
-			return tagged;
-		}
 		PersistentDataContainer pdc = meta.getPersistentDataContainer();
 		pdc.set(GraveKeys.insuranceGraveId(), GraveKeys.GRAVE_ID_TYPE, grave.getId().toString());
 		String loreLine = boundLore(grave.getBlockLocation());

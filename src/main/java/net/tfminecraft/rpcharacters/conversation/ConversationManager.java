@@ -53,7 +53,7 @@ public class ConversationManager implements Listener {
 			return;
 		}
 
-		recordChannelMessage(player, channel);
+		recordChannelMessage(player, channel, event.getRecipients());
 	}
 
 	public static void recordChannelMessage(Player speaker, ChatChannel channel) {
@@ -61,15 +61,16 @@ public class ConversationManager implements Listener {
 			return;
 		}
 
+		recordChannelMessage(speaker, channel, speaker.getWorld().getPlayers());
+	}
+
+	private static void recordChannelMessage(Player speaker, ChatChannel channel, java.util.Collection<? extends Player> recipients) {
 		PlayerData speakerData = PlayerManager.get(speaker);
 		if (speakerData == null || !speakerData.hasActiveCharacter()) {
 			return;
 		}
 
 		RPCharacter speakerCharacter = speakerData.getActiveCharacter();
-		if (speakerCharacter == null) {
-			return;
-		}
 
 		long now = System.currentTimeMillis();
 		pruneExpired(now);
@@ -77,7 +78,7 @@ public class ConversationManager implements Listener {
 		Location origin = speaker.getLocation();
 		int replyRange = channel.getRange();
 
-		processReplies(speaker, speakerCharacter, origin, replyRange, now);
+		processReplies(speakerCharacter, origin, replyRange, now, recipients);
 
 		int outboundRange = channel.getRange();
 		if (outboundRange <= 0) {
@@ -86,8 +87,8 @@ public class ConversationManager implements Listener {
 		double rangeSq = (double) outboundRange * outboundRange;
 		long expiresAt = now + (Cache.conversationReplyTimeoutSeconds * 1000L);
 
-		for (Player target : speaker.getWorld().getPlayers()) {
-			if (target.equals(speaker) || target.getGameMode() != GameMode.SURVIVAL) {
+		for (Player target : recipients) {
+			if (target == null || !target.getWorld().equals(speaker.getWorld()) || target.equals(speaker) || target.getGameMode() != GameMode.SURVIVAL) {
 				continue;
 			}
 			if (MaskService.isMasked(target)) {
@@ -102,9 +103,6 @@ public class ConversationManager implements Listener {
 				continue;
 			}
 			RPCharacter listenerCharacter = listenerData.getActiveCharacter();
-			if (listenerCharacter == null) {
-				continue;
-			}
 
 			if (hasActiveSession(speakerCharacter, listenerCharacter, now)) {
 				refreshActiveSession(speakerCharacter, listenerCharacter, now);
@@ -119,8 +117,8 @@ public class ConversationManager implements Listener {
 		}
 	}
 
-	private static void processReplies(Player replier, RPCharacter replierCharacter, Location replyOrigin,
-			int replyRange, long now) {
+	private static void processReplies(RPCharacter replierCharacter, Location replyOrigin,
+			int replyRange, long now, java.util.Collection<? extends Player> recipients) {
 		if (replyRange <= 0) {
 			return;
 		}
@@ -134,13 +132,9 @@ public class ConversationManager implements Listener {
 			if (!replierCharacter.getId().equals(pendingConversation.getListenerCharacterId())) {
 				continue;
 			}
-			if (pendingConversation.isExpired(now)) {
-				iterator.remove();
-				continue;
-			}
 
 			Player speakerPlayer = Bukkit.getPlayer(pendingConversation.getSpeakerPlayerId());
-			if (speakerPlayer == null || !speakerPlayer.isOnline()) {
+			if (speakerPlayer == null || !speakerPlayer.isOnline() || !recipients.contains(speakerPlayer)) {
 				continue;
 			}
 			if (MaskService.isMasked(speakerPlayer)) {
@@ -158,8 +152,7 @@ public class ConversationManager implements Listener {
 				continue;
 			}
 			RPCharacter speakerCharacter = speakerData.getActiveCharacter();
-			if (speakerCharacter == null
-					|| !speakerCharacter.getId().equals(pendingConversation.getSpeakerCharacterId())) {
+			if (!speakerCharacter.getId().equals(pendingConversation.getSpeakerCharacterId())) {
 				continue;
 			}
 
@@ -226,9 +219,6 @@ public class ConversationManager implements Listener {
 	}
 
 	private static boolean hasActiveSession(RPCharacter first, RPCharacter second, long nowMs) {
-		if (first == null || second == null) {
-			return false;
-		}
 		String firstId = first.getId();
 		String secondId = second.getId();
 		if (firstId == null || secondId == null) {
@@ -247,9 +237,6 @@ public class ConversationManager implements Listener {
 
 	private static boolean pairInvolvesCharacter(String pairKey, String characterId) {
 		int separator = pairKey.indexOf(':');
-		if (separator < 0) {
-			return false;
-		}
 		String left = pairKey.substring(0, separator);
 		String right = pairKey.substring(separator + 1);
 		return characterId.equals(left) || characterId.equals(right);

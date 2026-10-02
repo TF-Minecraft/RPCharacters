@@ -5,13 +5,17 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.TreeMap;
 import com.google.gson.Gson;
@@ -39,7 +43,7 @@ import org.json.simple.parser.JSONParser;
 
 
 public class Database {
-	private JSONObject json; // org.json.simple
+	private JSONObject json = new JSONObject(); // org.json.simple
     JSONParser parser = new JSONParser();
 
 	public static void log(Player p, String action) {
@@ -49,7 +53,7 @@ public class Database {
 			if (!baseFolder.exists()) baseFolder.mkdirs();
 
 			// Get first letter, lowercase
-			String firstLetter = p.getName().substring(0, 1).toLowerCase();
+			String firstLetter = p.getName().substring(0, 1).toLowerCase(Locale.ROOT);
 
 			// Subfolder (A-Z)
 			File subFolder = new File(baseFolder, firstLetter);
@@ -78,17 +82,9 @@ public class Database {
 	public PlayerData loadPlayer(Player p) {
 		File file = new File("plugins/RPCharacters/data/playerdata", p.getUniqueId().toString()+".json");
 		if (file.exists()) {
-        	try {
-				json = (JSONObject) parser.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
-				List<String> pendingMmoRemoves = new ArrayList<>();
-				if(json.containsKey("to remove")) {
-					JSONArray removeArray = (JSONArray) json.get("to remove");
-					int i = 0;
-					while(i < removeArray.size()) {
-						pendingMmoRemoves.add(removeArray.get(i).toString());
-						i++;
-					}
-				}
+	try {
+				json = readObject(file);
+				List<String> pendingMmoRemoves = pendingMmoRemoves(json);
 				Long lastCharacterSwitchAtMs = null;
 				if (json.containsKey("last-character-switch-ms")) {
 					lastCharacterSwitchAtMs = ((Number) json.get("last-character-switch-ms")).longValue();
@@ -96,11 +92,11 @@ public class Database {
 					int remainingMinutes = (int) Math.round(((Number) json.get("cooldown")).doubleValue());
 					lastCharacterSwitchAtMs = PermissionGroupService.migrateLegacyCooldownMinutes(remainingMinutes);
 				}
-				boolean eighteen = json.containsKey("eighteen") ? Boolean.parseBoolean((String) json.get("eighteen")) : false;
+				boolean eighteen = json.containsKey("eighteen") ? Boolean.parseBoolean(String.valueOf(json.get("eighteen"))) : false;
 				List<String> completedStages = new ArrayList<>();
 				int i = 0;
 				JSONArray stageArray = (JSONArray) json.get("completed stages");
-				while(i < stageArray.size()) {
+				while(stageArray != null && i < stageArray.size()) {
 					completedStages.add(stageArray.get(i).toString());
 					i++;
 				}
@@ -145,17 +141,16 @@ public class Database {
 		if (uuid == null) {
 			return null;
 		}
+		File file = new File("plugins/RPCharacters/data/playerdata", uuid.toString() + ".json");
 		org.bukkit.entity.Player online = Bukkit.getPlayer(uuid);
 		if (online != null) {
-			PlayerData loaded = loadPlayer(online);
-			return loaded != null ? loaded : new PlayerData(online);
+			return file.exists() ? loadPlayer(online) : new PlayerData(online);
 		}
-		File file = new File("plugins/RPCharacters/data/playerdata", uuid.toString() + ".json");
 		if (!file.exists()) {
 			return new PlayerData(uuid);
 		}
 		try {
-			json = (JSONObject) parser.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+			json = readObject(file);
 			Long lastCharacterSwitchAtMs = null;
 			if (json.containsKey("last-character-switch-ms")) {
 				lastCharacterSwitchAtMs = ((Number) json.get("last-character-switch-ms")).longValue();
@@ -163,7 +158,7 @@ public class Database {
 				int remainingMinutes = (int) Math.round(((Number) json.get("cooldown")).doubleValue());
 				lastCharacterSwitchAtMs = PermissionGroupService.migrateLegacyCooldownMinutes(remainingMinutes);
 			}
-			boolean eighteen = json.containsKey("eighteen") ? Boolean.parseBoolean((String) json.get("eighteen")) : false;
+			boolean eighteen = json.containsKey("eighteen") ? Boolean.parseBoolean(String.valueOf(json.get("eighteen"))) : false;
 			List<String> completedStages = new ArrayList<>();
 			int i = 0;
 			JSONArray stageArray = (JSONArray) json.get("completed stages");
@@ -197,11 +192,28 @@ public class Database {
 			} else if (json.containsKey("last-kit-grant-ms")) {
 				pd.setLastKitGrantAtMs(((Number) json.get("last-kit-grant-ms")).longValue());
 			}
+			pd.setPendingMmoAttributeRemoves(pendingMmoRemoves(json));
 			loadCharacters(pd);
 			return pd;
 		} catch (Exception ex) {
 			ex.printStackTrace();
-			return new PlayerData(uuid);
+			return null;
+		}
+	}
+
+	private static List<String> pendingMmoRemoves(JSONObject data) {
+		List<String> pending = new ArrayList<>();
+		if (data.containsKey("to remove")) {
+			for (Object removal : (JSONArray) data.get("to remove")) {
+				pending.add(removal.toString());
+			}
+		}
+		return pending;
+	}
+
+	private JSONObject readObject(File file) throws IOException, org.json.simple.parser.ParseException {
+		try (InputStreamReader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+			return (JSONObject) parser.parse(reader);
 		}
 	}
 
@@ -230,7 +242,7 @@ public class Database {
 		}
 		List<String> ids = new ArrayList<>();
 		for (File file : files) {
-			if (!file.isFile()) {
+			if (!file.isFile() || isStagingFile(file)) {
 				continue;
 			}
 			String name = file.getName();
@@ -242,6 +254,11 @@ public class Database {
 			}
 		}
 		return ids;
+	}
+
+	private static boolean isStagingFile(File file) {
+		String name = file.getName();
+		return name.startsWith(".rpcharacters-") && name.endsWith(".tmp");
 	}
 
 	public void loadCharacters(PlayerData pd) {
@@ -260,54 +277,54 @@ public class Database {
 			}
 			return;
 		}
-    	for (final File file : files) {
-            if (!file.isDirectory()) {
-            	try {
-    				json = (JSONObject) parser.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
-    				String id = (String) json.get("id");
-    				String name = (String) json.get("name");
-    				Status status = Status.valueOf(((String) json.get("status")).toUpperCase());
-    				Boolean active = Boolean.parseBoolean((String) json.get("active"));
-    				Race r = RaceLoader.getByString((String) json.get("race"));
+	for (final File file : files) {
+            if (!file.isDirectory() && !isStagingFile(file)) {
+	try {
+				json = readObject(file);
+				String id = (String) json.get("id");
+				String name = (String) json.get("name");
+				Status status = Status.valueOf(((String) json.get("status")).toUpperCase(Locale.ROOT));
+				Boolean active = Boolean.parseBoolean(String.valueOf(json.get("active")));
+				Race r = RaceLoader.getByString((String) json.get("race"));
 					String mmoClass = json.containsKey("class") ? (String) json.get("class") : null;
-    				if(r == null) {
-    					r = RaceLoader.get().get(0);
-    				}
-    				List<Trait> traits = new ArrayList<Trait>();
-    				int i = 0;
-    				JSONArray traitArray = (JSONArray) json.get("traits");
-    				while(i < traitArray.size()) {
-    					Trait t = TraitLoader.getByString(traitArray.get(i).toString());
-    					if(t != null) {
-    						traits.add(t);
-    					}
-    					i++;
-    				}
-    				List<String> clues = new ArrayList<>();
-    				if (json.containsKey("clues")) {
-    					JSONArray clueArray = (JSONArray) json.get("clues");
-    					int j = 0;
-    					while (j < clueArray.size()) {
-    						clues.add(clueArray.get(j).toString());
-    						j++;
-    					}
-    				}
-    				RPCharacter c = new RPCharacter(pd.getPlayer(), id, name, active, status, r, traits, mmoClass, clues);
-    				int createdAtEpochSeconds = DurationParser.resolveCreatedAtEpochSeconds(
-    						json.containsKey("created-at"),
-    						json.containsKey("created-at") ? ((Number) json.get("created-at")).intValue() : 0,
-    						json.containsKey("playtime-seconds"),
-    						json.containsKey("playtime-seconds") ? ((Number) json.get("playtime-seconds")).intValue() : 0,
-    						file);
-    				c.setCreatedAtEpochSeconds(createdAtEpochSeconds);
-    				if (json.containsKey("online-playtime-seconds")) {
-    					c.setOnlinePlaytimeSeconds(((Number) json.get("online-playtime-seconds")).intValue());
-    				}
-    				c.setConversationCounts(loadConversationCounts(json));
-    				c.setConversationLastAtMs(loadConversationLastAt(json));
-    				loadPersonaFields(c, json);
-    				loadProfessionFields(c, json);
-    				loadExtraAttributeAllocation(c, json);
+				if(r == null) {
+					r = RaceLoader.get().get(0);
+				}
+				List<Trait> traits = new ArrayList<Trait>();
+				int i = 0;
+				JSONArray traitArray = (JSONArray) json.get("traits");
+				while(i < traitArray.size()) {
+					Trait t = TraitLoader.getByString(traitArray.get(i).toString());
+					if(t != null) {
+						traits.add(t);
+					}
+					i++;
+				}
+				List<String> clues = new ArrayList<>();
+				if (json.containsKey("clues")) {
+					JSONArray clueArray = (JSONArray) json.get("clues");
+					int j = 0;
+					while (j < clueArray.size()) {
+						clues.add(clueArray.get(j).toString());
+						j++;
+					}
+				}
+				RPCharacter c = new RPCharacter(pd.getPlayer(), id, name, active, status, r, traits, mmoClass, clues);
+				int createdAtEpochSeconds = DurationParser.resolveCreatedAtEpochSeconds(
+						json.containsKey("created-at"),
+						json.containsKey("created-at") ? ((Number) json.get("created-at")).intValue() : 0,
+						json.containsKey("playtime-seconds"),
+						json.containsKey("playtime-seconds") ? ((Number) json.get("playtime-seconds")).intValue() : 0,
+						file);
+				c.setCreatedAtEpochSeconds(createdAtEpochSeconds);
+				if (json.containsKey("online-playtime-seconds")) {
+					c.setOnlinePlaytimeSeconds(((Number) json.get("online-playtime-seconds")).intValue());
+				}
+				c.setConversationCounts(loadConversationCounts(json));
+				c.setConversationLastAtMs(loadConversationLastAt(json));
+				loadPersonaFields(c, json);
+				loadProfessionFields(c, json);
+				loadExtraAttributeAllocation(c, json);
 				loadTraitState(c, json);
 				loadLastLocation(c, json);
 				loadPvpLethal(c, json);
@@ -318,50 +335,50 @@ public class Database {
 				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
 					c.update();
 				}
-    				if (c.getSlug() == null || c.getSlug().isBlank()) {
-    					pd.assignSlug(c);
-    				}
-    				pd.addCharacter(c);
+				if (c.getSlug() == null || c.getSlug().isBlank()) {
+					pd.assignSlug(c);
+				}
+				pd.addCharacter(c);
 					net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
-    			} catch (Exception ex) {
-    				String message = "Skipped character file " + file.getAbsolutePath()
-    						+ " for " + pd.getUniqueId() + "; it stays on disk and will not be removed from the website roster";
-    				if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
-    					net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
-    							java.util.logging.Level.SEVERE, message, ex);
-    				} else {
-    					System.err.println("[RPCharacters] " + message);
-    					ex.printStackTrace();
-    				}
-    			}
+			} catch (Exception ex) {
+				String message = "Skipped character file " + file.getAbsolutePath()
+						+ " for " + pd.getUniqueId() + "; it stays on disk and will not be removed from the website roster";
+				if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+					net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
+							java.util.logging.Level.SEVERE, message, ex);
+				} else {
+					System.err.println("[RPCharacters] " + message);
+					ex.printStackTrace();
+				}
+			}
             }
         }
 	}
-	@SuppressWarnings("unchecked")
 	public void savePlayer(PlayerData pd) {
+		trySavePlayer(pd);
+	}
+
+	/** Returns whether all character files and account data were persisted. */
+	@SuppressWarnings("unchecked")
+	public boolean trySavePlayer(PlayerData pd) {
 		try {
 			File subFolder = new File("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString());
-			if(!subFolder.exists()) subFolder.mkdir();
+			if(!subFolder.exists()) subFolder.mkdirs();
 			File file = new File("plugins/RPCharacters/data/playerdata", pd.getUniqueId().toString()+".json");
-			file.createNewFile();
-        	PrintWriter pw = new PrintWriter(file, "UTF-8");
-        	pw.print("{");
-        	pw.print("}");
-        	pw.flush();
-        	pw.close();
+			file.getParentFile().mkdirs();
             HashMap<String, Object> defaults = new HashMap<String, Object>();
-        	json = (JSONObject) parser.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
-        	defaults.put("eighteen", String.valueOf(pd.isEighteen()));
+	json = new JSONObject();
+	defaults.put("eighteen", String.valueOf(pd.isEighteen()));
 			if (pd.getLastCharacterSwitchAtMs() != null) {
 				defaults.put("last-character-switch-ms", pd.getLastCharacterSwitchAtMs());
 			}
-        	int i = 0;
-        	JSONArray stageArray = new JSONArray();
-        	while(i < pd.getCompletedStages().size()) {
-        		stageArray.add(pd.getCompletedStages().get(i));
-        		i++;
-        	}
-        	defaults.put("completed stages", stageArray);
+	int i = 0;
+	JSONArray stageArray = new JSONArray();
+	while(i < pd.getCompletedStages().size()) {
+		stageArray.add(pd.getCompletedStages().get(i));
+		i++;
+	}
+	defaults.put("completed stages", stageArray);
 			if (pd.getCreatedAtEpochSeconds() > 0) {
 				defaults.put("created-at", pd.getCreatedAtEpochSeconds());
 			}
@@ -391,62 +408,74 @@ public class Database {
 				}
 				defaults.put("last-kit-claims", claims);
 			}
-        	for(RPCharacter c : pd.getCharacters()) {
-        		saveCharacter(pd, c);
-        		if(c.isActive() && pd.getPlayer() != null) {
-            		Integrator integrator = new Integrator();
-            		
-            		i = 0;
-                	JSONArray removeArray = new JSONArray();
-                	List<String> remove = integrator.getRemoveList(pd.getPlayer(), c);
-                	while(i < remove.size()) {
-                		removeArray.add(remove.get(i));
-                		i++;
-                	}
-                	defaults.put("to remove", removeArray);
-            	}
-        	}
-        	save(file, defaults);
+	List<String> pendingRemoves = pd.getPendingMmoAttributeRemoves();
+	for(RPCharacter c : pd.getCharacters()) {
+		if (!trySaveCharacter(pd, c)) return false;
+		if(c.isActive() && pd.getPlayer() != null && pendingRemoves.isEmpty()) {
+		Integrator integrator = new Integrator();
+
+		i = 0;
+	JSONArray removeArray = new JSONArray();
+	List<String> remove = integrator.getRemoveList(pd.getPlayer(), c);
+	while(i < remove.size()) {
+		removeArray.add(remove.get(i));
+		i++;
+	}
+	defaults.put("to remove", removeArray);
+	}
+	}
+	if (!pendingRemoves.isEmpty()) {
+		JSONArray pendingArray = new JSONArray();
+		pendingArray.addAll(pendingRemoves);
+		defaults.put("to remove", pendingArray);
+	}
+	return save(file, defaults);
         } catch (Throwable ex) {
 			ex.printStackTrace();
+			return false;
         }
 	}
-	@SuppressWarnings("unchecked")
 	public void saveCharacter(PlayerData pd, RPCharacter c) {
+		trySaveCharacter(pd, c);
+	}
+
+	/** Returns whether this character was persisted before directory publication. */
+	@SuppressWarnings("unchecked")
+	public boolean trySaveCharacter(PlayerData pd, RPCharacter c) {
 		try {
 			File dir = new File("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString());
 			if (!dir.exists()) {
 				dir.mkdirs();
 			}
-			File file = new File(dir, c.getId()+".json");
-			file.createNewFile();
-        	PrintWriter pw = new PrintWriter(file, "UTF-8");
-        	pw.print("{");
-        	pw.print("}");
-        	pw.flush();
-        	pw.close();
+			Path ownerDirectory = dir.toPath().toAbsolutePath().normalize();
+			Path characterFile = ownerDirectory.resolve(c.getId() + ".json").normalize();
+			if (!ownerDirectory.equals(characterFile.getParent())) {
+				throw new IllegalArgumentException("Character id must name a file inside its owner's directory");
+			}
+			File file = characterFile.toFile();
+			file.getParentFile().mkdirs();
             HashMap<String, Object> defaults = new HashMap<String, Object>();
-        	json = (JSONObject) parser.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
-        	defaults.put("id", c.getId());
-        	defaults.put("name", c.getName());
-        	defaults.put("status", c.getStatus().toString());
-        	defaults.put("race", c.getRace().getId());
-        	defaults.put("active", c.isActive().toString());
+	json = new JSONObject();
+	defaults.put("id", c.getId());
+	defaults.put("name", c.getName());
+	defaults.put("status", c.getStatus().toString());
+	defaults.put("race", c.getRace().getId());
+	defaults.put("active", c.isActive().toString());
 			if(c.hasMMOClass()) defaults.put("class", c.getMMOClass());
-        	int i = 0;
-        	JSONArray traitArray = new JSONArray();
-        	while(i < c.getTraits().size()) {
-        		traitArray.add(c.getTraits().get(i).getId());
-        		i++;
-        	}
-        	defaults.put("traits", traitArray);
-        	i = 0;
-        	JSONArray clueArray = new JSONArray();
-        	while (i < c.getPlayerClues().size()) {
-        		clueArray.add(c.getPlayerClues().get(i));
-        		i++;
-        	}
-        	defaults.put("clues", clueArray);
+	int i = 0;
+	JSONArray traitArray = new JSONArray();
+	while(i < c.getTraits().size()) {
+		traitArray.add(c.getTraits().get(i).getId());
+		i++;
+	}
+	defaults.put("traits", traitArray);
+	i = 0;
+	JSONArray clueArray = new JSONArray();
+	while (i < c.getPlayerClues().size()) {
+		clueArray.add(c.getPlayerClues().get(i));
+		i++;
+	}
+	defaults.put("clues", clueArray);
 			if (c.getCreatedAtEpochSeconds() > 0) {
 				defaults.put("created-at", c.getCreatedAtEpochSeconds());
 			}
@@ -464,19 +493,21 @@ public class Database {
 			CharacterEvilRpFields.save(defaults, c);
 			CharacterStageChangeFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
-			if (save(file, defaults)) {
-				net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);
-			}
+			if (!save(file, defaults)) return false;
+			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
+			return true;
         } catch (Throwable ex) {
 			ex.printStackTrace();
+			return false;
         }
 	}
 	@SuppressWarnings("unchecked")
 	public boolean save(File file, HashMap<String, Object> defaults) {
+	  Path staged = null;
 	  try {
 		  JSONObject toSave = new JSONObject();
-	  
+
 	    for (String s : defaults.keySet()) {
 	      Object o = defaults.get(s);
 	      if (o instanceof String) {
@@ -495,36 +526,43 @@ public class Database {
 	        toSave.put(s, getArray(s, defaults));
 	      }
 	    }
-	  
+
 	    TreeMap<String, Object> treeMap = new TreeMap<String, Object>(String.CASE_INSENSITIVE_ORDER);
 	    treeMap.putAll(toSave);
-	  
+
 	   Gson g = new GsonBuilder().setPrettyPrinting().create();
 	   String prettyJsonString = g.toJson(treeMap);
-	  
-	    FileWriter fw = new FileWriter(file);
-	    fw.write(prettyJsonString);
-	    fw.flush();
-	    fw.close();
-	  
+
+	    Path target = file.toPath().toAbsolutePath();
+	    staged = Files.createTempFile(target.getParent(), ".rpcharacters-", ".tmp");
+	    Files.writeString(staged, prettyJsonString, StandardCharsets.UTF_8);
+	    Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+
 	    return true;
 	  } catch (Exception ex) {
+	    if (staged != null) {
+	      try {
+	        Files.deleteIfExists(staged);
+	      } catch (IOException cleanupFailure) {
+	        ex.addSuppressed(cleanupFailure);
+	      }
+	    }
 	    ex.printStackTrace();
 	    return false;
 	  }
 	}
-	
+
 	public String getRawData(String key, HashMap<String, Object> defaults) {
 	    return json.containsKey(key) ? json.get(key).toString()
 	       : (defaults.containsKey(key) ? defaults.get(key).toString() : key);
 	  }
-	
+
 	  // Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	  @SuppressWarnings("deprecation")
 	  public String getString(String key, HashMap<String, Object> defaults) {
 	    return ChatColor.translateAlternateColorCodes('&', getRawData(key, defaults));
 	  }
-	
+
 	  public boolean getBoolean(String key, HashMap<String, Object> defaults) {
 	    return Boolean.valueOf(getRawData(key, defaults));
 	  }
@@ -536,26 +574,26 @@ public class Database {
 	        ? new BigDecimal(floating.doubleValue()) : new BigDecimal(value.toString());
 	    return number.longValueExact();
 	  }
-	
+
 	  public double getDouble(String key, HashMap<String, Object> defaults) {
 	    try {
 	      return Double.parseDouble(getRawData(key, defaults));
 	    } catch (Exception ex) { }
 	    return -1;
 	  }
-	
+
 	  public double getInteger(String key, HashMap<String, Object> defaults) {
 	    try {
 	      return Integer.parseInt(getRawData(key, defaults));
 	    } catch (Exception ex) { }
 	    return -1;
 	  }
-	 
+
 	  public JSONObject getObject(String key, HashMap<String, Object> defaults) {
 	     return json.containsKey(key) ? (JSONObject) json.get(key)
 	       : (defaults.containsKey(key) ? (JSONObject) defaults.get(key) : new JSONObject());
 	  }
-	 
+
 	  public JSONArray getArray(String key, HashMap<String, Object> defaults) {
 		     return json.containsKey(key) ? (JSONArray) json.get(key)
 		       : (defaults.containsKey(key) ? (JSONArray) defaults.get(key) : new JSONArray());
@@ -647,9 +685,6 @@ public class Database {
 	}
 
 	private void loadNutritionFields(RPCharacter character, JSONObject characterJson) {
-		if (characterJson == null) {
-			return;
-		}
 		if (characterJson.containsKey("food-value")) {
 			character.setFoodValue(((Number) characterJson.get("food-value")).intValue());
 		} else {
@@ -765,7 +800,7 @@ public class Database {
 					if (entry.get("name-styles") instanceof JSONArray sarr) {
 						for (Object s : sarr) {
 							if (s != null && !s.toString().isBlank()) {
-								styles.add(s.toString().trim().toLowerCase());
+								styles.add(s.toString().trim().toLowerCase(Locale.ROOT));
 							}
 						}
 					}

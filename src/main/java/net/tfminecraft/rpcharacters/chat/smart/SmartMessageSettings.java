@@ -193,7 +193,7 @@ public final class SmartMessageSettings {
 		if (override != null) {
 			return override;
 		}
-		return SoundOcclusionRules.attenuationFromBlastResistance(material, defaultBlockAttenuation);
+		return SoundOcclusionRules.attenuationFromBlastResistance(material);
 	}
 
 	public void setBlockAttenuation(Map<Material, Double> blockAttenuation) {

@@ -72,9 +72,6 @@ public final class SpeechPowerCalculator {
 	}
 
 	private static double distanceFactor(double distance, int range, double fadeStartPercent) {
-		if (range <= 0) {
-			return 1.0;
-		}
 		double fadeStart = range * clamp(fadeStartPercent);
 		if (distance <= fadeStart) {
 			return 1.0;
@@ -144,9 +141,6 @@ public final class SpeechPowerCalculator {
 
 	private static OcclusionResult rayOcclusion(Location from, Location to, SmartMessageSettings settings) {
 		World world = from.getWorld();
-		if (world == null || !world.equals(to.getWorld())) {
-			return new OcclusionResult(0.0, 0.0, 0);
-		}
 
 		double dx = to.getX() - from.getX();
 		double dy = to.getY() - from.getY();

@@ -44,9 +44,6 @@ public final class ProstheticFuelService {
 			}
 
 			RPCharacter character = pd.getActiveCharacter();
-			if (!character.isActive()) {
-				continue;
-			}
 
 			if (processCharacter(player, character, tickMs)) {
 				RPCharacters.getPlayerManager().savePlayer(player);
@@ -64,7 +61,7 @@ public final class ProstheticFuelService {
 			}
 
 			FuelTemplate template = FuelTemplateLoader.getByString(trait.getFuelTemplateId());
-			if (template == null || template.getBurnIntervalMs() <= 0L) {
+			if (template == null) {
 				continue;
 			}
 
@@ -102,13 +99,9 @@ public final class ProstheticFuelService {
 	}
 
 	private static void refreshCharacter(Player player, RPCharacter character) {
-		if (character.isActive()) {
-			Integrator integrator = new Integrator();
-			integrator.remove(player, character, false);
-			character.update();
-			integrator.integrate(player, character);
-		} else {
-			character.update();
-		}
+		Integrator integrator = new Integrator();
+		integrator.remove(player, character, false);
+		character.update();
+		integrator.integrate(player, character);
 	}
 }

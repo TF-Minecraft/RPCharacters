@@ -10,10 +10,10 @@ public final class AnonymousMuffledVoiceResolver {
 
 	public static boolean shouldAnonymize(Player speaker, Player listener, ChatChannel channel,
 			double intelligibility, SmartMessageSettings settings) {
-		if (!settings.isAnonymousMuffledVoiceEnabled()) {
+		if (speaker == null || listener == null || channel == null || settings == null) {
 			return false;
 		}
-		if (speaker == null || listener == null || channel == null || settings == null) {
+		if (!settings.isAnonymousMuffledVoiceEnabled()) {
 			return false;
 		}
 		if (speaker.equals(listener)) {

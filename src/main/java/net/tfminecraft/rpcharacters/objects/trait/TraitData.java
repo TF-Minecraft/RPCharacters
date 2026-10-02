@@ -80,7 +80,7 @@ public class TraitData {
 			String raw = config.getString("icon");
 			if (raw != null && !raw.isBlank()) {
 				try {
-					icon = Material.valueOf(raw.trim().toUpperCase());
+					icon = Material.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
 					if (icon == Material.AIR) {
 						icon = null;
 					}

@@ -85,6 +85,7 @@ public final class ProstheticTraitRules {
 		boolean changed = false;
 		for (RPCharacter character : playerData.getCharacters()) {
 			if (stripReplacedInjuries(character)) {
+				character.update();
 				changed = true;
 			}
 		}

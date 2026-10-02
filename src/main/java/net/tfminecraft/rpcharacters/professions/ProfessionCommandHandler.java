@@ -49,7 +49,7 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 			inventoryManager.openMainMenu(player);
 			return true;
 		}
-		String sub = args[0].toLowerCase();
+		String sub = args[0].toLowerCase(Locale.ROOT);
 		switch (sub) {
 			case "reload" -> {
 				if (!ProfessionPermissions.isAdmin(sender)) {
@@ -84,7 +84,14 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 					RPTexts.send(sender, RPTexts.ERROR + "Invalid player or profession.");
 					return true;
 				}
-				int amount = Integer.parseInt(args[3]);
+				int amount;
+				try {
+					amount = Integer.parseInt(args[3]);
+					if (amount <= 0) throw new NumberFormatException("non-positive amount");
+				} catch (NumberFormatException invalid) {
+					RPTexts.send(sender, RPTexts.ERROR + "Amount must be a positive whole number.");
+					return true;
+				}
 				ProfessionPointService.grantPoints(target, profession.getId(), amount);
 				RPTexts.send(sender, RPTexts.SUCCESS + "Gave " + target.getName() + " " + RPTexts.WARN + amount
 						+ RPTexts.SUCCESS + " lifetime points in " + RPTexts.INFO + profession.getName());
@@ -271,14 +278,12 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 	private static void fixPerms(CommandSender sender) {
 		LuckPerms luckPerms = LuckPermsProvider.get();
 		for (Player player : Bukkit.getOnlinePlayers()) {
-			PlayerData pd = PlayerManager.get(player);
-			RPCharacter character = pd != null ? pd.getActiveCharacter() : null;
 			luckPerms.getUserManager().loadUser(player.getUniqueId()).thenAcceptAsync(user -> {
 				boolean changed = false;
 				for (Node node : user.data().toCollection()) {
 					if (node instanceof PermissionNode permissionNode) {
 						String permission = permissionNode.getPermission();
-						if (permission.toLowerCase().contains("professions")
+						if (permission.toLowerCase(Locale.ROOT).contains("professions")
 								&& node.getContexts().contains(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext)) {
 							user.data().remove(node);
 							changed = true;
@@ -291,6 +296,9 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 				new BukkitRunnable() {
 					@Override
 					public void run() {
+						if (!player.isOnline()) return;
+						PlayerData current = PlayerManager.get(player);
+						RPCharacter character = current != null ? current.getActiveCharacter() : null;
 						if (character != null) {
 							ProfessionIntegrator.apply(player, character);
 						}
@@ -303,6 +311,7 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 
 	@Override
 	public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+		if (args.length == 0) return Collections.emptyList();
 		if (args.length == 1) {
 			List<String> subs = new ArrayList<>();
 			subs.add("top");

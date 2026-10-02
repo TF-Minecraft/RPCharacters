@@ -112,11 +112,12 @@ public class SelectionStage extends Stage{
 		this.active = false;
 		this.target = another.getTarget();
 		this.options = another.getNewOptions();
+		this.options.forEach(item -> item.setSelected(false));
 		this.minSelect = another.getMinSelections();
 		this.maxSelect = another.getMaxSelections();
 		this.slots = another.getSlots();
 		this.selections = 0;
-		this.points = another.getPoints();
+		this.points = another.getInitialPoints();
 		this.initialPoints = another.getInitialPoints();
 		this.hasPoints = another.hasPoints();
 		this.size = another.getSize();
@@ -254,13 +255,23 @@ public class SelectionStage extends Stage{
 			RPTexts.send(p, RPTexts.ERROR + "Cannot afford this trait");
 			return;
 		}
+		if (cc != null) {
+			for (SelectableItem item : options) {
+				if (item.isSelected() && ((item.getType().equalsIgnoreCase("race") && RaceLoader.getByString(item.getId()) == null)
+						|| (item.getType().equalsIgnoreCase("trait") && TraitLoader.getByString(item.getId()) == null))) {
+					RPTexts.send(p, RPTexts.ERROR + "Selection is no longer available; reopen this stage.");
+					return;
+				}
+			}
+		}
 		active = false;
 		p.closeInventory();
 		if(cc != null) {
 			if (target.equalsIgnoreCase("trait") && key != null) {
 				List<Trait> toRemove = new ArrayList<>();
 				for (Trait trait : cc.getCharacter().getTraits()) {
-					if (trait.getTraitData().getKey().equalsIgnoreCase(key)) {
+					if (trait.getTraitData().getKey().equalsIgnoreCase(key)
+							&& (!isPermanentOnlyFilter() || !trait.getTraitData().hasDuration())) {
 						toRemove.add(trait);
 					}
 				}
@@ -310,6 +321,7 @@ public class SelectionStage extends Stage{
 			{
 				public void run()
 				{
+					if (cc.isCancelled()) return;
 					if (cc.isEditingFromSummary()) {
 						cc.returnToSummary();
 					} else if(autoNext()) {
@@ -334,15 +346,7 @@ public class SelectionStage extends Stage{
 
 	@Override
 	public void update(PlayerData pd) {
-		if(!pd.hasActiveCharacter()) return;
-		for(Trait t : pd.getActiveCharacter().getTraits()) {
-			for(SelectableItem item : options) {
-				if(item.getId().equalsIgnoreCase(t.getId())) {
-					item.setSelected(true);
-					select(item);
-				}
-			}
-		}
+		hydrateFromCharacter(pd.hasActiveCharacter() ? pd.getActiveCharacter() : null);
 	}
 	
 	public void execute(Player p, CharacterCreation cc) {

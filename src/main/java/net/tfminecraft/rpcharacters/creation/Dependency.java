@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.creation;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,13 +36,14 @@ public class Dependency {
 		return checkExclude(c, "noneTrait");
 	}
 	public boolean checkExclude(RPCharacter c, String id) {
-		if (type.equalsIgnoreCase("trait")) {
+		if (c == null) return false;
+		if ("trait".equalsIgnoreCase(type)) {
 			Set<String> traitIds = c.getTraits().stream()
 									.map(Trait::getId)
 									.filter(traitId -> !traitId.equalsIgnoreCase(id))
 									.collect(Collectors.toSet());
 			return matchesTraitIds(traitIds);
-		} else if (type.equalsIgnoreCase("race")) {
+		} else if ("race".equalsIgnoreCase(type) && c.getRace() != null) {
 			for (String s : dependencies) {
 				if (c.getRace().getId().equalsIgnoreCase(s)) return true;
 			}
@@ -51,14 +53,14 @@ public class Dependency {
 
 	/** Trait requirements against an in-progress id set. Race dependencies stay on the character. */
 	public boolean satisfiedBy(Set<String> traitIds) {
-		if (type == null || !type.equalsIgnoreCase("trait") || traitIds == null) {
+		if (type == null || !"trait".equalsIgnoreCase(type) || traitIds == null) {
 			return false;
 		}
 		return matchesTraitIds(traitIds);
 	}
 
 	public boolean satisfiedByExcluding(Set<String> traitIds, String excludedId) {
-		if (type == null || !type.equalsIgnoreCase("trait") || traitIds == null) {
+		if (type == null || !"trait".equalsIgnoreCase(type) || traitIds == null) {
 			return false;
 		}
 		Set<String> filtered = traitIds.stream()
@@ -68,15 +70,17 @@ public class Dependency {
 	}
 
 	private boolean matchesTraitIds(Set<String> traitIds) {
-		if (mode.equalsIgnoreCase("all")) {
+		Set<String> normalized = traitIds.stream().filter(java.util.Objects::nonNull)
+				.map(value -> value.toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+		if ("all".equalsIgnoreCase(mode)) {
 			for (String s : dependencies) {
-				if (!traitIds.contains(s)) return false;
+				if (!normalized.contains(s.toLowerCase(Locale.ROOT))) return false;
 			}
 			return true;
 		}
-		if (mode.equalsIgnoreCase("one-or-more")) {
+		if ("one-or-more".equalsIgnoreCase(mode)) {
 			for (String s : dependencies) {
-				if (traitIds.contains(s)) return true;
+				if (normalized.contains(s.toLowerCase(Locale.ROOT))) return true;
 			}
 			return false;
 		}

@@ -360,23 +360,18 @@ public final class CreationCatalogSyncService {
 			}
 			classes.sort((a, b) -> Integer.compare(a.getDisplayOrder(), b.getDisplayOrder()));
 			for (PlayerClass playerClass : classes) {
-				if (!first) {
-					sb.append(',');
-				}
+				StringBuilder row = new StringBuilder("{");
+				appendField(row, "id", playerClass.getId(), true);
+				appendField(row, "name", strip(playerClass.getName()), false);
+				row.append(",\"display_order\":").append(playerClass.getDisplayOrder());
+				row.append(',');
+				appendStringList(row, "description", stripList(playerClass.getDescription()));
+				row.append(',');
+				appendStringList(row, "attribute_description", stripList(playerClass.getAttributeDescription()));
+				row.append('}');
+				if (!first) sb.append(',');
 				first = false;
-				sb.append('{');
-				appendField(sb, "id", playerClass.getId(), true);
-				appendField(sb, "name", strip(playerClass.getName()), false);
-				sb.append(",\"display_order\":").append(playerClass.getDisplayOrder());
-				sb.append(',');
-				appendStringList(sb, "description", stripList(playerClass.getDescription()));
-				sb.append(',');
-				appendStringList(
-					sb,
-					"attribute_description",
-					stripList(playerClass.getAttributeDescription())
-				);
-				sb.append('}');
+				sb.append(row);
 			}
 		} catch (Throwable t) {
 			RPCharacters.plugin.getLogger().warning(

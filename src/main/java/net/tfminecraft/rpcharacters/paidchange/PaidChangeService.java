@@ -114,7 +114,8 @@ public final class PaidChangeService {
 			return null;
 		}
 		if (!snapshot(character).equals(pending.before())) {
-			character.setPaidChangeCount(pending.stageId(), character.getPaidChangeCount(pending.stageId()) + 1);
+			character.setPaidChangeCount(pending.stageId(),
+					(int) Math.min(Integer.MAX_VALUE, (long) character.getPaidChangeCount(pending.stageId()) + 1));
 			character.setPendingPaidChange(null);
 			return Outcome.KEPT;
 		}
@@ -236,7 +237,7 @@ public final class PaidChangeService {
 		}
 		int paid = character.getPaidChangeCount(rule.getStageId());
 		String next = formatDenars(rule.costAfter(paid));
-		String after = formatDenars(rule.costAfter(paid + 1));
+		String after = formatDenars(rule.costAfter((int) Math.min(Integer.MAX_VALUE, (long) paid + 1)));
 		List<String> lines = new ArrayList<>();
 		if (!locked) {
 			lines.add(RPTexts.MUTED + "Click to change");

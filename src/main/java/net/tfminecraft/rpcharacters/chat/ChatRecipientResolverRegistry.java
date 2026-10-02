@@ -75,28 +75,6 @@ public final class ChatRecipientResolverRegistry {
 		return id != null && !id.isBlank() && RESOLVERS.containsKey(id);
 	}
 
-	/**
-	 * Test-only entry point that invokes a registered resolver without requiring a {@link Player}.
-	 */
-	static Set<Player> invokeRegisteredForTests(String id, ChatChannel channel) {
-		if (id == null || id.isBlank() || channel == null) {
-			return Collections.emptySet();
-		}
-		ChatRecipientResolver resolver = RESOLVERS.get(id);
-		if (resolver == null) {
-			return Collections.emptySet();
-		}
-		try {
-			Set<Player> resolved = resolver.resolve(null, channel);
-			if (resolved == null || resolved.isEmpty()) {
-				return Collections.emptySet();
-			}
-			return new HashSet<>(resolved);
-		} catch (RuntimeException e) {
-			return Collections.emptySet();
-		}
-	}
-
 	private static void logWarning(String message) {
 		if (RPCharacters.plugin != null) {
 			RPCharacters.plugin.getLogger().warning(message);

@@ -23,8 +23,9 @@ public final class WipeCommand {
 	private static final long CONFIRM_TTL_MS = 30_000L;
 	private static final String USAGE = "Usage: /rpcharacter wipe website [confirm]";
 
-	/** Sender key to confirm expiry time. */
-	private static final Map<String, Long> PENDING = new HashMap<>();
+	private record Confirmation(String realm, long expiresAtMs) {}
+	/** A confirmation authorizes only the realm shown to this sender. */
+	private static final Map<String, Confirmation> PENDING = new HashMap<>();
 
 	private WipeCommand() {}
 
@@ -44,10 +45,11 @@ public final class WipeCommand {
 			RPTexts.send(sender, RPTexts.ERROR + USAGE);
 			return true;
 		}
-		if (!takeConfirm(sender)) {
+		String confirmedRealm = takeConfirm(sender);
+		if (confirmedRealm == null) {
 			return true;
 		}
-		return wipeWebsite(sender);
+		return wipeWebsite(sender, confirmedRealm);
 	}
 
 	private static boolean prelude(CommandSender sender) {
@@ -59,30 +61,34 @@ public final class WipeCommand {
 		RPTexts.send(sender, RPTexts.WARN + "Website wipe target: realm " + RPTexts.ACCENT + realm + RPTexts.WARN + ".");
 		RPTexts.send(sender, RPTexts.ERROR
 				+ "This deletes every website character row for this realm, including pending donor creates.");
-		PENDING.put(key(sender), System.currentTimeMillis() + CONFIRM_TTL_MS);
+		PENDING.put(key(sender), new Confirmation(realm, System.currentTimeMillis() + CONFIRM_TTL_MS));
 		RPTexts.send(sender, RPTexts.COMMAND + "Type /rpcharacter wipe website confirm"
 				+ RPTexts.WARN + " within 30 seconds.");
 		return true;
 	}
 
-	/** True when this sender armed the wipe and it has not expired. */
-	private static boolean takeConfirm(CommandSender sender) {
-		Long expiresAtMs = PENDING.remove(key(sender));
-		if (expiresAtMs == null) {
+	/** The realm this sender armed, only while the confirmation remains valid. */
+	private static String takeConfirm(CommandSender sender) {
+		Confirmation confirmation = PENDING.remove(key(sender));
+		if (confirmation == null) {
 			RPTexts.send(sender, RPTexts.ERROR + "Nothing to confirm.");
-			return false;
+			return null;
 		}
-		if (System.currentTimeMillis() > expiresAtMs) {
+		if (System.currentTimeMillis() > confirmation.expiresAtMs()) {
 			RPTexts.send(sender, RPTexts.ERROR + "Confirm expired. Run the wipe command again.");
-			return false;
+			return null;
 		}
-		return true;
+		return confirmation.realm();
 	}
 
-	private static boolean wipeWebsite(CommandSender sender) {
+	private static boolean wipeWebsite(CommandSender sender, String confirmedRealm) {
 		String realm = GatewayClient.realmId();
 		if (realm == null) {
 			RPTexts.send(sender, RPTexts.ERROR + "Could not read the realm id from TFMCWeb. Website wipe aborted.");
+			return true;
+		}
+		if (!realm.equals(confirmedRealm)) {
+			RPTexts.send(sender, RPTexts.ERROR + "The realm changed since confirmation. Run the wipe command again.");
 			return true;
 		}
 		RPTexts.send(sender, RPTexts.COMMAND + "Wiping website character data for realm " + realm + "...");

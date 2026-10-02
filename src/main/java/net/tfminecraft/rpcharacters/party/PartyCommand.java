@@ -101,13 +101,25 @@ public final class PartyCommand {
 			return true;
 		}
 		Player target = Bukkit.getPlayerExact(args[2]);
-		if (target == null) {
+		UUID targetId = target == null ? null : target.getUniqueId();
+		if (targetId == null) {
+			Party party = PartyManager.get().getParty(player.getUniqueId());
+			if (party != null) {
+				for (UUID memberId : party.getMemberIds()) {
+					if (PartyManager.displayName(memberId).equalsIgnoreCase(args[2])) {
+						targetId = memberId;
+						break;
+					}
+				}
+			}
+		}
+		if (targetId == null) {
 			RPTexts.send(player, PartyLoader.getTargetNotFound().replace("{player}", args[2]));
 			return true;
 		}
-		PartyResult result = PartyManager.get().kick(player.getUniqueId(), target.getUniqueId());
+		PartyResult result = PartyManager.get().kick(player.getUniqueId(), targetId);
 		deliver(player, result);
-		if (result.ok() && result.kind() == PartyResult.Kind.MEMBER_KICKED) {
+		if (result.ok() && result.kind() == PartyResult.Kind.MEMBER_KICKED && target != null) {
 			RPTexts.send(target, PartyLoader.getKickedNotify());
 		}
 		return true;
@@ -128,6 +140,9 @@ public final class PartyCommand {
 	private static void deliver(Player player, PartyResult result) {
 		switch (result.kind()) {
 			case MEMBER_LEFT -> {
+				if (result.message() != null && !result.message().isBlank()) {
+					RPTexts.send(player, result.message());
+				}
 				notifyMembers(result.notifyIds(), result.message());
 				return;
 			}
@@ -188,15 +203,18 @@ public final class PartyCommand {
 				}
 				String prefix = args[2].toLowerCase(Locale.ROOT);
 				List<String> matches = new ArrayList<>();
-				for (Player online : Bukkit.getOnlinePlayers()) {
-					if ("kick".equals(sub) && online.equals(player)) {
-						continue;
+				if ("kick".equals(sub)) {
+					for (UUID memberId : party.getMemberIds()) {
+						if (memberId.equals(player.getUniqueId())) continue;
+						String name = PartyManager.displayName(memberId);
+						if (name.toLowerCase(Locale.ROOT).startsWith(prefix)) matches.add(name);
 					}
-					if ("invite".equals(sub) && PartyManager.get().getParty(online.getUniqueId()) != null) {
-						continue;
-					}
-					if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
-						matches.add(online.getName());
+				} else {
+					for (Player online : Bukkit.getOnlinePlayers()) {
+						if (PartyManager.get().getParty(online.getUniqueId()) != null) continue;
+						if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+							matches.add(online.getName());
+						}
 					}
 				}
 				return matches;

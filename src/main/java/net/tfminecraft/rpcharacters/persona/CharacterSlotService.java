@@ -55,7 +55,7 @@ public final class CharacterSlotService {
 	}
 
 	public static boolean isSlotUnlocked(Player player, int slotIndex) {
-		return slotIndex < getMaxAliveCharacters(player);
+		return slotIndex >= 0 && slotIndex < getMaxAliveCharacters(player);
 	}
 
 	public static boolean isOverSlotLimit(Player player, PlayerData data) {

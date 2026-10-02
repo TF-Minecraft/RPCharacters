@@ -47,13 +47,8 @@ public final class AgeCalculator {
 		LocalDate earliest = now.minusYears(ageYears + 1L).plusDays(1);
 		LocalDate latest = now.minusYears(ageYears);
 		long daySpan = ChronoUnit.DAYS.between(earliest, latest);
-		if (daySpan < 0) {
-			return FantasyCalendar.toIso(latest);
-		}
 		int offset;
-		if (daySpan == 0) {
-			offset = 0;
-		} else if (salt == null || salt.isBlank()) {
+		if (salt == null || salt.isBlank()) {
 			offset = ThreadLocalRandom.current().nextInt((int) daySpan + 1);
 		} else {
 			offset = saltedOffset(salt, ageYears, (int) daySpan);

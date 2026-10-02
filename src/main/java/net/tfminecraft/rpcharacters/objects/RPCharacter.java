@@ -365,7 +365,7 @@ public class RPCharacter {
 		return mmoClass != null;
 	}
 	public void setMMOClass(String s) {
-		mmoClass = s.toUpperCase();
+		mmoClass = s.toUpperCase(Locale.ROOT);
 	}
 	public String getMMOClass() {
 		return mmoClass;
@@ -653,7 +653,7 @@ public class RPCharacter {
 		if (data == null || data.getKitKey() == null || data.getKitKey().isBlank()) {
 			return;
 		}
-		kitCustomisations.put(data.getKitKey().toLowerCase(), data);
+		kitCustomisations.put(data.getKitKey().toLowerCase(Locale.ROOT), data);
 	}
 
 	public void removeKitCustomise(String kitKey) {
@@ -758,7 +758,7 @@ public class RPCharacter {
 			needed = Math.max(needed, Cache.evilCluesRequired);
 		}
 		for (Trait trait : traits) {
-			Integer override = Cache.traitClueOverrides.get(trait.getId().toLowerCase());
+			Integer override = Cache.traitClueOverrides.get(trait.getId().toLowerCase(Locale.ROOT));
 			if (override != null && override > needed) {
 				needed = override;
 			}
@@ -953,6 +953,7 @@ public class RPCharacter {
 	}
 
 	public void setForfeitedProfessionPoints(Map<String, Integer> points) {
+		points = points == null ? null : new HashMap<>(points);
 		forfeitedProfessionPoints.clear();
 		if (points != null) {
 			for (Map.Entry<String, Integer> entry : points.entrySet()) {
@@ -965,7 +966,7 @@ public class RPCharacter {
 		if (professionId == null || professionId.isBlank() || amount <= 0) {
 			return;
 		}
-		forfeitedProfessionPoints.merge(professionId.toLowerCase(), amount, Integer::sum);
+		forfeitedProfessionPoints.merge(professionId.toLowerCase(Locale.ROOT), amount, Integer::sum);
 	}
 
 	public void clearForfeitedProfessionPoints() {
@@ -982,7 +983,7 @@ public class RPCharacter {
 
 	/** Held upgrade costs plus forfeited points; what the profession's lifetime points pay for. */
 	public int getSpentPointsOnProfession(String professionId) {
-		int spent = professionId != null ? forfeitedProfessionPoints.getOrDefault(professionId.toLowerCase(), 0) : 0;
+		int spent = professionId != null ? forfeitedProfessionPoints.getOrDefault(professionId.toLowerCase(Locale.ROOT), 0) : 0;
 		for (ProfessionUpgradeDefinition upgrade : resolveProfessionUpgrades()) {
 			if (upgrade.getProfessionId().equalsIgnoreCase(professionId)) {
 				spent += upgrade.getCost();
@@ -1004,11 +1005,12 @@ public class RPCharacter {
 	}
 
 	public void setExtraAttributeAllocation(Map<String, Integer> allocation) {
+		allocation = allocation == null ? null : new HashMap<>(allocation);
 		extraAttributeAllocation.clear();
 		if (allocation != null) {
 			for (Map.Entry<String, Integer> entry : allocation.entrySet()) {
 				if (entry.getKey() != null && entry.getValue() != null && entry.getValue() > 0) {
-					extraAttributeAllocation.put(entry.getKey().toLowerCase(), entry.getValue());
+					extraAttributeAllocation.put(entry.getKey().toLowerCase(Locale.ROOT), entry.getValue());
 				}
 			}
 		}
@@ -1022,11 +1024,11 @@ public class RPCharacter {
 	}
 
 	public int getSpentExtraAttributePoints() {
-		int spent = 0;
+		long spent = 0;
 		for (int amount : extraAttributeAllocation.values()) {
 			spent += amount;
 		}
-		return spent;
+		return (int) Math.min(Integer.MAX_VALUE, spent);
 	}
 
 	/** Player head for this character (wardrobe / owner). See {@link CharacterSkull}. */

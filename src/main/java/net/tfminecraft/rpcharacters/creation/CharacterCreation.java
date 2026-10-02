@@ -655,10 +655,6 @@ public class CharacterCreation {
 
 				return;
 
-			} else {
-
-				pd.addCompletedStage(s);
-
 			}
 
 		}
@@ -697,6 +693,10 @@ public class CharacterCreation {
 
 			return;
 
+		}
+
+		if (!s.shouldRepeat()) {
+			agePd.addCompletedStage(s);
 		}
 
 		if(s instanceof InfoStage) {
@@ -1031,12 +1031,6 @@ public class CharacterCreation {
 
 	private void reopenStageAt(int index) {
 
-		if (index < 0 || index >= stages.size()) {
-
-			return;
-
-		}
-
 		canNext = false;
 
 		p.closeInventory();
@@ -1072,10 +1066,6 @@ public class CharacterCreation {
 		} else if (s instanceof ClueStage clue) {
 
 			clue.execute(p, this);
-
-		} else if (s instanceof SummaryStage summary) {
-
-			summary.execute(p, this);
 
 		}
 

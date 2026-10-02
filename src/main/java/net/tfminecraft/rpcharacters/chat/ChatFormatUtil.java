@@ -23,11 +23,11 @@ public final class ChatFormatUtil {
 		int index = before.length();
 
 		while (index > 0) {
-			if (index >= 9 && before.regionMatches(index - 9, "&#", 0, 2)) {
-				String hex = before.substring(index - 9, index);
+			if (index >= 8 && before.regionMatches(index - 8, "&#", 0, 2)) {
+				String hex = before.substring(index - 8, index);
 				if (hex.matches("&#[0-9A-Fa-f]{6}")) {
 					codes.insert(0, hex);
-					index -= 9;
+					index -= 8;
 					continue;
 				}
 			}

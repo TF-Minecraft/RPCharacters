@@ -119,7 +119,7 @@ public final class PermadeathService {
 	public static PermadeathRisk computeRisk(RPCharacter character) {
 		int injuryCount = countInjuryTraits(character);
 		int chancePerInjury = PermadeathZoneLoader.getChancePerInjury();
-		int chancePercent = injuryCount * chancePerInjury;
+		int chancePercent = (int) Math.min(100L, (long) injuryCount * chancePerInjury);
 		return new PermadeathRisk(injuryCount, chancePercent, chancePerInjury);
 	}
 
@@ -332,16 +332,10 @@ public final class PermadeathService {
 	}
 
 	private static void convertTrait(Player player, RPCharacter character, Trait healing, String permanentId) {
-		TraitChangeService.removeTrait(player, character, healing);
-
 		if (permanentId == null || permanentId.isBlank()) {
 			RPCharacters.plugin.getLogger().warning(
 					"No permanent progression target for healing trait '" + healing.getId()
 							+ "' on character " + character.getName() + ".");
-			return;
-		}
-
-		if (ownsTraitId(character, permanentId)) {
 			return;
 		}
 
@@ -350,6 +344,11 @@ public final class PermadeathService {
 			RPCharacters.plugin.getLogger().warning(
 					"Permanent trait '" + permanentId + "' not found while converting '"
 							+ healing.getId() + "' on character " + character.getName() + ".");
+			return;
+		}
+
+		TraitChangeService.removeTrait(player, character, healing);
+		if (ownsTraitId(character, permanentId)) {
 			return;
 		}
 
@@ -362,9 +361,6 @@ public final class PermadeathService {
 	}
 
 	private static boolean ownsTraitId(Set<String> ownedTraitIds, String traitId) {
-		if (traitId == null) {
-			return false;
-		}
 		for (String owned : ownedTraitIds) {
 			if (owned.equalsIgnoreCase(traitId)) {
 				return true;

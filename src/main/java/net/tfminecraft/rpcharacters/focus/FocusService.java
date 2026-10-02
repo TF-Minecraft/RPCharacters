@@ -174,7 +174,7 @@ public final class FocusService {
 
     private void applyOfflineRegen(Player player, FocusData data) {
         long now = System.currentTimeMillis();
-        long intervalMs = Math.max(1L, FocusConfig.regenIntervalTicks) * 50L;
+        long intervalMs = regenIntervalMs();
         if (FocusConfig.offlineRegen) {
             data.applyRegenForElapsed(hourlyRate(player), intervalMs, now);
         } else {
@@ -184,7 +184,7 @@ public final class FocusService {
 
     private void tickRegen() {
         long now = System.currentTimeMillis();
-        long intervalMs = Math.max(1L, FocusConfig.regenIntervalTicks) * 50L;
+        long intervalMs = regenIntervalMs();
         for (Player player : Bukkit.getOnlinePlayers()) {
             FocusData data = dataFor(player);
             if (data == null) {
@@ -200,6 +200,11 @@ public final class FocusService {
             hourly += FocusAttributes.getTotal(player, bonus.mmocoreId) * bonus.extraPerHourPerPoint;
         }
         return hourly;
+    }
+
+    private static long regenIntervalMs() {
+        long ticks = Math.max(1L, FocusConfig.regenIntervalTicks);
+        return ticks > Long.MAX_VALUE / 50L ? Long.MAX_VALUE : ticks * 50L;
     }
 
     private void stopRegen() {

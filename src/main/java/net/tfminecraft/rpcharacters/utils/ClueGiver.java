@@ -159,7 +159,7 @@ public final class ClueGiver {
 		RPCharacter character = pd.getActiveCharacter();
 		String clue = getRandomClueExcluding(character, exclude);
 		if (clue == null) return null;
-		return spawnClueWithText(anchor, targetBlock, owner, clue, fallbackLocation);
+		return registerSpawnedClue(spawnLocation, targetBlock, owner, clue);
 	}
 
 	/**
@@ -270,6 +270,7 @@ public final class ClueGiver {
 		int x = location.getBlockX();
 		int y = location.getBlockY();
 		int z = location.getBlockZ();
+		if (y < world.getMinHeight() || y >= world.getMaxHeight() - 1) return false;
 		Block feet = world.getBlockAt(x, y, z);
 		Block above = world.getBlockAt(x, y + 1, z);
 		return feet.getType().isAir() && above.getType().isAir();

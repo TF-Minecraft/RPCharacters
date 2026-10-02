@@ -18,6 +18,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.FuelTemplate;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.Integrator;
@@ -45,6 +46,11 @@ public final class ProstheticRefuelListener implements Listener {
 		event.setCancelled(true);
 
 		Player player = event.getPlayer();
+		ItemStack held = player.getInventory().getItemInMainHand();
+		if (!item.isSimilar(held) || held.getAmount() < 1) {
+			return;
+		}
+		item = held;
 		PlayerData pd = PlayerManager.get(player);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			RPTexts.send(player, RPTexts.ERROR + "You need an active character to refuel prosthetics.");
@@ -52,6 +58,10 @@ public final class ProstheticRefuelListener implements Listener {
 		}
 
 		RPCharacter character = pd.getActiveCharacter();
+		if (character.getStatus() != Status.ALIVE) {
+			RPTexts.send(player, RPTexts.ERROR + "You need a living character to refuel prosthetics.");
+			return;
+		}
 		List<Trait> fueledProsthetics = findFueledProsthetics(character, template.getId());
 		if (fueledProsthetics.isEmpty()) {
 			RPTexts.send(player, RPTexts.MUTED + "You do not have a prosthetic that uses that fuel.");
@@ -86,6 +96,12 @@ public final class ProstheticRefuelListener implements Listener {
 			return;
 		}
 
+		if (item.getAmount() <= 1) {
+			player.getInventory().setItemInMainHand(null);
+		} else {
+			item.setAmount(item.getAmount() - 1);
+		}
+
 		if (needsRefresh) {
 			refreshCharacter(player, character);
 		}
@@ -96,11 +112,7 @@ public final class ProstheticRefuelListener implements Listener {
 		}
 		player.playSound(player.getLocation(), Sound.ITEM_BUCKET_FILL, 0.8f, 1.2f);
 
-		if (item.getAmount() <= 1) {
-			player.getInventory().setItemInMainHand(null);
-		} else {
-			item.setAmount(item.getAmount() - 1);
-		}
+
 	}
 
 	private static List<Trait> findFueledProsthetics(RPCharacter character, String templateId) {
@@ -117,13 +129,9 @@ public final class ProstheticRefuelListener implements Listener {
 	}
 
 	private static void refreshCharacter(Player player, RPCharacter character) {
-		if (character.isActive()) {
-			Integrator integrator = new Integrator();
-			integrator.remove(player, character, false);
-			character.update();
-			integrator.integrate(player, character);
-		} else {
-			character.update();
-		}
+		Integrator integrator = new Integrator();
+		integrator.remove(player, character, false);
+		character.update();
+		integrator.integrate(player, character);
 	}
 }

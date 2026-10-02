@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,7 +25,18 @@ import net.tfminecraft.rpcharacters.ingest.KitCustomiseIngestService;
 
 public final class KitService {
 
-	private static final Set<UUID> claimsInFlight = ConcurrentHashMap.newKeySet();
+	private static final Map<UUID, Claim> claimsInFlight = new ConcurrentHashMap<>();
+
+	private static final class Claim {
+		final String characterId;
+		final String kitId;
+		boolean cancelled;
+
+		Claim(String characterId, String kitId) {
+			this.characterId = characterId;
+			this.kitId = kitId;
+		}
+	}
 
 	private KitService() {
 	}
@@ -113,14 +123,15 @@ public final class KitService {
 		}
 
 		UUID playerId = player.getUniqueId();
-		if (!claimsInFlight.add(playerId)) {
+		Claim claim = new Claim(character.getId(), kitId);
+		if (claimsInFlight.putIfAbsent(playerId, claim) != null) {
 			RPTexts.send(player, RPTexts.WARN + "Your kit claim is already in progress.");
 			return;
 		}
 
 		String characterId = character.getId();
 		RPTexts.send(player, RPTexts.MUTED + "Checking your kit...");
-		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
+		Runnable fetch = () -> {
 			boolean scheduledMain = false;
 			try {
 				ProvinceSystemClient.SimpleResult claimStatus =
@@ -144,6 +155,7 @@ public final class KitService {
 							"[kit-claim] claim-status failed for " + playerId
 									+ " kit=" + kitId + ": " + claimStatus.error
 					);
+					throw new IllegalStateException("Kit claim status is unavailable");
 				}
 
 				List<JSONObject> pendingItems = List.of();
@@ -153,6 +165,7 @@ public final class KitService {
 					RPCharacters.plugin.getLogger().warning(
 							"[kit-customise] claim-pull failed: " + pending.error
 					);
+					throw new IllegalStateException("Pending kit customisations are unavailable");
 				} else {
 					String body = pending.body != null ? pending.body : "";
 					if (body.isBlank()) {
@@ -173,11 +186,12 @@ public final class KitService {
 				boolean pack = pendingPack;
 				Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 					try {
+						if (claim.cancelled) return;
 						finishClaimAfterFetch(
 								playerId, kitId, characterId, skin, pack, itemsForMain
 						);
 					} finally {
-						claimsInFlight.remove(playerId);
+						claimsInFlight.remove(playerId, claim);
 					}
 				});
 				scheduledMain = true;
@@ -194,10 +208,16 @@ public final class KitService {
 				});
 			} finally {
 				if (!scheduledMain) {
-					claimsInFlight.remove(playerId);
+					claimsInFlight.remove(playerId, claim);
 				}
 			}
-		});
+		};
+		try {
+			Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, fetch);
+		} catch (RuntimeException | Error failure) {
+			claimsInFlight.remove(playerId, claim);
+			throw failure;
+		}
 	}
 
 	/**
@@ -235,10 +255,7 @@ public final class KitService {
 				RPTexts.send(player, RPTexts.ERROR + "This character has already claimed that kit.");
 				return false;
 			}
-			if (status != KitStatus.ELIGIBLE && status != KitStatus.INELIGIBLE) {
-				RPTexts.send(player, RPTexts.ERROR + "This character cannot claim that kit.");
-				return false;
-			}
+
 		}
 
 		if (isCooldownActive(pd, kitId)) {
@@ -548,6 +565,12 @@ public final class KitService {
 		}
 		ResolvedKitTarget t = (ResolvedKitTarget) resolved;
 
+		Claim claim = claimsInFlight.get(target.getUniqueId());
+		// A claim ingests pending rows for the entire character, not just its own kit.
+		if (claim != null && t.character.getId().equalsIgnoreCase(claim.characterId)
+				&& (t.kitId.equals(claim.kitId) || !t.kit.editableKitKeys().isEmpty())) {
+			claim.cancelled = true;
+		}
 		t.character.setKitStatus(t.kitId, KitStatus.ELIGIBLE);
 		t.pd.setLastKitClaimAtMs(t.kitId, null);
 		for (String key : t.kit.editableKitKeys()) {

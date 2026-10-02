@@ -49,7 +49,8 @@ public final class CharacterNutritionFields {
 
     private static int intValue(Object raw) {
         if (raw instanceof Number number) {
-            return number.intValue();
+            // Floating-point narrowing saturates instead of wrapping oversized JSON integers.
+            return (int) number.doubleValue();
         }
         return Integer.parseInt(String.valueOf(raw));
     }

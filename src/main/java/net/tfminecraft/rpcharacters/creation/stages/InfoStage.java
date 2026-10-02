@@ -109,9 +109,11 @@ public class InfoStage extends Stage{
 
 		String substituted = substitutePlaceholders(message);
 
-		String type = substituted.split("\\(")[0];
+		int open = substituted.indexOf('(');
+		if (open < 0 || !substituted.endsWith(")")) return;
+		String type = substituted.substring(0, open);
 
-		String info = RPTexts.formatGui(substituted.split("\\(")[1].replace(")", ""));
+		String info = RPTexts.formatGui(substituted.substring(open + 1, substituted.length() - 1));
 
 		if(type.equalsIgnoreCase("title")) {
 

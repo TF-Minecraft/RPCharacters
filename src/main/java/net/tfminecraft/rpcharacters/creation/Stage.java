@@ -79,7 +79,7 @@ public class Stage {
 			this.platform = "both";
 			return;
 		}
-		String p = platform.trim().toLowerCase();
+		String p = platform.trim().toLowerCase(java.util.Locale.ROOT);
 		if (!p.equals("web") && !p.equals("game") && !p.equals("both")) {
 			p = "both";
 		}
@@ -194,26 +194,18 @@ public class Stage {
 		if (config.contains("platform")) {
 			s.setPlatform(config.getString("platform"));
 		}
-		StageType type = StageType.valueOf(config.getString("type").toUpperCase());
+		StageType type = StageType.valueOf(config.getString("type").toUpperCase(java.util.Locale.ROOT));
 		s.setCancelled(false);
-		if(type.equals(StageType.INFO)) {
-			return new InfoStage(s, config);
-		} else if(type.equals(StageType.QUESTIONS)) {
-			return new QuestionStage(s, config);
-		} else if(type.equals(StageType.SETTER)) {
-			return new SetterStage(s, config);
-		} else if(type.equals(StageType.SELECTION)) {
-			return new SelectionStage(s, config);
-		} else if(type.equals(StageType.ATTRIBUTES)) {
-			return new AttributesStage(s, config);
-		} else if(type.equals(StageType.CLUE)) {
-			return new ClueStage(s, config);
-		} else if(type.equals(StageType.SUMMARY)) {
-			return new SummaryStage(s, config);
-		} else if(type.equals(StageType.WARDROBE)) {
-			return new WardrobeStage(s, config);
-		}
-		return s;
+		return switch (type) {
+			case INFO -> new InfoStage(s, config);
+			case QUESTIONS -> new QuestionStage(s, config);
+			case SETTER -> new SetterStage(s, config);
+			case SELECTION -> new SelectionStage(s, config);
+			case ATTRIBUTES -> new AttributesStage(s, config);
+			case CLUE -> new ClueStage(s, config);
+			case SUMMARY -> new SummaryStage(s, config);
+			case WARDROBE -> new WardrobeStage(s, config);
+		};
 	}
 	
 	public static Stage another(Stage another) {

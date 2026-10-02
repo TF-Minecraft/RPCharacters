@@ -23,7 +23,7 @@ public final class MagnifyingGlassDefinition {
 		if (config.isConfigurationSection("requires")) {
 			ConfigurationSection req = config.getConfigurationSection("requires");
 			for (String key : req.getKeys(false)) {
-				requires.put(key.toLowerCase(), req.getInt(key, 0));
+				requires.put(key.toLowerCase(java.util.Locale.ROOT), req.getInt(key, 0));
 			}
 		}
 	}

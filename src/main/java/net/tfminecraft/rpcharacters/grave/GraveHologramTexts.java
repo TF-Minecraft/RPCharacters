@@ -18,7 +18,7 @@ public final class GraveHologramTexts {
 		if (grave == null) {
 			return lines;
 		}
-		Player owner = Bukkit.getPlayer(grave.getOwner());
+		Player owner = grave.getOwner() != null ? Bukkit.getPlayer(grave.getOwner()) : null;
 		String name = owner != null ? characterOrName(owner) : offlineName(grave.getOwner());
 		lines.add(name);
 		if (GraveLoader.isHologramShowKiller()) {
@@ -68,9 +68,6 @@ public final class GraveHologramTexts {
 	}
 
 	private static String characterOrName(Player player) {
-		if (player == null) {
-			return "Unknown";
-		}
 		String character = DisplayIdentityService.resolveCharacterName(player);
 		if (character != null && !character.isBlank()) {
 			return character;

@@ -119,7 +119,7 @@ public class PlayerData {
 		if (amount <= 0) {
 			return;
 		}
-		setAccountSkillPointsTotal(getAccountSkillPointsTotal() + amount);
+		setAccountSkillPointsTotal((int) Math.min(Integer.MAX_VALUE, (long) getAccountSkillPointsTotal() + amount));
 	}
 
 	public boolean needsAttributePointsMigration() {
@@ -138,7 +138,7 @@ public class PlayerData {
 		if (amount <= 0) {
 			return;
 		}
-		setAccountAttributePointsTotal(getAccountAttributePointsTotal() + amount);
+		setAccountAttributePointsTotal((int) Math.min(Integer.MAX_VALUE, (long) getAccountAttributePointsTotal() + amount));
 	}
 
 	public boolean isProfessionPointsInitialized() {
@@ -153,21 +153,21 @@ public class PlayerData {
 		if (professionId == null) {
 			return 0;
 		}
-		return Math.max(0, accountProfessionPoints.getOrDefault(professionId.toLowerCase(), 0));
+		return Math.max(0, accountProfessionPoints.getOrDefault(professionId.toLowerCase(Locale.ROOT), 0));
 	}
 
 	public void setAccountProfessionPoints(String professionId, int amount) {
 		if (professionId == null) {
 			return;
 		}
-		accountProfessionPoints.put(professionId.toLowerCase(), Math.max(0, amount));
+		accountProfessionPoints.put(professionId.toLowerCase(Locale.ROOT), Math.max(0, amount));
 	}
 
 	public void addAccountProfessionPoints(String professionId, int amount) {
 		if (professionId == null || amount <= 0) {
 			return;
 		}
-		setAccountProfessionPoints(professionId, getAccountProfessionPoints(professionId) + amount);
+		setAccountProfessionPoints(professionId, (int) Math.min(Integer.MAX_VALUE, (long) getAccountProfessionPoints(professionId) + amount));
 	}
 
 	public Map<String, Integer> getAccountProfessionPointsMap() {
@@ -442,6 +442,11 @@ public class PlayerData {
 
 	public void setPendingMmoAttributeRemoves(List<String> pending) {
 		pendingMmoAttributeRemoves = pending == null ? new ArrayList<>() : new ArrayList<>(pending);
+	}
+
+	/** A save must not consume removals waiting for MMOCore readiness. */
+	public List<String> getPendingMmoAttributeRemoves() {
+		return new ArrayList<>(pendingMmoAttributeRemoves);
 	}
 
 	public List<String> takePendingMmoAttributeRemoves() {

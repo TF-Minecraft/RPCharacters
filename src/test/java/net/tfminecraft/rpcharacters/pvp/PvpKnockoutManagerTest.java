@@ -34,22 +34,13 @@ import static org.mockito.Mockito.*;
 
 class PvpKnockoutManagerTest {
     @BeforeAll static void initializeServerRegistries() {
-        // Paper resolves attribute/effect constants through server registries on first use.
-        var access = mock(RegistryAccess.class, call -> {
-            Object key = call.getArgument(0);
-            return mock(Registry.class, lookup -> {
-                if (!lookup.getMethod().getName().equals("getOrThrow")) {
-                    return RETURNS_DEFAULTS.answer(lookup);
-                }
-                if (RegistryKey.ATTRIBUTE.equals(key)) return mock(Attribute.class);
-                if (RegistryKey.MOB_EFFECT.equals(key)) return mock(PotionEffectType.class);
-                return null;
-            });
-        });
-        try (var registries = mockStatic(RegistryAccess.class)) {
-            registries.when(RegistryAccess::registryAccess).thenReturn(access);
+        // Initialize real MockBukkit registry values before any test resolves Paper constants.
+        org.mockbukkit.mockbukkit.MockBukkit.mock();
+        try {
             assertNotNull(Attribute.MAX_HEALTH);
             assertNotNull(PotionEffectType.BLINDNESS);
+        } finally {
+            org.mockbukkit.mockbukkit.MockBukkit.unmock();
         }
     }
 

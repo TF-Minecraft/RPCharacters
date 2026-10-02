@@ -42,7 +42,7 @@ public final class RPTexts {
 		if (raw == null || raw.isEmpty()) {
 			return raw;
 		}
-		return StringFormatter.formatHex(raw.replace('&', '\u00A7'));
+		return StringFormatter.formatHex(raw.replaceAll("(?i)&(?=#[0-9a-f]{6})", "").replace('&', '\u00A7'));
 	}
 
 	public static void send(CommandSender sender, String raw) {

@@ -1,7 +1,6 @@
 package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,7 +36,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 
 	public static final String COMMAND = "pvp";
 
-	private final Map<UUID, Long> armorBlockUntil = new HashMap<>();
+	private final Map<PvpSituation, Long> armorWarnings = new IdentityHashMap<>();
 	private final Map<PvpSituation, List<BukkitTask>> tasksBySituation = new IdentityHashMap<>();
 
 	@Override
@@ -111,12 +110,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 			}
 		}
 		long expiry = System.currentTimeMillis() + PvpLoader.getStartWarnSeconds() * 1000L;
-		for (UUID id : targets) {
-			Long existing = armorBlockUntil.get(id);
-			if (existing == null || expiry > existing) {
-				armorBlockUntil.put(id, expiry);
-			}
-		}
 		PvpSituation previous = PvpSituations.openFor(player.getUniqueId());
 		if (previous != null) {
 			finish(previous);
@@ -124,6 +117,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets);
 		PvpSituations.track(situation);
 		tasksBySituation.put(situation, new ArrayList<>());
+		armorWarnings.put(situation, expiry);
 
 		String warning = PvpLoader.getStartWarning()
 				.replace("{seconds}", String.valueOf(PvpLoader.getStartWarnSeconds()));
@@ -185,6 +179,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	/** Drop scheduled warnings. After the fight has started, title anyone who has not died. */
 	private void finish(PvpSituation situation) {
 		List<UUID> recipients = situation.close();
+		armorWarnings.remove(situation);
 		List<BukkitTask> tasks = tasksBySituation.remove(situation);
 		if (tasks != null) {
 			for (BukkitTask task : tasks) {
@@ -211,6 +206,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	public void shutdown() {
 		for (PvpSituation situation : new ArrayList<>(tasksBySituation.keySet())) {
 			situation.close();
+			armorWarnings.remove(situation);
 			List<BukkitTask> tasks = tasksBySituation.remove(situation);
 			if (tasks != null) {
 				for (BukkitTask task : tasks) {
@@ -218,15 +214,16 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				}
 			}
 			PvpSituations.untrack(situation);
+			for (UUID id : situation.participants()) {
+				if (!PvpSituations.remainsActiveElsewhere(id, situation)) {
+					PvpStartSessions.end(id);
+				}
+			}
 		}
 	}
 
 	private void schedule(PvpSituation situation, BukkitTask task) {
 		List<BukkitTask> tasks = tasksBySituation.get(situation);
-		if (tasks == null || !situation.isOpen()) {
-			task.cancel();
-			return;
-		}
 		tasks.add(task);
 	}
 
@@ -237,12 +234,10 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 			return;
 		}
 		UUID id = player.getUniqueId();
-		Long until = armorBlockUntil.get(id);
-		if (until == null) {
-			return;
-		}
-		if (System.currentTimeMillis() >= until) {
-			armorBlockUntil.remove(id);
+		long now = System.currentTimeMillis();
+		armorWarnings.entrySet().removeIf(entry -> now >= entry.getValue());
+		boolean blocked = armorWarnings.keySet().stream().anyMatch(situation -> situation.includes(id));
+		if (!blocked) {
 			return;
 		}
 		if (event.getNewArmorPiece() == null) {

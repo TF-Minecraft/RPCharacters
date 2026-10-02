@@ -56,7 +56,7 @@ public final class EvilRpCommands {
 			RPTexts.send(sender, RPTexts.ERROR + "Usage: " + ADMIN_USAGE);
 			return true;
 		}
-		String action = args[actionIndex].toLowerCase();
+		String action = args[actionIndex].toLowerCase(java.util.Locale.ROOT);
 		int playerIndex = actionIndex + 1;
 		Player player = Bukkit.getPlayerExact(args[playerIndex]);
 		if (player == null) {
@@ -90,7 +90,7 @@ public final class EvilRpCommands {
 				if (quiet) {
 					long now = System.currentTimeMillis();
 					EvilRpService.applyDecay(character, now);
-					character.setEvilRpStrikes(character.getEvilRpStrikes() + 1);
+					character.setEvilRpStrikes((int) Math.min(Integer.MAX_VALUE, (long) character.getEvilRpStrikes() + 1));
 					character.setLastStrikeAtMs(now);
 					RPCharacters.getPlayerManager().savePlayer(player);
 					RPTexts.send(sender, RPTexts.SUCCESS + "Added a strike to " + RPTexts.WARN + character.getName()

@@ -79,7 +79,11 @@ public final class ProfessionItemFactory {
 				if (enchant == null) {
 					continue;
 				}
-				meta.addEnchant(enchant, Integer.parseInt(parts[1]), true);
+				try {
+					meta.addEnchant(enchant, Integer.parseInt(parts[1]), true);
+				} catch (NumberFormatException ignored) {
+					// A malformed configured level must not prevent the other menu items from rendering.
+				}
 			}
 		}
 		if (spec.isHideEnchants()) {
@@ -120,7 +124,7 @@ public final class ProfessionItemFactory {
 			return null;
 		}
 		try {
-			return Material.valueOf(raw.toUpperCase());
+			return Material.valueOf(raw.toUpperCase(java.util.Locale.ROOT));
 		} catch (IllegalArgumentException ignored) {
 			return Material.BARRIER;
 		}
@@ -128,9 +132,6 @@ public final class ProfessionItemFactory {
 
 	private static ItemStack fromPath(String ref) {
 		String normalized = normalizePath(ref);
-		if (normalized.isBlank()) {
-			return null;
-		}
 		try {
 			ItemStack built = TLibs.getItemAPI().getCreator().getItemFromPath(normalized);
 			if (built == null || built.getType() == Material.AIR) {
@@ -143,12 +144,9 @@ public final class ProfessionItemFactory {
 	}
 
 	private static String normalizePath(String ref) {
-		if (ref == null || ref.isBlank()) {
-			return "";
-		}
 		String trimmed = ref.trim();
-		if (trimmed.toLowerCase().startsWith("vanilla.")) {
-			return "v." + trimmed.substring("vanilla.".length()).toLowerCase();
+		if (trimmed.toLowerCase(java.util.Locale.ROOT).startsWith("vanilla.")) {
+			return "v." + trimmed.substring("vanilla.".length()).toLowerCase(java.util.Locale.ROOT);
 		}
 		return trimmed;
 	}

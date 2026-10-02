@@ -1,7 +1,6 @@
 package net.tfminecraft.rpcharacters.wardrobe;
 
-import java.lang.reflect.Method;
-import java.util.Collection;
+import com.destroystokyo.paper.profile.ProfileProperty;
 import java.util.logging.Level;
 
 import org.bukkit.entity.Player;
@@ -9,8 +8,7 @@ import org.bukkit.entity.Player;
 import net.tfminecraft.rpcharacters.RPCharacters;
 
 /**
- * Apply Mojang-signed textures via Paper PlayerProfile (reflection so we compile
- * against spigot-api).
+ * Apply Mojang-signed textures through the supported Paper profile API.
  */
 public final class SkinApplyHelper {
 
@@ -21,30 +19,13 @@ public final class SkinApplyHelper {
 			return null;
 		}
 		try {
-			Object profile = player.getClass().getMethod("getPlayerProfile").invoke(player);
-			if (profile == null) {
-				return null;
-			}
-			Method getProperties = profile.getClass().getMethod("getProperties");
-			Object props = getProperties.invoke(profile);
-			if (!(props instanceof Collection<?>)) {
-				return null;
-			}
-			for (Object prop : (Collection<?>) props) {
-				if (prop == null) {
+			var profile = player.getPlayerProfile();
+			for (ProfileProperty prop : profile.getProperties()) {
+				if (!"textures".equals(prop.getName())) {
 					continue;
 				}
-				String name = String.valueOf(
-					prop.getClass().getMethod("getName").invoke(prop)
-				);
-				if (!"textures".equals(name)) {
-					continue;
-				}
-				String value = String.valueOf(
-					prop.getClass().getMethod("getValue").invoke(prop)
-				);
-				Object sigObj = prop.getClass().getMethod("getSignature").invoke(prop);
-				String signature = sigObj == null ? null : String.valueOf(sigObj);
+				String value = prop.getValue();
+				String signature = prop.getSignature();
 				SkinTextures textures = new SkinTextures(value, signature);
 				return textures.isValid() ? textures : null;
 			}
@@ -76,35 +57,10 @@ public final class SkinApplyHelper {
 			return true;
 		}
 		try {
-			Object profile = player.getClass().getMethod("getPlayerProfile").invoke(player);
-			if (profile == null) {
-				return false;
-			}
-			Class<?> propertyClass = Class.forName(
-				"com.destroystokyo.paper.profile.ProfileProperty"
-			);
-			Object property = propertyClass
-				.getConstructor(String.class, String.class, String.class)
-				.newInstance("textures", value, signature);
-
-			try {
-				profile.getClass()
-					.getMethod("removeProperty", String.class)
-					.invoke(profile, "textures");
-			} catch (NoSuchMethodException ignored) {
-				// older Paper: setProperty may replace
-			}
-
-			profile.getClass()
-				.getMethod("setProperty", propertyClass)
-				.invoke(profile, property);
-
-			Class<?> profileIface = Class.forName(
-				"com.destroystokyo.paper.profile.PlayerProfile"
-			);
-			player.getClass()
-				.getMethod("setPlayerProfile", profileIface)
-				.invoke(player, profile);
+			var profile = player.getPlayerProfile();
+			profile.removeProperty("textures");
+			profile.setProperty(new ProfileProperty("textures", value, signature));
+			player.setPlayerProfile(profile);
 			WardrobeCache.setLastApplied(player, next);
 			return true;
 		} catch (Throwable t) {

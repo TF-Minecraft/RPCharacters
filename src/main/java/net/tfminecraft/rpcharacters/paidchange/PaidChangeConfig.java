@@ -52,7 +52,12 @@ public final class PaidChangeConfig {
 		}
 		List<BigDecimal> costs = new ArrayList<>();
 		for (Object value : rule.getList("costs", List.of())) {
-			BigDecimal cost = value instanceof Number number ? new BigDecimal(number.toString()) : null;
+			BigDecimal cost = null;
+			try {
+				if (value instanceof Number number) cost = new BigDecimal(number.toString());
+			} catch (NumberFormatException invalidNumber) {
+				// YAML permits non-finite floating-point values; prices do not.
+			}
 			if (cost != null && cost.signum() >= 0) {
 				costs.add(cost);
 			} else {

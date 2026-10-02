@@ -2,6 +2,10 @@ package net.tfminecraft.rpcharacters.pvp;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -138,14 +142,23 @@ public final class PvpStrikeService {
 			return false;
 		}
 		Player victim = Bukkit.getPlayer(victimId);
+		if (System.currentTimeMillis() >= decision.expiresAtMs) {
+			pending.remove(victimId, decision);
+			RPTexts.send(killer, RPTexts.MUTED + "You didn't choose in time, so they were spared.");
+			if (victim != null) {
+				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared.");
+			}
+			return false;
+		}
 		if (!choice.isOffered(decision.strikeKills)) {
 			RPTexts.send(killer, RPTexts.ERROR + "You can only wound or maim someone whose next strike would kill them.");
 			return false;
 		}
 		decision = decision.withChoice(choice);
+		PlayerData data = victim != null && victim.isOnline() ? PlayerManager.get(victim) : null;
 		boolean injury = choice == StrikeChoice.WOUND || choice == StrikeChoice.MAIM;
-		if (injury && victim != null && victim.isOnline() && PlayerManager.get(victim) != null) {
-			RPCharacter character = characterById(victim, decision.characterId);
+		if (injury && data != null) {
+			RPCharacter character = characterById(data, decision.characterId);
 			// Keep the decision open when there's no injury left to give, so they can pick again.
 			if (character != null && !injure(victim, character, choice == StrikeChoice.MAIM, killer)) {
 				RPTexts.send(killer, RPTexts.ERROR + "They have no " + (choice == StrikeChoice.MAIM ? "permanent" : "healing")
@@ -155,21 +168,28 @@ public final class PvpStrikeService {
 			pending.remove(victimId);
 			return true;
 		}
-		pending.remove(victimId);
 		if (choice == StrikeChoice.SPARE) {
+			pending.remove(victimId);
 			RPTexts.send(killer, RPTexts.SUCCESS + "You spared them.");
 			if (victim != null) {
 				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared.");
 			}
 			return true;
 		}
-		if (victim == null || !victim.isOnline() || PlayerManager.get(victim) == null) {
-			verdicts.put(victimId, decision);
-			saveVerdicts();
+		if (data == null) {
+			Decision previous = verdicts.put(victimId, decision);
+			if (!saveVerdicts()) {
+				if (previous == null) verdicts.remove(victimId, decision);
+				else verdicts.put(victimId, previous);
+				RPTexts.send(killer, RPTexts.ERROR + "Could not save that decision. Please try again.");
+				return false;
+			}
+			pending.remove(victimId);
 			RPTexts.send(killer, RPTexts.WARN + "They're offline. It lands when they return.");
 			return true;
 		}
-		execute(victim, decision, killer);
+		pending.remove(victimId);
+		execute(victim, data, decision, killer);
 		return true;
 	}
 
@@ -186,7 +206,8 @@ public final class PvpStrikeService {
 			if (!player.isOnline()) {
 				return;
 			}
-			if (PlayerManager.get(player) == null) {
+			PlayerData data = PlayerManager.get(player);
+			if (data == null) {
 				// Keep the verdict for their next join if their data never loads.
 				if (retriesLeft > 0) {
 					applyVerdictLater(player, retriesLeft - 1);
@@ -197,8 +218,11 @@ public final class PvpStrikeService {
 			if (verdict == null) {
 				return;
 			}
-			saveVerdicts();
-			execute(player, verdict, Bukkit.getPlayer(verdict.killerId));
+			if (!saveVerdicts()) {
+				verdicts.put(player.getUniqueId(), verdict);
+				return;
+			}
+			execute(player, data, verdict, Bukkit.getPlayer(verdict.killerId));
 		}, JOIN_DELAY_TICKS);
 	}
 
@@ -224,8 +248,8 @@ public final class PvpStrikeService {
 		return true;
 	}
 
-	private static void execute(Player victim, Decision decision, Player killer) {
-		RPCharacter character = characterById(victim, decision.characterId);
+	private static void execute(Player victim, PlayerData data, Decision decision, Player killer) {
+		RPCharacter character = characterById(data, decision.characterId);
 		if (character == null) {
 			return;
 		}
@@ -356,11 +380,7 @@ public final class PvpStrikeService {
 		return character.getStatus() == Status.ALIVE ? character : null;
 	}
 
-	private static RPCharacter characterById(Player player, String characterId) {
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
-			return null;
-		}
+	private static RPCharacter characterById(PlayerData pd, String characterId) {
 		RPCharacter character = pd.getCharacterById(characterId);
 		return character != null && character.getStatus() == Status.ALIVE ? character : null;
 	}
@@ -392,7 +412,7 @@ public final class PvpStrikeService {
 		}
 	}
 
-	private static void saveVerdicts() {
+	private static boolean saveVerdicts() {
 		YamlConfiguration config = new YamlConfiguration();
 		for (Map.Entry<UUID, Decision> entry : verdicts.entrySet()) {
 			String key = entry.getKey().toString();
@@ -402,10 +422,24 @@ public final class PvpStrikeService {
 			config.set(key + ".died", entry.getValue().died);
 			config.set(key + ".choice", entry.getValue().choice.name().toLowerCase(Locale.ROOT));
 		}
+		Path staged = null;
 		try {
-			config.save(verdictFile());
+			Path target = verdictFile().toPath().toAbsolutePath().normalize();
+			Files.createDirectories(target.getParent());
+			staged = Files.createTempFile(target.getParent(), ".pending-strikes-", ".tmp");
+			Files.writeString(staged, config.saveToString(), StandardCharsets.UTF_8);
+			Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			return true;
 		} catch (IOException ex) {
+			if (staged != null) {
+				try {
+					Files.deleteIfExists(staged);
+				} catch (IOException cleanupFailure) {
+					ex.addSuppressed(cleanupFailure);
+				}
+			}
 			RPCharacters.plugin.getLogger().warning("Could not save " + VERDICT_FILE + ": " + ex.getMessage());
+			return false;
 		}
 	}
 

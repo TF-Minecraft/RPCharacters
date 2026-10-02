@@ -71,7 +71,6 @@ public final class PlaytimeService {
 			@Override
 			public void run() {
 				if (!dirty) return;
-				dirty = false;
 				saveAllNow();
 			}
 		}.runTaskTimer(RPCharacters.plugin, AUTOSAVE_INTERVAL_TICKS, AUTOSAVE_INTERVAL_TICKS);
@@ -82,7 +81,7 @@ public final class PlaytimeService {
 	}
 
 	public static void saveAllNow() {
-		PlaytimeIndexDatabase.saveAll(new ArrayList<>(byUuid.values()));
+		dirty = !PlaytimeIndexDatabase.trySaveAll(new ArrayList<>(byUuid.values()));
 	}
 
 	/** Credits one tick to the active character, then republishes the player's figure. */
@@ -107,7 +106,8 @@ public final class PlaytimeService {
 		if (p == null) return null;
 		PlayerData pd = PlayerManager.get(p);
 		if (pd == null || !pd.hasActiveCharacter()) return null;
-		return pd.getActiveCharacter();
+		RPCharacter active = pd.getActiveCharacter();
+		return active.getStatus() == net.tfminecraft.rpcharacters.enums.Status.ALIVE ? active : null;
 	}
 
 	private static void publish(Player p, RPCharacter active) {

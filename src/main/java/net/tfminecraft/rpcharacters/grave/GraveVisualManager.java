@@ -11,6 +11,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.display.TextDisplayHelper;
@@ -26,6 +27,7 @@ public final class GraveVisualManager {
 
 	private final Map<UUID, ViewerGraveState> viewerStates = new HashMap<>();
 	private boolean warnedProtocolMissing;
+	private BukkitTask task;
 
 	private GraveVisualManager() {}
 
@@ -34,7 +36,8 @@ public final class GraveVisualManager {
 	}
 
 	public void startTicks() {
-		new BukkitRunnable() {
+		shutdown();
+		task = new BukkitRunnable() {
 			@Override
 			public void run() {
 				if (!ProtocolLibBridge.isReady()) {
@@ -54,6 +57,10 @@ public final class GraveVisualManager {
 	}
 
 	public void shutdown() {
+		if (task != null) {
+			task.cancel();
+			task = null;
+		}
 		for (UUID viewerId : new ArrayList<>(viewerStates.keySet())) {
 			clearViewer(viewerId);
 		}
@@ -132,9 +139,6 @@ public final class GraveVisualManager {
 		}
 
 		List<String> lines = GraveHologramTexts.linesForViewer(viewer, grave);
-		if (lines.isEmpty()) {
-			return;
-		}
 
 		Location visualBase = blockLoc.clone().add(0.5, GraveLoader.getHologramOffsetY(), 0.5);
 		AtomicInteger idSource = viewerStates.get(viewer.getUniqueId()).getEntityIdSource();

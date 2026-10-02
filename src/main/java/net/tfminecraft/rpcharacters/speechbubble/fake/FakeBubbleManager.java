@@ -68,6 +68,9 @@ public final class FakeBubbleManager {
 		if (!ProtocolLibBridge.isReady() || viewer == null || speaker == null || channel == null) {
 			return;
 		}
+		if (!viewer.getWorld().equals(speaker.getWorld())) {
+			return;
+		}
 		if (heardMessage == null || heardMessage.isBlank()) {
 			return;
 		}
@@ -79,9 +82,6 @@ public final class FakeBubbleManager {
 
 		String colorPrefix = StringFormatter.formatHex(channel.getMessageColorPrefix().replace('&', '\u00A7'));
 		List<String> lines = TextWrapUtil.wrapLines(heardMessage, settings.getMaxCharactersPerLine(), colorPrefix);
-		if (lines.isEmpty()) {
-			return;
-		}
 
 		ViewerBubbleState viewerState = viewerStates.computeIfAbsent(viewer.getUniqueId(), ViewerBubbleState::new);
 		SpeakerViewerStack stack = viewerState.getOrCreateStack(speaker.getUniqueId());
@@ -169,7 +169,8 @@ public final class FakeBubbleManager {
 					}
 				}
 
-				if (stack.getUtterances().isEmpty() || speaker == null || !speaker.isOnline()) {
+				if (stack.getUtterances().isEmpty() || speaker == null || !speaker.isOnline()
+						|| !viewer.getWorld().equals(speaker.getWorld())) {
 					destroyStackEntities(viewer, stack);
 					stackIterator.remove();
 					continue;
@@ -236,17 +237,13 @@ public final class FakeBubbleManager {
 		for (int i = 0; !needRefresh && i < layoutLines.size(); i++) {
 			int stackIndex = layoutLines.size() - 1 - i;
 			Location target = BubbleLayoutUtil.desiredLineLocation(speaker, stackIndex, settings, tickCounter);
-			if (i >= stack.getActiveLines().size()) {
-				needRefresh = true;
-				break;
-			}
 			FakeBubbleLine line = stack.getActiveLines().get(i);
 			Location current = line.getCurrentLocation();
-			Location lerped = TextDisplayHelper.lerpLocation(current, target, lerpFactor);
-			if (lerped == null) {
+			if (!current.getWorld().equals(target.getWorld())) {
 				needRefresh = true;
 				break;
 			}
+			Location lerped = TextDisplayHelper.lerpLocation(current, target, lerpFactor);
 			if (current.distanceSquared(lerped) > POSITION_EPSILON_SQ) {
 				line.setCurrentLocation(lerped);
 				packets.teleport(viewer, line.getEntityId(), lerped);
@@ -277,7 +274,10 @@ public final class FakeBubbleManager {
 			entityIds.add(line.getEntityId());
 		}
 		if (!entityIds.isEmpty()) {
-			ProtocolLibBridge.getPackets().destroy(viewer, entityIds);
+			FakeTextDisplayPackets packets = ProtocolLibBridge.getPackets();
+			if (packets != null) {
+				packets.destroy(viewer, entityIds);
+			}
 		}
 		stack.getActiveLines().clear();
 		for (ViewerUtterance utterance : stack.getUtterances()) {
@@ -288,7 +288,10 @@ public final class FakeBubbleManager {
 	private void destroyUtteranceEntities(Player viewer, ViewerUtterance utterance) {
 		List<Integer> entityIds = utterance.getEntityIds();
 		if (!entityIds.isEmpty()) {
-			ProtocolLibBridge.getPackets().destroy(viewer, entityIds);
+			FakeTextDisplayPackets packets = ProtocolLibBridge.getPackets();
+			if (packets != null) {
+				packets.destroy(viewer, entityIds);
+			}
 			utterance.clearEntityIds();
 		}
 	}

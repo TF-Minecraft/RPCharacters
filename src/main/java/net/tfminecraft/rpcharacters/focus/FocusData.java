@@ -64,10 +64,10 @@ public final class FocusData {
         }
         long intervals = elapsed / intervalMs;
         double msPerHour = 3_600_000.0;
-        int perInterval = Math.max(1, (int) Math.round(hourlyRate * intervalMs / msPerHour));
-        int newPoints = Math.min(points + (int) intervals * perInterval, FocusConfig.max);
-        int added = newPoints - points;
-        points = newPoints;
+        long perInterval = Math.max(1L, Math.round(hourlyRate * intervalMs / msPerHour));
+        // Cap against the remaining balance before narrowing either the interval count or its product.
+        int added = (int) Math.min((long) FocusConfig.max - points, intervals * (double) perInterval);
+        points += added;
         lastRegenMs += intervals * intervalMs;
         return added;
     }

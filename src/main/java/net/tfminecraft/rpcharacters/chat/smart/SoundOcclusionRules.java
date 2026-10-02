@@ -51,18 +51,15 @@ final class SoundOcclusionRules {
 		if (override != null) {
 			return override;
 		}
-		return attenuationFromBlastResistance(material, settings.getDefaultBlockAttenuation());
+		return attenuationFromBlastResistance(material);
 	}
 
-	static double attenuationFromBlastResistance(Material material, double fallback) {
+	static double attenuationFromBlastResistance(Material material) {
 		if (material == null || material.isAir()) {
 			return 0.0;
 		}
 
 		float resistance = material.getBlastResistance();
-		if (resistance < 0.0f) {
-			return fallback;
-		}
 		if (resistance < 0.3f) {
 			return 0.06;
 		}
@@ -95,11 +92,7 @@ final class SoundOcclusionRules {
 	}
 
 	private static boolean isClosed(Block block) {
-		BlockData data = block.getBlockData();
-		if (data instanceof Openable openable) {
-			return !openable.isOpen();
-		}
-		return !block.isPassable();
+		return !((Openable) block.getBlockData()).isOpen();
 	}
 
 	private static boolean isPermeable(Material material, BlockData data) {

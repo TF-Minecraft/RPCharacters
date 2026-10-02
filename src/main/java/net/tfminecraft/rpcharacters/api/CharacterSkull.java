@@ -1,7 +1,6 @@
 package net.tfminecraft.rpcharacters.api;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import com.destroystokyo.paper.profile.ProfileProperty;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -35,9 +34,7 @@ public final class CharacterSkull {
 		if (player == null) {
 			return head;
 		}
-		if (!(head.getItemMeta() instanceof SkullMeta meta)) {
-			return head;
-		}
+		SkullMeta meta = (SkullMeta) head.getItemMeta();
 		meta.setOwningPlayer(player);
 		head.setItemMeta(meta);
 		return head;
@@ -106,21 +103,9 @@ public final class CharacterSkull {
 			return;
 		}
 		try {
-			Class<?> profileClass = Class.forName("com.destroystokyo.paper.profile.PlayerProfile");
-			Class<?> propertyClass = Class.forName("com.destroystokyo.paper.profile.ProfileProperty");
-			Method createProfile = Bukkit.getServer().getClass().getMethod("createProfile", UUID.class);
-			Object profile = createProfile.invoke(Bukkit.getServer(), UUID.randomUUID());
-			Constructor<?> propertyCtor = propertyClass.getConstructor(String.class, String.class, String.class);
-			String signature = textureSignature == null ? "" : textureSignature;
-			Object property = propertyCtor.newInstance("textures", textureValue, signature);
-			try {
-				profile.getClass().getMethod("setProperty", propertyClass).invoke(profile, property);
-			} catch (NoSuchMethodException missingSet) {
-				profile.getClass().getMethod("setProperty", String.class, propertyClass)
-					.invoke(profile, "textures", property);
-			}
-			Method setProfile = meta.getClass().getMethod("setPlayerProfile", profileClass);
-			setProfile.invoke(meta, profile);
+			var profile = Bukkit.getServer().createProfile(UUID.randomUUID());
+			profile.setProperty(new ProfileProperty("textures", textureValue, textureSignature == null ? "" : textureSignature));
+			meta.setPlayerProfile(profile);
 			head.setItemMeta(meta);
 		} catch (Throwable error) {
 			if (RPCharacters.plugin != null) {

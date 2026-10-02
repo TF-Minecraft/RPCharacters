@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -55,12 +56,7 @@ public final class CharacterIngestService {
 		if (plugin == null) {
 			return;
 		}
-		long now = System.currentTimeMillis();
-		long prev = lastPullAtMs.get();
-		if (now - prev < PULL_COOLDOWN_MS) {
-			return;
-		}
-		if (!lastPullAtMs.compareAndSet(prev, now)) {
+		if (!claimPullWindow()) {
 			return;
 		}
 		pullAsync(plugin);
@@ -85,17 +81,17 @@ public final class CharacterIngestService {
 		if (plugin == null || playerUuid == null) {
 			return;
 		}
-		long now = System.currentTimeMillis();
-		long prev = lastPullAtMs.get();
-		if (now - prev < PULL_COOLDOWN_MS) {
-			RosterSyncService.pushRosterAsync(playerUuid);
-			return;
-		}
-		if (!lastPullAtMs.compareAndSet(prev, now)) {
+		if (!claimPullWindow()) {
 			RosterSyncService.pushRosterAsync(playerUuid);
 			return;
 		}
 		pullForPlayerAsync(plugin, playerUuid);
+	}
+
+	private static boolean claimPullWindow() {
+		long now = System.currentTimeMillis();
+		long previous = lastPullAtMs.get();
+		return now - previous >= PULL_COOLDOWN_MS && lastPullAtMs.compareAndSet(previous, now);
 	}
 
 	public static void startPeriodicPull(JavaPlugin plugin) {
@@ -178,7 +174,9 @@ public final class CharacterIngestService {
 		}
 		AtomicReference<List<JSONObject>> ref = new AtomicReference<>(List.of());
 		CountDownLatch latch = new CountDownLatch(1);
+		AtomicBoolean queued = new AtomicBoolean(true);
 		Bukkit.getScheduler().runTask(plugin, () -> {
+			if (!queued.compareAndSet(true, false)) return;
 			try {
 				List<JSONObject> results = new ArrayList<>();
 				for (JSONObject row : creates) {
@@ -193,6 +191,9 @@ public final class CharacterIngestService {
 			latch.await(30, TimeUnit.SECONDS);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
+		} finally {
+			// Cancel work still queued when its waiting caller has abandoned it.
+			queued.set(false);
 		}
 		return ref.get();
 	}
@@ -236,17 +237,18 @@ public final class CharacterIngestService {
 		if (online != null && PlayerManager.exists(online)) {
 			pd = PlayerManager.get(online);
 			inManager = true;
-		} else if (online != null) {
-			pd = DB.loadPlayer(online);
-			if (pd == null) {
-				pd = new PlayerData(online);
-			}
 		} else {
 			pd = DB.loadPlayerData(playerUuid);
 		}
 
 		if (pd == null) {
 			return ApplyOutcome.fail("could not load player data");
+		}
+
+		for (RPCharacter existing : pd.getCharacters()) {
+			if (existing.getId() != null && existing.getId().equalsIgnoreCase(createId)) {
+				return ApplyOutcome.ok(createId);
+			}
 		}
 
 		if (online != null) {
@@ -261,11 +263,6 @@ public final class CharacterIngestService {
 			}
 		}
 
-		for (RPCharacter existing : pd.getCharacters()) {
-			if (existing.getId() != null && existing.getId().equalsIgnoreCase(createId)) {
-				return ApplyOutcome.ok(createId);
-			}
-		}
 
 		String name = stringOf(payload.get("name"));
 		String raceId = stringOf(payload.get("race_id"));
@@ -350,6 +347,7 @@ public final class CharacterIngestService {
 		character.ensureTraitStateDefaults();
 		character.update();
 
+		Boolean previousEighteen = pd.isEighteen();
 		Object eighteenRaw = payload.get("eighteen");
 		if (eighteenRaw instanceof Boolean) {
 			pd.setEighteen((Boolean) eighteenRaw);
@@ -358,6 +356,12 @@ public final class CharacterIngestService {
 		net.tfminecraft.rpcharacters.creation.StageRevisions.stampCurrent(
 			character, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);
 		pd.addCharacter(character);
+		net.tfminecraft.rpcharacters.kit.KitService.onCharacterCreated(online, pd, character);
+		if (!DB.trySavePlayer(pd)) {
+			pd.getCharacters().remove(character);
+			pd.setEighteen(previousEighteen);
+			return ApplyOutcome.fail("could not save player data");
+		}
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(online, pd.getUniqueId(), character);
 
@@ -365,8 +369,6 @@ public final class CharacterIngestService {
 			pd.setActiveCharacter(character);
 			net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(online);
 		}
-
-		net.tfminecraft.rpcharacters.kit.KitService.onCharacterCreated(online, pd, character);
 
 		if (inManager && online != null) {
 			RPCharacters.getPlayerManager().savePlayer(online);

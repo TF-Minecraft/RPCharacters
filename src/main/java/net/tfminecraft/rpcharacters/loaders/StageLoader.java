@@ -49,6 +49,7 @@ public class StageLoader implements LoaderInterface{
 		List<String> list = new ArrayList<String>(set);
 		
 		for(String key : list) {
+			if (!config.isConfigurationSection(key)) continue;
 			Stage o = Stage.create(key, config.getConfigurationSection(key));
 			oList.add(o);
 		}

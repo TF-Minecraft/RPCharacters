@@ -28,20 +28,20 @@ public final class AttributePointService {
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
 		Map<String, Integer> allocation = new HashMap<>();
-		int spent = 0;
+		long spent = 0;
 		for (AttributeInstance instance : mmoPd.getAttributes().getInstances()) {
 			if (IgnoredAttributes.isIgnored(instance.getId())) {
 				continue;
 			}
 			int creationBase = character.getCreationBaseAmount(instance.getId());
-			int extra = Math.max(0, instance.getBase() - creationBase);
+			int extra = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, (long) instance.getBase() - creationBase));
 			if (extra > 0) {
-				allocation.put(instance.getId().toLowerCase(), extra);
+				allocation.put(instance.getId().toLowerCase(java.util.Locale.ROOT), extra);
 				spent += extra;
 			}
 		}
 		character.setExtraAttributeAllocation(allocation);
-		return spent;
+		return (int) Math.min(Integer.MAX_VALUE, spent);
 	}
 
 	public static void applyAllocationToMmo(Player player, RPCharacter character) {
@@ -57,7 +57,7 @@ public final class AttributePointService {
 			if (instance == null || entry.getValue() == null || entry.getValue() <= 0) {
 				continue;
 			}
-			instance.setBase(instance.getBase() + entry.getValue());
+			instance.setBase((int) Math.min(Integer.MAX_VALUE, (long) instance.getBase() + entry.getValue()));
 		}
 	}
 
@@ -151,7 +151,7 @@ public final class AttributePointService {
 		if (active != null) {
 			spent = captureAllocationFromMmo(player, active);
 		}
-		pd.setAccountAttributePointsTotal(unspent + spent);
+		pd.setAccountAttributePointsTotal((int) Math.min(Integer.MAX_VALUE, (long) unspent + spent));
 		RPCharacters.getPlayerManager().savePlayer(player);
 	}
 
@@ -173,7 +173,7 @@ public final class AttributePointService {
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
 		int spent = captureAllocationFromMmo(player, active);
-		int mmoPool = mmoPd.getAttributePoints() + spent;
+		int mmoPool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getAttributePoints() + spent);
 		int beforeTotal = pd.getAccountAttributePointsTotal();
 		if (mmoPool != beforeTotal) {
 			pd.setAccountAttributePointsTotal(mmoPool);
@@ -254,12 +254,9 @@ public final class AttributePointService {
 			}
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
-		while (mmoPd.getAttributePoints() + character.getSpentExtraAttributePoints() > lifetime) {
-			if (mmoPd.getAttributePoints() > 0) {
-				mmoPd.setAttributePoints(mmoPd.getAttributePoints() - 1);
-				continue;
-			}
-			break;
+		int allowedUnspent = Math.max(0, lifetime - character.getSpentExtraAttributePoints());
+		if (mmoPd.getAttributePoints() > allowedUnspent) {
+			mmoPd.setAttributePoints(allowedUnspent);
 		}
 	}
 

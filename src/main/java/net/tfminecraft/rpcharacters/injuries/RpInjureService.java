@@ -59,7 +59,8 @@ public final class RpInjureService {
 			return false;
 		}
 
-		RpInjureSession session = new RpInjureSession(attacker.getUniqueId(), target.getUniqueId());
+		RpInjureSession session = new RpInjureSession(attacker.getUniqueId(), target.getUniqueId(),
+				PlayerManager.get(attacker).getActiveCharacter().getId(), character.getId());
 		byAttacker.put(session.attackerId, session);
 		byTarget.put(session.targetId, session);
 		RpInjureGui.openPicker(attacker, target, character);
@@ -79,6 +80,27 @@ public final class RpInjureService {
 		return session != null ? session : getByTarget(playerId);
 	}
 
+	public static void changePickerPage(Player attacker, int delta) {
+		RpInjureSession session = getByAttacker(attacker.getUniqueId());
+		if (session == null || session.phase != RpInjureSession.Phase.PICKING) {
+			return;
+		}
+		Player target = Bukkit.getPlayer(session.targetId);
+		if (target == null || !target.isOnline()) {
+			cancel(session, attacker, "That player is no longer online.");
+			return;
+		}
+		String fail = validateSession(session, attacker, target, false);
+		if (fail != null) {
+			cancel(session, attacker, fail);
+			return;
+		}
+		session.ignoreClose = true;
+		session.pickerPage = RpInjureGui.openPicker(attacker, target,
+				PlayerManager.get(target).getActiveCharacter(), (long) session.pickerPage + delta);
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> session.ignoreClose = false);
+	}
+
 	public static void chooseInjury(Player attacker, String traitId) {
 		RpInjureSession session = getByAttacker(attacker.getUniqueId());
 		if (session == null || session.phase != RpInjureSession.Phase.PICKING) {
@@ -89,7 +111,7 @@ public final class RpInjureService {
 			cancel(session, attacker, "That player is no longer online.");
 			return;
 		}
-		String fail = validatePair(attacker, target, false);
+		String fail = validateSession(session, attacker, target, false);
 		if (fail != null) {
 			cancel(session, attacker, fail);
 			return;
@@ -124,14 +146,14 @@ public final class RpInjureService {
 		}
 		Player attacker = Bukkit.getPlayer(session.attackerId);
 		if (attacker == null || !attacker.isOnline()) {
-			finish(session, true);
+			finish(session);
 			RPTexts.send(target, RPTexts.ERROR + "That player is no longer online.");
 			return;
 		}
-		String fail = validatePair(attacker, target, true);
+		String fail = validateSession(session, attacker, target, true);
 		if (fail != null) {
 			notifyBoth(session, RPTexts.ERROR + fail);
-			finish(session, true);
+			finish(session);
 			return;
 		}
 
@@ -139,7 +161,7 @@ public final class RpInjureService {
 		Trait trait = TraitLoader.getByString(session.traitId);
 		if (trait == null || !isAvailable(character, trait)) {
 			notifyBoth(session, RPTexts.ERROR + "That injury can no longer be applied.");
-			finish(session, true);
+			finish(session);
 			return;
 		}
 
@@ -149,7 +171,7 @@ public final class RpInjureService {
 				+ RPTexts.SUCCESS + " to " + RPTexts.WARN + character.getName()
 				+ RPTexts.SUCCESS + " (" + RPTexts.WARN + target.getName() + RPTexts.SUCCESS + ").");
 		Bukkit.getPluginManager().callEvent(new CharacterInjuredEvent(target, attacker, character, trait.getId()));
-		finish(session, true);
+		finish(session);
 	}
 
 	public static void decline(Player target) {
@@ -162,7 +184,7 @@ public final class RpInjureService {
 			RPTexts.send(attacker, RPTexts.ERROR + target.getName() + " declined the injury.");
 		}
 		RPTexts.send(target, RPTexts.MUTED + "You declined the injury.");
-		finish(session, true);
+		finish(session);
 	}
 
 	public static void cancelFromClose(Player player) {
@@ -280,6 +302,19 @@ public final class RpInjureService {
 		return null;
 	}
 
+	private static String validateSession(RpInjureSession session, Player attacker, Player target,
+			boolean forAccept) {
+		String fail = validatePair(attacker, target, forAccept);
+		if (fail != null) {
+			return fail;
+		}
+		if (!session.attackerCharacterId.equals(PlayerManager.get(attacker).getActiveCharacter().getId())
+				|| !session.targetCharacterId.equals(PlayerManager.get(target).getActiveCharacter().getId())) {
+			return "An active character changed. Please start a new injury request.";
+		}
+		return null;
+	}
+
 	private static String formatRange(double range) {
 		if (Math.abs(range - Math.rint(range)) < 0.001) {
 			return String.valueOf((int) Math.rint(range));
@@ -302,7 +337,7 @@ public final class RpInjureService {
 			if (target != null && target.isOnline()) {
 				RPTexts.send(target, RPTexts.MUTED + "The injury request timed out.");
 			}
-			finish(session, true);
+			finish(session);
 		}, seconds * 20L);
 	}
 
@@ -321,13 +356,10 @@ public final class RpInjureService {
 		if (other != null && other.isOnline() && session.phase == RpInjureSession.Phase.AWAITING_ACCEPT) {
 			RPTexts.send(other, RPTexts.MUTED + "The injury request was cancelled.");
 		}
-		finish(session, true);
+		finish(session);
 	}
 
 	private static Player otherPlayer(RpInjureSession session, Player actor) {
-		if (actor == null) {
-			return null;
-		}
 		UUID otherId = actor.getUniqueId().equals(session.attackerId) ? session.targetId : session.attackerId;
 		return Bukkit.getPlayer(otherId);
 	}
@@ -343,13 +375,10 @@ public final class RpInjureService {
 		}
 	}
 
-	private static void finish(RpInjureSession session, boolean closeInventories) {
+	private static void finish(RpInjureSession session) {
 		cancelTimeout(session);
 		byAttacker.remove(session.attackerId, session);
 		byTarget.remove(session.targetId, session);
-		if (!closeInventories) {
-			return;
-		}
 		session.ignoreClose = true;
 		closeIfOurs(Bukkit.getPlayer(session.attackerId));
 		closeIfOurs(Bukkit.getPlayer(session.targetId));
@@ -372,14 +401,19 @@ public final class RpInjureService {
 
 		final UUID attackerId;
 		final UUID targetId;
+		final String attackerCharacterId;
+		final String targetCharacterId;
+		int pickerPage;
 		Phase phase = Phase.PICKING;
 		String traitId;
 		boolean ignoreClose;
 		BukkitTask timeoutTask;
 
-		RpInjureSession(UUID attackerId, UUID targetId) {
+		RpInjureSession(UUID attackerId, UUID targetId, String attackerCharacterId, String targetCharacterId) {
 			this.attackerId = attackerId;
 			this.targetId = targetId;
+			this.attackerCharacterId = attackerCharacterId;
+			this.targetCharacterId = targetCharacterId;
 		}
 	}
 }

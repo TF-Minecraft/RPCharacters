@@ -77,13 +77,15 @@ public final class LastSolidTracker {
 
 	private static Block findSolid(Player player) {
 		Location loc = player.getLocation();
-		if (loc.getWorld() == null) {
+		if (loc.getWorld() == null || loc.getBlockY() < loc.getWorld().getMinHeight()
+				|| loc.getBlockY() >= loc.getWorld().getMaxHeight()) {
 			return null;
 		}
 		Block feet = loc.getBlock();
 		if (feet.getType().isSolid()) {
 			return feet;
 		}
+		if (feet.getY() <= loc.getWorld().getMinHeight()) return null;
 		Block below = feet.getRelative(BlockFace.DOWN);
 		if (below.getType().isSolid()) {
 			return below;

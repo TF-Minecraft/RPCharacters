@@ -28,6 +28,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.ProstheticReplacement;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.ProstheticTraitRules;
@@ -60,6 +61,10 @@ public final class ProstheticInstallListener implements Listener {
 		event.setCancelled(true);
 
 		Player player = event.getPlayer();
+		ItemStack held = player.getInventory().getItemInMainHand();
+		if (!item.isSimilar(held) || held.getAmount() < 1) {
+			return;
+		}
 		PlayerData pd = PlayerManager.get(player);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			RPTexts.send(player, RPTexts.ERROR + "You need an active character to install prosthetics.");
@@ -67,6 +72,10 @@ public final class ProstheticInstallListener implements Listener {
 		}
 
 		RPCharacter character = pd.getActiveCharacter();
+		if (character.getStatus() != Status.ALIVE) {
+			RPTexts.send(player, RPTexts.ERROR + "You need a living character to install prosthetics.");
+			return;
+		}
 		ProstheticReplacement replacement = match.getReplacement();
 		boolean hasInjury = ownsTrait(character, replacement.getPermanentInjuryId());
 		String ownedId = replacement.ownedProstheticId(character.getTraits());
@@ -77,7 +86,7 @@ public final class ProstheticInstallListener implements Listener {
 			case INSTALL -> {
 				if (TraitChangeService.replaceInjuryWithProsthetic(player, character,
 						replacement.getPermanentInjuryId(), match.getTraitId())) {
-					consumeHeldItem(player);
+					consumeHeldItem(player, held);
 					player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.2f);
 				}
 			}
@@ -171,6 +180,10 @@ public final class ProstheticInstallListener implements Listener {
 			return;
 		}
 		RPCharacter character = pd.getActiveCharacter();
+		if (character.getStatus() != Status.ALIVE) {
+			RPTexts.send(player, RPTexts.ERROR + "You need a living character to install prosthetics.");
+			return;
+		}
 		if (!character.getId().equals(pending.characterId())) {
 			RPTexts.send(player, RPTexts.ERROR + "That prosthetic swap is no longer valid.");
 			return;
@@ -190,15 +203,12 @@ public final class ProstheticInstallListener implements Listener {
 		}
 
 		if (TraitChangeService.replaceProsthetic(player, character, pending.fromTraitId(), pending.toTraitId())) {
-			consumeHeldItem(player);
+			consumeHeldItem(player, item);
 			player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.2f);
 		}
 	}
 
 	private static boolean ownsTrait(RPCharacter character, String traitId) {
-		if (character == null || traitId == null || traitId.isBlank()) {
-			return false;
-		}
 		for (Trait trait : character.getTraits()) {
 			if (trait.getId().equalsIgnoreCase(traitId)) {
 				return true;
@@ -207,9 +217,9 @@ public final class ProstheticInstallListener implements Listener {
 		return false;
 	}
 
-	private static void consumeHeldItem(Player player) {
+	private static void consumeHeldItem(Player player, ItemStack expected) {
 		ItemStack item = player.getInventory().getItemInMainHand();
-		if (item == null || item.getType().isAir()) {
+		if (item == null || item.getType().isAir() || !item.isSimilar(expected)) {
 			return;
 		}
 		if (item.getAmount() <= 1) {

@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -165,12 +166,11 @@ public final class KitCustomiseIngestService {
 	}
 
 	private static List<JSONObject> applyAllOnMain(JavaPlugin plugin, List<JSONObject> items) {
-		if (items == null || items.isEmpty()) {
-			return List.of();
-		}
 		AtomicReference<List<JSONObject>> ref = new AtomicReference<>(List.of());
 		CountDownLatch latch = new CountDownLatch(1);
+		AtomicBoolean queued = new AtomicBoolean(true);
 		Bukkit.getScheduler().runTask(plugin, () -> {
+			if (!queued.compareAndSet(true, false)) return;
 			try {
 				List<JSONObject> results = new ArrayList<>();
 				for (JSONObject row : items) {
@@ -185,6 +185,9 @@ public final class KitCustomiseIngestService {
 			latch.await(30, TimeUnit.SECONDS);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
+		} finally {
+			// Cancel work still queued when its waiting caller has abandoned it.
+			queued.set(false);
 		}
 		return ref.get();
 	}
@@ -207,15 +210,8 @@ public final class KitCustomiseIngestService {
 			UUID playerUuid = UUID.fromString(playerUuidStr);
 			Player online = Bukkit.getPlayer(playerUuid);
 			PlayerData pd;
-			boolean inManager = false;
 			if (online != null && PlayerManager.exists(online)) {
 				pd = PlayerManager.get(online);
-				inManager = true;
-			} else if (online != null) {
-				pd = DB.loadPlayer(online);
-				if (pd == null) {
-					pd = new PlayerData(online);
-				}
 			} else {
 				pd = DB.loadPlayerData(playerUuid);
 			}
@@ -226,14 +222,7 @@ public final class KitCustomiseIngestService {
 			}
 
 			RPCharacter character = pd.getCharacterById(characterId);
-			if (character == null) {
-				for (RPCharacter c : pd.getCharacters()) {
-					if (c != null && characterId.equalsIgnoreCase(c.getId())) {
-						character = c;
-						break;
-					}
-				}
-			}
+
 			if (character == null) {
 				result.put("ok", false);
 				result.put("error", "character not found");
@@ -273,19 +262,28 @@ public final class KitCustomiseIngestService {
 			if (stylesObj instanceof JSONArray sarr) {
 				for (Object s : sarr) {
 					if (s != null && !s.toString().isBlank()) {
-						styles.add(s.toString().trim().toLowerCase());
+						styles.add(s.toString().trim().toLowerCase(java.util.Locale.ROOT));
 					}
 				}
 			}
 			KitCustomiseData data = new KitCustomiseData(
 					kitKey, displayName, lore, skinSlug, path, iaNamespace, colours, styles
 			);
+			KitCustomiseData previous = character.getKitCustomisations().get(data.getKitKey().toLowerCase(java.util.Locale.ROOT));
 			character.putKitCustomise(data);
-
-			if (inManager && online != null) {
-				RPCharacters.getPlayerManager().savePlayer(online);
-			} else {
-				DB.savePlayer(pd);
+			boolean saved = false;
+			try {
+				saved = DB.trySavePlayer(pd);
+			} finally {
+				if (!saved) {
+					if (previous == null) character.removeKitCustomise(data.getKitKey());
+					else character.putKitCustomise(previous);
+				}
+			}
+			if (!saved) {
+				result.put("ok", false);
+				result.put("error", "could not save player data");
+				return result;
 			}
 
 			result.put("ok", true);

@@ -176,10 +176,7 @@ final class GraveInsuranceExtract {
 
 		@Override
 		public void setContents(ItemStack bundle, List<ItemStack> contents) {
-			ItemMeta meta = bundle.getItemMeta();
-			if (!(meta instanceof BundleMeta bundleMeta)) {
-				return;
-			}
+			BundleMeta bundleMeta = (BundleMeta) bundle.getItemMeta();
 			List<ItemStack> kept = new ArrayList<>();
 			if (contents != null) {
 				for (ItemStack inner : contents) {

@@ -72,8 +72,8 @@ public final class GraveLoader implements LoaderInterface {
 		expireSeconds = Math.max(0, config.getInt("expire-seconds", 0));
 		hologramOffsetY = config.getDouble("hologram-offset-y", 1.2);
 		hologramRadius = config.getDouble("hologram-radius", 32.0);
-		hologramTimerFormat = config.getString("hologram-timer-format", hologramTimerFormat);
-		hologramTimerExpiring = config.getString("hologram-timer-expiring", hologramTimerExpiring);
+		hologramTimerFormat = config.getString("hologram-timer-format", "&7Despawns in &e{time}");
+		hologramTimerExpiring = config.getString("hologram-timer-expiring", "&7Despawning...");
 
 		Material parsed = Material.matchMaterial(config.getString("material", "CHEST"));
 		material = parsed != null ? parsed : Material.CHEST;
@@ -82,33 +82,30 @@ public final class GraveLoader implements LoaderInterface {
 		excludedItems = parseExcludedItems(config.getStringList("excluded-items"));
 		excludedSlotItems = parseExcludedSlotItems(config.getConfigurationSection("excluded-slot-items"));
 
-		String configuredInsurance = config.getString("insurance.item", insuranceItemPath);
+		String configuredInsurance = config.getString("insurance.item", "m.miscellanea.grave_insurance");
 		insuranceItemPath = configuredInsurance != null ? configuredInsurance.trim() : "";
 		insuranceConsume = config.getBoolean("insurance.consume", true);
-		insuranceBoundLore = config.getString("insurance.bound-lore", insuranceBoundLore);
+		insuranceBoundLore = config.getString("insurance.bound-lore", "&7Bound to your grave at &f{x}, {y}, {z}");
 
-		messageLocked = config.getString("messages.locked", messageLocked);
-		messageRecovered = config.getString("messages.recovered", messageRecovered);
-		messageLooted = config.getString("messages.looted", messageLooted);
-		messageInventoryFull = config.getString("messages.inventory-full", messageInventoryFull);
-		messageEmpty = config.getString("messages.empty", messageEmpty);
-		messagePlaced = config.getString("messages.placed", messagePlaced);
-		messageUnlockHint = config.getString("messages.unlock-hint", messageUnlockHint);
-		messageInsuranceNone = config.getString("messages.insurance-none", messageInsuranceNone);
-		messageInsuranceGone = config.getString("messages.insurance-gone", messageInsuranceGone);
-		messageInsuranceBound = config.getString("messages.insurance-bound", messageInsuranceBound);
-		messageUnlockedByStrike = config.getString("messages.unlocked-evil-rp", messageUnlockedByStrike);
-		messageUnlockNone = config.getString("messages.unlock-none", messageUnlockNone);
-		messageUnlockAlready = config.getString("messages.unlock-already", messageUnlockAlready);
-		messageUnlockSuccess = config.getString("messages.unlock-success", messageUnlockSuccess);
-		messageRobHint = config.getString("messages.rob-hint", messageRobHint);
+		messageLocked = config.getString("messages.locked", "&cThis grave is locked.");
+		messageRecovered = config.getString("messages.recovered", "&aYou recovered your belongings.");
+		messageLooted = config.getString("messages.looted", "&aYou looted this grave.");
+		messageInventoryFull = config.getString("messages.inventory-full", "&eSome items did not fit and were dropped.");
+		messageEmpty = config.getString("messages.empty", "&7There is nothing left here.");
+		messagePlaced = config.getString("messages.placed", "&eYour grave was placed at &f{x}, {y}, {z} &ein {world}.");
+		messageUnlockHint = config.getString("messages.unlock-hint", "&eRun &f/grave unlock &eto let others loot this grave.");
+		messageInsuranceNone = config.getString("messages.insurance-none", "&eThis ticket is not bound to a grave. Carry it when you die to insure that grave.");
+		messageInsuranceGone = config.getString("messages.insurance-gone", "&eThe grave this ticket was bound to is gone.");
+		messageInsuranceBound = config.getString("messages.insurance-bound", "&aOne of your insurance tickets is now bound to this grave. Right click it to recover your items.");
+		messageUnlockedByStrike = config.getString("messages.unlocked-evil-rp", "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it.");
+		messageUnlockNone = config.getString("messages.unlock-none", "&eYou have no grave to unlock.");
+		messageUnlockAlready = config.getString("messages.unlock-already", "&eYour grave is already unlocked.");
+		messageUnlockSuccess = config.getString("messages.unlock-success", "&aYour grave is now unlocked. Anyone can loot it.");
+		messageRobHint = config.getString("messages.rob-hint", "&aRight click to rob");
 	}
 
 	private static Set<Integer> parseExcludedSlots(List<Integer> configured) {
 		Set<Integer> slots = new HashSet<>();
-		if (configured == null) {
-			return slots;
-		}
 		for (Integer slot : configured) {
 			if (slot != null && slot >= 0 && slot <= 40) {
 				slots.add(slot);
@@ -119,9 +116,6 @@ public final class GraveLoader implements LoaderInterface {
 
 	private static List<String> parseExcludedItems(List<String> configured) {
 		List<String> paths = new ArrayList<>();
-		if (configured == null) {
-			return paths;
-		}
 		for (String path : configured) {
 			if (path != null && !path.isBlank()) {
 				paths.add(path.trim());

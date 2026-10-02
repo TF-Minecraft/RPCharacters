@@ -106,9 +106,6 @@ public final class JoinUnstuckListener implements Listener {
 
 	private static Location findSafeSpot(Location from) {
 		World world = from.getWorld();
-		if (world == null) {
-			return null;
-		}
 		int[] spot = SafeSpotSearch.find(from.getBlockX(), from.getBlockY(), from.getBlockZ(),
 				(x, y, z) -> canStand(world, x, y, z));
 		if (spot == null) {
