@@ -3,7 +3,6 @@ package net.tfminecraft.rpcharacters.party;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -60,13 +59,14 @@ final class PartyStore {
         Path temp = Files.createTempFile(file.getParent(), "parties-", ".tmp");
         try {
             Files.writeString(temp, GSON.toJson(new SavedParties(1, records)));
+            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException | RuntimeException | Error failure) {
             try {
-                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+                Files.deleteIfExists(temp);
+            } catch (IOException | RuntimeException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
             }
-        } finally {
-            Files.deleteIfExists(temp);
+            throw failure;
         }
     }
 

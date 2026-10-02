@@ -1,0 +1,27 @@
+package net.tfminecraft.rpcharacters.tutorial;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.*;
+import org.mockbukkit.mockbukkit.MockBukkit;
+import net.tfminecraft.rpcharacters.*;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.PlayerData;
+
+class TutorialRuntimeTest {
+ @TempDir Path folder;RuntimeTestState state;RPCharacters plugin;Player player;PlayerData data;PlayerManager manager;MockedStatic<PlayerManager> players;MockedStatic<RPCharacters> root;MockedStatic<Bukkit> bukkit;Path file;
+ @BeforeEach void setup()throws Exception{MockBukkit.mock();state=new RuntimeTestState(RPCharacters.class,TutorialLoader.class);plugin=mock(RPCharacters.class);RPCharacters.plugin=plugin;player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.getName()).thenReturn("Player");data=new PlayerData(player);players=mockStatic(PlayerManager.class);players.when(()->PlayerManager.get(player)).thenReturn(data);manager=mock(PlayerManager.class);root=mockStatic(RPCharacters.class);root.when(RPCharacters::getPlayerManager).thenReturn(manager);bukkit=mockStatic(Bukkit.class,CALLS_REAL_METHODS);bukkit.when(()->Bukkit.getPlayerExact("Player")).thenReturn(player);file=folder.resolve("tutorials.yml");Files.writeString(file,"tutorials:\n  evil-rp:\n    lines: ['&aHello {name}', '']\n");new TutorialLoader().load(file.toFile());}
+ @AfterEach void cleanup(){bukkit.close();root.close();players.close();state.close();MockBukkit.unmock();}
+ @Test void tutorialsRenderPlaceholdersAndClickablePersistentDismissals(){assertFalse(TutorialService.show(null,"evil-rp"));assertFalse(TutorialService.show(player,"missing"));assertTrue(TutorialService.show(player,"evil-rp",Map.of("name","Aria")));verify(player).sendMessage("§aHello Aria");var capture=ArgumentCaptor.forClass(Component.class);verify(player).sendMessage(capture.capture());assertEquals("/rpcharacter tutorial dismiss evil-rp",capture.getValue().children().get(1).clickEvent().value());assertTrue(TutorialService.dismiss(player,"evil-rp"));assertTrue(data.hasDismissedTutorial("evil-rp"));verify(manager).savePlayer(player);assertFalse(TutorialService.show(player,"evil-rp"));assertTrue(TutorialService.isDismissed(player,"evil-rp"));assertFalse(TutorialService.dismiss(player,"missing"));assertNull(TutorialService.formatLine(null,Map.of()));assertEquals("",TutorialService.formatLine("",Map.of()));players.when(()->PlayerManager.get(player)).thenReturn(null);assertFalse(TutorialService.isDismissed(player,"evil-rp"));assertFalse(TutorialService.dismiss(player,"evil-rp"));}
+ @Test void dismissCommandsValidateSyntaxAndAdminResetCanClearOneOrAll(){assertTrue(TutorialCommands.handle(player,new String[]{"tutorial"}));assertTrue(TutorialCommands.handle(player,new String[]{"tutorial","wrong","evil-rp"}));TutorialCommands.dismiss(player,"missing");TutorialCommands.handle(player,new String[]{"tutorial","DISMISS","evil-rp"});assertTrue(data.hasDismissedTutorial("evil-rp"));TutorialCommands.handleAdmin(player,new String[]{"reset"},0);TutorialCommands.handleAdmin(player,new String[]{"wrong","Player"},0);TutorialCommands.handleAdmin(player,new String[]{"reset","missing"},0);TutorialCommands.handleAdmin(player,new String[]{"reset","Player","evil-rp"},0);assertFalse(data.hasDismissedTutorial("evil-rp"));data.setTutorialDismissed("evil-rp",true);TutorialCommands.handleAdmin(player,new String[]{"reset","Player"},0);assertTrue(data.getDismissedTutorials().isEmpty());verify(manager,times(3)).savePlayer(player);}
+ @Test void loaderPreservesLastGoodDataAndAddsBundledDefaults()throws Exception{when(plugin.getResource("tutorials.yml")).thenAnswer(c->new ByteArrayInputStream("tutorials:\n  evil-rp:\n    lines: ['bundled old']\n  new:\n    lines: ['New tutorial']\n  ignored:\n    lines: []\n".getBytes(StandardCharsets.UTF_8)));new TutorialLoader().load(file.toFile());assertEquals(List.of("&aHello {name}",""),TutorialLoader.getLines("EVIL-RP"));assertTrue(TutorialLoader.exists("NEW"));assertEquals(List.of("evil-rp","new"),TutorialLoader.getIds());assertTrue(TutorialLoader.getLines(null).isEmpty());assertFalse(TutorialLoader.exists(null));Files.writeString(file,"broken: [");new TutorialLoader().load(file.toFile());assertTrue(TutorialLoader.exists("new"));new TutorialLoader().load(folder.resolve("missing").toFile());assertTrue(TutorialLoader.exists("new"));}
+ @Test void missingAndFailingBundledResourcesLeaveServerTutorialsAvailable()throws Exception{when(plugin.getResource("tutorials.yml")).thenReturn(null);new TutorialLoader().load(file.toFile());assertTrue(TutorialLoader.exists("evil-rp"));RPCharacters.plugin=null;new TutorialLoader().load(file.toFile());assertTrue(TutorialLoader.exists("evil-rp"));RPCharacters.plugin=plugin;when(plugin.getResource("tutorials.yml")).thenAnswer(c->new ByteArrayInputStream("{}".getBytes(StandardCharsets.UTF_8)){@Override public void close()throws IOException{throw new IOException("close failed");}});new TutorialLoader().load(file.toFile());assertTrue(TutorialLoader.exists("evil-rp"));Files.writeString(file,"{}");new TutorialLoader().load(file.toFile());assertTrue(TutorialLoader.getIds().isEmpty());}
+}

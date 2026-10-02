@@ -11,6 +11,7 @@ import net.tfminecraft.rpcharacters.playerlist.PlayerListSettings;
 import net.tfminecraft.rpcharacters.profile.ProfileFormatter;
 
 public class Cache {
+	private Cache() {}
 	public static List<String> attributes = new ArrayList<>();
 	public static Set<String> ignoredAttributes = new HashSet<>();
 	public static List<String> professions = new ArrayList<>();

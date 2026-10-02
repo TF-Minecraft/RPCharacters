@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -63,11 +62,8 @@ public final class TutorialLoader implements LoaderInterface {
 		if (stream == null) {
 			return null;
 		}
-		try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-			return YamlConfiguration.loadConfiguration(reader);
-		} catch (IOException e) {
-			return null;
-		}
+		// Bukkit owns and closes the supplied reader, including failed loads.
+		return YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
 	}
 
 	public static List<String> getLines(String id) {

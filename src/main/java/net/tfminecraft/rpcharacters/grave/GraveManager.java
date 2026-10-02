@@ -4,9 +4,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -22,6 +24,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.TileState;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.util.io.BukkitObjectInputStream;
@@ -57,7 +60,8 @@ public final class GraveManager {
 			if (raw != null && !raw.isBlank()) {
 				try {
 					Grave tagged = byId.get(UUID.fromString(raw));
-					if (tagged != null) {
+					if (tagged != null && tagged.getBlockLocation() != null
+							&& blockKey(block).equals(blockKey(tagged.getBlockLocation()))) {
 						return tagged;
 					}
 				} catch (IllegalArgumentException ignored) {
@@ -93,7 +97,7 @@ public final class GraveManager {
 
 	public List<Grave> getGravesNear(Location center, double radius) {
 		List<Grave> result = new ArrayList<>();
-		if (center == null || center.getWorld() == null || radius <= 0.0) {
+		if (center == null || center.getWorld() == null || !Double.isFinite(radius) || radius <= 0.0) {
 			return result;
 		}
 		double radiusSq = radius * radius;
@@ -132,10 +136,9 @@ public final class GraveManager {
 		if (grave == null || grave.getId() == null) {
 			return;
 		}
-		Grave previous = byId.put(grave.getId(), grave);
-		if (previous != null && previous.getBlockLocation() != null) {
-			byBlock.remove(blockKey(previous.getBlockLocation()));
-		}
+		byId.put(grave.getId(), grave);
+		// The same Grave object can move before registration; its old Location is no longer available.
+		byBlock.entrySet().removeIf(entry -> grave.getId().equals(entry.getValue().getId()));
 		if (grave.getBlockLocation() != null) {
 			byBlock.put(blockKey(grave.getBlockLocation()), grave);
 		}
@@ -145,10 +148,8 @@ public final class GraveManager {
 		if (grave == null) {
 			return;
 		}
-		byId.remove(grave.getId());
-		if (grave.getBlockLocation() != null) {
-			byBlock.remove(blockKey(grave.getBlockLocation()));
-		}
+		byId.remove(grave.getId(), grave);
+		byBlock.entrySet().removeIf(entry -> entry.getValue() == grave);
 	}
 
 	public void applyPdc(Block block, Grave grave) {
@@ -161,8 +162,12 @@ public final class GraveManager {
 	}
 
 	public void save(Grave grave) {
+		trySave(grave);
+	}
+
+	public boolean trySave(Grave grave) {
 		if (grave == null) {
-			return;
+			return false;
 		}
 		register(grave);
 		Location loc = grave.getBlockLocation();
@@ -171,10 +176,25 @@ public final class GraveManager {
 		}
 		File file = fileFor(grave.getId());
 		file.getParentFile().mkdirs();
-		try (FileWriter writer = new FileWriter(file, StandardCharsets.UTF_8)) {
-			GSON.toJson(toRecord(grave), writer);
-		} catch (IOException e) {
+		Path staged = null;
+		try {
+			// Encode the complete record before touching the previous on-disk contents.
+			String contents = GSON.toJson(toRecord(grave));
+			Path target = file.toPath().toAbsolutePath();
+			staged = Files.createTempFile(target.getParent(), ".grave-", ".tmp");
+			Files.writeString(staged, contents, StandardCharsets.UTF_8);
+			Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			return true;
+		} catch (Exception e) {
+			if (staged != null) {
+				try {
+					Files.deleteIfExists(staged);
+				} catch (IOException cleanupFailure) {
+					e.addSuppressed(cleanupFailure);
+				}
+			}
 			RPCharacters.plugin.getLogger().warning("Could not save grave " + grave.getId() + ": " + e.getMessage());
+			return false;
 		}
 	}
 
@@ -216,6 +236,7 @@ public final class GraveManager {
 			return null;
 		}
 		chestBlock.getChunk().load();
+		org.bukkit.block.BlockState previous = chestBlock.getState();
 		Material material = GraveLoader.getMaterial();
 		chestBlock.setType(material, false);
 		if (chestBlock.getType() != material) {
@@ -230,13 +251,17 @@ public final class GraveManager {
 		grave.setExperience(experience);
 		copyInto(grave, storage, armor, offhand, extras);
 
-		applyPdc(chestBlock, grave);
-		save(grave);
+		if (!trySave(grave)) {
+			unregister(grave);
+			previous.update(true, false);
+			return null;
+		}
 		return grave;
 	}
 
 	public Block findChestBlock(Player player, Location deathLocation) {
 		if (deathLocation != null && deathLocation.getWorld() != null) {
+			deathLocation = boundedHeight(deathLocation);
 			Block atDeath = deathLocation.getBlock();
 			if (isWaterLike(atDeath)) {
 				Block placed = pickPlaceable(atDeath);
@@ -261,13 +286,20 @@ public final class GraveManager {
 			}
 		}
 		Location cached = LastSolidTracker.get().getLastSolid(player);
-		if (cached != null) {
-			Block placed = pickOnSolid(cached.getBlock());
+		if (cached != null && cached.getWorld() != null) {
+			Block placed = pickOnSolid(boundedHeight(cached).getBlock());
 			if (placed != null) {
 				return placed;
 			}
 		}
 		return findLastResort(deathLocation);
+	}
+
+	private static Location boundedHeight(Location location) {
+		Location bounded = location.clone();
+		bounded.setY(Math.max(location.getWorld().getMinHeight(),
+				Math.min(location.getWorld().getMaxHeight() - 1, location.getY())));
+		return bounded;
 	}
 
 	private Block findLastResort(Location deathLocation) {
@@ -292,7 +324,7 @@ public final class GraveManager {
 			return inChunk;
 		}
 
-		if (!isGrave(deathBlock)) {
+		if (!isGrave(deathBlock) && !hasStoredItems(deathBlock)) {
 			deathBlock.getChunk().load();
 			return deathBlock;
 		}
@@ -355,9 +387,6 @@ public final class GraveManager {
 	}
 
 	private static Block findColumnSupport(Location deathLocation) {
-		if (deathLocation == null || deathLocation.getWorld() == null) {
-			return null;
-		}
 		World world = deathLocation.getWorld();
 		int minY = world.getMinHeight();
 		Block current = deathLocation.getBlock();
@@ -371,10 +400,7 @@ public final class GraveManager {
 	}
 
 	private Block pickOnSolid(Block ground) {
-		if (ground == null) {
-			return null;
-		}
-		Block above = ground.getRelative(0, 1, 0);
+		Block above = ground.getY() + 1 < ground.getWorld().getMaxHeight() ? ground.getRelative(0, 1, 0) : null;
 		if (canPlace(above)) {
 			above.getChunk().load();
 			return above;
@@ -387,9 +413,6 @@ public final class GraveManager {
 	}
 
 	private Block pickPlaceable(Block preferred) {
-		if (preferred == null) {
-			return null;
-		}
 		if (canPlace(preferred)) {
 			preferred.getChunk().load();
 			return preferred;
@@ -402,9 +425,6 @@ public final class GraveManager {
 	}
 
 	private static boolean isWaterLike(Block block) {
-		if (block == null) {
-			return false;
-		}
 		Material type = block.getType();
 		return type == Material.WATER || type == Material.BUBBLE_COLUMN;
 	}
@@ -412,6 +432,8 @@ public final class GraveManager {
 	private Block searchNearby(Block origin) {
 		World world = origin.getWorld();
 		for (int[] offset : SEARCH_OFFSETS) {
+			int y = origin.getY() + offset[1];
+			if (y < world.getMinHeight() || y >= world.getMaxHeight()) continue;
 			Block candidate = world.getBlockAt(origin.getX() + offset[0], origin.getY() + offset[1],
 					origin.getZ() + offset[2]);
 			if (canPlace(candidate)) {
@@ -441,7 +463,7 @@ public final class GraveManager {
 		if (block == null) {
 			return false;
 		}
-		if (isGrave(block)) {
+		if (isGrave(block) || hasStoredItems(block)) {
 			return false;
 		}
 		Material type = block.getType();
@@ -455,6 +477,10 @@ public final class GraveManager {
 			return true;
 		}
 		return !type.isSolid();
+	}
+
+	private static boolean hasStoredItems(Block block) {
+		return block.getState() instanceof InventoryHolder holder && !holder.getInventory().isEmpty();
 	}
 
 	public void despawn(Grave grave) {
@@ -547,7 +573,7 @@ public final class GraveManager {
 		return new File(gravesFolder(), id.toString() + ".json");
 	}
 
-	private static GraveRecord toRecord(Grave grave) {
+	private static GraveRecord toRecord(Grave grave) throws IOException {
 		GraveRecord record = new GraveRecord();
 		record.id = grave.getId().toString();
 		record.owner = grave.getOwner() != null ? grave.getOwner().toString() : null;
@@ -609,7 +635,7 @@ public final class GraveManager {
 		}
 	}
 
-	private static List<String> encodeArray(ItemStack[] items) {
+	private static List<String> encodeArray(ItemStack[] items) throws IOException {
 		List<String> encoded = new ArrayList<>();
 		if (items == null) {
 			return encoded;
@@ -647,7 +673,7 @@ public final class GraveManager {
 
 	// Preserve the existing serialized item format so previously saved graves remain readable.
 	@SuppressWarnings("deprecation")
-	private static String serializeItem(ItemStack item) {
+	private static String serializeItem(ItemStack item) throws IOException {
 		if (Grave.isBlank(item)) {
 			return null;
 		}
@@ -656,8 +682,6 @@ public final class GraveManager {
 			out.writeObject(item);
 			out.flush();
 			return Base64.getEncoder().encodeToString(bytes.toByteArray());
-		} catch (IOException e) {
-			return null;
 		}
 	}
 

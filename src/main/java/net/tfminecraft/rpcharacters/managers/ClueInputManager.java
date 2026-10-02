@@ -82,6 +82,7 @@ public class ClueInputManager implements Listener {
 	}
 
 	private static void handleClueInput(Player player, String characterId, String message) {
+		if (!player.isOnline()) return;
 		RPCharacter character = CreationManager.resolveCharacter(player, characterId);
 		if (character == null) {
 			PlayerData pd = PlayerManager.get(player);
@@ -115,8 +116,6 @@ public class ClueInputManager implements Listener {
 		if (!draft) {
 			RPCharacters.getPlayerManager().savePlayer(player);
 			RPCharacters.getPlayerManager().reevaluateFreeze(player);
-		} else if (editing) {
-			cc.persistEdits();
 		}
 
 		InventoryManager inv = new InventoryManager();
@@ -132,5 +131,6 @@ public class ClueInputManager implements Listener {
 	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
 		cancel(event.getPlayer());
+		skipConversationTracking.remove(event.getPlayer().getUniqueId());
 	}
 }

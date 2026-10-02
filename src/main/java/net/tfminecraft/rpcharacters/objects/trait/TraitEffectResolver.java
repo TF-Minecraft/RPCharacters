@@ -145,9 +145,6 @@ public final class TraitEffectResolver {
 	}
 
 	private static double clamp01(double value) {
-		if (value < 0D) {
-			return 0D;
-		}
 		if (value > 1D) {
 			return 1D;
 		}

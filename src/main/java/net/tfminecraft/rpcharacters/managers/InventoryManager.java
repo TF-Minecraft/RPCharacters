@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.managers;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -113,7 +114,7 @@ public class InventoryManager {
 	@SuppressWarnings("deprecation")
 	public void cluesView(Player viewer, RPCharacter c, CreationGuiContext context, CharacterCreation creation) {
 		int clueCount = c.getPlayerClues().size();
-		int rows = Math.max(3, Math.min(6, ((clueCount + 2) + 8) / 9));
+		int rows = Math.max(3, Math.min(6, ((clueCount + 1 + 8) / 9) + 1));
 		String title = ClueProgressFormatter.guiTitle(c);
 		RPCHolder holder = context == CreationGuiContext.CREATION_SUMMARY
 				|| context == CreationGuiContext.EDIT_SUMMARY
@@ -127,6 +128,7 @@ public class InventoryManager {
 		int slot = 0;
 		List<String> clues = c.getPlayerClues();
 		for (int index = 0; index < clues.size(); index++) {
+			if (slot == 8) slot++; // PlayerManager reserves this slot for Add Clue.
 			if (slot >= i.getSize() - 9) break;
 			ItemStack paper = new ItemStack(Material.PAPER, 1);
 			ItemMeta meta = paper.getItemMeta();
@@ -315,7 +317,7 @@ public class InventoryManager {
 		}
 		ItemStack item;
 
-		switch (entryKey.toLowerCase()) {
+		switch (entryKey.toLowerCase(Locale.ROOT)) {
 			case "name" -> {
 				item = new ItemStack(Material.NAME_TAG, 1);
 				if (character.getName() != null && !character.getName().isBlank()) {
@@ -350,12 +352,10 @@ public class InventoryManager {
 			}
 			case "age" -> {
 				item = new ItemStack(Material.CLOCK, 1);
-				lore.clear();
-				lore.add(summaryValue(RPTexts.MUTED + "Age: " + RPTexts.GUI_WARN
+				lore.add(0, summaryValue(RPTexts.MUTED + "Age: " + RPTexts.GUI_WARN
 					+ PersonaService.resolveAge(character)));
-				lore.add(summaryValue(RPTexts.MUTED + "Birthday: " + RPTexts.GUI_WARN
+				lore.add(1, summaryValue(RPTexts.MUTED + "Birthday: " + RPTexts.GUI_WARN
 					+ PersonaService.resolveBirthday(character)));
-				lore.add(summaryValue(RPTexts.MUTED + "Click to change"));
 			}
 			case "description" -> {
 				item = new ItemStack(Material.WRITABLE_BOOK, 1);
@@ -1292,9 +1292,9 @@ public class InventoryManager {
 			if(t.getTraitData().hasDependency()) {
 				Dependency d = t.getTraitData().getDependency();
 				lore.add(t(RPTexts.MUTED + "------------------------"));
-				if(d.getMode().equalsIgnoreCase("all")) {
+				if("all".equalsIgnoreCase(d.getMode())) {
 					lore.add(t(RPTexts.GUI_WARN + "Requires all of these:"));
-				} else if(d.getMode().equalsIgnoreCase("one-or-more")) {
+				} else if("one-or-more".equalsIgnoreCase(d.getMode())) {
 					lore.add(t(RPTexts.GUI_WARN + "Requires at least one of these:"));
 				}
 				for(String dep : d.getDependencies()) {

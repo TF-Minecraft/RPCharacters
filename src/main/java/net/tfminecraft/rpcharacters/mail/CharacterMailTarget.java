@@ -37,7 +37,7 @@ public final class CharacterMailTarget {
 		this.displayTab = displayTab != null ? displayTab : "";
 		this.displayPlain = displayPlain != null ? displayPlain : "";
 		this.worldName = worldName;
-		this.location = location;
+		this.location = location != null ? location.clone() : null;
 		this.baseTextureValue = baseTextureValue;
 		this.baseTextureSignature = baseTextureSignature;
 	}
@@ -63,7 +63,7 @@ public final class CharacterMailTarget {
 	}
 
 	public Location getLocation() {
-		return location;
+		return location != null ? location.clone() : null;
 	}
 
 	public String getBaseTextureValue() {

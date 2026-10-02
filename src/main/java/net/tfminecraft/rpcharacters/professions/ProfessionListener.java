@@ -39,6 +39,9 @@ public class ProfessionListener implements Listener {
 			return;
 		}
 		event.setCancelled(true);
+		if (!event.getClickedInventory().equals(event.getView().getTopInventory())) {
+			return;
+		}
 		if (!(event.getWhoClicked() instanceof Player player)) {
 			return;
 		}
@@ -70,6 +73,9 @@ public class ProfessionListener implements Listener {
 			return;
 		}
 		event.setCancelled(true);
+		if (!event.getClickedInventory().equals(event.getView().getTopInventory())) {
+			return;
+		}
 		if (event.getCurrentItem().getType().equals(Material.BARRIER)) {
 			inventoryManager.openMainMenu(player);
 			currentProfessionMenu.remove(player);
@@ -99,7 +105,7 @@ public class ProfessionListener implements Listener {
 	@SuppressWarnings("deprecation")
 	private void handleUpgradeClick(Player player, RPCharacter character, ProfessionDefinition profession,
 			ProfessionUpgradeDefinition upgrade, InventoryClickEvent event) {
-		if (character.getTotalSpentPoints() + upgrade.getCost() > Cache.professionMaxSpendingPoints
+		if ((long) character.getTotalSpentPoints() + upgrade.getCost() > Cache.professionMaxSpendingPoints
 				&& !character.hasProfessionUpgrade(upgrade.getId())) {
 			RPTexts.send(player, RPTexts.ERROR + "You already have the maximum amount of upgrades!");
 			player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
@@ -121,7 +127,7 @@ public class ProfessionListener implements Listener {
 			new BukkitRunnable() {
 				@Override
 				public void run() {
-					pendingRemoval.remove(player);
+					pendingRemoval.remove(player, upgrade);
 				}
 			}.runTaskLater(RPCharacters.plugin, 1200L);
 			return;

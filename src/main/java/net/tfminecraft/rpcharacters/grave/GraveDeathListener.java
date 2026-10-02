@@ -70,6 +70,14 @@ public final class GraveDeathListener implements Listener {
 			offhand = offhandSlot[0];
 		}
 		if (!hasStoreableItems(storage, armor, offhand) && event.getDroppedExp() <= 0) {
+			// Ticket extraction may have changed a kept bundle; retain its original contents.
+			stash.clear();
+			stripKept(cloneArray(inventory.getStorageContents()), cloneArray(inventory.getArmorContents()),
+					cloneItem(inventory.getItemInOffHand()), stash);
+			if (!stash.isEmpty()) {
+				excludedStash.put(victim.getUniqueId(), stash);
+				removeStashedDrops(event.getDrops(), stash.values());
+			}
 			return;
 		}
 
@@ -149,6 +157,23 @@ public final class GraveDeathListener implements Listener {
 		}
 	}
 
+	private static void removeStashedDrops(List<ItemStack> drops, java.util.Collection<ItemStack> kept) {
+		for (ItemStack stack : kept) {
+			int remaining = stack.getAmount();
+			for (var iterator = drops.iterator(); iterator.hasNext() && remaining > 0;) {
+				ItemStack drop = iterator.next();
+				if (!stack.isSimilar(drop)) continue;
+				int removed = Math.min(remaining, drop.getAmount());
+				remaining -= removed;
+				if (removed == drop.getAmount()) {
+					iterator.remove();
+				} else {
+					drop.setAmount(drop.getAmount() - removed);
+				}
+			}
+		}
+	}
+
 	private static void giveTicket(Player player, ItemStack ticket) {
 		if (!player.isOnline()) {
 			return;
@@ -204,9 +229,6 @@ public final class GraveDeathListener implements Listener {
 	}
 
 	private static ItemStack[] cloneArray(ItemStack[] source) {
-		if (source == null) {
-			return null;
-		}
 		ItemStack[] copy = new ItemStack[source.length];
 		for (int i = 0; i < source.length; i++) {
 			copy[i] = cloneItem(source[i]);
@@ -219,9 +241,6 @@ public final class GraveDeathListener implements Listener {
 	}
 
 	private void sendPlaced(Player player, Block chest, boolean unlocked, boolean insured) {
-		if (player == null || chest == null) {
-			return;
-		}
 		List<String> notices = new ArrayList<>();
 		String template = GraveLoader.getMessagePlaced();
 		if (template != null && !template.isBlank()) {

@@ -59,7 +59,6 @@ public final class ClueHologram {
 
 			UUID existingId = i < ids.size() ? ids.get(i) : null;
 			TextDisplay display = getOrCreateDisplay(clue, i, existingId, world, lineLoc, text, transformation);
-			if (display == null) continue;
 
 			UUID displayId = display.getUniqueId();
 			if (i < ids.size()) {
@@ -97,10 +96,8 @@ public final class ClueHologram {
 			TextDisplayHelper.applyDisplay(td, text, transformation, true);
 			tagDisplay(td, clue.getId(), lineIndex);
 		});
-		if (display == null) {
-			return null;
-		}
 		if (entityId != null && entityId.equals(display.getUniqueId())) {
+			display.teleport(lineLoc);
 			TextDisplayHelper.applyDisplay(display, text, transformation, true);
 			tagDisplay(display, clue.getId(), lineIndex);
 		}

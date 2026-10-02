@@ -41,11 +41,12 @@ public final class InvestigationPointService {
 
 		long effectiveCycleMs = resolveEffectiveCycleMs(data, settings, cycleMs);
 		long elapsedMs = now - last;
-		int cycles = (int) (elapsedMs / effectiveCycleMs);
+		long cycles = elapsedMs / effectiveCycleMs;
 		if (cycles <= 0) return;
 
 		int max = settings.getInvestigationPointsMax();
-		int updated = Math.min(max, data.getInvestigationPoints() + cycles);
+		int updated = data.getInvestigationPoints()
+				+ (int) Math.min((long) max - data.getInvestigationPoints(), cycles);
 		data.setInvestigationPoints(updated);
 		data.setLastInvestigationRegenMs(last + cycles * effectiveCycleMs);
 	}

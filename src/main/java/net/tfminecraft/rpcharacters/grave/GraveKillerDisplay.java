@@ -60,9 +60,6 @@ public final class GraveKillerDisplay {
 	}
 
 	private static String playerLabel(Player player) {
-		if (player == null) {
-			return null;
-		}
 		String display = DisplayIdentityService.resolveDisplay(player);
 		if (display != null && !display.isBlank()) {
 			return ClueFormatter.stripColor(display);
@@ -73,9 +70,6 @@ public final class GraveKillerDisplay {
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")
 	private static String entityLabel(LivingEntity entity) {
-		if (entity == null) {
-			return null;
-		}
 		String custom = entity.getCustomName();
 		if (custom != null && !ClueFormatter.stripColor(custom).isBlank()) {
 			return ClueFormatter.stripColor(custom);
@@ -106,9 +100,6 @@ public final class GraveKillerDisplay {
 			return null;
 		}
 		String raw = cause.name().toLowerCase(Locale.ROOT).replace('_', ' ');
-		if (raw.isEmpty()) {
-			return null;
-		}
 		return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
 	}
 
@@ -117,9 +108,6 @@ public final class GraveKillerDisplay {
 			return null;
 		}
 		String raw = entityTypeName.toLowerCase(Locale.ROOT).replace('_', ' ');
-		if (raw.isEmpty()) {
-			return null;
-		}
 		return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
 	}
 }

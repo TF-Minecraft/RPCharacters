@@ -136,14 +136,7 @@ public final class SmartMessageLoader implements LoaderInterface {
 
 	private static void loadMuffleRules(List<Map<?, ?>> rawRules) {
 		List<MuffleRule> rules = new ArrayList<>();
-		if (rawRules == null) {
-			settings.setMuffleRules(rules);
-			return;
-		}
 		for (Map<?, ?> raw : rawRules) {
-			if (raw == null) {
-				continue;
-			}
 			String replace = stringValue(raw.get("replace"));
 			String to = stringValue(raw.get("to"));
 			double min = doubleValue(raw.get("min-intelligibility"), 0.0);

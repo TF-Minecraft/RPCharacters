@@ -128,9 +128,6 @@ public final class ChatLoader implements LoaderInterface {
 
 	private static List<String> normalizeChannelIds(List<String> channelIds) {
 		List<String> normalized = new ArrayList<>();
-		if (channelIds == null) {
-			return normalized;
-		}
 		for (String channelId : channelIds) {
 			if (channelId == null || channelId.isBlank()) {
 				continue;

@@ -74,9 +74,6 @@ public final class WardrobeService {
 			return;
 		}
 		RPCharacter active = pd.getActiveCharacter();
-		if (active == null) {
-			return;
-		}
 		refreshAsync(player, active.getId(), onMainAfterSuccess);
 	}
 
@@ -106,16 +103,16 @@ public final class WardrobeService {
 				return;
 			}
 			WardrobeSnapshot snapshot = WardrobeSnapshot.parse(result.body);
-			if (snapshot == null) {
+			if (snapshot == null || !cid.equalsIgnoreCase(snapshot.getCharacterId())) {
 				RPCharacters.plugin.getLogger().warning(
-					"Wardrobe pull returned unreadable JSON for " + uuid + "/" + cid
+					"Wardrobe pull returned unreadable JSON or a different character for " + uuid + "/" + cid
 				);
 				return;
 			}
 			List<String> pendingSlots = pendingSlotIds(snapshot);
 			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 				Player online = Bukkit.getPlayer(playerId);
-				if (online == null || !online.isOnline()) {
+				if (online != player || !online.isOnline()) {
 					return;
 				}
 				PlayerData pd = PlayerManager.get(online);
@@ -181,6 +178,12 @@ public final class WardrobeService {
 		if (snapshot == null) {
 			return;
 		}
+		PlayerData owner = PlayerManager.get(player);
+		RPCharacter character = owner != null ? owner.getActiveCharacter() : null;
+		if (character == null || !character.getId().equalsIgnoreCase(snapshot.getCharacterId())) {
+			applyAccountSkin(player);
+			return;
+		}
 
 		if (MaskService.isMasked(player)) {
 			WardrobeSlotData masked = snapshot.getSlot(WardrobeSnapshot.SLOT_MASKED);
@@ -207,6 +210,10 @@ public final class WardrobeService {
 			}
 		}
 
+		applyAccountSkin(player);
+	}
+
+	private static void applyAccountSkin(Player player) {
 		SkinTextures account = WardrobeCache.getAccountSkin(player);
 		if (account != null && account.isValid()) {
 			SkinApplyHelper.apply(player, account);
@@ -235,13 +242,6 @@ public final class WardrobeService {
 			}
 			return;
 		}
-		if (WardrobeSnapshot.SLOT_MASKED.equals(slotKey)) {
-			if (callback != null) {
-				callback.done("Masked skins cannot be equipped manually.");
-			}
-			return;
-		}
-
 		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		if (snapshot == null) {
 			if (callback != null) {
@@ -264,7 +264,14 @@ public final class WardrobeService {
 			}
 			return;
 		}
-		String characterId = pd.getActiveCharacter().getId();
+		RPCharacter character = pd.getActiveCharacter();
+		String characterId = character.getId();
+		if (!characterId.equalsIgnoreCase(snapshot.getCharacterId())) {
+			if (callback != null) {
+				callback.done("Wardrobe is still loading. Try again in a moment.");
+			}
+			return;
+		}
 		UUID playerId = player.getUniqueId();
 		String uuid = playerId.toString();
 
@@ -273,9 +280,16 @@ public final class WardrobeService {
 				ProvinceSystemClient.setWardrobeActive(uuid, characterId, slotKey);
 			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 				Player online = Bukkit.getPlayer(playerId);
-				if (online == null || !online.isOnline()) {
+				if (online != player || !online.isOnline()) {
 					if (callback != null) {
 						callback.done("Player went offline.");
+					}
+					return;
+				}
+				PlayerData current = PlayerManager.get(online);
+				if (current == null || current.getActiveCharacter() != character) {
+					if (callback != null) {
+						callback.done("Your active character changed. Open the wardrobe again.");
 					}
 					return;
 				}

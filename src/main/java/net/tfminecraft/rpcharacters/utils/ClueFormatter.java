@@ -13,7 +13,7 @@ public final class ClueFormatter {
 	public static final int LORE_LINE_LENGTH = 32;
 
 	public static String stripColor(String input) {
-		return TextWrapUtil.stripColor(input);
+		return TextWrapUtil.stripColor(RPTexts.formatGui(input));
 	}
 
 	public static int plainLength(String input) {

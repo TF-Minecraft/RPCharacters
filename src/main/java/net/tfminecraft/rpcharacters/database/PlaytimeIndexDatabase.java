@@ -2,7 +2,11 @@ package net.tfminecraft.rpcharacters.database;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,8 +31,8 @@ import net.tfminecraft.rpcharacters.RPCharacters;
  * cached value for an offline player is exact rather than stale.
  */
 public class PlaytimeIndexDatabase {
+	private PlaytimeIndexDatabase() {}
 
-	private static final JSONParser PARSER = new JSONParser();
 
 	/** One player: the uuid is the identity, the name is the lookup key other plugins have. */
 	public static final class Entry {
@@ -64,18 +68,17 @@ public class PlaytimeIndexDatabase {
 		File file = getFile();
 		if (!file.exists()) return entries;
 
-		try {
-			JSONArray array = (JSONArray) PARSER.parse(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+		try (var reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+			JSONArray array = (JSONArray) new JSONParser().parse(reader);
 			for (Object raw : array) {
-				JSONObject obj = (JSONObject) raw;
-				if (obj == null) continue;
+				if (!(raw instanceof JSONObject obj)) continue;
 				Object id = obj.get("uuid");
 				Object name = obj.get("name");
 				if (id == null || name == null) continue;
 				try {
-					int seconds = obj.containsKey("seconds") ? ((Number) obj.get("seconds")).intValue() : 0;
+					int seconds = obj.containsKey("seconds") ? (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ((Number) obj.get("seconds")).longValue())) : 0;
 					entries.add(new Entry(UUID.fromString(id.toString()), name.toString(), seconds));
-				} catch (IllegalArgumentException ignored) {
+				} catch (RuntimeException ignored) {
 				}
 			}
 		} catch (Exception ex) {
@@ -86,6 +89,12 @@ public class PlaytimeIndexDatabase {
 
 	@SuppressWarnings("unchecked")
 	public static void saveAll(Collection<Entry> entries) {
+		trySaveAll(entries);
+	}
+
+	@SuppressWarnings("unchecked")
+	public static boolean trySaveAll(Collection<Entry> entries) {
+		Path staged = null;
 		try {
 			File file = getFile();
 			file.getParentFile().mkdirs();
@@ -101,11 +110,21 @@ public class PlaytimeIndexDatabase {
 			}
 
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			try (FileWriter writer = new FileWriter(file, false)) {
-				writer.write(gson.toJson(array));
-			}
+			String serialized = gson.toJson(array);
+			staged = Files.createTempFile(file.toPath().getParent(), ".playtime-", ".tmp");
+			Files.writeString(staged, serialized, StandardCharsets.UTF_8);
+			Files.move(staged, file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			return true;
 		} catch (Exception ex) {
+			if (staged != null) {
+				try {
+					Files.deleteIfExists(staged);
+				} catch (IOException cleanup) {
+					ex.addSuppressed(cleanup);
+				}
+			}
 			ex.printStackTrace();
+			return false;
 		}
 	}
 }

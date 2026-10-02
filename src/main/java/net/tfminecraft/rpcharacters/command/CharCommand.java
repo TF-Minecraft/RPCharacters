@@ -235,7 +235,7 @@ public final class CharCommand {
 		String raw = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
 		String text = player.hasPermission(Cache.personaDescriptionColorsPermission)
 				? raw.trim()
-				: ClueFormatter.stripColor(raw);
+				: ClueFormatter.stripColor(RPTexts.formatGui(raw));
 		String error = DescriptionValidator.validate(text);
 		if (error != null) {
 			RPTexts.send(player, error);
@@ -340,7 +340,7 @@ public final class CharCommand {
 			case "birthday":
 				return overrideBirthday(sender, target, character, args);
 			case "playtime":
-				return overridePlaytime(sender, target, args);
+				return overridePlaytime(sender, target, data, args);
 			default:
 				RPTexts.send(sender, RPTexts.ERROR
 						+ "Unknown field. Use alias, tempalias, gender, description, namecolour, birthday, or playtime.");
@@ -417,7 +417,7 @@ public final class CharCommand {
 		String raw = String.join(" ", Arrays.copyOfRange(args, 3, args.length));
 		String text = sender.hasPermission(Cache.personaDescriptionColorsPermission)
 				? raw.trim()
-				: ClueFormatter.stripColor(raw);
+				: ClueFormatter.stripColor(RPTexts.formatGui(raw));
 		String error = DescriptionValidator.validate(text);
 		if (error != null) {
 			RPTexts.send(sender, error);
@@ -485,16 +485,7 @@ public final class CharCommand {
 		return true;
 	}
 
-	private static boolean overridePlaytime(CommandSender sender, Player target, String[] args) {
-		if (args.length < 4) {
-			RPTexts.send(sender, RPTexts.WARN + "Usage: /rpcharacter override <player> playtime <hours|seconds|clear>");
-			return true;
-		}
-		PlayerData data = PlayerManager.get(target);
-		if (data == null) {
-			RPTexts.send(sender, RPTexts.ERROR + "Player data not found.");
-			return true;
-		}
+	private static boolean overridePlaytime(CommandSender sender, Player target, PlayerData data, String[] args) {
 		String value = String.join(" ", Arrays.copyOfRange(args, 3, args.length)).trim();
 		long now = java.time.Instant.now().getEpochSecond();
 		int createdAt;
@@ -525,14 +516,15 @@ public final class CharCommand {
 		String trimmed = value.trim().toLowerCase(Locale.ROOT);
 		try {
 			if (trimmed.endsWith("s")) {
-				return Integer.parseInt(trimmed.substring(0, trimmed.length() - 1).trim());
+				int seconds = Integer.parseInt(trimmed.substring(0, trimmed.length() - 1).trim());
+				return seconds < 0 ? null : seconds;
 			}
-			if (trimmed.endsWith("h")) {
-				double hours = Double.parseDouble(trimmed.substring(0, trimmed.length() - 1).trim());
-				return (int) Math.round(hours * 3600.0);
+			String hoursText = trimmed.endsWith("h") ? trimmed.substring(0, trimmed.length() - 1).trim() : trimmed;
+			double seconds = Double.parseDouble(hoursText) * 3600.0;
+			if (!Double.isFinite(seconds) || seconds < 0 || seconds > Integer.MAX_VALUE) {
+				return null;
 			}
-			double hours = Double.parseDouble(trimmed);
-			return (int) Math.round(hours * 3600.0);
+			return (int) Math.round(seconds);
 		} catch (NumberFormatException ex) {
 			return null;
 		}

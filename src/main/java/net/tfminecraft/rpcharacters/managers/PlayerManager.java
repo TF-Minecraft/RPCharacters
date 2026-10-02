@@ -118,6 +118,7 @@ public class PlayerManager implements Listener{
 		if(!p.getGameMode().equals(GameMode.SURVIVAL)) return true;
 		Location loc = frozen.get(p);
 		if(loc == null) return true;
+		if(!java.util.Objects.equals(p.getWorld(), loc.getWorld())) return false;
 		if(p.getLocation().getX() != loc.getX()) return false;
 		if(p.getLocation().getY() != loc.getY()) return false;
 		if(p.getLocation().getZ() != loc.getZ()) return false;
@@ -373,9 +374,10 @@ public class PlayerManager implements Listener{
 	
 	public void initiatePlayer(Player p) {
 		if(!exists(p)) {
-			PlayerData pd = db.loadPlayer(p);
+			PlayerData pd = db.loadPlayerData(p.getUniqueId());
 			if(pd == null) {
-				pd = new PlayerData(p);
+				p.kickPlayer("Your character data could not be loaded. Please contact staff.");
+				return;
 			}
 			final PlayerData loaded = pd;
 			data.add(loaded);
@@ -411,16 +413,31 @@ public class PlayerManager implements Listener{
 	private static final long CLASS_APPLY_RETRY_TICKS = 5L;
 
 	private void applyMmoOnJoin(Player p, PlayerData pd) {
-		if (p == null || !p.isOnline() || pd == null) {
+		applyMmoOnJoin(p, pd, 0);
+	}
+
+	private void applyMmoOnJoin(Player p, PlayerData pd, int attempt) {
+		if (p == null || !p.isOnline() || pd == null || get(p) != pd) {
 			return;
 		}
-		new Integrator().applyPendingRemoves(p, pd.takePendingMmoAttributeRemoves());
+		List<String> pending = pd.takePendingMmoAttributeRemoves();
+		if (!new Integrator().tryApplyPendingRemoves(p, pending)) {
+			pd.setPendingMmoAttributeRemoves(pending);
+			if (attempt < CLASS_APPLY_RETRIES && RPCharacters.plugin != null) {
+				Bukkit.getScheduler().runTaskLater(RPCharacters.plugin,
+						() -> applyMmoOnJoin(p, pd, attempt + 1), CLASS_APPLY_RETRY_TICKS);
+			} else if (RPCharacters.plugin != null) {
+				RPCharacters.plugin.getLogger().warning("MMOCore attributes for " + p.getName()
+						+ " were unavailable after " + attempt + " retries; pending removals retained");
+			}
+			return;
+		}
 		AttributePointService.migrateAttributePointsIfNeeded(p, pd);
 		finishMmoOnJoin(p, pd, 0);
 	}
 
 	private void finishMmoOnJoin(Player p, PlayerData pd, int attempt) {
-		if (p == null || !p.isOnline() || pd == null) {
+		if (p == null || !p.isOnline() || pd == null || get(p) != pd) {
 			return;
 		}
 		if (pd.hasActiveCharacter()) {
@@ -535,6 +552,14 @@ public class PlayerManager implements Listener{
 		if(!e.getClickedInventory().equals(e.getView().getTopInventory())) return;
 		RPCHolder h = (RPCHolder) e.getView().getTopInventory().getHolder();
 		Player o = h.getOwner();
+		String title = e.getView().getTitle();
+		if (o != null && get(o) == null && (title.equalsIgnoreCase("§7Character Menu")
+				|| title.equalsIgnoreCase("§7Character Info") || title.equalsIgnoreCase("§7Trait List")
+				|| title.equalsIgnoreCase("§7Dead Characters"))) {
+			e.setCancelled(true);
+			RPTexts.send(p, RPTexts.ERROR + "Could not find that player's data.");
+			return;
+		}
 		if(e.getView().getTitle().equalsIgnoreCase("§7Character Menu")) {
 			e.setCancelled(true);
 			if(e.getSlot() == Cache.deadSlot) {
@@ -602,6 +627,7 @@ public class PlayerManager implements Listener{
 				p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
 			} else if(e.getSlot() == 8) {
 				ItemStack i = e.getInventory().getItem(10);
+				if (i == null || i.getItemMeta() == null || e.getCurrentItem() == null) return;
 				if(!e.getCurrentItem().getType().equals(Material.IRON_AXE)) return;
 				if(o == null) {
 					RPTexts.send(p, RPTexts.ERROR + "Cant find player, maybe they are offline?");
@@ -622,7 +648,7 @@ public class PlayerManager implements Listener{
 			} else if (e.getSlot() == 4 && Permissions.isAdmin(p)) {
 				ItemStack i = e.getInventory().getItem(10);
 				if (i == null || i.getItemMeta() == null) return;
-				if (!e.getCurrentItem().getType().equals(Material.TOTEM_OF_UNDYING)) return;
+				if (e.getCurrentItem() == null || !e.getCurrentItem().getType().equals(Material.TOTEM_OF_UNDYING)) return;
 				if (o == null) {
 					RPTexts.send(p, RPTexts.ERROR + "Cant find player, maybe they are offline?");
 					return;
@@ -652,6 +678,7 @@ public class PlayerManager implements Listener{
 				inv.confirmView(p);
 			} else if(e.getSlot() == 6) {
 				ItemStack i = e.getInventory().getItem(10);
+				if (i == null || i.getItemMeta() == null || e.getCurrentItem() == null) return;
 				if(!e.getCurrentItem().getType().equals(Material.EMERALD)) return;
 				if(o == null) {
 					RPTexts.send(p, RPTexts.ERROR + "Cant find player, maybe they are offline?");
@@ -758,13 +785,9 @@ public class PlayerManager implements Listener{
 				Integer index = clicked.getItemMeta().getPersistentDataContainer().get(clueIndexKey, PersistentDataType.INTEGER);
 				if (index == null) return;
 				if (c.removePlayerClue(index)) {
-					CharacterCreation activeSession = CreationManager.activeCreators.get(p);
-					boolean editing = activeSession != null && activeSession.isEditing();
 					if (!CreationManager.isDraftCharacter(p, characterId)) {
 						savePlayer(p);
 						reevaluateFreeze(p);
-					} else if (editing) {
-						activeSession.persistEdits();
 					}
 					InventoryManager inv = new InventoryManager();
 					if (fromSummary && creation != null) {
@@ -814,7 +837,7 @@ public class PlayerManager implements Listener{
 			p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
 		} else if(e.getView().getTitle().equalsIgnoreCase("§7Dead Characters")) {
 			e.setCancelled(true);
-			if(e.getCurrentItem().getType().equals(Material.ENDER_PEARL)) {
+			if(e.getCurrentItem() != null && e.getCurrentItem().getType().equals(Material.ENDER_PEARL)) {
 				NamespacedKey key = new NamespacedKey(RPCharacters.plugin, "character_id");
 				String id = e.getCurrentItem().getItemMeta().getPersistentDataContainer().get(key, PersistentDataType.STRING);
 				if(o == null) {
@@ -846,7 +869,7 @@ public class PlayerManager implements Listener{
 	public void xpGain(PlayerExperienceGainEvent e) {
 		Player p = e.getPlayer();
 		PlayerData pd = get(p);
-		if(!pd.hasActiveCharacter()) return;
+		if(pd == null || !pd.hasActiveCharacter()) return;
 		if(e.getProfession() == null) {
 			ClassService.trackFromPlayer(p);
 			return;
@@ -926,7 +949,8 @@ public class PlayerManager implements Listener{
 		new BukkitRunnable() {
 			@Override
 			public void run() {
-				if (!player.isOnline() || character == null) {
+				PlayerData current = get(player);
+				if (!player.isOnline() || current == null || current.getActiveCharacter() != character) {
 					return;
 				}
 				AttributePointService.applyCharacterAttributes(player, character);

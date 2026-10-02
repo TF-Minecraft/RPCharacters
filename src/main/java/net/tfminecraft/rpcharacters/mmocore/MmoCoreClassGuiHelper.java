@@ -70,18 +70,26 @@ public final class MmoCoreClassGuiHelper {
 				28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
 		int maxUsable = Math.max(0, guiSize - 10);
 		int fallbackIndex = 0;
+		Map<String, Integer> assigned = new HashMap<>();
+		java.util.Set<Integer> reserved = new java.util.HashSet<>();
+		for (PlayerClass playerClass : classes) {
+			String id = playerClass.getId().toLowerCase(Locale.ROOT);
+			Integer configured = configuredSlots.get(id);
+			if (configured != null && configured >= 0 && configured < maxUsable && reserved.add(configured)) {
+				assigned.put(id, configured);
+			}
+		}
 
 		List<SelectableItem> options = new ArrayList<>();
 		List<Integer> slots = new ArrayList<>();
 
 		for (PlayerClass playerClass : classes) {
-			options.add(new SelectableItem(playerClass));
 			String classId = playerClass.getId().toLowerCase(Locale.ROOT);
-			Integer slot = configuredSlots.get(classId);
+			Integer slot = assigned.get(classId);
 			if (slot == null) {
 				while (fallbackIndex < fallbackSlots.length) {
 					int candidate = fallbackSlots[fallbackIndex++];
-					if (candidate < maxUsable && !slots.contains(candidate)) {
+					if (candidate < maxUsable && !reserved.contains(candidate) && !slots.contains(candidate)) {
 						slot = candidate;
 						String source = usingRpc ? "stages.yml class-slots" : "class-select.yml";
 						RPCharacters.plugin.getLogger().warning(
@@ -92,6 +100,7 @@ public final class MmoCoreClassGuiHelper {
 				}
 			}
 			if (slot != null) {
+				options.add(new SelectableItem(playerClass));
 				slots.add(slot);
 			}
 		}

@@ -34,7 +34,9 @@ public final class WorldGuardBridge {
 		}
 
 		try {
-			WorldGuard.getInstance().getPlatform().getRegionContainer();
+			if (WorldGuard.getInstance().getPlatform().getRegionContainer() == null) {
+				throw new IllegalStateException("WorldGuard region container is unavailable");
+			}
 			available = true;
 			RPCharacters.plugin.getLogger().info("WorldGuard bridge enabled for permadeath zones.");
 		} catch (Exception ex) {

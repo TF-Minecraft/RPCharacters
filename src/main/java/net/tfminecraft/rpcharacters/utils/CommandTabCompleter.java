@@ -34,7 +34,7 @@ public class CommandTabCompleter implements TabCompleter {
 
 	@Override
 	public List<String> onTabComplete(CommandSender sender, Command cmd, String label, String[] args) {
-		if (!cmd.getName().equalsIgnoreCase("rpcharacter")) {
+		if (!cmd.getName().equalsIgnoreCase("rpcharacter") || args.length == 0) {
 			return Collections.emptyList();
 		}
 
@@ -173,7 +173,9 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.addAll(CLEAR);
 			} else if (args[0].equalsIgnoreCase("sethidden") && sender.hasPermission(Cache.personaCharacterHiddenPermission)
 					&& sender instanceof Player player) {
-				for (RPCharacter character : PlayerManager.get(player).getCharacters()) {
+				PlayerData data = PlayerManager.get(player);
+				if (data == null) return Collections.emptyList();
+				for (RPCharacter character : data.getCharacters()) {
 					if (character.getSlug() != null) {
 						completions.add(character.getSlug());
 					}
@@ -377,7 +379,7 @@ public class CommandTabCompleter implements TabCompleter {
 				}
 				if (args.length >= 3 && !args[1].equalsIgnoreCase("clear") && sender instanceof Player player) {
 					int maxStops = PermissionGroupService.getNameColourStops(player);
-					if (args.length - 1 < maxStops) {
+					if (args.length - 1 <= maxStops) {
 						return filter(List.of("#0000ff"), args[args.length - 1]);
 					}
 				}

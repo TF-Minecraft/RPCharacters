@@ -32,7 +32,7 @@ public class QuestionStage extends Stage{
 		Set<String> set = config.getConfigurationSection("questions").getKeys(false);
 
 		List<String> list = new ArrayList<String>(set);
-		amount = config.getInt("amount", 1);
+		amount = Math.max(0, config.getInt("amount", 1));
 		for(String key : list) {
 			base.add(new Question(config.getConfigurationSection("questions."+key).getString("question"), config.getConfigurationSection("questions."+key).getStringList("answers")));
 		}
@@ -40,7 +40,8 @@ public class QuestionStage extends Stage{
 	}
 	public QuestionStage(QuestionStage another) {
 		copyBaseFields(another);
-		setStored(another.getQuestions());
+		setStored(new ArrayList<>(another.base));
+		amount = another.amount;
 		setCurrentQuestion(0);
 	}
 	public int getAmount() {

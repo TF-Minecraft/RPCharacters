@@ -5,6 +5,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 public final class ChatChannelExecutor implements CommandExecutor {
@@ -28,6 +29,12 @@ public final class ChatChannelExecutor implements CommandExecutor {
 
 		if (!parsed.hasMessage()) {
 			RPTexts.send(player, RPTexts.ERROR + "Usage: /" + parsed.label() + " <message>");
+			return true;
+		}
+
+		if (CreationManager.activeCreators.containsKey(player)
+				&& !CreationManager.isChatInputStage(player)) {
+			CreationManager.sendChatBlockedDuringCreationHint(player);
 			return true;
 		}
 

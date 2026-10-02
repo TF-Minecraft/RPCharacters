@@ -48,9 +48,6 @@ public final class AliasValidator {
 	}
 
 	private static boolean containsColourCodes(String input) {
-		if (input == null) {
-			return false;
-		}
 		String stripped = ClueFormatter.stripColor(input);
 		if (!stripped.equals(input)) {
 			return true;

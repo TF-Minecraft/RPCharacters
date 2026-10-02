@@ -304,11 +304,15 @@ public class CommandManager implements Listener, CommandExecutor{
 				return true;
 			} else if(cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("setclass") && args.length == 3) {
 				Player argPlayer = Bukkit.getPlayerExact(args[1]);
-				if(argPlayer != null && !Permissions.isAdmin(sender)) {
+				if(!Permissions.isAdmin(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to view other player's profiles");
 					return true;
 				}
-				String newClass = args[2].toUpperCase();
+				if (argPlayer == null) {
+                    RPTexts.send(p, RPTexts.ERROR + "No player found");
+                    return true;
+                }
+                String newClass = args[2].toUpperCase(Locale.ROOT);
 				PlayerClass mmoClass = MMOCore.plugin.classManager.get(newClass);
 				if(mmoClass == null) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "No class by the id " + newClass);
@@ -325,7 +329,7 @@ public class CommandManager implements Listener, CommandExecutor{
 					return true;
 				}
 				PlayerData pd = PlayerManager.get(argPlayer);
-				if(!pd.hasActiveCharacter()) {
+				if(pd == null || !pd.hasActiveCharacter()) {
 					RPTexts.send(p, RPTexts.ERROR + argPlayer.getName() + " has no character");
 					return true;
 				}
@@ -350,8 +354,16 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.send(p, RPTexts.ERROR + "No player found");
 					return true;
 				}
-				Boolean value = Boolean.parseBoolean(args[2]);
+				if (!args[2].equalsIgnoreCase("true") && !args[2].equalsIgnoreCase("false")) {
+                    RPTexts.send(p, RPTexts.ERROR + "Value must be true or false");
+                    return true;
+                }
+                Boolean value = Boolean.parseBoolean(args[2]);
 				PlayerData pd = PlayerManager.get(argPlayer);
+				if (pd == null) {
+					RPTexts.send(p, RPTexts.ERROR + "Player data not loaded.");
+					return true;
+				}
 				pd.setEighteen(value);
 				RPTexts.send(p, RPTexts.WARN + "18+ value for " + argPlayer.getName()
 						+ " changed to " + RPTexts.INFO + value.toString());
@@ -368,6 +380,10 @@ public class CommandManager implements Listener, CommandExecutor{
 					return true;
 				}
 				PlayerData pd = PlayerManager.get(argPlayer);
+				if (pd == null) {
+					RPTexts.send(p, RPTexts.ERROR + "Player data not loaded.");
+					return true;
+				}
 				pd.clearCharacterSwitchCooldown();
 				RPTexts.send(p, RPTexts.WARN + "Removed cooldown for " + argPlayer);
 				RPTexts.send(argPlayer, RPTexts.WARN + "Character Cooldown has been skipped");
@@ -538,7 +554,7 @@ public class CommandManager implements Listener, CommandExecutor{
 						return true;
 					}
 					PlayerData pd = PlayerManager.get(p);
-					if (!pd.hasActiveCharacter()) {
+					if (pd == null || !pd.hasActiveCharacter()) {
 						RPTexts.send(p, RPTexts.ERROR + "You have no active character");
 						return true;
 					}
@@ -609,7 +625,7 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Radius must be a number");
 					return true;
 				}
-				if (radius <= 0) {
+				if (!Double.isFinite(radius) || radius <= 0) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Radius must be greater than 0");
 					return true;
 				}
@@ -715,24 +731,16 @@ public class CommandManager implements Listener, CommandExecutor{
     public void onCommand(PlayerCommandPreprocessEvent event) {
 		Player p = event.getPlayer();
 		if(Permissions.isAdmin(p)) return;
-		if(PlayerManager.get(p).hasActiveCharacter() || !Cache.requireCharacter || !p.getGameMode().equals(GameMode.SURVIVAL)) return;
-        String message = event.getMessage().toLowerCase();
-
+		PlayerData pd = PlayerManager.get(p);
+		if((pd != null && pd.hasActiveCharacter()) || !Cache.requireCharacter || !p.getGameMode().equals(GameMode.SURVIVAL)) return;
         String raw = event.getMessage().stripLeading();
         if (raw.startsWith("/")) {
-        	String withoutSlash = raw.substring(1);
-        	int space = withoutSlash.indexOf(' ');
-        	String label = (space < 0 ? withoutSlash : withoutSlash.substring(0, space)).toLowerCase(Locale.ROOT);
-        	if (ChatLoader.getChannelCommands().contains(label)) {
-        		return;
-        	}
-        }
-
-        if (message.startsWith("/rpcharacter clues")
-        		|| message.startsWith("/rpcharacter")
-        		|| message.equals("/roll")
-        		|| message.startsWith("/roll ")) {
-        	return;
+            String withoutSlash = raw.substring(1);
+            int space = withoutSlash.indexOf(' ');
+            String label = (space < 0 ? withoutSlash : withoutSlash.substring(0, space)).toLowerCase(Locale.ROOT);
+            if (label.equals("rpcharacter") || label.equals("roll") || ChatLoader.getChannelCommands().contains(label)) {
+                return;
+            }
         }
 
         event.setCancelled(true);

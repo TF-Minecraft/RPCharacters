@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.injuries;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.bukkit.Bukkit;
@@ -37,22 +38,35 @@ public final class RpInjureGui {
 
 	@SuppressWarnings("deprecation")
 	public static void openPicker(Player attacker, Player target, RPCharacter character) {
+		openPicker(attacker, target, character, 0);
+	}
+
+	@SuppressWarnings("deprecation")
+	static int openPicker(Player attacker, Player target, RPCharacter character, long requestedPage) {
 		Holder holder = new Holder(Kind.PICKER, attacker);
 		Inventory inventory = Bukkit.createInventory(holder, 27,
 				RPTexts.formatGui(RPTexts.MUTED + "Injure " + target.getName()));
 		holder.inventory = inventory;
 
 		List<Trait> traits = RpInjureService.listPickerInjuries(character);
-		int index = 0;
-		for (Trait trait : traits) {
-			if (index >= PICKER_SLOTS.length) {
-				break;
-			}
+		traits.sort(Comparator.comparing(trait -> RpInjureService.isOwned(character, trait)));
+		int lastPage = Math.max(0, (traits.size() - 1) / PICKER_SLOTS.length);
+		int page = (int) Math.max(0L, Math.min(lastPage, requestedPage));
+		int first = page * PICKER_SLOTS.length;
+		for (int index = 0; index < PICKER_SLOTS.length && first + index < traits.size(); index++) {
+			Trait trait = traits.get(first + index);
 			boolean owned = RpInjureService.isOwned(character, trait);
-			inventory.setItem(PICKER_SLOTS[index++], pickerItem(trait, character, owned));
+			inventory.setItem(PICKER_SLOTS[index], pickerItem(trait, character, owned));
+		}
+		if (page > 0) {
+			inventory.setItem(21, actionItem(Material.ARROW, RPTexts.MUTED + "Previous page", "previous"));
+		}
+		if (page < lastPage) {
+			inventory.setItem(25, actionItem(Material.ARROW, RPTexts.MUTED + "Next page", "next"));
 		}
 		fillEmpty(inventory);
 		attacker.openInventory(inventory);
+		return page;
 	}
 
 	@SuppressWarnings("deprecation")
@@ -87,9 +101,6 @@ public final class RpInjureGui {
 		Material material = owned ? Material.GRAY_DYE : (trait.hasIcon() ? trait.getIcon() : Material.RED_DYE);
 		ItemStack item = new ItemStack(material, 1);
 		ItemMeta meta = item.getItemMeta();
-		if (meta == null) {
-			return item;
-		}
 		meta.setDisplayName(RPTexts.formatGui(RPTexts.RESET + trait.getName()));
 		List<String> lore = new ArrayList<>();
 		for (String line : TraitEffectResolver.resolveDescription(character, trait)) {
@@ -117,9 +128,6 @@ public final class RpInjureGui {
 		Material material = trait.hasIcon() ? trait.getIcon() : Material.RED_DYE;
 		ItemStack item = new ItemStack(material, 1);
 		ItemMeta meta = item.getItemMeta();
-		if (meta == null) {
-			return item;
-		}
 		meta.setDisplayName(RPTexts.formatGui(RPTexts.RESET + trait.getName()));
 		List<String> lore = new ArrayList<>();
 		lore.add(RPTexts.formatGui(RPTexts.MUTED + attacker.getName() + " wants to apply this."));
@@ -139,9 +147,6 @@ public final class RpInjureGui {
 	private static ItemStack actionItem(Material material, String name, String action) {
 		ItemStack item = new ItemStack(material, 1);
 		ItemMeta meta = item.getItemMeta();
-		if (meta == null) {
-			return item;
-		}
 		meta.setDisplayName(RPTexts.formatGui(name));
 		meta.getPersistentDataContainer().set(actionKey(), PersistentDataType.STRING, action);
 		item.setItemMeta(meta);

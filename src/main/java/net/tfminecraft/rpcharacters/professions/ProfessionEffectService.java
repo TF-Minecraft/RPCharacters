@@ -1,11 +1,8 @@
 package net.tfminecraft.rpcharacters.professions;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Animals;
@@ -49,118 +46,130 @@ public class ProfessionEffectService implements Listener {
 		return character.resolveProfessionUpgrades();
 	}
 
-	// Preserve mutations of the caller-owned ItemStack and its aliases.
-	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void stationEnchantTypeEvent(PlayerUseCraftingStationEvent event) {
-		Player player = event.getPlayer();
-		if (!event.getInteraction().equals(StationAction.CRAFTING_QUEUE)) {
+		if (event.getInteraction() != StationAction.CRAFTING_QUEUE) {
 			return;
 		}
-		ItemStack item = event.getResult();
-		boolean hasChanged = false;
-		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(player)) {
+		ItemStack result = event.getResult();
+		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(event.getPlayer())) {
 			if (!"station_enchant".equalsIgnoreCase(upgrade.getType())) {
 				continue;
 			}
-			if (!NBTItem.get(item).hasType()) {
+			NBTItem nbt = NBTItem.get(result);
+			if (!nbt.hasType()) {
 				continue;
 			}
-			MMOItem mmoitem = new LiveMMOItem(NBTItem.get(item));
-			EnchantListData enchants = (EnchantListData) mmoitem.getData(ItemStats.ENCHANTS);
+			MMOItem item = new LiveMMOItem(nbt);
+			EnchantListData enchants = (EnchantListData) item.getData(ItemStats.ENCHANTS);
+			if (enchants == null) {
+				enchants = new EnchantListData();
+			}
+			boolean changed = false;
 			for (String unlock : upgrade.getUnlocks()) {
-				for (ProfessionItemType type : Cache.professionItemTypes) {
-					if (!type.getId().equalsIgnoreCase(unlock.split("\\.")[0])) {
+				String[] parts = unlock.split("\\.", 3);
+				if (parts.length != 3 || !matchesItemGroup(parts[0], nbt.getType())) {
+					continue;
+				}
+				try {
+					NamespacedKey key = NamespacedKey.fromString(parts[1].toLowerCase(Locale.ROOT));
+					Enchantment enchantment = key == null ? null : io.papermc.paper.registry.RegistryAccess.registryAccess()
+							.getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT).get(key);
+					int added = Integer.parseInt(parts[2]);
+					if (enchantment == null || added <= 0) {
 						continue;
 					}
-					for (String mmoType : type.getMmoItemTypes()) {
-						if (!mmoType.equalsIgnoreCase(NBTItem.get(item).getType().toString())) {
-							continue;
-						}
-						String enchType = unlock.split("\\.")[1];
-						int enchLevel = Integer.parseInt(unlock.split("\\.")[2]);
-						enchLevel = enchLevel + enchants.getLevel(io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT).get(NamespacedKey.minecraft(enchType)));
-						enchants.addEnchant(io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.ENCHANTMENT).get(NamespacedKey.minecraft(enchType)), enchLevel);
-						hasChanged = true;
-					}
+					int level = (int) Math.min(Integer.MAX_VALUE, (long) enchants.getLevel(enchantment) + added);
+					enchants.addEnchant(enchantment, level);
+					changed = true;
+				} catch (IllegalArgumentException invalidUnlock) {
+					// A malformed configured perk must not discard a completed craft.
 				}
 			}
-			if (hasChanged) {
-				mmoitem.setData(ItemStats.ENCHANTS, enchants);
-				StatHistory history = mmoitem.getStatHistory(ItemStats.ENCHANTS);
+			if (changed) {
+				item.setData(ItemStats.ENCHANTS, enchants);
+				StatHistory history = item.getStatHistory(ItemStats.ENCHANTS);
 				history.registerExternalData(enchants);
-				mmoitem.setStatHistory(ItemStats.ENCHANTS, history);
-				event.getResult().setType(Material.AIR);
-				item = mmoitem.newBuilder().build();
+				item.setStatHistory(ItemStats.ENCHANTS, history);
+				updateResult(result, item.newBuilder().build());
 			}
-		}
-		if (hasChanged) {
-			item.setAmount(event.getResult().getAmount());
-			player.getInventory().addItem(item);
-			event.getResult().setType(Material.AIR);
 		}
 	}
 
-	// This path mutates the existing ItemStack; replacing it would change aliases held by callers.
-	@SuppressWarnings("deprecation")
 	@EventHandler
 	public void stationAddedStats(PlayerUseCraftingStationEvent event) {
-		Player player = event.getPlayer();
-		if (!event.getInteraction().equals(StationAction.CRAFTING_QUEUE)) {
+		if (event.getInteraction() != StationAction.CRAFTING_QUEUE) {
 			return;
 		}
-		ItemStack item = event.getResult();
-		boolean hasChanged = false;
-		DoubleData oldStat = null;
-		String statName = null;
-		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(player)) {
+		ItemStack result = event.getResult();
+		for (ProfessionUpgradeDefinition upgrade : activeUpgrades(event.getPlayer())) {
 			if (!"add_stats".equalsIgnoreCase(upgrade.getType())) {
 				continue;
 			}
-			if (!NBTItem.get(item).hasType()) {
+			NBTItem nbt = NBTItem.get(result);
+			if (!nbt.hasType()) {
 				continue;
 			}
-			MMOItem mmoitem = new LiveMMOItem(NBTItem.get(item));
-			for (String stat : upgrade.getUnlocks()) {
-				for (ProfessionItemType type : Cache.professionItemTypes) {
-					if (!type.getId().equalsIgnoreCase(stat.split("\\.")[0])) {
+			MMOItem item = new LiveMMOItem(nbt);
+			boolean changed = false;
+			for (String unlock : upgrade.getUnlocks()) {
+				String[] parts = unlock.split("\\.", 3);
+				if (parts.length != 3 || !matchesItemGroup(parts[0], nbt.getType())) {
+					continue;
+				}
+				try {
+					var stat = MMOItems.plugin.getStats().get(parts[1].toUpperCase(Locale.ROOT));
+					double added = Double.parseDouble(parts[2].replace(',', '.'));
+					if (stat == null || !Double.isFinite(added)) {
 						continue;
 					}
-					for (String mmoType : type.getMmoItemTypes()) {
-						if (!mmoType.equalsIgnoreCase(NBTItem.get(item).getType().toString())) {
-							continue;
+					var previous = item.getData(stat);
+					if (previous != null && !(previous instanceof DoubleData)) {
+						continue;
+					}
+					double value = (previous == null ? 0D : ((DoubleData) previous).getValue()) + added;
+					if (!Double.isFinite(value)) {
+						continue;
+					}
+					DoubleData updated = new DoubleData(value);
+					item.replaceData(stat, updated);
+					StatHistory history = item.computeStatHistory(stat);
+					if (history != null) {
+						if (history.getOriginalData() instanceof DoubleData original) {
+							original.setValue(value);
 						}
-						statName = stat.split("\\.")[1];
-						oldStat = (DoubleData) mmoitem.getData(MMOItems.plugin.getStats().get(stat.split("\\.")[1].toUpperCase()));
-						if (oldStat == null) {
-							oldStat = new DoubleData(0.0);
-						}
-						oldStat.setValue(oldStat.getValue() + Double.parseDouble(stat.split("\\.")[2].replace(",", ".")));
-						hasChanged = true;
+						item.setStatHistory(stat, history);
+					}
+					changed = true;
+				} catch (IllegalArgumentException invalidUnlock) {
+					// Ignore malformed configured numbers without losing other valid perks.
+				}
+			}
+			if (changed) {
+				updateResult(result, item.newBuilder().build());
+			}
+		}
+	}
+
+	private static boolean matchesItemGroup(String groupId, String mmoType) {
+		for (ProfessionItemType type : Cache.professionItemTypes) {
+			if (type.getId().equalsIgnoreCase(groupId)) {
+				for (String allowed : type.getMmoItemTypes()) {
+					if (allowed.equalsIgnoreCase(mmoType)) {
+						return true;
 					}
 				}
 			}
-			if (hasChanged && statName != null) {
-				mmoitem.replaceData(MMOItems.plugin.getStats().get(statName.toUpperCase()), oldStat);
-				StatHistory hist = mmoitem.computeStatHistory(MMOItems.plugin.getStats().get(statName.toUpperCase()));
-				if (hist != null) {
-					DoubleData original = (DoubleData) hist.getOriginalData();
-					original.setValue(oldStat.getValue());
-					mmoitem.setStatHistory(MMOItems.plugin.getStats().get(statName.toUpperCase()), hist);
-				}
-				event.getResult().setType(Material.AIR);
-				item = mmoitem.newBuilder().build();
-			}
 		}
-		if (hasChanged) {
-			event.getResult().setType(Material.AIR);
-			item.setAmount(event.getResult().getAmount());
-			if (player.getInventory().firstEmpty() == -1) {
-				player.getWorld().dropItem(player.getLocation(), item);
-			} else {
-				player.getInventory().addItem(item);
-			}
-		}
+		return false;
+	}
+
+	/** Preserve the event's result object and quantity for later listeners and normal queue delivery. */
+	private static void updateResult(ItemStack result, ItemStack rebuilt) {
+		int amount = result.getAmount();
+		result.setType(rebuilt.getType());
+		result.setItemMeta(rebuilt.getItemMeta());
+		result.setAmount(amount);
 	}
 
 	@EventHandler

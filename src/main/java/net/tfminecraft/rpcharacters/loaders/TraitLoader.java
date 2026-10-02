@@ -35,6 +35,7 @@ public class TraitLoader implements LoaderInterface{
 		List<String> list = new ArrayList<String>(set);
 		
 		for(String key : list) {
+			if (!config.isConfigurationSection(key)) continue;
 			Trait o = new Trait(key, config.getConfigurationSection(key));
 			oList.add(o);
 		}

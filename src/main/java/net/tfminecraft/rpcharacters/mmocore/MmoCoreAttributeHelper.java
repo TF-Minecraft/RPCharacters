@@ -41,9 +41,6 @@ public final class MmoCoreAttributeHelper {
 		} catch (Throwable ignored) {
 			// fall through
 		}
-		if (id.isEmpty()) {
-			return id;
-		}
 		return Character.toUpperCase(id.charAt(0)) + id.substring(1);
 	}
 

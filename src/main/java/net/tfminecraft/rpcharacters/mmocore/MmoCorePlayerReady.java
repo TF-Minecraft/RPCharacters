@@ -24,7 +24,7 @@ public final class MmoCorePlayerReady implements Listener {
 
 	private static final int MAX_WAIT_TICKS = 100;
 	private static final Map<UUID, List<Runnable>> PENDING = new ConcurrentHashMap<>();
-	private static final java.util.Set<UUID> POLLING = ConcurrentHashMap.newKeySet();
+	private static final Map<UUID, Object> POLLING = new ConcurrentHashMap<>();
 
 	public static boolean isReady(Player player) {
 		if (player == null) {
@@ -73,26 +73,28 @@ public final class MmoCorePlayerReady implements Listener {
 	}
 
 	private static void startPoll(UUID id) {
-		if (!POLLING.add(id)) {
+		Object generation = new Object();
+		if (POLLING.putIfAbsent(id, generation) != null) {
 			return;
 		}
-		poll(id, 0);
+		poll(id, 0, generation);
 	}
 
-	private static void poll(UUID id, int tick) {
+	private static void poll(UUID id, int tick, Object generation) {
 		Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
+			if (POLLING.get(id) != generation) return;
 			if (flush(id)) {
-				POLLING.remove(id);
+				POLLING.remove(id, generation);
 				return;
 			}
 			if (tick >= MAX_WAIT_TICKS) {
-				POLLING.remove(id);
+				POLLING.remove(id, generation);
 				PENDING.remove(id);
 				RPCharacters.plugin.getLogger().warning(
 						"MMOCore player data did not finish loading in time for " + id);
 				return;
 			}
-			poll(id, tick + 1);
+			poll(id, tick + 1, generation);
 		}, 1L);
 	}
 

@@ -59,8 +59,9 @@ public final class FocusListener implements Listener {
             return;
         }
         ItemStack item = player.getInventory().getItemInMainHand();
+        ItemStack expected = item.clone();
         FocusConfig.RestoreItem restore = restoreItemFor(item);
-        if (restore == null) {
+        if (restore == null || !player.getInventory().getItemInMainHand().equals(expected)) {
             return;
         }
         event.setUseItemInHand(Event.Result.DENY);

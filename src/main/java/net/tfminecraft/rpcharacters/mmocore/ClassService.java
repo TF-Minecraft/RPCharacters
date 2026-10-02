@@ -46,7 +46,7 @@ public final class ClassService {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
-		int pool = mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent();
+		int pool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent());
 		pd.setAccountSkillPointsTotal(pool);
 		RPCharacters.getPlayerManager().savePlayer(player);
 	}
@@ -93,7 +93,7 @@ public final class ClassService {
 		PlayerData mmoPd = PlayerData.get(player);
 		List<String> stripped = sanitizeForeignSkillLevels(mmoPd);
 		int spent = mmoPd.countSkillPointsSpent();
-		int mmoPool = mmoPd.getSkillPoints() + spent;
+		int mmoPool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getSkillPoints() + spent);
 		int beforeTotal = pd.getAccountSkillPointsTotal();
 		if (mmoPool != beforeTotal) {
 			pd.setAccountSkillPointsTotal(mmoPool);
@@ -296,10 +296,11 @@ public final class ClassService {
 		}
 		PlayerData mmoPd = PlayerData.get(player);
 		int lifetime = pd.getAccountSkillPointsTotal();
-		while (mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent() > lifetime) {
+		while ((long) mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent() > lifetime) {
 			int unspent = mmoPd.getSkillPoints();
 			if (unspent > 0) {
-				mmoPd.setSkillPoints(unspent - 1);
+				long excess = (long) unspent + mmoPd.countSkillPointsSpent() - lifetime;
+				mmoPd.setSkillPoints(unspent - (int) Math.min(unspent, excess));
 				continue;
 			}
 			List<String> downgradeable = new ArrayList<>();

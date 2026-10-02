@@ -19,7 +19,8 @@ public final class ProtocolLibBridge {
 		ready = false;
 		packets = null;
 
-		if (Bukkit.getPluginManager().getPlugin("ProtocolLib") == null) {
+		Plugin protocolLib = Bukkit.getPluginManager().getPlugin("ProtocolLib");
+		if (protocolLib == null || !protocolLib.isEnabled()) {
 			plugin.getLogger().warning(
 					"ProtocolLib not found — smart-message speech bubbles disabled (chat muffling still works).");
 			return;
@@ -27,6 +28,7 @@ public final class ProtocolLibBridge {
 
 		try {
 			ProtocolManager manager = ProtocolLibrary.getProtocolManager();
+			if (manager == null) throw new IllegalStateException("ProtocolLib manager is unavailable");
 			packets = new FakeTextDisplayPackets(manager);
 			ready = true;
 			plugin.getLogger().info("ProtocolLib detected — per-viewer fake speech bubbles enabled.");

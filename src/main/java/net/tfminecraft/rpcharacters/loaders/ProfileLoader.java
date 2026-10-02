@@ -70,10 +70,6 @@ public class ProfileLoader implements LoaderInterface {
 			Cache.baseCharacterSlotCount = slots.size();
 		}
 
-		if (slots.size() > maxSlots) {
-			slots = new ArrayList<>(slots.subList(0, maxSlots));
-		}
-
 		if (slots.size() < maxSlots && maxSlots > DEFAULT_ROW1.size()) {
 			Bukkit.getLogger().warning(
 					"[RPCharacters] profile.yml: only " + slots.size() + " character slot positions configured "

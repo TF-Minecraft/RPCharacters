@@ -20,6 +20,9 @@ public final class SmartMessageService {
 	private SmartMessageService() {}
 
 	public static void deliver(CharacterChatEvent event, ChatChannel channel, Player sender) {
+		if (sender == null) {
+			return;
+		}
 		SmartMessageSettings settings = SmartMessageLoader.getSettings();
 		Set<Player> recipients = event.getRecipients();
 		String message = event.getMessage();
@@ -140,14 +143,7 @@ public final class SmartMessageService {
 	}
 
 	private static String label(Player player) {
-		if (player == null) {
-			return "null";
-		}
-		String name = player.getName();
-		if (name != null && !name.isBlank()) {
-			return name;
-		}
-		return player.getUniqueId().toString().substring(0, 8);
+		return player.getName();
 	}
 
 	private static String preview(String text) {

@@ -73,9 +73,7 @@ public final class PermadeathAreaLookup {
 			}
 			Object zone = method.invoke(null, player, location);
 			return (PermadeathZoneDefinition) zone;
-		} catch (ClassNotFoundException | NoClassDefFoundError ignored) {
-			return null;
-		} catch (Exception ex) {
+		} catch (NoClassDefFoundError | Exception ex) {
 			if (RPCharacters.plugin != null) {
 				RPCharacters.plugin.getLogger().warning(
 						"SimpleFactions permadeath lookup failed: " + ex.getMessage());

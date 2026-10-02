@@ -51,6 +51,7 @@ public class AttributeData {
 	public AttributeData(AttributeData other) {
 		this();
 		if (other != null) {
+			clearAll();
 			mergeFrom(other);
 		}
 	}

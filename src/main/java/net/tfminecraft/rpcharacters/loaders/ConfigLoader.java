@@ -75,7 +75,7 @@ public class ConfigLoader implements LoaderInterface{
         ConfigurationSection overrideSection = config.getConfigurationSection("trait-clue-overrides");
         if (overrideSection != null) {
         	for (String key : overrideSection.getKeys(false)) {
-        		overrides.put(key.toLowerCase(), overrideSection.getInt(key));
+            overrides.put(key.toLowerCase(Locale.ROOT), overrideSection.getInt(key));
         	}
         }
         Cache.traitClueOverrides = overrides;

@@ -41,9 +41,6 @@ final class PhoneticMuffler {
 	}
 
 	private static boolean isWord(String token) {
-		if (token == null || token.isEmpty()) {
-			return false;
-		}
 		for (int i = 0; i < token.length(); i++) {
 			if (!Character.isLetter(token.charAt(i))) {
 				return false;
@@ -78,9 +75,6 @@ final class PhoneticMuffler {
 	}
 
 	private static String processSegment(String segment, double distortion, Random random) {
-		if (segment.isEmpty()) {
-			return segment;
-		}
 
 		String working = applySoundClusters(segment, distortion, random, true);
 		if (!isSuffixTail(working)) {
@@ -147,9 +141,6 @@ final class PhoneticMuffler {
 			suffix = "le";
 		}
 
-		if (stem.isEmpty()) {
-			return word;
-		}
 
 		char last = stem.charAt(stem.length() - 1);
 		if (!Character.isLetter(last) || isVowel(last)) {
@@ -191,21 +182,15 @@ final class PhoneticMuffler {
 	}
 
 	private static String insertPhoneticBreaks(String word, double distortion, Random random) {
-		if (word.length() < 5) {
-			return word;
-		}
 
 		int breakAt = findDoubleConsonantBreak(word);
 		if (breakAt < 0 || distortion < 0.32) {
 			if (random.nextDouble() >= distortion * 0.68) {
 				return word;
 			}
-			breakAt = findBreakIndex(word, random);
+			breakAt = findBreakIndex(word);
 		}
 
-		if (breakAt <= 0 || breakAt >= word.length()) {
-			return word;
-		}
 
 		String left = word.substring(0, breakAt);
 		String right = trimBridgingConsonant(left, word.substring(breakAt));
@@ -230,26 +215,20 @@ final class PhoneticMuffler {
 
 	private static String insertSecondBreak(String word, double distortion, Random random) {
 		int ellipsis = word.indexOf(ELLIPSIS);
-		if (ellipsis < 0) {
-			return word;
-		}
 
 		String right = word.substring(ellipsis + ELLIPSIS.length());
 		if (right.length() < 4 || random.nextDouble() >= distortion * 0.5) {
 			return word;
 		}
 
-		int localBreak = findBreakIndex(right, random);
-		if (localBreak <= 0 || localBreak >= right.length()) {
-			return word;
-		}
+		int localBreak = findBreakIndex(right);
 
 		String leftPart = right.substring(0, localBreak);
 		String rightPart = trimBridgingConsonant(leftPart, right.substring(localBreak));
 		return word.substring(0, ellipsis + ELLIPSIS.length()) + leftPart + ELLIPSIS + rightPart;
 	}
 
-	private static int findBreakIndex(String word, Random random) {
+	private static int findBreakIndex(String word) {
 		int mid = word.length() / 2;
 		int best = -1;
 		int bestScore = Integer.MIN_VALUE;
@@ -278,16 +257,10 @@ final class PhoneticMuffler {
 			}
 		}
 
-		if (best > 0) {
-			return best;
-		}
-		return Math.max(2, mid + (random.nextBoolean() ? 0 : 1));
+		return best;
 	}
 
 	private static String trimBridgingConsonant(String left, String right) {
-		if (left.isEmpty() || right.isEmpty()) {
-			return right;
-		}
 		char leftEnd = left.charAt(left.length() - 1);
 		char rightStart = right.charAt(0);
 		if (leftEnd == rightStart && !isVowel(leftEnd)) {
@@ -298,9 +271,6 @@ final class PhoneticMuffler {
 
 	private static String slurLeadingSyllable(String word, double distortion, Random random) {
 		if (word.length() < 5 || distortion < 0.38 || random.nextDouble() >= distortion * 0.48) {
-			return word;
-		}
-		if (word.startsWith(ELLIPSIS)) {
 			return word;
 		}
 

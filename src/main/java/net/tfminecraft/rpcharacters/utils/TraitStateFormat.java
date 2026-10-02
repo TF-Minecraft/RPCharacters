@@ -57,7 +57,7 @@ public final class TraitStateFormat {
 		if (remainingMs < MS_PER_HOUR) {
 			return ((remainingMs + MS_PER_MINUTE - 1L) / MS_PER_MINUTE) + "m";
 		}
-		return ((remainingMs + MS_PER_HOUR - 1L) / MS_PER_HOUR) + "h";
+		return (remainingMs / MS_PER_HOUR + (remainingMs % MS_PER_HOUR == 0 ? 0 : 1)) + "h";
 	}
 
 	public static String formatFuel(double current, double capacity) {

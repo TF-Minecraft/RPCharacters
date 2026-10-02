@@ -108,7 +108,7 @@ public final class InjuryPoolLoader implements LoaderInterface {
 	public static Trait pickRandom(Set<String> ownedTraitIds) {
 		List<String> eligible = new ArrayList<>();
 		List<Integer> eligibleWeights = new ArrayList<>();
-		int total = 0;
+		long total = 0;
 
 		for (Map.Entry<String, Integer> entry : weights.entrySet()) {
 			if (ownsTrait(ownedTraitIds, entry.getKey())) {
@@ -123,9 +123,9 @@ public final class InjuryPoolLoader implements LoaderInterface {
 			return null;
 		}
 
-		int roll = ThreadLocalRandom.current().nextInt(total);
-		int cumulative = 0;
-		for (int i = 0; i < eligible.size(); i++) {
+		long roll = ThreadLocalRandom.current().nextLong(total);
+		long cumulative = 0;
+		for (int i = 0; i < eligible.size() - 1; i++) {
 			cumulative += eligibleWeights.get(i);
 			if (roll < cumulative) {
 				return TraitLoader.getByString(eligible.get(i));

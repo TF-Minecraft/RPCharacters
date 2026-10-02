@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.calendar;
 
 import java.time.Instant;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -31,7 +32,7 @@ public final class FantasyCalendar {
 			return null;
 		}
 		int fantasyYear = toFantasyYear(realDate.getYear());
-		return LocalDate.of(fantasyYear, realDate.getMonth(), realDate.getDayOfMonth());
+		return realDate.withYear(fantasyYear);
 	}
 
 	public static String toIso(LocalDate fantasyDate) {
@@ -69,7 +70,7 @@ public final class FantasyCalendar {
 			int month = Integer.parseInt(parts[1].trim());
 			int year = Integer.parseInt(parts[2].trim());
 			return LocalDate.of(year, month, day);
-		} catch (NumberFormatException | DateTimeParseException ex) {
+		} catch (NumberFormatException | DateTimeException ex) {
 			return null;
 		}
 	}

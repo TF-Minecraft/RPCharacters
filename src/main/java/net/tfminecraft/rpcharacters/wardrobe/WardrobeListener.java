@@ -101,6 +101,7 @@ public final class WardrobeListener implements Listener {
 		}
 
 		boolean reopenWardrobe = WardrobeGui.closeIfOpen(player);
+		org.bukkit.inventory.Inventory expectedInventory = player.getOpenInventory().getTopInventory();
 
 		WardrobeService.setActiveAndApply(player, slotId, error -> {
 			if (error != null) {
@@ -130,7 +131,7 @@ public final class WardrobeListener implements Listener {
 			);
 			if (reopenWardrobe) {
 				Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
-					if (player.isOnline()) {
+					if (player.isOnline() && player.getOpenInventory().getTopInventory() == expectedInventory) {
 						WardrobeGui.openNow(player);
 					}
 				});

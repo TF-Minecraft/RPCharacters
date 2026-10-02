@@ -112,10 +112,6 @@ public final class SpeechBubbleManager {
 
 		String colorPrefix = StringFormatter.formatHex(channel.getMessageColorPrefix().replace('&', '\u00A7'));
 		List<String> lines = TextWrapUtil.wrapLines(message, settings.getMaxCharactersPerLine(), colorPrefix);
-		if (lines.isEmpty()) {
-			SpeechBubbleDebug.logSkip("onChat", "wrap produced no lines");
-			return;
-		}
 
 		SpeechBubbleDebug.log("onChat",
 				"creating utterance lines=" + lines.size()
@@ -228,12 +224,6 @@ public final class SpeechBubbleManager {
 						TextDisplayHelper.createScaleTransformation(scale), false);
 				tagDisplay(td, ownerId, layoutLine.getUtteranceId(), layoutLine.getLineIndex());
 			});
-			if (display == null) {
-				SpeechBubbleDebug.logSkip("refreshVisuals",
-						"failed to spawn line " + i + " at " + formatLoc(spawnLoc));
-				continue;
-			}
-
 			TextDisplayHelper.applyDisplay(display, layoutLine.getText(),
 					TextDisplayHelper.createScaleTransformation(scale), false);
 			tagDisplay(display, ownerId, layoutLine.getUtteranceId(), layoutLine.getLineIndex());
@@ -274,11 +264,8 @@ public final class SpeechBubbleManager {
 
 			Location current = display.getLocation();
 			Location lerped = TextDisplayHelper.lerpLocation(current, target, lerpFactor);
-			if (lerped == null) {
-				needRefresh = true;
-				break;
-			}
-			if (current.distanceSquared(lerped) > POSITION_EPSILON_SQ) {
+			if (!current.getWorld().equals(lerped.getWorld())
+					|| current.distanceSquared(lerped) > POSITION_EPSILON_SQ) {
 				display.teleport(lerped);
 			}
 		}
@@ -336,9 +323,6 @@ public final class SpeechBubbleManager {
 	}
 
 	private static String formatLoc(Location location) {
-		if (location == null) {
-			return "null";
-		}
 		return String.format(Locale.ROOT, "%.2f,%.2f,%.2f",
 				location.getX(), location.getY(), location.getZ());
 	}

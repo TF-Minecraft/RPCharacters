@@ -76,7 +76,7 @@ public final class SpeechBubbleSettings {
 	}
 
 	public void setMaxStackedUtterances(int maxStackedUtterances) {
-		this.maxStackedUtterances = maxStackedUtterances;
+		this.maxStackedUtterances = Math.max(0, maxStackedUtterances);
 	}
 
 	public int getUtteranceTimeoutSeconds() {

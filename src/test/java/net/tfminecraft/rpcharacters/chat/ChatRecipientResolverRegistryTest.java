@@ -43,7 +43,7 @@ class ChatRecipientResolverRegistryTest {
 	}
 
 	@Test
-	void invokeRegisteredForTestsCallsResolverWithChannel() {
+	void resolveCallsRegisteredResolverWithChannel() {
 		ChatChannel channel = testChannel("pooc", "rpcharacters:party");
 		AtomicReference<String> resolvedChannelId = new AtomicReference<>();
 		AtomicBoolean invoked = new AtomicBoolean();
@@ -54,7 +54,8 @@ class ChatRecipientResolverRegistryTest {
 			return Set.of();
 		});
 
-		ChatRecipientResolverRegistry.invokeRegisteredForTests("rpcharacters:party", channel);
+		ChatRecipientResolverRegistry.resolve("rpcharacters:party",
+				org.mockito.Mockito.mock(org.bukkit.entity.Player.class), channel);
 
 		assertTrue(invoked.get());
 		assertEquals("pooc", resolvedChannelId.get());

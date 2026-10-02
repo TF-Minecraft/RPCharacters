@@ -54,6 +54,10 @@ public class CreationManager implements Listener{
 	private static final String SUMMARY_ACTION_KEY = "summary_action";
 	
 	public static void initiateCreation(Player p) {
+		if (activeCreators.containsKey(p)) {
+			RPTexts.send(p, RPTexts.ERROR + "You already have an active character session.");
+			return;
+		}
 		PlayerData pd = PlayerManager.get(p);
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
 			RPTexts.send(p, RPTexts.ERROR + "You don't have a free character slot!");
@@ -315,19 +319,18 @@ public class CreationManager implements Listener{
 							return;
 						}
 					}
-					if(s.getMaxSelections() <= s.getSelections()) {
-						if (item.getType().equalsIgnoreCase("class") && s.getMaxSelections() == 1) {
-							for (SelectableItem chosen : new ArrayList<>(s.getSelection())) {
-								chosen.setSelected(false);
-								s.unSelect(chosen);
-							}
-						} else {
-							RPTexts.send(p, RPTexts.ERROR + "Cannot make any more selections");
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
+					boolean replaceClass = item.getType().equalsIgnoreCase("class") && s.getMaxSelections() == 1
+							&& s.getMaxSelections() <= s.getSelections();
+					if (s.getMaxSelections() <= s.getSelections() && !replaceClass) {
+						RPTexts.send(p, RPTexts.ERROR + "Cannot make any more selections");
+						p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+						return;
 					}
-					if(item.getCost() > s.getPoints()) {
+					long availablePoints = s.getPoints();
+					if (replaceClass) {
+						for (SelectableItem chosen : s.getSelection()) availablePoints += chosen.getCost();
+					}
+					if(item.getCost() > availablePoints) {
 						RPTexts.send(p, RPTexts.ERROR + "Cannot afford this trait");
 						p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 						return;
@@ -345,6 +348,12 @@ public class CreationManager implements Listener{
 							RPTexts.send(p, PlaytimeGate.denialMessage(p, trait));
 							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 							return;
+						}
+					}
+					if (replaceClass) {
+						for (SelectableItem chosen : new ArrayList<>(s.getSelection())) {
+							chosen.setSelected(false);
+							s.unSelect(chosen);
 						}
 					}
 					s.select(item);
@@ -557,9 +566,6 @@ public class CreationManager implements Listener{
 
 	private void attributesClick(Player p, AttributesStage s, CharacterCreation cc, InventoryClickEvent e) {
 		Inventory inventory = e.getClickedInventory();
-		if (inventory == null) {
-			return;
-		}
 		if (!(inventory.getHolder() instanceof RPCHolder)) {
 			return;
 		}
@@ -634,6 +640,7 @@ public class CreationManager implements Listener{
 			{
 				public void run()
 				{
+					if (!p.isOnline() || activeCreators.containsKey(p)) return;
 					InventoryManager inv = new InventoryManager();
 					inv.selectionView(p, (SelectionStage) stage, null);
 				}
@@ -641,6 +648,7 @@ public class CreationManager implements Listener{
 			} else if (stage instanceof AttributesStage) {
 				new BukkitRunnable() {
 					public void run() {
+						if (!p.isOnline() || activeCreators.containsKey(p)) return;
 						InventoryManager inv = new InventoryManager();
 						inv.attributesView(p, (AttributesStage) stage, null);
 					}
@@ -657,13 +665,14 @@ public class CreationManager implements Listener{
 			return;
 		}
 		if (h.getStage() instanceof SummaryStage) {
+			Stage expectedStage = cc.getActiveStage();
 			if (h.isOverridden()) {
 				return;
 			}
 			new BukkitRunnable() {
 				public void run() {
-					if (activeCreators.containsKey(p)) {
-						activeCreators.get(p).openSummary();
+					if (canReopen(p, cc, expectedStage)) {
+						cc.openSummary();
 					}
 				}
 			}.runTaskLater(RPCharacters.plugin, 3L);
@@ -678,6 +687,7 @@ public class CreationManager implements Listener{
 			{
 				public void run()
 				{
+					if (!canReopen(p, cc, s) || !s.isActive()) return;
 					InventoryManager inv = new InventoryManager();
 					inv.selectionView(p, s, cc);
 				}
@@ -688,10 +698,16 @@ public class CreationManager implements Listener{
 			if (h.isOverridden()) return;
 			new BukkitRunnable() {
 				public void run() {
+					if (!canReopen(p, cc, s) || !s.isActive()) return;
 					InventoryManager inv = new InventoryManager();
 					inv.attributesView(p, s, cc);
 				}
 			}.runTaskLater(RPCharacters.plugin, 3L);
 		}
 	}
+	private static boolean canReopen(Player player, CharacterCreation creation, Stage stage) {
+		return player.isOnline() && activeCreators.get(player) == creation
+				&& !creation.isCancelled() && creation.getActiveStage() == stage;
+	}
+
 }

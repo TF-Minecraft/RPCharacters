@@ -17,6 +17,6 @@ public enum StrikeOutcome {
 
 	/** Whether the next strike kills: always during an evil RP session, otherwise only the last one. */
 	public static boolean nextStrikeKills(int currentStrikes, boolean inEvilSession) {
-		return inEvilSession || forStrike(currentStrikes + 1) == DEATH;
+		return inEvilSession || currentStrikes >= MAX_STRIKES - 1;
 	}
 }

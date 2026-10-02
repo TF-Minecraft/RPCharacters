@@ -85,6 +85,9 @@ public final class ProfessionPointService {
 			return;
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
+		if (mmoPd == null) {
+			return;
+		}
 		for (ProfessionDefinition profession : ProfessionRegistry.getProfessions()) {
 			Profession mmoProf = MMOCore.plugin.professionManager.get(profession.getId());
 			if (mmoProf == null) {

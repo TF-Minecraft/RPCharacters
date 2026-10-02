@@ -113,7 +113,7 @@ public final class RollManager implements CommandExecutor, TabCompleter {
 			low = 1;
 		}
 
-		int roll = ThreadLocalRandom.current().nextInt(low, high + 1);
+		int roll = (int) ThreadLocalRandom.current().nextLong(low, (long) high + 1);
 		String message = RollFormatter.format(player, roll, high, modifier);
 		if (message.isEmpty()) {
 			return;
@@ -195,13 +195,7 @@ public final class RollManager implements CommandExecutor, TabCompleter {
 		try {
 			return Integer.parseInt(trimmed);
 		} catch (NumberFormatException ex) {
-			if (trimmed.startsWith("+")) {
-				try {
-					return Integer.parseInt(trimmed.substring(1));
-				} catch (NumberFormatException ignored) {
-					return null;
-				}
-			}
+
 			return null;
 		}
 	}

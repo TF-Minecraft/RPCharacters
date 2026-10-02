@@ -135,7 +135,7 @@ public final class EvilRpService {
 	 */
 	public static StrikeOutcome applyStrike(Player player, RPCharacter character, Player killer, boolean killEntity) {
 		applyDecay(character, System.currentTimeMillis());
-		int strike = character.getEvilRpStrikes() + 1;
+		int strike = (int) Math.min(Integer.MAX_VALUE, (long) character.getEvilRpStrikes() + 1);
 		character.setEvilRpStrikes(strike);
 		character.setLastStrikeAtMs(System.currentTimeMillis());
 		StrikeOutcome outcome = StrikeOutcome.forStrike(strike);

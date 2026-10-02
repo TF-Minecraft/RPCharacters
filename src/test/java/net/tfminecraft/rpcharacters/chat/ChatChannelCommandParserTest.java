@@ -53,6 +53,17 @@ class ChatChannelCommandParserTest {
 	}
 
 	@Test
+	void incompleteCommandsAndReloadedChannelsAreRejected() {
+		for (String raw : new String[]{null, " ", "me hello", "/", "/ hello"}) {
+			assertNull(ChatChannelCommandParser.parse(raw));
+		}
+		try (var loader = org.mockito.Mockito.mockStatic(ChatLoader.class)) {
+			loader.when(() -> ChatLoader.resolveChannelFromCommand("me")).thenReturn("action");
+			assertNull(ChatChannelCommandParser.parse("/me hello"));
+		}
+	}
+
+	@Test
 	void parsesNamespacedMeCommand() {
 		ParsedChannelCommand parsed = ChatChannelCommandParser.parse("/minecraft:me hello");
 

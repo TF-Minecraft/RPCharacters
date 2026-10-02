@@ -56,9 +56,6 @@ public final class KitCustomiseApplyService {
 		String colouredName = formatDisplayName(data);
 		if (slug != null && !slug.isBlank()) {
 			String ns = data.getIaNamespace();
-			if (ns == null || ns.isBlank()) {
-				ns = "tfmc_submissions";
-			}
 			String iaPath = "ia." + ns + ":" + slug;
 			try {
 				ArmorMerger merger = TLibs.getItemAPI().getArmorMerger();
@@ -168,9 +165,6 @@ public final class KitCustomiseApplyService {
 			return true;
 		}
 		String ns = data.getIaNamespace();
-		if (ns == null || ns.isBlank()) {
-			ns = "tfmc_submissions";
-		}
 		try {
 			dev.lone.itemsadder.api.CustomStack custom =
 					dev.lone.itemsadder.api.CustomStack.getInstance(ns + ":" + slug);

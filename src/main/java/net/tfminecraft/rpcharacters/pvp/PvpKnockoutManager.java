@@ -160,7 +160,7 @@ public final class PvpKnockoutManager implements Listener {
 		}
 		player.setHealth(Math.max(0.1, Math.min(1.0, maxHealth)));
 
-		int durationTicks = PvpLoader.getKnockoutSeconds() * 20;
+		int durationTicks = (int) Math.min(Integer.MAX_VALUE, PvpLoader.getKnockoutSeconds() * 20L);
 		player.addPotionEffect(new PotionEffect(
 				PotionEffectType.BLINDNESS,
 				durationTicks,

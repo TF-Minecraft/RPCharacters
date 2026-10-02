@@ -28,6 +28,9 @@ public final class ProfessionTopService {
 		List<LevelEntry> entries = new ArrayList<>();
 		for (Player player : Bukkit.getOnlinePlayers()) {
 			PlayerData pd = PlayerData.get(player);
+			if (pd == null) {
+				continue;
+			}
 			Profession mmoProfession = MMOCore.plugin.professionManager.get(profession.getId());
 			if (mmoProfession == null) {
 				continue;
@@ -38,7 +41,7 @@ public final class ProfessionTopService {
 		}
 		entries.sort(Comparator.comparingInt(LevelEntry::level).reversed());
 		RPTexts.send(sender, RPTexts.ACCENT + "The top players currently online in the Profession "
-				+ RPTexts.ERROR + profession.getId().toUpperCase() + RPTexts.ACCENT + " are:");
+				+ RPTexts.ERROR + profession.getId().toUpperCase(java.util.Locale.ROOT) + RPTexts.ACCENT + " are:");
 		for (int i = 0; i < entries.size() && i < 11; i++) {
 			LevelEntry entry = entries.get(i);
 			RPTexts.send(sender, RPTexts.INFO + entry.name() + " " + RPTexts.MUTED + "(" + RPTexts.ERROR

@@ -77,9 +77,9 @@ public final class ChatManager implements Listener {
 	}
 
 	public static void dispatch(Player player, ChatChannel channel, String rawMessage, boolean wasCommand) {
-		if (player == null || channel == null || rawMessage == null || rawMessage.isBlank()) {
+		if (player == null || !player.isOnline() || channel == null || rawMessage == null || rawMessage.isBlank()) {
 			if (SpeechBubbleDebug.isEnabled()) {
-				SpeechBubbleDebug.logSkip("chat-dispatch", "null player/channel/message");
+				SpeechBubbleDebug.logSkip("chat-dispatch", "offline player or null player/channel/message");
 			}
 			return;
 		}
@@ -204,7 +204,7 @@ public final class ChatManager implements Listener {
 		if (colorPerm != null && !colorPerm.isBlank() && player.hasPermission(colorPerm)) {
 			return trimmed;
 		}
-		return ClueFormatter.stripColor(trimmed);
+		return ClueFormatter.stripColor(RPTexts.formatGui(trimmed));
 	}
 
 	private static Set<Player> buildRecipients(Player sender, ChatChannel channel) {

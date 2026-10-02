@@ -54,6 +54,11 @@ public final class PlayerListDialogs {
 
 	public static void openList(Player viewer) {
 		PlayerListSettings settings = Cache.playerList;
+		if (!viewer.hasPermission(settings.permission())) {
+			net.tfminecraft.rpcharacters.utils.RPTexts.send(viewer,
+					net.tfminecraft.rpcharacters.utils.RPTexts.ERROR + "You do not have permission to view the player list.");
+			return;
+		}
 		List<Player> online = visiblePlayers(viewer, settings);
 		int widest = online.stream().mapToInt(p -> GuiText.width(label(p, settings)) + 10).max().orElse(100);
 		int buttonWidth = Math.max(100, Math.min(220, widest + 10));

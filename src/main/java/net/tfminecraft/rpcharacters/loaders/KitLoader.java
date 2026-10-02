@@ -123,9 +123,6 @@ public final class KitLoader implements LoaderInterface {
 	 */
 	private static List<KitItemDefinition> parseItems(List<Map<?, ?>> rawItems, String kitId) {
 		List<KitItemDefinition> loaded = new ArrayList<>();
-		if (rawItems == null) {
-			return loaded;
-		}
 		for (Map<?, ?> map : rawItems) {
 			Object pathObj = map.get("path");
 			String path = pathObj != null ? pathObj.toString().trim() : "";

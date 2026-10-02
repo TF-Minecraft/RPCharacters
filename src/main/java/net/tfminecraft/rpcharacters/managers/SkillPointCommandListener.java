@@ -42,7 +42,7 @@ public class SkillPointCommandListener implements Listener {
 		if (parts.length < 6) {
 			return null;
 		}
-		if (!parts[0].equalsIgnoreCase("mmocore")) {
+		if (!parts[0].equalsIgnoreCase("mmocore") && !parts[0].equalsIgnoreCase("mmocore:mmocore")) {
 			return null;
 		}
 		if (!parts[1].equalsIgnoreCase("admin")) {

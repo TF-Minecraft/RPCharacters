@@ -247,9 +247,6 @@ public final class RosterSyncService {
 	@SuppressWarnings("unchecked")
 	private static JSONObject attributeTotals(RPCharacter character) {
 		JSONObject out = new JSONObject();
-		if (character == null) {
-			return out;
-		}
 		AttributeData data = character.getAttributeData();
 		if (data == null || data.getModifiers() == null) {
 			return out;
@@ -267,9 +264,6 @@ public final class RosterSyncService {
 	@SuppressWarnings("unchecked")
 	private static JSONArray experienceModifierRows(RPCharacter character) {
 		JSONArray out = new JSONArray();
-		if (character == null) {
-			return out;
-		}
 		AttributeData data = character.getAttributeData();
 		if (data == null || data.getExperienceModifiers() == null) {
 			return out;
@@ -374,9 +368,6 @@ public final class RosterSyncService {
 	@SuppressWarnings("unchecked")
 	private static JSONArray clueRows(RPCharacter character) {
 		JSONArray out = new JSONArray();
-		if (character == null) {
-			return out;
-		}
 		for (String clue : character.getPlayerClues()) {
 			if (clue == null || clue.isBlank()) {
 				continue;

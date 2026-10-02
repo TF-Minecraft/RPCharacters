@@ -27,21 +27,23 @@ public final class SimpleFactionsRegionBridge {
 	}
 
 	public static void init() {
+		PermadeathBattleExemption.set(null);
 		available = Bukkit.getPluginManager().isPluginEnabled("SimpleFactions");
 		if (!available) {
 			return;
 		}
 		RPCharacters.plugin.getLogger().info(
 				"SimpleFactions bridge enabled for permadeath map regions.");
-		try {
-			PermadeathBattleExemption.set(player -> {
+		PermadeathBattleExemption.set(player -> {
+			try {
 				Battle battle = BattleManager.getBattleByMemberId(player.getUniqueId());
 				return battle != null && battle.hasStarted();
-			});
-		} catch (NoClassDefFoundError | Exception ex) {
-			RPCharacters.plugin.getLogger().warning(
-					"SimpleFactions battle exemption failed: " + ex.getMessage());
-		}
+			} catch (NoClassDefFoundError | Exception ex) {
+				RPCharacters.plugin.getLogger().warning(
+						"SimpleFactions battle exemption failed: " + ex.getMessage());
+				return false;
+			}
+		});
 	}
 
 	public static boolean isAvailable() {
@@ -70,7 +72,7 @@ public final class SimpleFactionsRegionBridge {
 	}
 
 	private static int resolveProvinceId(Player player, Location location) {
-		if (player != null) {
+		if (location == null && player != null) {
 			int current = ProvincePresenceService.getInstance().getCurrentProvince(player);
 			if (current > 0) {
 				return current;

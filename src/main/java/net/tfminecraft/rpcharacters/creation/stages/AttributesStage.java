@@ -49,14 +49,14 @@ public class AttributesStage extends Stage {
 	private final Map<String, Integer> attributeSlots;
 
 	private final Map<String, Integer> ranks = new LinkedHashMap<>();
-	private int remaining;
+	private long remaining;
 	private boolean active;
 
 	public AttributesStage(Stage s, ConfigurationSection config) {
 		copyBaseFields(s);
 		this.key = config.getString("key", "attributes");
 		this.pool = config.contains("points") ? config.getInt("points") : 12;
-		this.maxRank = config.contains("max-rank") ? config.getInt("max-rank") : 4;
+		this.maxRank = Math.max(0, Math.min(31, config.getInt("max-rank", 4)));
 		this.size = config.contains("gui-size") ? config.getInt("gui-size") : 54;
 		this.attributes = new ArrayList<>();
 		this.attributeSlots = new LinkedHashMap<>();
@@ -68,7 +68,7 @@ public class AttributesStage extends Stage {
 					continue;
 				}
 				String id = a.trim().toLowerCase(Locale.ROOT);
-				if (!acceptAttribute(id)) {
+				if (attributes.contains(id) || !acceptAttribute(id)) {
 					continue;
 				}
 				this.attributes.add(id);
@@ -100,7 +100,7 @@ public class AttributesStage extends Stage {
 			int idx = 0;
 			for (String rawKey : map.getKeys(false)) {
 				String id = rawKey.trim().toLowerCase(Locale.ROOT);
-				if (!acceptAttribute(id)) {
+				if (attributes.contains(id) || !acceptAttribute(id)) {
 					continue;
 				}
 				int slot = -1;
@@ -128,7 +128,7 @@ public class AttributesStage extends Stage {
 				continue;
 			}
 			String id = a.trim().toLowerCase(Locale.ROOT);
-			if (!acceptAttribute(id)) {
+			if (attributes.contains(id) || !acceptAttribute(id)) {
 				continue;
 			}
 			this.attributes.add(id);
@@ -181,7 +181,7 @@ public class AttributesStage extends Stage {
 	}
 
 	public int getRemaining() {
-		return remaining;
+		return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, remaining));
 	}
 
 	public boolean isActive() {
@@ -237,11 +237,15 @@ public class AttributesStage extends Stage {
 		if (rank < 1) {
 			return 0;
 		}
-		return 1 << (rank - 1);
+		return rank > 31 ? Integer.MAX_VALUE : 1 << (rank - 1);
 	}
 
 	public int spentPoints() {
-		int spent = 0;
+		return (int) Math.min(Integer.MAX_VALUE, totalSpentPoints());
+	}
+
+	private long totalSpentPoints() {
+		long spent = 0;
 		for (String attr : attributes) {
 			int r = getRank(attr);
 			for (int n = 1; n <= r; n++) {
@@ -304,10 +308,7 @@ public class AttributesStage extends Stage {
 			}
 			ranks.put(attr, Math.min(rank, maxRank));
 		}
-		remaining = pool - spentPoints();
-		if (remaining < 0) {
-			remaining = 0;
-		}
+		remaining = (long) pool - totalSpentPoints();
 	}
 
 	private static boolean hasTraitId(RPCharacter character, String id) {
@@ -324,6 +325,20 @@ public class AttributesStage extends Stage {
 			RPTexts.send(p, RPTexts.ERROR + "Spend all " + pool + " attribute points ("
 				+ remaining + " left).");
 			return;
+		}
+		List<Trait> replacements = new ArrayList<>();
+		if (cc != null) {
+			for (String attr : attributes) {
+				for (int n = 1; n <= getRank(attr); n++) {
+					Trait trait = TraitLoader.getByString(traitId(attr, n));
+					if (trait == null) {
+						RPTexts.send(p, RPTexts.ERROR + "Missing attribute trait "
+								+ traitId(attr, n) + " — check attributes-traits.yml");
+						return;
+					}
+					replacements.add(trait);
+				}
+			}
 		}
 		active = false;
 		p.closeInventory();
@@ -342,24 +357,16 @@ public class AttributesStage extends Stage {
 		}
 		AttributeData contribution = new AttributeData();
 		contribution.clearAll();
-		for (String attr : attributes) {
-			int rank = getRank(attr);
-			for (int n = 1; n <= rank; n++) {
-				Trait t = TraitLoader.getByString(traitId(attr, n));
-				if (t == null) {
-					RPTexts.send(p, RPTexts.ERROR + "Missing attribute trait "
-						+ traitId(attr, n) + " — check attributes-traits.yml");
-					continue;
-				}
-				cc.getCharacter().addTrait(t);
-				contribution.mergeFrom(t.getTraitData().getAttributeData());
-			}
+		for (Trait trait : replacements) {
+			cc.getCharacter().addTrait(trait);
+			contribution.mergeFrom(trait.getTraitData().getAttributeData());
 		}
 		cc.setAttributeStageContribution(key, contribution);
 		RPTexts.send(p, RPTexts.SUCCESS + "Attributes set.");
 		new BukkitRunnable() {
 			@Override
 			public void run() {
+				if (cc.isCancelled()) return;
 				if (cc.isEditingFromSummary()) {
 					cc.returnToSummary();
 				} else if (autoNext()) {

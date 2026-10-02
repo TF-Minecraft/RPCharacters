@@ -36,6 +36,7 @@ public class RaceLoader implements LoaderInterface{
 		List<String> list = new ArrayList<String>(set);
 		
 		for(String key : list) {
+			if (!config.isConfigurationSection(key)) continue;
 			Race o = new Race(key, config.getConfigurationSection(key));
 			oList.add(o);
 		}

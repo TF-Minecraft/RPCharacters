@@ -179,11 +179,7 @@ public class SpawnedClue {
 		try {
 			return discoveredByCharacter.containsKey(UUID.fromString(characterId));
 		} catch (IllegalArgumentException ex) {
-			for (UUID key : discoveredByCharacter.keySet()) {
-				if (key.toString().equalsIgnoreCase(characterId)) {
-					return true;
-				}
-			}
+
 			return false;
 		}
 	}

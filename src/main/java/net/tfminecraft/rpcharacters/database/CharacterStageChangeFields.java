@@ -26,7 +26,7 @@ public final class CharacterStageChangeFields {
 		if (characterJson.get("paid-changes") instanceof Map<?, ?> counts) {
 			for (Map.Entry<?, ?> entry : counts.entrySet()) {
 				if (entry.getKey() instanceof String stageId && entry.getValue() instanceof Number count) {
-					character.setPaidChangeCount(stageId, count.intValue());
+					character.setPaidChangeCount(stageId, (int) count.doubleValue());
 				}
 			}
 		}
@@ -38,7 +38,7 @@ public final class CharacterStageChangeFields {
 				if (entry.getKey() instanceof String stageId && entry.getValue() instanceof Map<?, ?> mark
 						&& mark.get("revision") instanceof Number revision) {
 					long since = mark.get("since") instanceof Number n ? n.longValue() : 0L;
-					character.setStageRevision(stageId, revision.intValue(), since);
+					character.setStageRevision(stageId, (int) revision.doubleValue(), since);
 				}
 			}
 		}

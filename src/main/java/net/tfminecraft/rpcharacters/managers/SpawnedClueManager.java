@@ -69,7 +69,15 @@ public class SpawnedClueManager implements Listener {
 	}
 
 	private void registerInternal(SpawnedClue clue) {
-		byId.put(clue.getId(), clue);
+		SpawnedClue previous = byId.put(clue.getId(), clue);
+		if (previous != null) {
+			ChunkKey previousKey = chunkKey(previous);
+			List<UUID> previousIds = byChunk.get(previousKey);
+			if (previousIds != null) {
+				previousIds.remove(previous.getId());
+				if (previousIds.isEmpty()) byChunk.remove(previousKey);
+			}
+		}
 		ChunkKey key = chunkKey(clue);
 		byChunk.computeIfAbsent(key, k -> new ArrayList<>());
 		List<UUID> ids = byChunk.get(key);
@@ -88,7 +96,7 @@ public class SpawnedClueManager implements Listener {
 
 	public List<SpawnedClue> getCluesNear(Location center, double radius) {
 		List<SpawnedClue> result = new ArrayList<>();
-		if (center == null || center.getWorld() == null || radius <= 0) return result;
+		if (center == null || center.getWorld() == null || !Double.isFinite(radius) || radius <= 0) return result;
 
 		double radiusSq = radius * radius;
 		Set<UUID> seen = new HashSet<>();
@@ -194,7 +202,7 @@ public class SpawnedClueManager implements Listener {
 	}
 
 	public int clearInRadius(Location center, double radius) {
-		if (center == null || center.getWorld() == null || radius <= 0) return 0;
+		if (center == null || center.getWorld() == null || !Double.isFinite(radius) || radius <= 0) return 0;
 
 		List<SpawnedClue> toRemove = new ArrayList<>(getCluesNear(center, radius));
 		for (SpawnedClue clue : toRemove) {
@@ -301,14 +309,13 @@ public class SpawnedClueManager implements Listener {
 			@Override
 			public void run() {
 				if (!dirty) return;
-				dirty = false;
 				saveAllNow();
 			}
 		}.runTaskTimer(RPCharacters.plugin, 200L, 200L);
 	}
 
 	public void saveAllNow() {
-		SpawnedClueDatabase.saveAll(byId.values());
+		dirty = !SpawnedClueDatabase.trySaveAll(byId.values());
 	}
 
 	public void shutdown() {
