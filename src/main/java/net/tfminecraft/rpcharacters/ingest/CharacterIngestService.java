@@ -1,6 +1,11 @@
 package net.tfminecraft.rpcharacters.ingest;
 
 import java.time.Instant;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.util.logging.Level;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -347,6 +352,18 @@ public final class CharacterIngestService {
 		character.ensureTraitStateDefaults();
 		character.update();
 
+		Path ownerDirectory = Path.of("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString())
+				.toAbsolutePath().normalize();
+		Path characterFile = ownerDirectory.resolve(createId + ".json").normalize();
+		if (!ownerDirectory.equals(characterFile.getParent())) {
+			return ApplyOutcome.fail("invalid character id");
+		}
+		// An unrecognized existing file may contain recoverable data. Never overwrite it or
+		// treat it as a file owned by this create's rollback.
+		if (Files.exists(characterFile, LinkOption.NOFOLLOW_LINKS)) {
+			return ApplyOutcome.fail("character file already exists");
+		}
+
 		Boolean previousEighteen = pd.isEighteen();
 		Object eighteenRaw = payload.get("eighteen");
 		if (eighteenRaw instanceof Boolean) {
@@ -360,6 +377,14 @@ public final class CharacterIngestService {
 		if (!DB.trySavePlayer(pd)) {
 			pd.getCharacters().remove(character);
 			pd.setEighteen(previousEighteen);
+			try {
+				Files.deleteIfExists(characterFile);
+			} catch (IOException rollbackFailure) {
+				RPCharacters.plugin.getLogger().log(Level.SEVERE,
+						"Could not remove uncommitted character file " + characterFile, rollbackFailure);
+			}
+			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.remove(createId);
+			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(pd.getUniqueId(), createId);
 			return ApplyOutcome.fail("could not save player data");
 		}
 

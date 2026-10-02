@@ -143,6 +143,80 @@ class CharacterIngestServiceTest extends IngestFixture {
         assertEquals(false,result(0).get("ok"),"Remote create must remain failed when no character file was saved");assertEquals("blocking file",Files.readString(characterFolder));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void failedAccountWriteRollsBackTheNewCharacterOnDiskAndAllowsOneRetry(boolean isOnline) throws Exception {
+        String originalAccount = obj("completed stages",array(),"eighteen",false).toJSONString();
+        Files.writeString(playerFile, originalAccount);
+        PlayerData loaded = mockData();
+        if (isOnline) online(loaded);
+        pending(row("alpha",payload()));
+        Path account = playerFile.toAbsolutePath().normalize();
+        try (var files = mockStatic(Files.class, invocation -> {
+            if (invocation.getMethod().getName().equals("move")
+                    && ((Path)invocation.getArgument(1)).toAbsolutePath().normalize().equals(account)) {
+                throw new java.io.IOException("account rename rejected after character commit");
+            }
+            return invocation.callRealMethod();
+        })) {
+            CharacterIngestService.pullAsync(plugin); runWorkers();
+        }
+        assertEquals(false,result(0).get("ok"));
+        assertEquals(originalAccount,Files.readString(playerFile));
+        assertFalse(Files.exists(characterFolder.resolve("alpha.json")), "A rejected create cannot reappear on reload");
+        assertTrue(loaded.getCharacters().isEmpty());
+        assertTrue(new net.tfminecraft.rpcharacters.database.Database().loadPlayerData(owner).getCharacters().isEmpty());
+        mail.verify(() -> net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.remove("alpha"));
+        playtime.verify(() -> net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(owner,"alpha"));
+        lifecycle.verifyNoInteractions();
+        CharacterIngestService.pullAsync(plugin); runWorkers();
+        assertEquals(true,result(0).get("ok"));
+        assertEquals(List.of("alpha"),new net.tfminecraft.rpcharacters.database.Database().listCharacterFileIds(owner));
+    }
+
+    @Test void anUnloadedExistingFileCannotBeOverwrittenOrDeletedByCreateRollback() throws Exception {
+        online(mockData()); Files.createDirectories(characterFolder);
+        Path existing = characterFolder.resolve("alpha.json");
+        Files.writeString(existing,"{recoverable old character");
+        pending(row("alpha",payload())); CharacterIngestService.pullAsync(plugin); runWorkers();
+        assertEquals(false,result(0).get("ok"));
+        assertEquals("{recoverable old character",Files.readString(existing));
+        assertFalse(Files.exists(playerFile)); lifecycle.verifyNoInteractions();
+    }
+
+    @Test void invalidCreateIdCannotDeleteFilesOutsideTheOwnersDirectory() throws Exception {
+        Path outside = characterFolder.getParent().resolve("outside-"+owner+".json");
+        Files.writeString(outside,"preserved sibling");
+        try {
+            pending(row("../outside-"+owner,payload())); CharacterIngestService.pullAsync(plugin); runWorkers();
+            assertEquals(false,result(0).get("ok"));
+            assertEquals("preserved sibling",Files.readString(outside));
+            assertFalse(Files.exists(playerFile));
+        } finally {Files.delete(outside);}
+    }
+
+    @Test void rollbackDeletionFailureIsReportedAndNeverAcknowledgedAsSuccess() throws Exception {
+        pending(row("alpha",payload())); Path characterFile = characterFolder.resolve("alpha.json").toAbsolutePath();
+        try (var files = mockStatic(Files.class, invocation -> {
+            if (invocation.getMethod().getName().equals("move")
+                    && ((Path)invocation.getArgument(1)).toAbsolutePath().equals(playerFile.toAbsolutePath())) {
+                throw new java.io.IOException("account commit rejected");
+            }
+            if (invocation.getMethod().getName().equals("deleteIfExists")
+                    && ((Path)invocation.getArgument(0)).toAbsolutePath().equals(characterFile)) {
+                throw new java.io.IOException("rollback deletion rejected");
+            }
+            return invocation.callRealMethod();
+        })) {
+            CharacterIngestService.pullAsync(plugin); runWorkers();
+        }
+        assertEquals(false,result(0).get("ok"));
+        verify(logger).log(eq(java.util.logging.Level.SEVERE),contains("uncommitted character file"),any(java.io.IOException.class));
+        lifecycle.verifyNoInteractions();
+        mail.verify(() -> net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.remove("alpha"));
+        playtime.verify(() -> net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(owner,"alpha"));
+    }
+
     @Test void existingDuplicateWithoutCapacityPressureAndNullIdAreSafe() {
         var pd=mockData();online(pd);doReturn(Arrays.asList(character(null),character("alpha"))).when(pd).getCharacters();pending(row("ALPHA",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals(true,result(0).get("ok"));verify(pd,never()).addCharacter(any());
     }

@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.wipe;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -30,6 +31,10 @@ public final class WipeCommand {
 	private WipeCommand() {}
 
 	public static boolean handle(CommandSender sender, String[] args) {
+		return handle(sender, args, System::currentTimeMillis);
+	}
+
+	static boolean handle(CommandSender sender, String[] args, LongSupplier clock) {
 		if (!Permissions.isAdmin(sender)) {
 			RPTexts.send(sender, RPTexts.ERROR + "You do not have permission to use this command.");
 			return true;
@@ -39,20 +44,20 @@ public final class WipeCommand {
 			return true;
 		}
 		if (args.length == 2) {
-			return prelude(sender);
+			return prelude(sender, clock);
 		}
 		if (args.length != 3 || !args[2].equalsIgnoreCase("confirm")) {
 			RPTexts.send(sender, RPTexts.ERROR + USAGE);
 			return true;
 		}
-		String confirmedRealm = takeConfirm(sender);
+		String confirmedRealm = takeConfirm(sender, clock);
 		if (confirmedRealm == null) {
 			return true;
 		}
 		return wipeWebsite(sender, confirmedRealm);
 	}
 
-	private static boolean prelude(CommandSender sender) {
+	private static boolean prelude(CommandSender sender, LongSupplier clock) {
 		String realm = GatewayClient.realmId();
 		if (realm == null) {
 			RPTexts.send(sender, RPTexts.ERROR + "Could not read the realm id from TFMCWeb. Website wipe aborted.");
@@ -61,20 +66,20 @@ public final class WipeCommand {
 		RPTexts.send(sender, RPTexts.WARN + "Website wipe target: realm " + RPTexts.ACCENT + realm + RPTexts.WARN + ".");
 		RPTexts.send(sender, RPTexts.ERROR
 				+ "This deletes every website character row for this realm, including pending donor creates.");
-		PENDING.put(key(sender), new Confirmation(realm, System.currentTimeMillis() + CONFIRM_TTL_MS));
+		PENDING.put(key(sender), new Confirmation(realm, clock.getAsLong() + CONFIRM_TTL_MS));
 		RPTexts.send(sender, RPTexts.COMMAND + "Type /rpcharacter wipe website confirm"
 				+ RPTexts.WARN + " within 30 seconds.");
 		return true;
 	}
 
 	/** The realm this sender armed, only while the confirmation remains valid. */
-	private static String takeConfirm(CommandSender sender) {
+	private static String takeConfirm(CommandSender sender, LongSupplier clock) {
 		Confirmation confirmation = PENDING.remove(key(sender));
 		if (confirmation == null) {
 			RPTexts.send(sender, RPTexts.ERROR + "Nothing to confirm.");
 			return null;
 		}
-		if (System.currentTimeMillis() > confirmation.expiresAtMs()) {
+		if (clock.getAsLong() > confirmation.expiresAtMs()) {
 			RPTexts.send(sender, RPTexts.ERROR + "Confirm expired. Run the wipe command again.");
 			return null;
 		}

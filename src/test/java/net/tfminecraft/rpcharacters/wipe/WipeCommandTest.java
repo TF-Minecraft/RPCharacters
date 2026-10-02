@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.wipe;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.*;
 import org.junit.jupiter.api.*;
@@ -19,6 +20,7 @@ class WipeCommandTest {
     MockedStatic<GatewayClient> gateway;
     MockedStatic<ProvinceSystemClient> api;
     MockedStatic<Bukkit> bukkit;
+    AtomicLong now;
     final List<Runnable> background = new ArrayList<>(), foreground = new ArrayList<>();
 
     @BeforeEach void setup() {
@@ -28,6 +30,7 @@ class WipeCommandTest {
         when(RPCharacters.plugin.getLogger()).thenReturn(java.util.logging.Logger.getLogger("wipe-test"));
         player = server.addPlayer();
         player.setOp(true);
+        now = new AtomicLong(100_000L);
         gateway = mockStatic(GatewayClient.class);
         gateway.when(GatewayClient::realmId).thenReturn("dev");
         api = mockStatic(ProvinceSystemClient.class);
@@ -41,7 +44,7 @@ class WipeCommandTest {
     }
 
     @AfterEach void cleanup() { bukkit.close(); api.close(); gateway.close(); state.close(); MockBukkit.unmock(); }
-    void call(String... args) { assertTrue(WipeCommand.handle(player, args)); }
+    void call(String... args) { assertTrue(WipeCommand.handle(player, args, now::get)); }
     String messages() { StringBuilder text = new StringBuilder(); String message; while ((message = player.nextMessage()) != null) text.append(message).append('\n'); return text.toString(); }
     void arm() { call("wipe", "website"); }
     void confirm() { call("wipe", "website", "confirm"); }
@@ -94,10 +97,35 @@ class WipeCommandTest {
         assertTrue(messages().contains("changed")); api.verifyNoInteractions();
     }
 
-    @Test void expiredConfirmationDoesNotScheduleDeletion() throws InterruptedException {
+    @Test void expiredConfirmationDoesNotScheduleDeletion() {
         arm(); messages();
-        Thread.sleep(30_050);
+        now.addAndGet(30_001L);
         confirm(); assertTrue(messages().contains("expired"));
         assertTrue(background.isEmpty()); api.verifyNoInteractions();
+        confirm(); assertTrue(messages().contains("Nothing to confirm"));
+    }
+
+    @Test void confirmationRemainsValidAtExactlyThirtySeconds() {
+        api.when(() -> ProvinceSystemClient.wipeRealmCharacterData("dev"))
+                .thenReturn(ProvinceSystemClient.RealmWipeResult.success("dev", 1, 0));
+        arm(); messages();
+        now.addAndGet(30_000L);
+        confirm();
+        assertEquals(1, background.size(), "Expiry uses a strict greater-than boundary");
+        finish();
+        assertTrue(messages().contains("Wiped website"));
+    }
+
+    @Test void staticEntryPointUsesTheSystemClockAndStillConfirmsImmediately() {
+        api.when(() -> ProvinceSystemClient.wipeRealmCharacterData("dev"))
+                .thenReturn(ProvinceSystemClient.RealmWipeResult.success("dev", 1, 0));
+        assertTrue(WipeCommand.handle(player, new String[] {"wipe", "website"}));
+        now.addAndGet(30_001L);
+        assertTrue(WipeCommand.handle(player, new String[] {"wipe", "website", "confirm"}));
+        assertEquals(1, background.size(), "Production uses the system clock independently of the injected test clock");
+        finish();
+        assertTrue(WipeCommand.handle(player, new String[] {"wipe", "website", "confirm"}));
+        assertTrue(messages().contains("Nothing to confirm"));
+        api.verify(() -> ProvinceSystemClient.wipeRealmCharacterData("dev"), times(1));
     }
 }
