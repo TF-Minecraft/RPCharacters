@@ -9,13 +9,13 @@
     <version>main-SNAPSHOT</version>
 
     <properties>
-        <argLine></argLine>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <argLine></argLine>
         <simplefactions.version>3.0.1</simplefactions.version>
         <tlibs.version>2.0.0</tlibs.version>
-        <worldguard.version>7.0.9</worldguard.version>
         <vehicleframework.version>2.7.0</vehicleframework.version>
+        <worldguard.version>7.0.9</worldguard.version>
     </properties>
 
     <dependencies>
