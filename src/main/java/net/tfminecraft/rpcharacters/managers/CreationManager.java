@@ -21,6 +21,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Dependency;
 import net.tfminecraft.rpcharacters.creation.Stage;
@@ -520,6 +522,12 @@ public class CreationManager implements Listener{
 			}
 			String stageId = action.substring("edit:".length());
 			Stage stage = StageLoader.getById(stageId);
+			if (cc.isEditing() && isClassStage(stage) && ClassPickService.isEnabled()) {
+				// Class picks are priced by the class picker, not the stage's lock and paid changes.
+				cc.closeEditSession();
+				ClassPickGui.open(p);
+				return;
+			}
 			if (stage != null && !StageEditLock.canEdit(p, stage, cc.getCharacter())
 					&& !PaidChangeService.canPayToOpen(stage)) {
 				RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");
@@ -527,6 +535,10 @@ public class CreationManager implements Listener{
 			}
 			cc.jumpToStageForEdit(stageId);
 		}
+	}
+
+	public static boolean isClassStage(Stage stage) {
+		return stage instanceof SelectionStage selection && "class".equalsIgnoreCase(selection.getTarget());
 	}
 
 	public void nonCreationClick(Player p, InventoryClickEvent e) {

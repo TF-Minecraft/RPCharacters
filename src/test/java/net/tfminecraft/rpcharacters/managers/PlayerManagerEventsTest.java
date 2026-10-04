@@ -27,6 +27,7 @@ import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.experience.Profession;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.Permissions;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Dependency;
 import net.tfminecraft.rpcharacters.creation.Stage;
@@ -167,6 +168,25 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
         message("Cant find player, maybe they are offline?");
         Cache.characterSlots.add(0);
         manager.selectionClick(menu("Character Menu", 0, item(Material.ENDER_PEARL, "character"), player));
+    }
+
+    @Test
+    void characterInfoClassButtonOpensThePickerForItsOwnerOnly() {
+        try (var gui = mockStatic(ClassPickGui.class)) {
+            ItemStack button = new ItemStack(Material.NETHERITE_SWORD);
+            var meta = button.getItemMeta();
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, InventoryManager.OPEN_CLASS_PICK_KEY), PersistentDataType.BYTE, (byte) 1);
+            button.setItemMeta(meta);
+            manager.selectionClick(menu("Character Info", InventoryManager.CLASS_PICK_SLOT, button, server.addPlayer("Other")));
+            manager.selectionClick(menu("Character Info", InventoryManager.CLASS_PICK_SLOT, new ItemStack(Material.NETHERITE_SWORD), player));
+            manager.selectionClick(menu("Character Info", InventoryManager.CLASS_PICK_SLOT, null, player));
+            InventoryClickEvent noMeta = menu("Character Info", InventoryManager.CLASS_PICK_SLOT, null, player);
+            when(noMeta.getCurrentItem()).thenReturn(mock(ItemStack.class));
+            manager.selectionClick(noMeta);
+            gui.verifyNoInteractions();
+            manager.selectionClick(menu("Character Info", InventoryManager.CLASS_PICK_SLOT, button, player));
+            gui.verify(() -> ClassPickGui.open(player));
+        }
     }
 
     @Test

@@ -20,6 +20,7 @@ import net.tfminecraft.tlibs.shaded.lang3.text.WordUtils;
 import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
 import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
@@ -64,6 +65,8 @@ public class InventoryManager {
 	private static final String CLUE_INDEX_KEY = "clue_index";
 	private static final String OPEN_CLUES_GUI_KEY = "open_clues_gui";
 	private static final String SUMMARY_ACTION_KEY = "summary_action";
+	public static final String OPEN_CLASS_PICK_KEY = "open_class_pick";
+	public static final int CLASS_PICK_SLOT = 22;
 
 	private static String t(String raw) {
 		return RPTexts.formatGui(raw);
@@ -92,6 +95,9 @@ public class InventoryManager {
 		}
 		if(c.getStatus().equals(Status.ALIVE) && !c.isActive() && (!PermissionGroupService.hasCharacterSwitchCooldown(p, pd) || Permissions.isAdmin(p)) && c.getOwner().equals(p)) {
 			i.setItem(6, getSwitchItem());
+		}
+		if (c.getStatus().equals(Status.ALIVE) && c.isActive() && c.getOwner().equals(p) && ClassPickService.isEnabled()) {
+			i.setItem(CLASS_PICK_SLOT, getClassPickItem(c));
 		}
 		int slotn = 0;
 		while(slotn < i.getSize()) {
@@ -261,6 +267,9 @@ public class InventoryManager {
 			return false;
 		}
 		Stage stage = StageLoader.getById(stageId);
+		if (CreationManager.isClassStage(stage) && ClassPickService.isEnabled()) {
+			return false;
+		}
 		return stage != null && !StageEditLock.canEdit(player, stage, character);
 	}
 
@@ -299,7 +308,9 @@ public class InventoryManager {
 		List<String> lore = new ArrayList<>();
 		boolean locked = editing && isSummaryEntryLocked(player, character, stageId);
 		Stage editedStage = editing && !"clues".equalsIgnoreCase(stageId) ? StageLoader.getById(stageId) : null;
-		List<String> paidLore = PaidChangeService.summaryLore(editedStage, character, locked);
+		List<String> paidLore = CreationManager.isClassStage(editedStage) && ClassPickService.isEnabled()
+				? ClassPickService.pricingLore(character, RPTexts.MUTED + "Click to open the class picker")
+				: PaidChangeService.summaryLore(editedStage, character, locked);
 		if (paidLore != null) {
 			for (String line : paidLore) {
 				lore.add(summaryValue(line));
@@ -946,6 +957,24 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
+	public ItemStack getClassPickItem(RPCharacter c) {
+		ItemStack item = new ItemStack(Material.NETHERITE_SWORD, 1);
+		ItemMeta meta = item.getItemMeta();
+		meta.setDisplayName(t(RPTexts.GUI_WARN + "Class"));
+		PlayerClass playerClass = c.hasMMOClass() ? MMOCore.plugin.classManager.get(c.getMMOClass()) : null;
+		List<String> lore = new ArrayList<>();
+		lore.add(summaryValue(playerClass == null ? RPTexts.MUTED + "Not selected" : ClassPickService.className(playerClass)));
+		lore.add(summaryValue(RPTexts.MUTED + "Click to choose your class or subclass"));
+		meta.setLore(lore);
+		meta.getPersistentDataContainer().set(new NamespacedKey(RPCharacters.plugin, OPEN_CLASS_PICK_KEY),
+				PersistentDataType.BYTE, (byte) 1);
+		meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+		item.setItemMeta(meta);
+		return item;
+	}
+
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")
 	public ItemStack getSwitchItem() {

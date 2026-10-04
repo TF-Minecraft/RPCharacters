@@ -80,7 +80,21 @@ rp-injure:
   range: 10
   timeout-seconds: 30
 
+# Class and subclass picks for the active character, through /class (and the commands below),
+# /rpcharacter class, the Class button in Character Info, and the class entry in /rpcharacter edit.
+# They replace MMOCore class points: the commands below open this picker instead of MMOCore's.
+# A character's first class and its first subclass are free. Every other pick costs change-cost.
+# infinite-points: every pick is free and unlimited (tutorial servers).
+# accounts: where to take the denars from, tried in order. The whole cost comes from one account.
+class-selection:
+  enabled: true
+  infinite-points: false
+  change-cost: 200
+  accounts: [pouch, bank]
+  commands: [class, c]
+
 # Pay to change a choice after its stage's lock-time runs out (class is locked after 5d).
+# The class rule only applies while class-selection is disabled.
 # Players pay when they open the choice, and get the denars back if they leave without changing it.
 # costs: the first paid change, the second, and so on. The last cost repeats after that.
 # accounts: where to take the denars from, tried in order. The whole cost comes from one account.

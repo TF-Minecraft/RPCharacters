@@ -30,6 +30,7 @@ import net.Indyuce.mmocore.api.event.PlayerChangeClassEvent;
 import net.Indyuce.mmocore.api.event.PlayerLevelChangeEvent;
 import net.Indyuce.mmocore.api.event.PlayerExperienceGainEvent;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
 import net.tfminecraft.rpcharacters.injuries.InjuryHealingService;
 import net.tfminecraft.rpcharacters.injuries.OffhandBlockService;
@@ -676,6 +677,14 @@ public class PlayerManager implements Listener{
 				last.put(p, c);
 				InventoryManager inv = new InventoryManager();
 				inv.confirmView(p);
+			} else if (e.getSlot() == InventoryManager.CLASS_PICK_SLOT) {
+				ItemStack clicked = e.getCurrentItem();
+				if (clicked == null || clicked.getItemMeta() == null || !p.equals(o) || !clicked.getItemMeta()
+						.getPersistentDataContainer().has(new NamespacedKey(RPCharacters.plugin, InventoryManager.OPEN_CLASS_PICK_KEY))) {
+					return;
+				}
+				ClassPickGui.open(p);
+				p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
 			} else if(e.getSlot() == 6) {
 				ItemStack i = e.getInventory().getItem(10);
 				if (i == null || i.getItemMeta() == null || e.getCurrentItem() == null) return;

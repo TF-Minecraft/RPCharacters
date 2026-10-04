@@ -48,6 +48,7 @@ public class CommandTabCompleter implements TabCompleter {
 			completions.add("cancel");
 			completions.add("help");
 			completions.add("edit");
+			completions.add("class");
 			completions.add("clues");
 			completions.add("wardrobe");
 			completions.add("party");

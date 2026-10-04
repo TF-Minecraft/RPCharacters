@@ -12,6 +12,7 @@ import net.Indyuce.mmocore.manager.ClassManager;
 import net.tfminecraft.rpcharacters.*;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient.CatalogPushResult;
 import net.tfminecraft.rpcharacters.catalog.CreationCatalogSyncService;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.clues.discovery.*;
 import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.creation.*;
@@ -276,6 +277,7 @@ class CommandManagerTest {
         var tutorials = boundary(TutorialCommands.class); assertFalse(run("dismisspdwarning")); tutorials.verify(() -> TutorialCommands.dismiss(player, TutorialService.PERMADEATH_ZONE));
         String[] tutorial = {"tutorial", "dismiss"}; assertFalse(run(tutorial)); tutorials.verify(() -> TutorialCommands.handle(player, tutorial));
         var evil = boundary(EvilRpCommands.class); assertFalse(run("strikes")); evil.verify(() -> EvilRpCommands.handleOwnStrikes(player));
+        var picker = boundary(ClassPickGui.class); assertTrue(run("class")); picker.verify(() -> ClassPickGui.open(player));
         String[] spare = {"spare", "Iris"}; assertFalse(run(spare)); evil.verify(() -> EvilRpCommands.handleDecision(player, spare, StrikeChoice.SPARE));
         run("setworldspawn"); message("access"); admin(); var zones = boundary(PermadeathZoneLoader.class); run("setworldspawn");
         zones.verify(() -> PermadeathZoneLoader.saveWorldSpawn(player.getLocation())); message("world spawn set");

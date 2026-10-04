@@ -35,6 +35,8 @@ import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.RuntimeTestState;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
 import net.tfminecraft.rpcharacters.creation.Dependency;
 import net.tfminecraft.rpcharacters.creation.Stage;
@@ -639,6 +641,31 @@ class CreationManagerTest {
         manager.selectionClick(summary("edit:race"));
         verify(creation).jumpToStageForEdit("race");
         manager.selectionClick(summary("unknown"));
+    }
+
+    @Test
+    void editingTheClassEntryOpensTheClassPickerInsteadOfThePaidStage() {
+        active();
+        when(creation.isEditing()).thenReturn(true);
+        SelectionStage stage = mock(SelectionStage.class);
+        when(stage.getTarget()).thenReturn("class");
+        stages.when(() -> StageLoader.getById("class_stage")).thenReturn(stage);
+        locks.when(() -> StageEditLock.canEdit(player, stage, character)).thenReturn(true);
+        try (var gui = mockStatic(ClassPickGui.class)) {
+            manager.selectionClick(summary("edit:class_stage"));
+            verify(creation).closeEditSession();
+            gui.verify(() -> ClassPickGui.open(player));
+            ClassPickService.configure(new ClassPickService.Settings(false, false, java.math.BigDecimal.ZERO, List.of(), java.util.Set.of()));
+            manager.selectionClick(summary("edit:class_stage"));
+            verify(creation).jumpToStageForEdit("class_stage");
+        } finally {
+            ClassPickService.configure(ClassPickService.Settings.DEFAULTS);
+        }
+        assertTrue(CreationManager.isClassStage(stage));
+        when(stage.getTarget()).thenReturn("race");
+        assertFalse(CreationManager.isClassStage(stage));
+        assertFalse(CreationManager.isClassStage(mock(Stage.class)));
+        assertFalse(CreationManager.isClassStage(null));
     }
 
     @Test
