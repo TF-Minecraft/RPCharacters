@@ -160,6 +160,9 @@ class ClassPickTest {
         assertEquals(BigDecimal.ZERO, ClassPickService.price(character, berserkerPick));
         assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, magePick));
         character.setMMOClass("mage"); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick), "Only the current class's subclasses are free");
+        character.setMMOClass("berserker"); var spellbladePick = ClassPickService.option("spellblade");
+        assertEquals(BigDecimal.ZERO, ClassPickService.price(character, spellbladePick), "A reset subclass holder's sibling is the free subclass pick");
+        assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, magePick));
         character.setMMOClass("warrior"); character.setSubclassPicked(true); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick));
         assertEquals(BigDecimal.ZERO, ClassPickService.price(new RPCharacter(player), magePick), "A character without a class picks its first one free");
         character.setMMOClass("mage"); ClassPickService.configure(settings(true, true)); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, magePick));
@@ -273,7 +276,8 @@ class ClassPickTest {
         ClassPickGui.click(player, (ClassPickGui.Holder) top.getHolder(), ClassPickGui.NAV_SLOT);
         assertEquals("Class Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
         level.set(2); character.setMMOClass("berserker"); top = openSubclasses();
-        assertTrue(lore(top.getItem(10)).contains("Your current class")); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
+        assertTrue(lore(top.getItem(10)).contains("Your current class")); assertTrue(lore(top.getItem(11)).contains("Cost: Free"));
+        character.setSubclassPicked(true); top = openSubclasses(); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
         character.setMMOClass("mage"); top = openSubclasses();
         assertTrue(ChatColor.stripColor(top.getItem(22).getItemMeta().getDisplayName()).contains("No subclasses"));
         character.setMMOClass(null); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
