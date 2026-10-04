@@ -42,6 +42,12 @@ import net.tfminecraft.rpcharacters.classpick.ClassPickService.Result;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Settings;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Status;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
+import net.tfminecraft.rpcharacters.creation.Stage;
+import net.tfminecraft.rpcharacters.creation.StageEditLock;
+import net.tfminecraft.rpcharacters.creation.stages.SelectionStage;
+import net.tfminecraft.rpcharacters.loaders.StageLoader;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeRule;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterClassChangeEvent;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -71,7 +77,7 @@ class ClassPickTest {
     <T> MockedStatic<T> boundary(Class<T> type) { var result = mockStatic(type); boundaries.add(result); return result; }
 
     @BeforeEach void setup() throws Exception {
-        server = MockBukkit.mock(); state = new RuntimeTestState(RPCharacters.class); previousMmo = MMOCore.plugin;
+        server = MockBukkit.mock(); state = new RuntimeTestState(RPCharacters.class, StageLoader.class, PaidChangeService.class); previousMmo = MMOCore.plugin;
         Cache.attributes = new ArrayList<>(); Cache.professions = new ArrayList<>();
         player = server.addPlayer("Picker");
         MMOCore.plugin = mock(MMOCore.class); classes = mock(ClassManager.class);
@@ -156,6 +162,24 @@ class ClassPickTest {
         assertEquals(BigDecimal.ZERO, ClassPickService.price(new RPCharacter(player), magePick), "A character without a class picks its first one free");
         character.setMMOClass("mage"); ClassPickService.configure(settings(true, true)); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, magePick));
         assertEquals("Free", ClassPickService.priceText(BigDecimal.ZERO)); assertEquals("200 denars", ClassPickService.priceText(new BigDecimal("200.00")));
+    }
+
+    @Test void classChangesFollowTheClassStageLockWindowAndPaidChangeRule() {
+        var stage = mock(SelectionStage.class); when(stage.getTarget()).thenReturn("class"); when(stage.getId()).thenReturn("class_selection_stage");
+        StageLoader.oList = new ArrayList<>(List.of(mock(Stage.class), stage));
+        PaidChangeService.configure(List.of(new PaidChangeRule("class", "class_selection_stage", "class",
+                List.of(new BigDecimal("100"), new BigDecimal("1000"), new BigDecimal("3000")))), List.of());
+        var locks = boundary(StageEditLock.class);
+        locks.when(() -> StageEditLock.canEdit(player, stage, character)).thenReturn(true); locks.when(() -> StageEditLock.lockRemainingMs(stage, character)).thenReturn(3_600_000L);
+        var magePick = ClassPickService.option("mage"); var lore = (java.util.function.Supplier<String>) () -> String.join(" / ", ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
+        assertEquals(BigDecimal.ZERO, ClassPickService.price(character, magePick), "Class changes are free while the class stage is unlocked");
+        assertTrue(lore.get().matches("Head / First subclass: Free / Class changes: Free for 1h.* / Then: 100 denars"), lore.get());
+        locks.when(() -> StageEditLock.lockRemainingMs(stage, character)).thenReturn(0L); assertEquals("Head / First subclass: Free / Class changes: Free", lore.get());
+        locks.when(() -> StageEditLock.canEdit(player, stage, character)).thenReturn(false);
+        assertEquals(new BigDecimal("100.00"), ClassPickService.price(character, magePick)); assertEquals("Head / First subclass: Free / Class changes: 100 denars / Then: 1,000 denars", lore.get());
+        wallet.balances.put(Account.POUCH, new BigDecimal("150")); var paid = ClassPickService.choose(player, "mage");
+        assertEquals(Status.CHOSEN, paid.status()); assertEquals(new BigDecimal("100.00"), paid.cost()); assertEquals(1, character.getPaidChangeCount("class_selection_stage"));
+        assertEquals(new BigDecimal("1000.00"), ClassPickService.price(character, ClassPickService.option("warrior")), "Each paid change raises the next price");
     }
 
     @Test void freeSubclassPickAppliesSavesAndAnnouncesTheChange() {

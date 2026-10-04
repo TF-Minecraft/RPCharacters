@@ -15,7 +15,10 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.api.player.profess.Subclass;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.creation.Stage;
+import net.tfminecraft.rpcharacters.creation.StageEditLock;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle;
+import net.tfminecraft.rpcharacters.loaders.StageLoader;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.mmocore.ClassService;
@@ -25,13 +28,16 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.paidchange.DenarEconomyWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.paidchange.PaidChangeRule;
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
+import net.tfminecraft.rpcharacters.utils.AgeFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * Class and subclass picks for the active character, in place of MMOCore class points. A
- * character's first class and first subclass are free; every other pick costs denars, unless the
- * server gives infinite points.
+ * character's first class and first subclass are free. Other picks are class changes, priced like
+ * the class creation stage: free while its lock window is open, then the class paid-change rule
+ * (change-cost when there is no rule). Infinite points make every pick free.
  */
 public final class ClassPickService {
 
@@ -126,7 +132,30 @@ public final class ClassPickService {
 				&& option.base().getId().equalsIgnoreCase(character.getMMOClass())) {
 			return BigDecimal.ZERO;
 		}
-		return settings.changeCost();
+		return changePrice(character);
+	}
+
+	/** The class creation stage, whose lock window and paid-change rule price class changes. */
+	static Stage classStage() {
+		for (Stage stage : StageLoader.oList) {
+			if (CreationManager.isClassStage(stage)) {
+				return stage;
+			}
+		}
+		return null;
+	}
+
+	/** Free while the class stage's lock window is open, then the class paid-change rule's next cost. */
+	static BigDecimal changePrice(RPCharacter character) {
+		Stage stage = classStage();
+		PaidChangeRule rule = PaidChangeService.ruleFor(stage);
+		if (rule == null) {
+			return settings.changeCost();
+		}
+		if (StageEditLock.canEdit(character.getOwner(), stage, character)) {
+			return BigDecimal.ZERO;
+		}
+		return rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 	}
 
 	/** Why {@code player} can't pick a class right now, or null when they can. */
@@ -182,6 +211,11 @@ public final class ClassPickService {
 		}
 		if (paidFrom != null) {
 			character.setPaidClassPicks(character.getPaidClassPicks() + 1);
+			PaidChangeRule rule = PaidChangeService.ruleFor(classStage());
+			if (rule != null) {
+				// Shared with paid class-stage edits, so the next change costs the next price.
+				character.setPaidChangeCount(rule.getStageId(), character.getPaidChangeCount(rule.getStageId()) + 1);
+			}
 		}
 		CharacterLifecycle.notifyClassChange(player, pd.getUniqueId(), character, oldClassId, target.getId());
 		RPCharacters.getPlayerManager().savePlayer(player);
@@ -257,7 +291,25 @@ public final class ClassPickService {
 		if (!character.hasPickedSubclass()) {
 			lines.add(RPTexts.MUTED + "First subclass: " + RPTexts.WARN + "Free");
 		}
-		lines.add(RPTexts.MUTED + "Other picks: " + RPTexts.WARN + priceText(settings.changeCost()));
+		Stage stage = classStage();
+		PaidChangeRule rule = PaidChangeService.ruleFor(stage);
+		if (rule == null) {
+			lines.add(RPTexts.MUTED + "Other picks: " + RPTexts.WARN + priceText(settings.changeCost()));
+			return lines;
+		}
+		int paid = character.getPaidChangeCount(rule.getStageId());
+		long freeFor = StageEditLock.lockRemainingMs(stage, character);
+		if (StageEditLock.canEdit(character.getOwner(), stage, character)) {
+			lines.add(RPTexts.MUTED + "Class changes: " + RPTexts.WARN + "Free"
+					+ (freeFor > 0 ? RPTexts.MUTED + " for " + RPTexts.WARN + AgeFormatter.formatCountdown(freeFor) : ""));
+			if (freeFor <= 0) {
+				return lines;
+			}
+		} else {
+			lines.add(RPTexts.MUTED + "Class changes: " + RPTexts.WARN + priceText(rule.costAfter(paid)));
+			paid++;
+		}
+		lines.add(RPTexts.MUTED + "Then: " + RPTexts.WARN + priceText(rule.costAfter(paid)));
 		return lines;
 	}
 
