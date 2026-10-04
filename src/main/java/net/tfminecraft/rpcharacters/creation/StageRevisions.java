@@ -4,12 +4,14 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Locale;
 
+import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 /**
  * Staff raise a stage's {@code revision} in stages.yml after a large change to it. Each character
  * then gets a fresh lock window on that stage, starting when it next loads, and its paid-change
- * prices start over.
+ * prices start over. On the class stage the free first subclass returns too.
+ * {@code /rpcharacter admin resetclasses} raises the class stage's revision the same way.
  */
 public final class StageRevisions {
 
@@ -29,6 +31,9 @@ public final class StageRevisions {
 			if (stage.getRevision() > character.getStageRevision(id)) {
 				character.setStageRevision(id, stage.getRevision(), nowEpochSeconds);
 				character.setPaidChangeCount(id, 0);
+				if (CreationManager.isClassStage(stage)) {
+					character.setSubclassPicked(false);
+				}
 				changed = true;
 			}
 		}

@@ -60,5 +60,8 @@ permissions:
     default: true
   rpchar.grave.admin:
     default: op
+  rpchar.class.reset:
+    description: Reset class picks for every character (class-selection.reset-permission)
+    default: op
   professions.admin:
     default: op

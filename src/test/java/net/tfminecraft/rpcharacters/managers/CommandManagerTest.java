@@ -13,6 +13,7 @@ import net.tfminecraft.rpcharacters.*;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient.CatalogPushResult;
 import net.tfminecraft.rpcharacters.catalog.CreationCatalogSyncService;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.clues.discovery.*;
 import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.creation.*;
@@ -133,6 +134,8 @@ class CommandManagerTest {
         String[] kill = {"admin", "permakill", "Iris"}; assertFalse(run(kill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, kill, 2, "permakill"));
         String[] strikes = {"admin", "strikes", "view"}; assertFalse(run(strikes)); evil.verify(() -> EvilRpCommands.handleAdmin(player, strikes, 2));
         String[] tutorial = {"admin", "tutorial", "reset"}; assertFalse(run(tutorial)); tutorials.verify(() -> TutorialCommands.handleAdmin(player, tutorial, 2));
+        var resets = boundary(ClassPickReset.class); String[] reset = {"admin", "ResetClasses", "confirm"}; assertFalse(run(reset));
+        resets.verify(() -> ClassPickReset.handle(player, reset, 2));
         String[] directKill = {"permakill", "Iris"}; assertFalse(run(directKill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, directKill, 1, "permakill"));
         String[] directInjure = {"injure", "Iris", "permanent"}; assertFalse(run(directInjure)); death.verify(() -> PermadeathAdminCommands.handleInjure(eq(player), same(directInjure), eq(1), anyString()));
         run("reload"); verify(plugin).reloadConfigs(player);

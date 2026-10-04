@@ -167,7 +167,7 @@ class InventoryManagerViewsTest extends InventoryFixture {
         manager.creationSummaryView(player,creation,summary("class","class-stage"));
         assertEquals("edit:class-stage",tag(top().getItem(10),"summary_action")); assertTrue(lore(top().getItem(10)).contains("class picker")); assertTrue(lore(top().getItem(10)).contains("First subclass"));
         try {
-            ClassPickService.configure(new ClassPickService.Settings(false,false,java.math.BigDecimal.ZERO,List.of(),Set.of()));
+            ClassPickService.configure(new ClassPickService.Settings(false,false,java.math.BigDecimal.ZERO,List.of(),Set.of(),"rpchar.class.reset"));
             manager.characterView(player,character); assertEquals(Material.GRAY_STAINED_GLASS_PANE,top().getItem(InventoryManager.CLASS_PICK_SLOT).getType());
             manager.creationSummaryView(player,creation,summary("class","class-stage")); assertNull(tag(top().getItem(10),"summary_action")); assertTrue(lore(top().getItem(10)).contains("Locked"));
         } finally {

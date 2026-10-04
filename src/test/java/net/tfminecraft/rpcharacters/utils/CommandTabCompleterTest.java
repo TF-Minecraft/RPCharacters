@@ -76,6 +76,7 @@ class CommandTabCompleterTest {
         List<String> basic = complete(""); assertTrue(basic.containsAll(List.of("create", "wardrobe", "party", "mail", "strikes")));
         assertFalse(basic.contains("admin")); assertFalse(basic.contains("tempalias")); assertFalse(basic.contains("sethidden"));
         basic.clear(); assertFalse(complete((String) null).isEmpty());
+        grant("rpchar.class.reset", true); assertTrue(complete("").contains("admin")); assertFalse(complete("").contains("reload"));
         admin(); grant(Cache.personaTempaliasPermission, true); grant(Cache.personaCharacterHiddenPermission, true);
         assertTrue(complete("").containsAll(List.of("admin", "reload", "catalog", "pending", "wipe", "reclaimkit", "resetkit", "stage", "setclass",
             "seteighteen", "skipcooldown", "addtrait", "removetrait", "clearclues", "placeclue", "adminmode", "discordgate", "setworldspawn", "tempalias", "sethidden")));
@@ -97,6 +98,8 @@ class CommandTabCompleterTest {
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
         assertEquals(List.of("injure", "permakill", "strikes", "tutorial"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "resetclasses"), complete("admin", ""));
+        assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));
         grant(Cache.personaTempaliasPermission, true); assertEquals(List.of("clear"), complete("tempalias", ""));
@@ -107,7 +110,8 @@ class CommandTabCompleterTest {
     @Test void adminSuggestionsDisappearWithoutPermission() {
         for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate"))
             assertEquals(List.of(), complete(verb, ""), verb);
-        assertEquals(List.of(), complete("admin", "strikes", ""));
+        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses"), complete("admin", ""));
     }
 
     @Test void hiddenCharacterSuggestionsWaitForPlayerDataToLoad() {

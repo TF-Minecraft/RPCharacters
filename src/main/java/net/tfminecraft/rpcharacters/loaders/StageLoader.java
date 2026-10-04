@@ -11,6 +11,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.tlibs.interfaces.LoaderInterface;
+import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.creation.Stage;
 
 public class StageLoader implements LoaderInterface{
@@ -53,5 +54,6 @@ public class StageLoader implements LoaderInterface{
 			Stage o = Stage.create(key, config.getConfigurationSection(key));
 			oList.add(o);
 		}
+		ClassPickReset.load(configFile.getParentFile(), oList);
 	}
 }

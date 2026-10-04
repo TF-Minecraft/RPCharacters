@@ -44,9 +44,9 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 public final class ClassPickService {
 
 	public record Settings(boolean enabled, boolean infinitePoints, BigDecimal changeCost,
-			List<Account> accounts, Set<String> commands) {
+			List<Account> accounts, Set<String> commands, String resetPermission) {
 		public static final Settings DEFAULTS = new Settings(true, false, new BigDecimal("200.00"),
-				List.of(Account.POUCH, Account.BANK), Set.of("class", "c"));
+				List.of(Account.POUCH, Account.BANK), Set.of("class", "c"), "rpchar.class.reset");
 	}
 
 	public enum Status {

@@ -31,7 +31,8 @@ public final class ClassPickConfig {
 				section.getBoolean("infinite-points", defaults.infinitePoints()),
 				readCost(section.get("change-cost"), defaults.changeCost()),
 				readAccounts(section, defaults.accounts()),
-				readCommands(section, defaults.commands())));
+				readCommands(section, defaults.commands()),
+				readPermission(section, defaults.resetPermission())));
 	}
 
 	private static BigDecimal readCost(Object value, BigDecimal fallback) {
@@ -60,6 +61,11 @@ public final class ClassPickConfig {
 			}
 		}
 		return accounts.isEmpty() ? fallback : List.copyOf(accounts);
+	}
+
+	private static String readPermission(ConfigurationSection section, String fallback) {
+		String permission = section.getString("reset-permission", "").trim();
+		return permission.isEmpty() ? fallback : permission;
 	}
 
 	private static Set<String> readCommands(ConfigurationSection section, Set<String> fallback) {
