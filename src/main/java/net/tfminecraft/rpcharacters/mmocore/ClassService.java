@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.mmocore;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -179,6 +180,12 @@ public final class ClassService {
 		Progression saved = ACCOUNT_PROGRESS.getOrDefault(uuid, new Progression(mmoPd.getLevel(), mmoPd.getExperience()));
 		int level = saved.level;
 		double exp = saved.exp;
+		// Attribute bases belong to the character, not the class. Capture them before
+		// MMOCore loads defaults or an older allocation from the target class.
+		Map<String, Integer> attributes = new HashMap<>();
+		for (var instance : mmoPd.getAttributes().getInstances()) {
+			attributes.put(instance.getId(), instance.getBase());
+		}
 
 		APPLYING.add(uuid);
 		try {
@@ -186,6 +193,8 @@ public final class ClassService {
 					? mmoPd.getClassInfo(target)
 					: new SavedClassInformation(MMOCore.plugin.playerDataManager.getDefaultData());
 			sanitizeForeignSkillLevels(target, info);
+			info.mapAttributeLevels().clear();
+			info.mapAttributeLevels().putAll(attributes);
 			info.load(target, mmoPd);
 			mmoPd.setLevel(level);
 			mmoPd.setExperience(exp);
