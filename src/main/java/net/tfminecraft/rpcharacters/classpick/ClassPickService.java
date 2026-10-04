@@ -3,7 +3,9 @@ package net.tfminecraft.rpcharacters.classpick;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -96,8 +98,15 @@ public final class ClassPickService {
 	/** Displayed base classes in display order. */
 	public static List<PlayerClass> baseClasses() {
 		List<PlayerClass> classes = new ArrayList<>();
+		Set<String> subclassIds = new HashSet<>();
 		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
-			if (MmoCoreClassGuiHelper.isClassDisplayed(playerClass)) {
+			for (Subclass subclass : playerClass.getSubclasses()) {
+				subclassIds.add(subclass.getProfess().getId().toUpperCase(Locale.ROOT));
+			}
+		}
+		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
+			if (!subclassIds.contains(playerClass.getId().toUpperCase(Locale.ROOT))
+					&& MmoCoreClassGuiHelper.isClassDisplayed(playerClass)) {
 				classes.add(playerClass);
 			}
 		}
@@ -114,6 +123,8 @@ public final class ClassPickService {
 			if (base.getId().equalsIgnoreCase(classId)) {
 				return new Option(base, null, 0);
 			}
+		}
+		for (PlayerClass base : MMOCore.plugin.classManager.getAll()) {
 			for (Subclass subclass : base.getSubclasses()) {
 				if (subclass.getProfess().getId().equalsIgnoreCase(classId)) {
 					return new Option(subclass.getProfess(), base, subclass.getLevel());
@@ -121,6 +132,18 @@ public final class ClassPickService {
 			}
 		}
 		return null;
+	}
+
+	/** Subclasses of the character's base class, including siblings of its current subclass. */
+	public static List<Option> subclassOptions(RPCharacter character) {
+		PlayerClass current = character.hasMMOClass() ? MMOCore.plugin.classManager.get(character.getMMOClass()) : null;
+		if (current == null) {
+			return List.of();
+		}
+		Option option = option(current.getId());
+		PlayerClass base = option != null && option.isSubclass() ? option.base() : current;
+		return base.getSubclasses().stream()
+				.map(subclass -> new Option(subclass.getProfess(), base, subclass.getLevel())).toList();
 	}
 
 	/** Free for the first class, the first subclass of the current class, and on infinite points. */
@@ -182,6 +205,10 @@ public final class ClassPickService {
 			return new Result(Status.UNKNOWN_CLASS, null, BigDecimal.ZERO, null);
 		}
 		PlayerClass target = option.playerClass();
+		if (option.isSubclass() && subclassOptions(character).stream()
+				.noneMatch(allowed -> allowed.playerClass().getId().equalsIgnoreCase(classId))) {
+			return new Result(Status.UNKNOWN_CLASS, target, BigDecimal.ZERO, null);
+		}
 		if (target.getId().equalsIgnoreCase(character.getMMOClass())) {
 			return new Result(Status.CURRENT_CLASS, target, BigDecimal.ZERO, null);
 		}

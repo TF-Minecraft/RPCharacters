@@ -8,6 +8,11 @@ depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
 softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions, GSit]
 
 commands:
+  class:
+    description: Choose your character's base class
+    aliases: [c]
+  subclass:
+    description: Choose a subclass of your character's class
   focus:
     description: Manage character focus
     usage: /focus restore <player> | /focus reload

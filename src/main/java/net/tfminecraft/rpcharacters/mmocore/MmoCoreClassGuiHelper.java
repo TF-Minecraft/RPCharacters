@@ -53,11 +53,7 @@ public final class MmoCoreClassGuiHelper {
 	 */
 	public static ClassGuiData buildClassOptions(int guiSize, Map<String, Integer> rpcSlots) {
 		List<PlayerClass> classes = new ArrayList<>();
-		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
-			if (isClassDisplayed(playerClass)) {
-				classes.add(playerClass);
-			}
-		}
+		classes.addAll(net.tfminecraft.rpcharacters.classpick.ClassPickService.baseClasses());
 		classes.sort(Comparator.comparingInt(PlayerClass::getDisplayOrder));
 
 		Map<String, Integer> configuredSlots = normalizeSlotMap(rpcSlots);
