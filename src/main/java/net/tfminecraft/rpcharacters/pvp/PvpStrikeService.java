@@ -41,10 +41,12 @@ import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 
 /**
  * Strikes from {@code /pvp start} fights. When a tagged player is killed or knocked out by
- * another player, the killer chooses to spare them or strike them. The strike is labelled
- * Kill when it would kill: the character's last strike, or any strike during an evil RP
- * session. Then the killer can also Wound (healing injury) or Maim (permanent injury)
- * instead, with no strike. Running out of time spares them.
+ * another player, the killer chooses to spare them or strike them. The same player cannot
+ * strike that character again until the cooldown in pvp.yml has passed, so one person
+ * cannot land all three strikes in a day. The strike is labelled Kill when it would kill:
+ * the character's last strike, or any strike during an evil RP session. Then the killer can
+ * also Wound (healing injury) or Maim (permanent injury) instead, with no strike. Running
+ * out of time spares them.
  */
 public final class PvpStrikeService {
 
@@ -231,8 +233,14 @@ public final class PvpStrikeService {
 		if (character == null) {
 			return false;
 		}
-		if (EvilRpService.applyDecay(character, System.currentTimeMillis())) {
+		long now = System.currentTimeMillis();
+		if (EvilRpService.applyDecay(character, now)) {
 			RPCharacters.getPlayerManager().savePlayer(victim);
+		}
+		// A spare here still covers the death, so a permadeath-zone roll does not stack on it.
+		if (onCooldown(character, killer.getUniqueId(), now)) {
+			sendCooldown(victim, killer, character, killer.getUniqueId(), now);
+			return true;
 		}
 		boolean evil = EvilRpService.isInSession(character);
 		boolean kills = StrikeOutcome.nextStrikeKills(character.getEvilRpStrikes(), evil);
@@ -260,19 +268,30 @@ public final class PvpStrikeService {
 			}
 			return;
 		}
-		EvilRpService.applyDecay(character, System.currentTimeMillis());
+		long now = System.currentTimeMillis();
+		if (EvilRpService.applyDecay(character, now)) {
+			RPCharacters.getPlayerManager().savePlayer(victim);
+		}
+		// The window can close while they decide, or while an offline verdict waits to land.
+		if (onCooldown(character, decision.killerId, now)) {
+			sendCooldown(victim, killer, character, decision.killerId, now);
+			return;
+		}
 		boolean killEntity = !decision.died;
 		boolean kills = StrikeOutcome.nextStrikeKills(character.getEvilRpStrikes(), decision.evil);
 		if (kills && killEntity) {
 			executions.put(victim.getUniqueId(), new Execution(decision.killerId, decision.evil,
-					System.currentTimeMillis() + EXECUTION_TTL_MS));
+					now + EXECUTION_TTL_MS));
 		}
 		character.setEvilRpSessionEndsAtMs(0L);
 		String victimName = character.getName();
 		if (decision.evil) {
-			EvilRpService.killByStrike(victim, character, killer, killEntity);
+			if (EvilRpService.killByStrike(victim, character, killer, killEntity)) {
+				rememberStrike(character, decision.killerId, now);
+			}
 			RPCharacters.getPlayerManager().savePlayer(victim);
 		} else {
+			rememberStrike(character, decision.killerId, now);
 			EvilRpService.applyStrike(victim, character, killer, killEntity);
 		}
 		// A CharacterPermakillEvent listener can cancel the kill.
@@ -284,6 +303,34 @@ public final class PvpStrikeService {
 			String outcome = killed ? "You killed " : kills ? "You couldn't kill " : "You struck ";
 			RPTexts.send(killer, RPTexts.ERROR + outcome + RPTexts.WARN + victimName + RPTexts.ERROR + ".");
 		}
+	}
+
+	private static boolean onCooldown(RPCharacter character, UUID killerId, long nowMs) {
+		return StrikeCooldown.blocks(character.getStrikesByKiller(), killerId, nowMs,
+				PvpLoader.getSameTargetCooldownMs());
+	}
+
+	private static void rememberStrike(RPCharacter character, UUID killerId, long nowMs) {
+		character.setStrikesByKiller(StrikeCooldown.record(character.getStrikesByKiller(), killerId, nowMs,
+				PvpLoader.getSameTargetCooldownMs()));
+	}
+
+	private static void sendCooldown(Player victim, Player killer, RPCharacter character, UUID killerId, long nowMs) {
+		String time = StrikeCooldown.formatRemaining(StrikeCooldown.remainingMs(character.getStrikesByKiller(),
+				killerId, nowMs, PvpLoader.getSameTargetCooldownMs()));
+		String name = character.getName() != null ? character.getName() : "them";
+		if (killer != null && killer.isOnline()) {
+			RPTexts.send(killer, RPTexts.ERROR + "You already struck " + RPTexts.WARN + name + RPTexts.ERROR
+					+ ". " + RPTexts.MUTED + "You can strike them again in " + time + ".");
+		}
+		if (victim != null && victim.isOnline()) {
+			RPTexts.send(victim, RPTexts.SUCCESS + "You were spared. " + RPTexts.MUTED
+					+ "They can strike you again in " + time + ".");
+		}
+		String killerName = killer != null ? killer.getName() : String.valueOf(killerId);
+		String victimName = victim != null ? victim.getName() : "offline";
+		RPCharacters.plugin.getLogger().info("Strike cooldown: " + killerName + " cannot strike "
+				+ victimName + " (" + name + ") for another " + time + ".");
 	}
 
 	/**

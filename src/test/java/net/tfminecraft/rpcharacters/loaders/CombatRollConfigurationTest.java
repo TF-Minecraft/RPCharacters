@@ -34,7 +34,7 @@ class CombatRollConfigurationTest {
             knockout-seconds: 40
             blindness-amplifier: 3
             freeze-period-ticks: 2
-            strikes: {decision-seconds: 45, decay: {enabled: true, days: 21}}
+            strikes: {decision-seconds: 45, same-target-cooldown-hours: 36, decay: {enabled: true, days: 21}}
             messages:
             """);
         messages.keySet().forEach(key -> config.append("  ").append(key).append(": '").append(key).append(" {player}'\n"));
@@ -42,9 +42,9 @@ class CombatRollConfigurationTest {
         assertEquals(24, PvpLoader.getStartRadius()); assertEquals(8, PvpLoader.getStartWarnSeconds()); assertEquals(4, PvpLoader.getStartCountdownFrom());
         assertEquals(20, PvpLoader.getStartActiveMinutes()); assertEquals(1200000, PvpLoader.getStartActiveMs()); assertEquals(40, PvpLoader.getKnockoutSeconds());
         assertEquals(3, PvpLoader.getBlindnessAmplifier()); assertEquals(2, PvpLoader.getFreezePeriodTicks()); assertEquals(45, PvpLoader.getDecisionSeconds());
-        assertEquals(45000, PvpLoader.getDecisionMs()); assertTrue(PvpLoader.isStrikeDecayEnabled()); assertEquals(1814400000L, PvpLoader.getStrikeDecayMs());
+        assertEquals(45000, PvpLoader.getDecisionMs()); assertEquals(36, PvpLoader.getSameTargetCooldownHours()); assertEquals(36 * 3_600_000L, PvpLoader.getSameTargetCooldownMs()); assertTrue(PvpLoader.isStrikeDecayEnabled()); assertEquals(1814400000L, PvpLoader.getStrikeDecayMs());
         messages.forEach((key,read) -> assertEquals(key + " {player}", read.get(), key));
-        new PvpLoader().load(yaml("{}")); assertEquals(16, PvpLoader.getStartRadius()); assertFalse(PvpLoader.isStrikeDecayEnabled()); assertEquals(14*86400000L, PvpLoader.getStrikeDecayMs());
+        new PvpLoader().load(yaml("{}")); assertEquals(16, PvpLoader.getStartRadius()); assertFalse(PvpLoader.isStrikeDecayEnabled()); assertEquals(14*86400000L, PvpLoader.getStrikeDecayMs()); assertEquals(24, PvpLoader.getSameTargetCooldownHours()); assertEquals(24 * 3_600_000L, PvpLoader.getSameTargetCooldownMs());
     }
 
     @Test void pvpBoundsCannotScheduleZeroLengthRepeatingTasks() throws Exception {
@@ -56,11 +56,11 @@ class CombatRollConfigurationTest {
             knockout-seconds: 0
             blindness-amplifier: -1
             freeze-period-ticks: 0
-            strikes: {decision-seconds: 0, decay: {days: 0}}
+            strikes: {decision-seconds: 0, same-target-cooldown-hours: -3, decay: {days: 0}}
             """));
         assertEquals(0, PvpLoader.getStartRadius()); assertEquals(1, PvpLoader.getStartWarnSeconds()); assertEquals(1, PvpLoader.getStartCountdownFrom());
         assertEquals(0, PvpLoader.getStartActiveMs()); assertEquals(1, PvpLoader.getKnockoutSeconds()); assertEquals(0, PvpLoader.getBlindnessAmplifier());
-        assertEquals(1, PvpLoader.getFreezePeriodTicks()); assertEquals(1000, PvpLoader.getDecisionMs()); assertEquals(86400000L, PvpLoader.getStrikeDecayMs());
+        assertEquals(1, PvpLoader.getFreezePeriodTicks()); assertEquals(1000, PvpLoader.getDecisionMs()); assertEquals(0, PvpLoader.getSameTargetCooldownHours()); assertEquals(0L, PvpLoader.getSameTargetCooldownMs()); assertEquals(86400000L, PvpLoader.getStrikeDecayMs());
         new PvpLoader().load(yaml("start-active-minutes: 2147483647\nstrikes: {decision-seconds: 2147483647, decay: {days: 2147483647}}"));
         assertEquals(2147483647L*60000, PvpLoader.getStartActiveMs()); assertEquals(2147483647L*1000, PvpLoader.getDecisionMs());
         assertEquals(2147483647L*86400000, PvpLoader.getStrikeDecayMs());

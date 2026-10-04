@@ -130,8 +130,13 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		for (UUID id : targets) {
 			Player online = Bukkit.getPlayer(id);
 			if (online != null) {
+				int cooldownHours = PvpLoader.getSameTargetCooldownHours();
+				String cooldown = cooldownHours <= 0 ? "no extra time"
+						: cooldownHours == 1 ? "1 hour" : cooldownHours + " hours";
 				TutorialService.show(online, TutorialService.PVP_STRIKES, Map.of(
-						"seconds", String.valueOf(PvpLoader.getDecisionSeconds())));
+						"seconds", String.valueOf(PvpLoader.getDecisionSeconds()),
+						"hours", String.valueOf(cooldownHours),
+						"cooldown", cooldown));
 			}
 		}
 

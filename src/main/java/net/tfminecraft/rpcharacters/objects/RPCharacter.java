@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,8 @@ public class RPCharacter {
 	private long evilRpSessionEndsAtMs;
 	/** When the latest strike landed, so strikes can wear off. 0 when unknown. */
 	private long lastStrikeAtMs;
+	/** Killer UUID to the epoch ms of their latest strike on this character. */
+	private final Map<UUID, Long> strikesByKillerAtMs = new LinkedHashMap<>();
 	/** Paid changes made so far, keyed by stage id. Sets the next price. */
 	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
 	/** Denars held for an open paid stage, saved so a crash can't lose the refund or the count. */
@@ -306,6 +309,22 @@ public class RPCharacter {
 
 	public void setLastStrikeAtMs(long lastStrikeAtMs) {
 		this.lastStrikeAtMs = Math.max(0L, lastStrikeAtMs);
+	}
+
+	public Map<UUID, Long> getStrikesByKiller() {
+		return Collections.unmodifiableMap(strikesByKillerAtMs);
+	}
+
+	public void setStrikesByKiller(Map<UUID, Long> strikes) {
+		strikesByKillerAtMs.clear();
+		if (strikes == null) {
+			return;
+		}
+		for (Map.Entry<UUID, Long> entry : strikes.entrySet()) {
+			if (entry.getKey() != null && entry.getValue() != null && entry.getValue() > 0L) {
+				strikesByKillerAtMs.put(entry.getKey(), entry.getValue());
+			}
+		}
 	}
 
 	public int getFoodValue() {

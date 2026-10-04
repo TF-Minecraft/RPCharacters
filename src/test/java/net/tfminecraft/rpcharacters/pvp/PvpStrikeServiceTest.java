@@ -64,7 +64,23 @@ class PvpStrikeServiceTest extends PvpRuntimeFixture {
 
     @Test void executionsExposeOneShotGraveContextAndCancelledKillsRemoveIt() {
         PvpStrikeService.start();character.setEvilRpStrikes(2);knockout();assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));timer.run();var grave=PvpStrikeService.graveContext(victim,false);assertTrue(grave.inPvpStart());assertFalse(grave.evilVictim());assertEquals(killer.getUniqueId(),grave.killerId());assertFalse(PvpStrikeService.graveContext(victim,false).inPvpStart());assertTrue(text(killer).contains("You killed"));
-        evil.when(()->EvilRpService.applyStrike(victim,character,killer,true)).thenReturn(StrikeOutcome.DEATH);character.setStatus(Status.ALIVE);character.setEvilRpStrikes(2);knockout();PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE);assertFalse(PvpStrikeService.graveContext(victim,false).inPvpStart());assertTrue(text(killer).contains("couldn't kill"));
+        evil.when(()->EvilRpService.applyStrike(victim,character,killer,true)).thenReturn(StrikeOutcome.DEATH);character.setStatus(Status.ALIVE);character.setEvilRpStrikes(2);character.setStrikesByKiller(Map.of());knockout();PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE);assertFalse(PvpStrikeService.graveContext(victim,false).inPvpStart());assertTrue(text(killer).contains("couldn't kill"));
+    }
+
+    @Test void theSameKillerIsSparedUntilTheCooldownPasses() {
+        knockout();assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));assertEquals(1,character.getEvilRpStrikes());
+        knockout();assertFalse(PvpStrikeService.hasPendingDecision(victim));assertTrue(text(killer).contains("already struck"));assertTrue(text(victim).contains("spared"));assertEquals(1,character.getEvilRpStrikes());verify(logger).info(contains("Strike cooldown"));
+        PvpStartSessions.begin(List.of(victim.getUniqueId()),System.currentTimeMillis(),60_000);PvpStrikeService.handleKnockout(victim,other);assertTrue(PvpStrikeService.choose(other,victim.getUniqueId(),StrikeChoice.STRIKE));assertEquals(2,character.getEvilRpStrikes());
+    }
+
+    @Test void aStrikeChosenAfterTheCooldownStartsDoesNotLand() {
+        evil.when(()->EvilRpService.applyDecay(eq(character),anyLong())).thenReturn(true);knockout();character.setStrikesByKiller(Map.of(killer.getUniqueId(),System.currentTimeMillis()));
+        assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));assertEquals(0,character.getEvilRpStrikes());assertTrue(text(killer).contains("already struck"));verify(manager,times(2)).savePlayer(victim);
+    }
+
+    @Test void aDisabledCooldownAllowsAnotherStrikeImmediately() {
+        config.when(PvpLoader::getSameTargetCooldownMs).thenReturn(0L);knockout();assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));
+        knockout();assertTrue(PvpStrikeService.hasPendingDecision(victim));assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));assertEquals(2,character.getEvilRpStrikes());
     }
 
     @Test void evilExecutionUsesKillBoundaryAndPreservesGraveOwner() {
