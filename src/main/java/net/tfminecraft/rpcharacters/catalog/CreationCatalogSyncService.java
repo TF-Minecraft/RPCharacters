@@ -353,11 +353,7 @@ public final class CreationCatalogSyncService {
 		boolean first = true;
 		try {
 			List<PlayerClass> classes = new ArrayList<>();
-			for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
-				if (MmoCoreClassGuiHelper.isClassDisplayed(playerClass)) {
-					classes.add(playerClass);
-				}
-			}
+			classes.addAll(net.tfminecraft.rpcharacters.classpick.ClassPickService.baseClasses());
 			classes.sort((a, b) -> Integer.compare(a.getDisplayOrder(), b.getDisplayOrder()));
 			for (PlayerClass playerClass : classes) {
 				StringBuilder row = new StringBuilder("{");

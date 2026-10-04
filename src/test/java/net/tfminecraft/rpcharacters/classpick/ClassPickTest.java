@@ -248,32 +248,71 @@ class ClassPickTest {
         assertInstanceOf(ClassPickGui.Holder.class, top.getHolder()); return top;
     }
 
-    @Test void pickerShowsBaseClassColumnsWithSubclassesBelowAndPrices() {
-        var top = openPicker(); assertEquals(ClassPickGui.SIZE, top.getSize()); assertSame(top, top.getHolder().getInventory());
-        assertEquals(Material.IRON_SWORD, top.getItem(10).getType()); assertTrue(lore(top.getItem(10)).contains("Your current class"));
-        assertEquals(Material.PAPER, top.getItem(11).getType()); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
-        assertEquals(Material.PAPER, top.getItem(19).getType()); assertTrue(lore(top.getItem(19)).contains("Subclass of Warrior")); assertTrue(lore(top.getItem(19)).contains("Unlocks at level 2"));
-        assertEquals(Material.PAPER, top.getItem(28).getType()); assertEquals(Material.GRAY_STAINED_GLASS_PANE, top.getItem(20).getType());
-        assertTrue(lore(top.getItem(ClassPickGui.INFO_SLOT)).contains("Class: Warrior")); assertEquals(Material.BARRIER, top.getItem(ClassPickGui.CLOSE_SLOT).getType());
-        when(account.getActiveCharacter()).thenReturn(new RPCharacter(player)); level.set(2); top = openPicker();
-        assertTrue(lore(top.getItem(ClassPickGui.INFO_SLOT)).contains("Class: None")); assertTrue(lore(top.getItem(19)).contains("Cost: Free"));
+    Inventory openSubclasses() {
+        ClassPickGui.openSubclasses(player); return player.getOpenInventory().getTopInventory();
     }
 
-    @Test void pickerShowsAtMostSevenColumnsAndThreeSubclassesEach() {
+    @Test void separateWindowsShowOnlyBasesOrTheCurrentClassSubclassFamily() {
+        displayed.addAll(Set.of("berserker", "spellblade"));
+        assertEquals(List.of(warrior, mage), ClassPickService.baseClasses());
+        assertEquals(List.of("warrior", "mage"), MmoCoreClassGuiHelper.buildClassOptions(54, Map.of("warrior", 10, "mage", 11)).getOptions().stream().map(item -> item.getId()).toList());
+        var top = openPicker(); assertEquals(ClassPickGui.SIZE, top.getSize()); assertSame(top, top.getHolder().getInventory());
+        assertEquals("Class Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
+        assertEquals(Material.IRON_SWORD, top.getItem(10).getType()); assertTrue(lore(top.getItem(10)).contains("Your current class"));
+        assertEquals(Material.PAPER, top.getItem(11).getType()); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
+        assertEquals(Material.GRAY_STAINED_GLASS_PANE, top.getItem(19).getType());
+        assertTrue(lore(top.getItem(ClassPickGui.INFO_SLOT)).contains("Class: Warrior"));
+        ClassPickGui.click(player, (ClassPickGui.Holder) top.getHolder(), ClassPickGui.NAV_SLOT);
+        top = player.getOpenInventory().getTopInventory();
+        assertEquals("Subclass Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
+        assertTrue(lore(top.getItem(10)).contains("Subclass of Warrior")); assertTrue(lore(top.getItem(10)).contains("Unlocks at level 2"));
+        assertEquals(Material.PAPER, top.getItem(11).getType());
+        assertEquals(Material.GRAY_STAINED_GLASS_PANE, top.getItem(12).getType());
+        ClassPickGui.click(player, (ClassPickGui.Holder) top.getHolder(), ClassPickGui.NAV_SLOT);
+        assertEquals("Class Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
+        level.set(2); character.setMMOClass("berserker"); top = openSubclasses();
+        assertTrue(lore(top.getItem(10)).contains("Your current class")); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
+        character.setMMOClass("mage"); top = openSubclasses();
+        assertTrue(ChatColor.stripColor(top.getItem(22).getItemMeta().getDisplayName()).contains("No subclasses"));
+        character.setMMOClass(null); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
+        top = openPicker(); assertTrue(lore(top.getItem(ClassPickGui.INFO_SLOT)).contains("Class: None"));
+        assertTrue(lore(top.getItem(10)).contains("Cost: Free"));
+    }
+
+    @Test void staleSubclassWindowCannotPickAnotherClassesSubclassOrCharge() {
+        level.set(2); var top = openSubclasses(); var holder = (ClassPickGui.Holder) top.getHolder();
+        ClassPickGui.click(player, holder, 10); character.setMMOClass("mage");
+        ClassPickGui.click(player, holder, 10); assertEquals("MAGE", character.getMMOClass());
+        assertTrue(messages().contains("can't be picked"));
+        assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "spellblade").status());
+        classService.verifyNoInteractions(); assertTrue(wallet.balances.isEmpty());
+    }
+
+    @Test void hiddenCurrentBaseStillAllowsItsOwnSubclasses() {
+        displayed.remove("warrior"); level.set(2);
+        assertEquals(List.of(mage), ClassPickService.baseClasses());
+        assertEquals(2, ClassPickService.subclassOptions(character).size());
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "berserker").status());
+        assertEquals(2, ClassPickService.subclassOptions(character).size());
+        ClassPickService.configure(settings(true, true));
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "spellblade").status());
+        character.setMMOClass("missing"); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
+    }
+
+    @Test void pickerUsesAdditionalRowsForMoreThanSevenClassesAndSubclasses() {
         for (int i = 0; i < 9; i++) { playerClass("base" + i, "Base " + i, 10 + i, null); displayed.add("base" + i); }
+        var top = openPicker(); assertEquals(Material.PAPER, top.getItem(19).getType());
         var subs = new ArrayList<Subclass>(); for (int i = 0; i < 5; i++) subs.add(new Subclass(playerClass("sub" + i, "Sub " + i, 40 + i, null), 1));
-        when(warrior.getSubclasses()).thenReturn(subs); var top = openPicker();
-        var holder = (ClassPickGui.Holder) top.getHolder();
-        assertEquals(Material.GRAY_STAINED_GLASS_PANE, top.getItem(46).getType()); assertNotNull(top.getItem(37)); assertTrue(lore(top.getItem(37)).contains("Subclass of Warrior"));
-        assertNull(holder.getPending());
+        when(warrior.getSubclasses()).thenReturn(subs); top = openSubclasses();
+        assertTrue(lore(top.getItem(14)).contains("Subclass of Warrior")); assertNull(((ClassPickGui.Holder) top.getHolder()).getPending());
     }
 
     @Test void pickerClicksMarkThenConfirmAndCloseOnSuccess() {
-        level.set(2); var top = openPicker(); var holder = (ClassPickGui.Holder) top.getHolder();
+        level.set(2); var top = openSubclasses(); var holder = (ClassPickGui.Holder) top.getHolder();
         ClassPickGui.click(player, holder, 0); assertNull(holder.getPending());
-        ClassPickGui.click(player, holder, 19); assertEquals("berserker", holder.getPending()); assertTrue(lore(top.getItem(19)).contains("Click again to confirm"));
-        assertTrue(top.getItem(19).getItemMeta().getEnchantmentGlintOverride());
-        ClassPickGui.click(player, holder, 19); assertEquals("BERSERKER", character.getMMOClass()); assertNull(holder.getPending());
+        ClassPickGui.click(player, holder, 10); assertEquals("berserker", holder.getPending()); assertTrue(lore(top.getItem(10)).contains("Click again to confirm"));
+        assertTrue(top.getItem(10).getItemMeta().getEnchantmentGlintOverride());
+        ClassPickGui.click(player, holder, 10); assertEquals("BERSERKER", character.getMMOClass()); assertNull(holder.getPending());
         assertTrue(messages().contains("You are now a Berserker."));
         top = openPicker(); holder = (ClassPickGui.Holder) top.getHolder();
         ClassPickGui.click(player, holder, ClassPickGui.CLOSE_SLOT);
@@ -282,7 +321,8 @@ class ClassPickTest {
     @Test void pickerClicksOnLockedOrFailingClassesExplainAndRefresh() {
         var top = openPicker(); var holder = (ClassPickGui.Holder) top.getHolder();
         ClassPickGui.click(player, holder, 10); assertTrue(messages().contains("You are already a Warrior."));
-        ClassPickGui.click(player, holder, 19); assertTrue(messages().contains("unlocks at level 2"));
+        var subclassTop = openSubclasses(); ClassPickGui.click(player, (ClassPickGui.Holder) subclassTop.getHolder(), 10); assertTrue(messages().contains("unlocks at level 2"));
+        top = openPicker(); holder = (ClassPickGui.Holder) top.getHolder();
         ClassPickGui.click(player, holder, 11); ClassPickGui.click(player, holder, 11); assertTrue(messages().contains("costs 200 denars"));
         assertSame(top, player.getOpenInventory().getTopInventory());
         ClassPickGui.click(player, holder, 11); when(account.hasActiveCharacter()).thenReturn(false); ClassPickGui.click(player, holder, 11);
@@ -308,13 +348,22 @@ class ClassPickTest {
         listener.onClick(otherClick); assertFalse(otherClick.isCancelled());
         var otherDrag = new InventoryDragEvent(plain, null, new ItemStack(Material.STONE), false, Map.of(0, new ItemStack(Material.STONE)));
         listener.onDrag(otherDrag); assertFalse(otherDrag.isCancelled());
-        for (String command : List.of("/class", "/C list", "/mmocore:class")) {
+        for (String command : List.of("/class", "/C list", "/mmocore:class", "/mmocore:c", "/rpcharacters:class")) {
             player.closeInventory(); var event = new PlayerCommandPreprocessEvent(player, command); listener.onCommand(event);
             assertTrue(event.isCancelled(), command); assertInstanceOf(ClassPickGui.Holder.class, player.getOpenInventory().getTopInventory().getHolder());
         }
         for (String command : List.of("/classes", "/", "/mmocore:skills")) {
             var event = new PlayerCommandPreprocessEvent(player, command); listener.onCommand(event); assertFalse(event.isCancelled(), command);
         }
+        for (String raw : List.of("/subclass", "/mmocore:subclass", "/rpcharacters:subclass")) {
+            var event = new PlayerCommandPreprocessEvent(player, raw); listener.onCommand(event);
+            assertTrue(event.isCancelled()); assertEquals("Subclass Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
+        }
+        var command = mock(org.bukkit.command.Command.class); when(command.getName()).thenReturn("subclass");
+        assertTrue(listener.onCommand(player, command, "subclass", new String[0]));
+        when(command.getName()).thenReturn("class"); assertTrue(listener.onCommand(player, command, "class", new String[0]));
+        assertEquals("Class Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
+        assertTrue(listener.onCommand(server.getConsoleSender(), command, "class", new String[0]));
         ClassPickService.configure(settings(false, false)); var disabled = new PlayerCommandPreprocessEvent(player, "/class");
         listener.onCommand(disabled); assertFalse(disabled.isCancelled());
     }
