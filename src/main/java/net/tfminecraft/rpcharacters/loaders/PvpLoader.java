@@ -19,6 +19,7 @@ public final class PvpLoader implements LoaderInterface {
 	private static int blindnessAmplifier = 4;
 	private static long freezePeriodTicks = 1L;
 	private static int decisionSeconds = 30;
+	private static int sameTargetCooldownHours = 24;
 	private static boolean strikeDecayEnabled = false;
 	private static int strikeDecayDays = 14;
 
@@ -54,6 +55,7 @@ public final class PvpLoader implements LoaderInterface {
 		blindnessAmplifier = Math.max(0, config.getInt("blindness-amplifier", 4));
 		freezePeriodTicks = Math.max(1L, config.getLong("freeze-period-ticks", 1L));
 		decisionSeconds = Math.max(1, config.getInt("strikes.decision-seconds", 30));
+		sameTargetCooldownHours = Math.max(0, config.getInt("strikes.same-target-cooldown-hours", 24));
 		strikeDecayEnabled = config.getBoolean("strikes.decay.enabled", false);
 		strikeDecayDays = Math.max(1, config.getInt("strikes.decay.days", 14));
 
@@ -111,6 +113,15 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static long getDecisionMs() {
 		return decisionSeconds * 1000L;
+	}
+
+	public static int getSameTargetCooldownHours() {
+		return sameTargetCooldownHours;
+	}
+
+	/** 0 when the cooldown is disabled. */
+	public static long getSameTargetCooldownMs() {
+		return sameTargetCooldownHours * 3_600_000L;
 	}
 
 	public static boolean isStrikeDecayEnabled() {

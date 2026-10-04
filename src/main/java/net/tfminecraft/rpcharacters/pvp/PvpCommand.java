@@ -131,7 +131,8 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 			Player online = Bukkit.getPlayer(id);
 			if (online != null) {
 				TutorialService.show(online, TutorialService.PVP_STRIKES, Map.of(
-						"seconds", String.valueOf(PvpLoader.getDecisionSeconds())));
+						"seconds", String.valueOf(PvpLoader.getDecisionSeconds()),
+						"hours", String.valueOf(PvpLoader.getSameTargetCooldownHours())));
 			}
 		}
 
