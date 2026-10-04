@@ -18,7 +18,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
-import net.Indyuce.mmocore.api.player.profess.Subclass;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Option;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Result;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Status;
@@ -28,16 +27,18 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
- * The class picker: one column per base class (up to 7), with up to 3 of its subclasses below it.
+ * Separate base-class and current-class subclass windows.
  * The first click on a class marks it, the second click picks it.
  */
 public final class ClassPickGui {
 	public static final String TITLE = "Class Selection";
+	public static final String SUBCLASS_TITLE = "Subclass Selection";
 	static final int SIZE = 54;
 	static final int INFO_SLOT = 4;
 	static final int CLOSE_SLOT = 49;
-	static final int COLUMNS = 7;
-	static final int SUBCLASS_ROWS = 3;
+	static final int NAV_SLOT = 48;
+	private static final int[] OPTION_SLOTS = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25,
+			28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
 
 	private ClassPickGui() {}
 
@@ -46,6 +47,7 @@ public final class ClassPickGui {
 		private final Set<Integer> choosable = new HashSet<>();
 		private String pending;
 		private Inventory inventory;
+		private boolean subclasses;
 
 		@Override
 		public Inventory getInventory() {
@@ -58,13 +60,23 @@ public final class ClassPickGui {
 	}
 
 	public static void open(Player player) {
+		open(player, false);
+	}
+
+	public static void openSubclasses(Player player) {
+		open(player, true);
+	}
+
+	private static void open(Player player, boolean subclasses) {
 		Status blocked = ClassPickService.blocker(player);
 		if (blocked != null) {
 			RPTexts.send(player, ClassPickService.message(new Result(blocked, null, BigDecimal.ZERO, null)));
 			return;
 		}
 		Holder holder = new Holder();
-		holder.inventory = Bukkit.createInventory(holder, SIZE, RPTexts.formatGui(RPTexts.MUTED + TITLE));
+		holder.subclasses = subclasses;
+		holder.inventory = Bukkit.createInventory(holder, SIZE,
+				RPTexts.formatGui(RPTexts.MUTED + (subclasses ? SUBCLASS_TITLE : TITLE)));
 		render(holder, player);
 		player.openInventory(holder.inventory);
 	}
@@ -76,16 +88,18 @@ public final class ClassPickGui {
 		inventory.clear();
 		holder.classBySlot.clear();
 		holder.choosable.clear();
-		List<PlayerClass> bases = ClassPickService.baseClasses();
-		for (int column = 0; column < Math.min(bases.size(), COLUMNS); column++) {
-			PlayerClass base = bases.get(column);
-			place(holder, 10 + column, new Option(base, null, 0), character, level);
-			List<Subclass> subclasses = base.getSubclasses();
-			for (int row = 0; row < Math.min(subclasses.size(), SUBCLASS_ROWS); row++) {
-				Subclass subclass = subclasses.get(row);
-				place(holder, 19 + 9 * row + column, new Option(subclass.getProfess(), base, subclass.getLevel()),
-						character, level);
-			}
+		List<Option> options = holder.subclasses ? ClassPickService.subclassOptions(character)
+				: ClassPickService.baseClasses().stream().map(base -> new Option(base, null, 0)).toList();
+		for (int index = 0; index < Math.min(options.size(), OPTION_SLOTS.length); index++) {
+			place(holder, OPTION_SLOTS[index], options.get(index), character, level);
+		}
+		inventory.setItem(NAV_SLOT, simpleItem(Material.ARROW,
+				holder.subclasses ? RPTexts.WARN + "Classes" : RPTexts.WARN + "Subclasses",
+				List.of(RPTexts.MUTED + (holder.subclasses ? "Choose a base class."
+						: "View subclasses of your current class."))));
+		if (holder.subclasses && options.isEmpty()) {
+			inventory.setItem(22, simpleItem(Material.PAPER, RPTexts.WARN + "No subclasses available",
+					List.of(RPTexts.MUTED + "Choose a base class with subclasses first.")));
 		}
 		inventory.setItem(INFO_SLOT, infoItem(character, level));
 		inventory.setItem(CLOSE_SLOT, simpleItem(Material.BARRIER, RPTexts.ERROR + "Close", List.of()));
@@ -159,6 +173,10 @@ public final class ClassPickGui {
 	}
 
 	public static void click(Player player, Holder holder, int slot) {
+		if (slot == NAV_SLOT) {
+			open(player, !holder.subclasses);
+			return;
+		}
 		if (slot == CLOSE_SLOT) {
 			player.closeInventory();
 			return;

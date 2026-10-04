@@ -449,6 +449,9 @@ public class CommandManager implements Listener, CommandExecutor{
 				return TutorialCommands.dismiss(p, TutorialService.PERMADEATH_ZONE);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("tutorial")) {
 				return TutorialCommands.handle(p, args);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("subclass") && args.length == 1) {
+				ClassPickGui.openSubclasses(p);
+				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("class") && args.length == 1) {
 				ClassPickGui.open(p);
 				return true;
