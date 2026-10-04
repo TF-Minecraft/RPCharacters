@@ -58,8 +58,25 @@ class StrikeCooldownTest {
 	void remainingTimeRoundsUpToAMinute() {
 		assertEquals(day, StrikeCooldown.remainingMs(1_000L, 1_000L, day));
 		assertEquals(0L, StrikeCooldown.remainingMs(1_000L, 1_000L + day, day));
+		assertEquals(0L, StrikeCooldown.remainingMs(1_000L, 1_000L, 0L));
+		assertEquals(day - 1, StrikeCooldown.remainingMs(Map.of(killer, 1_000L), killer, 1_001L, day));
+		assertEquals(0L, StrikeCooldown.remainingMs(Map.of(), killer, 1_001L, day));
+		assertEquals(0L, StrikeCooldown.remainingMs((Map<UUID, Long>) null, killer, 1_001L, day));
 		assertEquals("24h", StrikeCooldown.formatRemaining(day));
 		assertEquals("23h 1m", StrikeCooldown.formatRemaining(23 * 3_600_000L + 1L));
 		assertEquals("1m", StrikeCooldown.formatRemaining(1L));
+		assertEquals("1m", StrikeCooldown.formatRemaining(0L));
+	}
+
+	@Test
+	void blankEntriesAreDroppedAndAMissingHistoryCanStillBeRecorded() {
+		assertFalse(StrikeCooldown.blocks((Map<UUID, Long>) null, killer, 1L, day));
+		assertFalse(StrikeCooldown.blocks(Map.of(), null, 1L, day));
+		assertEquals(Map.of(killer, 5L), StrikeCooldown.record(null, killer, 5L, day));
+
+		Map<UUID, Long> messy = new LinkedHashMap<>();
+		messy.put(killer, 0L);
+		messy.put(other, null);
+		assertEquals(Map.of(killer, 9L), StrikeCooldown.record(messy, killer, 9L, day));
 	}
 }

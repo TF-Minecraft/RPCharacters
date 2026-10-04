@@ -66,6 +66,7 @@ class EvilRpPersistenceTest {
         UUID killer = UUID.fromString("11111111-1111-1111-1111-111111111111");
         JSONObject byKiller = new JSONObject();
         byKiller.put("not-a-uuid", 50L);
+        byKiller.put("bad-time", "nope");
         byKiller.put(killer.toString(), 80L);
         JSONObject evilRp = new JSONObject();
         evilRp.put("strikes-by-killer", byKiller);
@@ -73,6 +74,21 @@ class EvilRpPersistenceTest {
         RPCharacter loaded = new RPCharacter(null);
         CharacterEvilRpFields.load(loaded, new JSONObject(Map.of("evil-rp", evilRp)));
         assertEquals(Map.of(killer, 80L), loaded.getStrikesByKiller());
+    }
+
+    @Test
+    void blankKillerEntriesAreNotKept() {
+        RPCharacter character = new RPCharacter(null);
+        character.setStrikesByKiller(null);
+        assertTrue(character.getStrikesByKiller().isEmpty());
+
+        UUID kept = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        Map<UUID, Long> messy = new HashMap<>();
+        messy.put(null, 1L);
+        messy.put(UUID.randomUUID(), 0L);
+        messy.put(kept, 5L);
+        character.setStrikesByKiller(messy);
+        assertEquals(Map.of(kept, 5L), character.getStrikesByKiller());
     }
 
     @Test
