@@ -15,7 +15,7 @@ import org.bukkit.plugin.Plugin;
  * declare DenarEconomy as a dependency: DenarEconomy already loads after RPCharacters through
  * TLibs, ItemsAdder and BirdMessenger, so either depend would make a load cycle.
  */
-final class DenarEconomyWallet implements DenarWallet {
+public final class DenarEconomyWallet implements DenarWallet {
 	private static final Logger LOG = Logger.getLogger("RPCharacters");
 
 	private Plugin boundTo;

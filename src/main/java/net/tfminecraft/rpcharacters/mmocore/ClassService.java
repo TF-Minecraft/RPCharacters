@@ -16,6 +16,7 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.PlayerData;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.api.player.profess.SavedClassInformation;
+import net.Indyuce.mmocore.experience.droptable.ExperienceTable;
 import net.Indyuce.mmocore.skill.ClassSkill;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -167,6 +168,7 @@ public final class ClassService {
 				sanitizeForeignSkillLevels(target, mmoPd.getClassInfo(target));
 			}
 			sanitizeForeignSkillLevels(mmoPd);
+			claimMissedLevelRewards(mmoPd, target);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
 			applyFreeAttributePointsIfActive(player);
@@ -188,12 +190,29 @@ public final class ClassService {
 			mmoPd.setLevel(level);
 			mmoPd.setExperience(exp);
 			sanitizeForeignSkillLevels(mmoPd);
+			claimMissedLevelRewards(mmoPd, target);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
 			applyFreeAttributePointsIfActive(player);
 			ACCOUNT_PROGRESS.put(uuid, new Progression(level, exp));
 		} finally {
 			APPLYING.remove(uuid);
+		}
+	}
+
+	/**
+	 * Claims the class's exp-table rewards for every level up to the current one that it has not
+	 * claimed yet. The level is shared across classes, so a class picked at level 12 never levelled
+	 * through 7 or 12 and would otherwise miss the skill slots unlocked there. MMOCore counts claims,
+	 * so a reward is never given twice. Skill points the triggers give are reset to the account pool.
+	 */
+	private static void claimMissedLevelRewards(PlayerData mmoPd, PlayerClass profess) {
+		if (!profess.hasExperienceTable()) {
+			return;
+		}
+		ExperienceTable table = profess.getExperienceTable();
+		for (int level = 1; level <= mmoPd.getLevel(); level++) {
+			table.claim(mmoPd, level, profess);
 		}
 	}
 

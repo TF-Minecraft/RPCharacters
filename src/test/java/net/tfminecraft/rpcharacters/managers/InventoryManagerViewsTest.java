@@ -8,6 +8,8 @@ import java.util.stream.IntStream;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.Permissions;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
+import net.tfminecraft.rpcharacters.mmocore.MmoCoreClassGuiHelper;
 import net.tfminecraft.rpcharacters.creation.*;
 import net.tfminecraft.rpcharacters.creation.stages.*;
 import net.tfminecraft.rpcharacters.enums.*;
@@ -151,6 +153,26 @@ class InventoryManagerViewsTest extends InventoryFixture {
         var summary=mock(SummaryStage.class); when(summary.getEntries()).thenReturn(entries); manager.creationSummaryView(player,creation,summary);
         assertEquals("edit:stage-27",tag(top().getItem(43),"summary_action")); assertEquals(35,entries.size());
         manager.creationSummaryView(player,creation,summary("class","class")); assertEquals(Material.NETHERITE_SWORD,top().getItem(10).getType()); assertTrue(lore(top().getItem(10)).contains("warrior"));
+    }
+
+    @Test void classButtonAndClassSummaryEntryOpenTheClassPicker() throws Exception {
+        var classes=installMmo(); var warrior=mock(PlayerClass.class); when(warrior.getName()).thenReturn("Warrior"); when(classes.get("warrior")).thenReturn(warrior);
+        classGui.when(() -> MmoCoreClassGuiHelper.formatLine(anyString())).thenAnswer(call -> call.getArgument(0)); when(character.isActive()).thenReturn(true);
+        manager.characterView(player,character); var button=top().getItem(InventoryManager.CLASS_PICK_SLOT);
+        assertEquals(Material.NETHERITE_SWORD,button.getType()); assertTrue(lore(button).contains("Warrior")); assertTrue(button.getItemMeta().getPersistentDataContainer().has(key(InventoryManager.OPEN_CLASS_PICK_KEY)));
+        manager.characterView(other,character); assertEquals(Material.GRAY_STAINED_GLASS_PANE,other.getOpenInventory().getTopInventory().getItem(InventoryManager.CLASS_PICK_SLOT).getType());
+        when(character.hasMMOClass()).thenReturn(false); assertTrue(lore(manager.getClassPickItem(character)).contains("Not selected")); when(character.hasMMOClass()).thenReturn(true);
+        when(creation.isEditing()).thenReturn(true); var classStage=mock(SelectionStage.class); when(classStage.getId()).thenReturn("class-stage"); when(classStage.getTarget()).thenReturn("class"); StageLoader.oList.add(classStage);
+        locks.when(() -> StageEditLock.canEdit(player,classStage,character)).thenReturn(false);
+        manager.creationSummaryView(player,creation,summary("class","class-stage"));
+        assertEquals("edit:class-stage",tag(top().getItem(10),"summary_action")); assertTrue(lore(top().getItem(10)).contains("class picker")); assertTrue(lore(top().getItem(10)).contains("First subclass"));
+        try {
+            ClassPickService.configure(new ClassPickService.Settings(false,false,java.math.BigDecimal.ZERO,List.of(),Set.of()));
+            manager.characterView(player,character); assertEquals(Material.GRAY_STAINED_GLASS_PANE,top().getItem(InventoryManager.CLASS_PICK_SLOT).getType());
+            manager.creationSummaryView(player,creation,summary("class","class-stage")); assertNull(tag(top().getItem(10),"summary_action")); assertTrue(lore(top().getItem(10)).contains("Locked"));
+        } finally {
+            ClassPickService.configure(ClassPickService.Settings.DEFAULTS);
+        }
     }
 
     @Test void attributeSummaryIdentifiersAreIndependentOfDefaultLocale() {

@@ -321,6 +321,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady(), this);
 		getServer().getPluginManager().registerEvents(creationManager, this);
 		getServer().getPluginManager().registerEvents(new PaidChangeListener(), this);
+		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.classpick.ClassPickListener(), this);
 		getServer().getPluginManager().registerEvents(clueInputManager, this);
 		getServer().getPluginManager().registerEvents(placeClueManager, this);
 		getServer().getPluginManager().registerEvents(magnifyingGlassListener, this);

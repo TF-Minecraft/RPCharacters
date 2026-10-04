@@ -103,6 +103,10 @@ public class RPCharacter {
 	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
 	/** Denars held for an open paid stage, saved so a crash can't lose the refund or the count. */
 	private net.tfminecraft.rpcharacters.paidchange.PendingPaidChange pendingPaidChange;
+	/** True once the character has picked a subclass, which uses up its free subclass pick. */
+	private boolean subclassPicked;
+	/** Class picks this character has paid for. */
+	private int paidClassPicks;
 	/** Stage revision each stage's lock window was last opened for, keyed by stage id. */
 	private final Map<String, Integer> stageRevisions = new HashMap<>();
 	/** Epoch seconds a revision reset opened each stage's window; 0 counts from creation. */
@@ -230,6 +234,22 @@ public class RPCharacter {
 
 	public Map<String, Integer> getPaidChangeCounts() {
 		return Collections.unmodifiableMap(paidChangeCounts);
+	}
+
+	public boolean hasPickedSubclass() {
+		return subclassPicked;
+	}
+
+	public void setSubclassPicked(boolean subclassPicked) {
+		this.subclassPicked = subclassPicked;
+	}
+
+	public int getPaidClassPicks() {
+		return paidClassPicks;
+	}
+
+	public void setPaidClassPicks(int paidClassPicks) {
+		this.paidClassPicks = Math.max(0, paidClassPicks);
 	}
 
 	public net.tfminecraft.rpcharacters.paidchange.PendingPaidChange getPendingPaidChange() {
@@ -365,7 +385,7 @@ public class RPCharacter {
 		return mmoClass != null;
 	}
 	public void setMMOClass(String s) {
-		mmoClass = s.toUpperCase(Locale.ROOT);
+		mmoClass = s == null ? null : s.toUpperCase(Locale.ROOT);
 	}
 	public String getMMOClass() {
 		return mmoClass;

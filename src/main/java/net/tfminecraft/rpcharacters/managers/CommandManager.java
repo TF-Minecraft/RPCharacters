@@ -15,6 +15,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.loaders.ChatLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -448,6 +449,9 @@ public class CommandManager implements Listener, CommandExecutor{
 				return TutorialCommands.dismiss(p, TutorialService.PERMADEATH_ZONE);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("tutorial")) {
 				return TutorialCommands.handle(p, args);
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("class") && args.length == 1) {
+				ClassPickGui.open(p);
+				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("strikes") && args.length == 1) {
 				return EvilRpCommands.handleOwnStrikes(p);
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && StrikeChoice.fromCommand(args[0]) != null) {

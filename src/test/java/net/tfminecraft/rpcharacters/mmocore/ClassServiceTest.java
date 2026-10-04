@@ -15,6 +15,7 @@ import net.Indyuce.mmocore.api.player.attribute.*;
 import net.Indyuce.mmocore.manager.*;
 import net.Indyuce.mmocore.manager.data.PlayerDataManager;
 import net.Indyuce.mmocore.skill.ClassSkill;
+import net.Indyuce.mmocore.experience.droptable.ExperienceTable;
 import net.tfminecraft.rpcharacters.*;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.*;
@@ -73,6 +74,13 @@ class ClassServiceTest extends MmoServiceFixture {
     @Test void firstVisitUsesDefaultClassInformationAndCurrentProgression(){
         var mage=playerClass("mage",1);try(var constructed=mockConstruction(SavedClassInformation.class,(info,context)->{when(info.mapSkillLevels()).thenReturn(new HashMap<>());doAnswer(c->{assertTrue(ClassService.isApplying(owner));current.set(mage);return null;}).when(info).load(mage,mmo);})){assertTrue(ClassService.applyClass(player,"mage"));assertEquals(1,constructed.constructed().size());assertEquals(5,level.get());assertEquals(30.0,experience.get());}
         players.when(() -> PlayerManager.get(player)).thenReturn(null);assertTrue(ClassService.applyClass(player,"mage"));
+    }
+
+    @Test void appliedClassesClaimExpTableRewardsMissedBelowTheSharedLevel(){
+        var mage=playerClass("mage",1);var table=mock(ExperienceTable.class);when(mage.hasExperienceTable()).thenReturn(true);when(mage.getExperienceTable()).thenReturn(table);saved(mage);
+        doAnswer(c->{skillPoints.addAndGet(2);return null;}).when(table).claim(mmo,5,mage);
+        assertTrue(ClassService.applyClass(player,"mage"));for(int claimed=1;claimed<=5;claimed++){int at=claimed;verify(table).claim(mmo,at,mage);}verify(table,never()).claim(mmo,6,mage);assertEquals(accountSkills.get(),skillPoints.get(),"Points a replayed trigger gives must not grow the account pool");
+        clearInvocations(table);assertTrue(ClassService.applyClass(player,"mage"));verify(table,times(5)).claim(eq(mmo),anyInt(),eq(mage));
     }
 
     @Test void unstableMmoDataAndConcurrentModificationFailSoftAndReleaseApplyingFlag(){

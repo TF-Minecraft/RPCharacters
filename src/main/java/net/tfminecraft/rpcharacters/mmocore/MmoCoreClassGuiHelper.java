@@ -138,7 +138,7 @@ public final class MmoCoreClassGuiHelper {
 		return lore;
 	}
 
-	private static String formatLine(String line) {
+	public static String formatLine(String line) {
 		if (line == null) {
 			return "";
 		}
