@@ -172,7 +172,7 @@ public final class ClassPickService {
 		}
 		String oldClassId = character.getMMOClass();
 		character.setMMOClass(target.getId());
-		if (!ClassService.applyClass(player, target.getId())) {
+		if (!applied(player, target.getId())) {
 			character.setMMOClass(oldClassId);
 			refund(player.getUniqueId(), paidFrom, cost);
 			return new Result(Status.NOT_APPLIED, target, cost, null);
@@ -186,6 +186,15 @@ public final class ClassPickService {
 		CharacterLifecycle.notifyClassChange(player, pd.getUniqueId(), character, oldClassId, target.getId());
 		RPCharacters.getPlayerManager().savePlayer(player);
 		return new Result(Status.CHOSEN, target, cost, paidFrom);
+	}
+
+	private static boolean applied(Player player, String classId) {
+		try {
+			return ClassService.applyClass(player, classId);
+		} catch (RuntimeException e) {
+			LOG.log(Level.WARNING, "[RPCharacters] Class " + classId + " could not be applied for " + player.getName(), e);
+			return false;
+		}
 	}
 
 	private static Account withdraw(UUID playerId, BigDecimal cost) {

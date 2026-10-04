@@ -385,7 +385,7 @@ public class RPCharacter {
 		return mmoClass != null;
 	}
 	public void setMMOClass(String s) {
-		mmoClass = s.toUpperCase(Locale.ROOT);
+		mmoClass = s == null ? null : s.toUpperCase(Locale.ROOT);
 	}
 	public String getMMOClass() {
 		return mmoClass;

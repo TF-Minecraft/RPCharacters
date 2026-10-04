@@ -197,6 +197,10 @@ class ClassPickTest {
         assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("Refund it by hand")));
         ClassPickService.configure(settings(true, true)); var free = ClassPickService.choose(player, "mage");
         assertEquals(Status.NOT_APPLIED, free.status()); assertFalse(ChatColor.stripColor(ClassPickService.message(free)).contains("charged"));
+        var classless = new RPCharacter(player); when(account.getActiveCharacter()).thenReturn(classless);
+        classService.when(() -> ClassService.applyClass(player, "mage")).thenThrow(new IllegalStateException("MMOCore broke"));
+        assertEquals(Status.NOT_APPLIED, ClassPickService.choose(player, "mage").status()); assertFalse(classless.hasMMOClass(), "A character without a class stays without one");
+        assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("could not be applied") && record.getThrown() instanceof IllegalStateException));
     }
 
     @Test void everyOutcomeHasAPlayerMessage() {

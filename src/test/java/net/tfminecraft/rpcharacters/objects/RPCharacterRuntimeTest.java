@@ -121,7 +121,7 @@ class RPCharacterRuntimeTest {
     }
 
     @Test void progressCountersClampAndExposeReadOnlyStageState() {
-        var c=character(); c.setSubclassPicked(true); assertTrue(c.hasPickedSubclass()); c.setPaidClassPicks(-2); assertEquals(0,c.getPaidClassPicks()); c.setPaidClassPicks(3); assertEquals(3,c.getPaidClassPicks());
+        var c=character(); c.setMMOClass(null); assertFalse(c.hasMMOClass()); c.setSubclassPicked(true); assertTrue(c.hasPickedSubclass()); c.setPaidClassPicks(-2); assertEquals(0,c.getPaidClassPicks()); c.setPaidClassPicks(3); assertEquals(3,c.getPaidClassPicks());
         c.setPvpLethal(false); assertFalse(c.isPvpLethal()); c.setPaidChangeCount(null,3); assertEquals(0,c.getPaidChangeCount(null)); c.setPaidChangeCount("class",2); assertEquals(2,c.getPaidChangeCounts().get("class")); c.setPaidChangeCount("class",0); assertEquals(0,c.getPaidChangeCount("class")); assertThrows(UnsupportedOperationException.class,() -> c.getPaidChangeCounts().put("bad",1));
         var pending=new PendingPaidChange("class","class",player.getUniqueId(),null,BigDecimal.ZERO,"{}"); c.setPendingPaidChange(pending); assertSame(pending,c.getPendingPaidChange()); c.setPendingPaidChange(null); assertNull(c.getPendingPaidChange());
         c.setStageRevision(null,3,9); assertEquals(0,c.getStageRevision(null)); assertEquals(0,c.getStageRevisionSince(null)); c.setStageRevision("class",2,9); assertEquals(2,c.getStageRevision("class")); assertEquals(9,c.getStageRevisionSince("class")); c.setStageRevision("class",3,0); assertEquals(0,c.getStageRevisionSince("class")); assertEquals(Map.of("class",3),c.getStageRevisions()); assertThrows(UnsupportedOperationException.class,() -> c.getStageRevisions().clear());
