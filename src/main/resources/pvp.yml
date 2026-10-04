@@ -27,7 +27,8 @@ strikes:
   # How long the killer has to choose. No choice means spare.
   decision-seconds: 30
   # Hours before that same player can strike this character again.
-  # Stops one person landing all three strikes in a single day. 0 disables it.
+  # The 24 hour default stops one person landing all three strikes in a single day.
+  # 0 disables the wait.
   same-target-cooldown-hours: 24
   # When enabled, one strike wears off after this many days without a new one.
   decay:
