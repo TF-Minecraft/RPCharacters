@@ -203,7 +203,10 @@ class CreationCatalogSyncServiceTest {
         when(high.getId()).thenReturn("high"); when(high.getName()).thenReturn("§aHigh"); when(high.getDisplayOrder()).thenReturn(2);
         when(high.getDescription()).thenReturn(Arrays.asList(null, "§7Lore")); when(high.getAttributeDescription()).thenReturn(List.of("§bStrong"));
         when(low.getId()).thenReturn("low"); when(low.getDisplayOrder()).thenReturn(1);
-        when(classes.getAll()).thenReturn(List.of(high, hidden, low));
+        when(hidden.getId()).thenReturn("hidden");
+        PlayerClass subclass = mock(PlayerClass.class); when(subclass.getId()).thenReturn("subclass");
+        when(high.getSubclasses()).thenReturn(List.of(new net.Indyuce.mmocore.api.player.profess.Subclass(subclass, 2)));
+        when(classes.getAll()).thenReturn(List.of(high, hidden, low, subclass));
         classDisplay.when(() -> MmoCoreClassGuiHelper.isClassDisplayed(hidden)).thenReturn(false);
         var rows = rows(payload(), "classes"); assertEquals(List.of("low", "high"), rows.stream().map(o -> o.get("id")).toList());
         assertEquals("High", rows.get(1).get("name")); assertEquals(List.of("", "Lore"), rows.get(1).get("description"));
