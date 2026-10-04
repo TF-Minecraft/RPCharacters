@@ -44,9 +44,9 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 public final class ClassPickService {
 
 	public record Settings(boolean enabled, boolean infinitePoints, BigDecimal changeCost,
-			List<Account> accounts, Set<String> commands) {
+			List<Account> accounts, Set<String> commands, String resetPermission) {
 		public static final Settings DEFAULTS = new Settings(true, false, new BigDecimal("200.00"),
-				List.of(Account.POUCH, Account.BANK), Set.of("class", "c"));
+				List.of(Account.POUCH, Account.BANK), Set.of("class", "c"), "rpchar.class.reset");
 	}
 
 	public enum Status {
@@ -146,16 +146,22 @@ public final class ClassPickService {
 				.map(subclass -> new Option(subclass.getProfess(), base, subclass.getLevel())).toList();
 	}
 
-	/** Free for the first class, the first subclass of the current class, and on infinite points. */
+	/** Free for the first class, the first subclass in the current class family, and on infinite points. */
 	public static BigDecimal price(RPCharacter character, Option option) {
 		if (settings.infinitePoints() || !character.hasMMOClass()) {
 			return BigDecimal.ZERO;
 		}
 		if (option.isSubclass() && !character.hasPickedSubclass()
-				&& option.base().getId().equalsIgnoreCase(character.getMMOClass())) {
+				&& option.base().getId().equalsIgnoreCase(baseClassId(character))) {
 			return BigDecimal.ZERO;
 		}
 		return changePrice(character);
+	}
+
+	/** The character's class, or the base class of its subclass. */
+	private static String baseClassId(RPCharacter character) {
+		Option current = option(character.getMMOClass());
+		return current != null && current.isSubclass() ? current.base().getId() : character.getMMOClass();
 	}
 
 	/** The class creation stage, whose lock window and paid-change rule price class changes. */

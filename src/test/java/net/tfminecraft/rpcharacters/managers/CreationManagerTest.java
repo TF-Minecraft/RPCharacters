@@ -655,7 +655,7 @@ class CreationManagerTest {
             manager.selectionClick(summary("edit:class_stage"));
             verify(creation).closeEditSession();
             gui.verify(() -> ClassPickGui.open(player));
-            ClassPickService.configure(new ClassPickService.Settings(false, false, java.math.BigDecimal.ZERO, List.of(), java.util.Set.of()));
+            ClassPickService.configure(new ClassPickService.Settings(false, false, java.math.BigDecimal.ZERO, List.of(), java.util.Set.of(), "rpchar.class.reset"));
             manager.selectionClick(summary("edit:class_stage"));
             verify(creation).jumpToStageForEdit("class_stage");
         } finally {

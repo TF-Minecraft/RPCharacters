@@ -123,21 +123,23 @@ class ClassPickTest {
     static String lore(ItemStack item) { return ChatColor.stripColor(String.join("\n", item.getItemMeta().getLore())); }
 
     Settings settings(boolean enabled, boolean infinite) {
-        return new Settings(enabled, infinite, new BigDecimal("200.00"), List.of(Account.POUCH, Account.BANK), Set.of("class", "c"));
+        return new Settings(enabled, infinite, new BigDecimal("200.00"), List.of(Account.POUCH, Account.BANK), Set.of("class", "c"), "rpchar.class.reset");
     }
 
     @Test void configReadsEverySettingAndFallsBackOnMissingOrInvalidValues() {
         ClassPickConfig.load(null); assertSame(Settings.DEFAULTS, ClassPickService.settings());
         var yaml = new YamlConfiguration();
         yaml.set("a.enabled", false); yaml.set("a.infinite-points", true); yaml.set("a.change-cost", 150.5);
-        yaml.set("a.accounts", List.of("Bank", "vault")); yaml.set("a.commands", List.of("/Class", " ", "Pick"));
+        yaml.set("a.accounts", List.of("Bank", "vault")); yaml.set("a.commands", List.of("/Class", " ", "Pick")); yaml.set("a.reset-permission", " staff.reset ");
         ClassPickConfig.load(yaml.getConfigurationSection("a")); var read = ClassPickService.settings();
         assertFalse(read.enabled()); assertFalse(ClassPickService.isEnabled()); assertTrue(read.infinitePoints()); assertEquals(new BigDecimal("150.50"), read.changeCost());
-        assertEquals(List.of(Account.BANK), read.accounts()); assertEquals(Set.of("class", "pick"), read.commands());
+        assertEquals(List.of(Account.BANK), read.accounts()); assertEquals(Set.of("class", "pick"), read.commands()); assertEquals("staff.reset", read.resetPermission());
         yaml.set("b.change-cost", "lots"); yaml.set("b.accounts", List.of("vault")); yaml.set("b.commands", "class");
         ClassPickConfig.load(yaml.getConfigurationSection("b")); read = ClassPickService.settings();
         assertTrue(read.enabled()); assertFalse(read.infinitePoints()); assertEquals(Settings.DEFAULTS.changeCost(), read.changeCost());
         assertEquals(Settings.DEFAULTS.accounts(), read.accounts()); assertEquals(Settings.DEFAULTS.commands(), read.commands());
+        assertEquals("rpchar.class.reset", read.resetPermission()); yaml.set("e.reset-permission", " "); ClassPickConfig.load(yaml.getConfigurationSection("e"));
+        assertEquals("rpchar.class.reset", ClassPickService.settings().resetPermission());
         yaml.set("c.change-cost", -5); yaml.set("c.enabled", true); ClassPickConfig.load(yaml.getConfigurationSection("c"));
         assertEquals(Settings.DEFAULTS.changeCost(), ClassPickService.settings().changeCost());
         yaml.set("d.infinite-points", true); ClassPickConfig.load(yaml.getConfigurationSection("d"));
@@ -158,6 +160,9 @@ class ClassPickTest {
         assertEquals(BigDecimal.ZERO, ClassPickService.price(character, berserkerPick));
         assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, magePick));
         character.setMMOClass("mage"); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick), "Only the current class's subclasses are free");
+        character.setMMOClass("berserker"); var spellbladePick = ClassPickService.option("spellblade");
+        assertEquals(BigDecimal.ZERO, ClassPickService.price(character, spellbladePick), "A reset subclass holder's sibling is the free subclass pick");
+        assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, magePick));
         character.setMMOClass("warrior"); character.setSubclassPicked(true); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick));
         assertEquals(BigDecimal.ZERO, ClassPickService.price(new RPCharacter(player), magePick), "A character without a class picks its first one free");
         character.setMMOClass("mage"); ClassPickService.configure(settings(true, true)); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, magePick));
@@ -271,7 +276,8 @@ class ClassPickTest {
         ClassPickGui.click(player, (ClassPickGui.Holder) top.getHolder(), ClassPickGui.NAV_SLOT);
         assertEquals("Class Selection", ChatColor.stripColor(player.getOpenInventory().getTitle()));
         level.set(2); character.setMMOClass("berserker"); top = openSubclasses();
-        assertTrue(lore(top.getItem(10)).contains("Your current class")); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
+        assertTrue(lore(top.getItem(10)).contains("Your current class")); assertTrue(lore(top.getItem(11)).contains("Cost: Free"));
+        character.setSubclassPicked(true); top = openSubclasses(); assertTrue(lore(top.getItem(11)).contains("Cost: 200 denars"));
         character.setMMOClass("mage"); top = openSubclasses();
         assertTrue(ChatColor.stripColor(top.getItem(22).getItemMeta().getDisplayName()).contains("No subclasses"));
         character.setMMOClass(null); assertTrue(ClassPickService.subclassOptions(character).isEmpty());

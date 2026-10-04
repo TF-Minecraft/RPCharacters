@@ -13,6 +13,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -74,6 +75,8 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
+			} else if (ClassPickReset.canUse(sender)) {
+				completions.add("admin");
 			}
 			completions.add("strikes");
 			if (sender.hasPermission(Cache.personaTempaliasPermission)) {
@@ -91,6 +94,10 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 		if (sub.equals(PartyCommand.SUBCOMMAND)) {
 			return PartyCommand.tabComplete(sender, args);
+		}
+		if (sub.equals("admin") && args.length == 3 && args[1].equalsIgnoreCase(ClassPickReset.SUBCOMMAND)
+				&& ClassPickReset.canUse(sender)) {
+			return filter(List.of("confirm"), args[2]);
 		}
 		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
 				&& (args[1].equalsIgnoreCase("strikes") || args[1].equalsIgnoreCase("tutorial"))) {
@@ -147,11 +154,16 @@ public class CommandTabCompleter implements TabCompleter {
 				for (Player online : Bukkit.getOnlinePlayers()) {
 					completions.add(online.getName());
 				}
-			} else if (args[0].equalsIgnoreCase("admin") && Permissions.isAdmin(sender)) {
-				completions.add("injure");
-				completions.add("permakill");
-				completions.add("strikes");
-				completions.add("tutorial");
+			} else if (args[0].equalsIgnoreCase("admin")) {
+				if (Permissions.isAdmin(sender)) {
+					completions.add("injure");
+					completions.add("permakill");
+					completions.add("strikes");
+					completions.add("tutorial");
+				}
+				if (ClassPickReset.canUse(sender)) {
+					completions.add(ClassPickReset.SUBCOMMAND);
+				}
 			} else if (args[0].equalsIgnoreCase("addtrait") || args[0].equalsIgnoreCase("removetrait")
 					|| args[0].equalsIgnoreCase("injure")) {
 				for (Player online : Bukkit.getOnlinePlayers()) {

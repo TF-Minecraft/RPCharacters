@@ -16,6 +16,7 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.loaders.ChatLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -62,6 +63,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		}
 		if (args.length >= 1 && args[0].equalsIgnoreCase(PartyCommand.SUBCOMMAND)) {
 			return PartyCommand.handle(sender, args);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(ClassPickReset.SUBCOMMAND)) {
+			return ClassPickReset.handle(sender, args, 2);
 		}
 		if (args.length >= 1 && args[0].equalsIgnoreCase("admin")) {
 			return handleAdmin(sender, args);
@@ -714,7 +719,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -730,7 +735,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase("tutorial")) {
 			return TutorialCommands.handleAdmin(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses> ...");
 		return true;
 	}
 
