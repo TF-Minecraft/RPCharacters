@@ -72,8 +72,63 @@ class ClassServiceTest extends MmoServiceFixture {
     }
 
     @Test void firstVisitUsesDefaultClassInformationAndCurrentProgression(){
-        var mage=playerClass("mage",1);try(var constructed=mockConstruction(SavedClassInformation.class,(info,context)->{when(info.mapSkillLevels()).thenReturn(new HashMap<>());doAnswer(c->{assertTrue(ClassService.isApplying(owner));current.set(mage);return null;}).when(info).load(mage,mmo);})){assertTrue(ClassService.applyClass(player,"mage"));assertEquals(1,constructed.constructed().size());assertEquals(5,level.get());assertEquals(30.0,experience.get());}
+        var mage=playerClass("mage",1);try(var constructed=mockConstruction(SavedClassInformation.class,(info,context)->{when(info.mapSkillLevels()).thenReturn(new HashMap<>());when(info.mapAttributeLevels()).thenReturn(new HashMap<>());doAnswer(c->{assertTrue(ClassService.isApplying(owner));current.set(mage);return null;}).when(info).load(mage,mmo);})){assertTrue(ClassService.applyClass(player,"mage"));assertEquals(1,constructed.constructed().size());assertEquals(5,level.get());assertEquals(30.0,experience.get());}
         players.when(() -> PlayerManager.get(player)).thenReturn(null);assertTrue(ClassService.applyClass(player,"mage"));
+    }
+
+    @Test void newSubclassKeepsCreationAttributesAndSpentAndFreePoints() {
+        var strength = instance("strength", 7, 3);
+        var dexterity = instance("dexterity", 2, 2);
+        var zero = instance("intelligence", 0, 0);
+        allocation.set(new HashMap<>(Map.of("strength", 4)));
+        when(account.hasActiveCharacter()).thenReturn(true);
+        attributePoints.when(() -> AttributePointService.applyFreeAttributePoints(player, character)).thenCallRealMethod();
+        var subclass = playerClass("berserker", 1);
+        try (var constructed = mockConstruction(SavedClassInformation.class, (info, context) -> {
+            when(info.mapSkillLevels()).thenReturn(new HashMap<>());
+            when(info.mapAttributeLevels()).thenReturn(new HashMap<>(Map.of("strength", 0, "intelligence", 99)));
+            doAnswer(call -> {
+                current.set(subclass);
+                instances.values().forEach(instance -> instance.setBase(0));
+                info.mapAttributeLevels().forEach((id, value) -> instances.get(id).setBase(value));
+                attributePointsBalance.set(0);
+                return null;
+            }).when(info).load(subclass, mmo);
+        })) {
+            assertTrue(ClassService.applyClass(player, "berserker"));
+            assertEquals(1, constructed.constructed().size());
+        }
+        assertEquals(7, strength.getBase());
+        assertEquals(2, dexterity.getBase());
+        assertEquals(0, zero.getBase());
+        assertEquals(Map.of("strength", 4), allocation.get());
+        assertEquals(6, attributePointsBalance.get());
+        assertEquals(10, accountAttributes.get());
+        assertEquals(5, level.get());
+        assertEquals(30.0, experience.get());
+    }
+
+    @Test void returningClassUsesCurrentAttributesInsteadOfItsStaleAllocation() {
+        saved(current.get());
+        var strength = instance("strength", 8, 3);
+        var dexterity = instance("dexterity", 0, 0);
+        var target = playerClass("mage", 1);
+        var info = saved(target);
+        info.mapAttributeLevels().putAll(Map.of("strength", 1, "dexterity", 9));
+        doAnswer(call -> {
+            current.set(target);
+            info.mapAttributeLevels().forEach((id, value) -> instances.get(id).setBase(value));
+            return null;
+        }).when(info).load(target, mmo);
+        assertTrue(ClassService.applyClass(player, "mage"));
+        assertEquals(8, strength.getBase());
+        assertEquals(0, dexterity.getBase());
+        strength.setBase(10);
+        assertTrue(ClassService.applyClass(player, "mage"));
+        assertEquals(10, strength.getBase(), "Reapplying the same class must not stack or reset attributes");
+        assertTrue(ClassService.applyClass(player, "warrior"));
+        assertTrue(ClassService.applyClass(player, "mage"));
+        assertEquals(10, strength.getBase(), "Repeated changes must keep the latest character allocation");
     }
 
     @Test void appliedClassesClaimExpTableRewardsMissedBelowTheSharedLevel(){
@@ -130,7 +185,7 @@ abstract class MmoServiceFixture {
     <T>MockedStatic<T> boundary(Class<T> type){var mocked=mockStatic(type);closeables.add(mocked);return mocked;}
     void field(String name,Object value)throws Exception{Field f=MMOCore.class.getField(name);f.setAccessible(true);f.set(MMOCore.plugin,value);}
     PlayerClass playerClass(String id,int order){var result=mock(PlayerClass.class);when(result.getId()).thenReturn(id);when(result.getName()).thenReturn(id);when(result.getDisplayOrder()).thenReturn(order);when(result.hasSkill(anyString())).thenAnswer(c->c.<String>getArgument(0).equals("known")||c.<String>getArgument(0).equals("base"));when(result.getSkills()).thenReturn(new ArrayList<>());classMap.put(id.toLowerCase(Locale.ROOT),result);return result;}
-    SavedClassInformation saved(PlayerClass target){var info=mock(SavedClassInformation.class);var map=new HashMap<String,Integer>();savedMaps.put(info,map);when(info.mapSkillLevels()).thenReturn(map);doAnswer(c->{map.put(c.getArgument(0),c.getArgument(1));return null;}).when(info).registerSkillLevel(anyString(),anyInt());doAnswer(c->{current.set(target);return null;}).when(info).load(target,mmo);saved.put(target,info);return info;}
+    SavedClassInformation saved(PlayerClass target){var info=mock(SavedClassInformation.class);var map=new HashMap<String,Integer>();savedMaps.put(info,map);when(info.mapSkillLevels()).thenReturn(map);when(info.mapAttributeLevels()).thenReturn(new HashMap<>());doAnswer(c->{map.put(c.getArgument(0),c.getArgument(1));return null;}).when(info).registerSkillLevel(anyString(),anyInt());doAnswer(c->{current.set(target);return null;}).when(info).load(target,mmo);saved.put(target,info);return info;}
     Map<String,Integer> savedLevels(SavedClassInformation info){return savedMaps.get(info);}
     void addSkill(String id,String name){var classSkill=mock(ClassSkill.class);SkillHandler<?> handler=mock(SkillHandler.class);when(handler.getName()).thenReturn(name);doReturn(handler).when(classSkill).getSkill();current.get().getSkills().add(classSkill);when(mmo.getSkillLevel(handler)).thenAnswer(c->skillLevels.getOrDefault(id,1));}
     PlayerAttributes.AttributeInstance instance(String id,int amount,int base){var instance=mock(PlayerAttributes.AttributeInstance.class);var value=new AtomicInteger(amount);when(instance.getId()).thenReturn(id);when(instance.getBase()).thenAnswer(c->value.get());doAnswer(c->{value.set(c.getArgument(0));return null;}).when(instance).setBase(anyInt());instances.put(id.toLowerCase(Locale.ROOT),instance);creationBases.put(id.toLowerCase(Locale.ROOT),base);return instance;}
