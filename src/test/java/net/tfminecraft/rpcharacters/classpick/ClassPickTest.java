@@ -288,6 +288,16 @@ class ClassPickTest {
         classService.verifyNoInteractions(); assertTrue(wallet.balances.isEmpty());
     }
 
+    @Test void hiddenCurrentBaseStillAllowsItsOwnSubclasses() {
+        displayed.remove("warrior"); level.set(2);
+        assertEquals(List.of(mage), ClassPickService.baseClasses());
+        assertEquals(2, ClassPickService.subclassOptions(character).size());
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "berserker").status());
+        assertEquals(2, ClassPickService.subclassOptions(character).size());
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "spellblade").status());
+        character.setMMOClass("missing"); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
+    }
+
     @Test void pickerUsesAdditionalRowsForMoreThanSevenClassesAndSubclasses() {
         for (int i = 0; i < 9; i++) { playerClass("base" + i, "Base " + i, 10 + i, null); displayed.add("base" + i); }
         var top = openPicker(); assertEquals(Material.PAPER, top.getItem(19).getType());

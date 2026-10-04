@@ -123,6 +123,8 @@ public final class ClassPickService {
 			if (base.getId().equalsIgnoreCase(classId)) {
 				return new Option(base, null, 0);
 			}
+		}
+		for (PlayerClass base : MMOCore.plugin.classManager.getAll()) {
 			for (Subclass subclass : base.getSubclasses()) {
 				if (subclass.getProfess().getId().equalsIgnoreCase(classId)) {
 					return new Option(subclass.getProfess(), base, subclass.getLevel());
@@ -134,11 +136,12 @@ public final class ClassPickService {
 
 	/** Subclasses of the character's base class, including siblings of its current subclass. */
 	public static List<Option> subclassOptions(RPCharacter character) {
-		Option current = option(character.getMMOClass());
+		PlayerClass current = character.hasMMOClass() ? MMOCore.plugin.classManager.get(character.getMMOClass()) : null;
 		if (current == null) {
 			return List.of();
 		}
-		PlayerClass base = current.isSubclass() ? current.base() : current.playerClass();
+		Option option = option(current.getId());
+		PlayerClass base = option != null && option.isSubclass() ? option.base() : current;
 		return base.getSubclasses().stream()
 				.map(subclass -> new Option(subclass.getProfess(), base, subclass.getLevel())).toList();
 	}
