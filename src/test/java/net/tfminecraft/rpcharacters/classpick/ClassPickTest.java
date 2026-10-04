@@ -294,6 +294,7 @@ class ClassPickTest {
         assertEquals(2, ClassPickService.subclassOptions(character).size());
         assertEquals(Status.CHOSEN, ClassPickService.choose(player, "berserker").status());
         assertEquals(2, ClassPickService.subclassOptions(character).size());
+        ClassPickService.configure(settings(true, true));
         assertEquals(Status.CHOSEN, ClassPickService.choose(player, "spellblade").status());
         character.setMMOClass("missing"); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
     }
