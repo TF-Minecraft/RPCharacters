@@ -132,6 +132,8 @@ public class PlayerManager implements Listener{
 		loc.setYaw(p.getLocation().getYaw());
 		loc.setPitch(p.getLocation().getPitch());
 		p.teleport(loc);
+		// Teleports keep the fall distance; frozen in the air, it would build up until it kills them.
+		p.setFallDistance(0f);
 	}
 
 	public void releaseFreeze(Player p) {
