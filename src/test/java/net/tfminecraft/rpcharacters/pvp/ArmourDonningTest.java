@@ -200,6 +200,17 @@ class ArmourDonningTest {
         assertEquals(Material.IRON_BOOTS, player.getInventory().getItem(0).getType());
     }
 
+    @Test void progressGoesThroughMythicLibSoMmoCoreDoesNotHideIt() {
+        var bar = mock(io.lumine.mythic.lib.message.actionbar.ActionBarHandler.class);
+        var data = mock(io.lumine.mythic.lib.api.player.MMOPlayerData.class); when(data.getActionBar()).thenReturn(bar);
+        var lib = mockStatic(io.lumine.mythic.lib.api.player.MMOPlayerData.class); mocks.add(lib);
+        lib.when(() -> io.lumine.mythic.lib.api.player.MMOPlayerData.getOrNull(player.getUniqueId())).thenReturn(data);
+        equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
+        verify(bar).show(eq(io.lumine.mythic.lib.message.actionbar.ActionBarPriority.HIGH), eq(40L), contains("Fastening your chestplate"));
+        ArmourDonning.stop(player, false);
+        verify(bar).reset(io.lumine.mythic.lib.message.actionbar.ActionBarPriority.HIGH);
+    }
+
     @Test void aPieceMovedOrUsedDuringTheEquipEventIsLookedUpAgain() {
         ItemStack stone = new ItemStack(Material.STONE);
         player.getInventory().setItem(0, chestplate.clone());

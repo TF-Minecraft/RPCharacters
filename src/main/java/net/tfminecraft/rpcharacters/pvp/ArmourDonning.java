@@ -35,6 +35,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
+import io.lumine.mythic.lib.api.player.MMOPlayerData;
+import io.lumine.mythic.lib.message.actionbar.ActionBarPriority;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
@@ -60,6 +62,8 @@ public final class ArmourDonning implements Listener {
 	private static final int STORAGE_SLOTS = 36;
 	private static final int CURSOR = -1;
 	private static final int NOT_FOUND = -2;
+	/** Ticks a progress line holds MMOCore's bar off; the ticker refreshes it well before. */
+	private static final long ACTION_BAR_TICKS = 40L;
 
 	private static final Map<UUID, Donning> donning = new HashMap<>();
 	private static final Map<UUID, EnumMap<ArmorType, Long>> equippedAt = new HashMap<>();
@@ -392,7 +396,7 @@ public final class ArmourDonning implements Listener {
 			return;
 		}
 		clearSlowness(player);
-		player.sendActionBar(Component.empty());
+		clearActionBar(player);
 		if (tell) {
 			RPTexts.send(player, PvpLoader.getDonInterrupted().replace("{piece}", pieceName(state.current.type())));
 		}
@@ -420,8 +424,24 @@ public final class ArmourDonning implements Listener {
 				.replace("{queued}", queued));
 	}
 
+	/** MythicLib redraws MMOCore's bar every tick, so go through its queue when it tracks the player. */
 	private static void actionBar(Player player, String raw) {
-		player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(RPTexts.formatDisplay(raw)));
+		String text = RPTexts.formatDisplay(raw);
+		MMOPlayerData data = MMOPlayerData.getOrNull(player.getUniqueId());
+		if (data != null) {
+			data.getActionBar().show(ActionBarPriority.HIGH, ACTION_BAR_TICKS, text);
+		} else {
+			player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(text));
+		}
+	}
+
+	private static void clearActionBar(Player player) {
+		MMOPlayerData data = MMOPlayerData.getOrNull(player.getUniqueId());
+		if (data != null) {
+			data.getActionBar().reset(ActionBarPriority.HIGH);
+		} else {
+			player.sendActionBar(Component.empty());
+		}
 	}
 
 	/** Armour doesn't stack, so it goes in the first free storage slot or on the ground. */
