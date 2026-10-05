@@ -112,7 +112,9 @@ class PlayerManagerLifecycleTest extends PlayerManagerFixture {
             player.teleport(moved);
             assertFalse(manager.isAtFreezeLoc(player));
             manager.reevaluateFreeze(player);
+            player.setFallDistance(9f);
             manager.toFreezeLoc(player);
+            assertEquals(0f, player.getFallDistance());
             assertEquals(origin.getX(), player.getLocation().getX());
             assertEquals(origin.getY(), player.getLocation().getY());
             assertEquals(origin.getZ(), player.getLocation().getZ());
