@@ -66,6 +66,61 @@ class PvpKnockoutManagerTest {
         verify(victim, times(600)).teleport(new Location(null, 10, 64, 10, 90, 20));
     }
 
+    @Test void freezeDoesNotBuildUpFallDistance() throws Exception {
+        Player victim = knockoutPlayer();
+        var manager = new PvpKnockoutManager();
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
+            invoke(manager, "applyKnockout", victim);
+            // Airborne when downed: every tick the client falls a little and is pulled back up.
+            when(victim.getLocation()).thenReturn(new Location(null, 10, 63.9, 10));
+            for (int i = 0; i < 600; i++) invoke(manager, "tick");
+            verify(victim, times(600)).setFallDistance(0f);
+            expire(manager, victim);
+            invoke(manager, "tick");
+            verify(victim, times(601)).setFallDistance(0f);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"FALL", "DROWNING", "FIRE_TICK", "SUFFOCATION", "STARVATION", "CUSTOM"})
+    void downedPlayerSurvivesDamageWithoutAttacker(String cause) throws Exception {
+        Player victim = knockoutPlayer();
+        when(victim.getHealth()).thenReturn(1.0);
+        var manager = new PvpKnockoutManager();
+        var event = mock(EntityDamageEvent.class);
+        when(event.getEntity()).thenReturn(victim);
+        when(event.getCause()).thenReturn(EntityDamageEvent.DamageCause.valueOf(cause));
+        when(event.getFinalDamage()).thenReturn(4.0);
+        manager.onLethalDamage(event);
+        verify(event, never()).setCancelled(true);
+        invoke(manager, "applyKnockout", victim);
+        manager.onLethalDamage(event);
+        verify(event).setCancelled(true);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"KILL", "VOID", "WORLD_BORDER"})
+    void killCommandVoidAndBorderStillKillDownedPlayer(String cause) {
+        var event = mock(EntityDamageEvent.class);
+        when(event.getCause()).thenReturn(EntityDamageEvent.DamageCause.valueOf(cause));
+        assertFalse(PvpKnockoutManager.downedPlayerSurvives(event));
+    }
+
+    @Test void mobsAndPlayersCanStillFinishDownedPlayer() {
+        var mobHit = mock(EntityDamageByEntityEvent.class);
+        when(mobHit.getCause()).thenReturn(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
+        when(mobHit.getDamager()).thenReturn(mock(Entity.class));
+        assertFalse(PvpKnockoutManager.downedPlayerSurvives(mobHit));
+        var caused = mock(EntityDamageEvent.class);
+        DamageSource source = mock(DamageSource.class);
+        when(caused.getCause()).thenReturn(EntityDamageEvent.DamageCause.MAGIC);
+        when(caused.getDamageSource()).thenReturn(source);
+        Player attacker = player();
+        when(source.getCausingEntity()).thenReturn(attacker);
+        assertFalse(PvpKnockoutManager.downedPlayerSurvives(caused));
+    }
+
     @Test void existingCrawlIsKeptAndInterruptedCrawlIsRestored() throws Exception {
         Player victim = knockoutPlayer();
         var manager = new PvpKnockoutManager();

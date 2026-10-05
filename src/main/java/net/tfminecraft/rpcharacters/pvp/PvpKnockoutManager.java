@@ -88,6 +88,10 @@ public final class PvpKnockoutManager implements Listener {
 		if (player.getHealth() - event.getFinalDamage() > 0) {
 			return;
 		}
+		if (isKnockedOut(player) && downedPlayerSurvives(event)) {
+			event.setCancelled(true);
+			return;
+		}
 		if (!usesNonlethalMode(event, player)) {
 			return;
 		}
@@ -112,6 +116,24 @@ public final class PvpKnockoutManager implements Listener {
 			return false;
 		}
 		return !pd.getActiveCharacter().isPvpLethal();
+	}
+
+	/**
+	 * A downed player is held in place at half a heart and cannot dodge drowning, fire, or the
+	 * fall when the freeze ends, so damage with no attacker cannot kill them. Players and mobs
+	 * still can, and so can /kill, the void and the world border.
+	 */
+	static boolean downedPlayerSurvives(EntityDamageEvent event) {
+		switch (event.getCause()) {
+			case KILL, VOID, WORLD_BORDER:
+				return false;
+			default:
+				break;
+		}
+		if (event instanceof EntityDamageByEntityEvent) {
+			return false;
+		}
+		return event.getDamageSource() == null || event.getDamageSource().getCausingEntity() == null;
 	}
 
 	static Player attackingPlayer(EntityDamageEvent event) {
@@ -142,7 +164,12 @@ public final class PvpKnockoutManager implements Listener {
 	}
 
 	private void releaseKnockout(Player player) {
-		if (knockouts.remove(player.getUniqueId()) != null && crawl != null) {
+		if (knockouts.remove(player.getUniqueId()) == null) {
+			return;
+		}
+		// Each freeze teleport keeps the fall distance, so it would kill them on landing.
+		player.setFallDistance(0f);
+		if (crawl != null) {
 			crawl.release(player);
 		}
 	}
@@ -192,6 +219,7 @@ public final class PvpKnockoutManager implements Listener {
 				continue;
 			}
 			enforceFreeze(player, entry.getValue().location);
+			player.setFallDistance(0f);
 			if (crawl != null) {
 				crawl.enforce(player);
 			}
