@@ -31,6 +31,8 @@ public class PlayerData {
 	private int createdAtEpochSeconds;
 	private Integer accountSkillPointsTotal;
 	private Integer accountAttributePointsTotal;
+	private Integer accountClassLevel;
+	private double accountClassExperience;
 	private final Map<String, Integer> accountProfessionPoints = new HashMap<>();
 	private boolean professionPointsInitialized;
 	private String tempAlias;
@@ -120,6 +122,27 @@ public class PlayerData {
 			return;
 		}
 		setAccountSkillPointsTotal((int) Math.min(Integer.MAX_VALUE, (long) getAccountSkillPointsTotal() + amount));
+	}
+
+	/**
+	 * The class level every character shares. MMOCore holds a player at the cap of the class being
+	 * played, so the account keeps its own copy for classes that allow more.
+	 */
+	public boolean hasAccountClassLevel() {
+		return accountClassLevel != null;
+	}
+
+	public int getAccountClassLevel() {
+		return accountClassLevel != null ? accountClassLevel : 1;
+	}
+
+	public double getAccountClassExperience() {
+		return accountClassExperience;
+	}
+
+	public void setAccountClassProgress(int level, double experience) {
+		this.accountClassLevel = Math.max(1, level);
+		this.accountClassExperience = Math.max(0.0, experience);
 	}
 
 	public boolean needsAttributePointsMigration() {

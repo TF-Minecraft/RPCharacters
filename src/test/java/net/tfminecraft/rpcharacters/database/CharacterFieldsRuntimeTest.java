@@ -118,6 +118,22 @@ class CharacterFieldsRuntimeTest {
         var empty = new HashMap<String, Object>(); PlayerTutorialFields.save(empty, new PlayerData(UUID.randomUUID())); assertTrue(empty.isEmpty());
     }
 
+    @Test void classLevelFieldsRoundTripAndIgnoreMissingOrMalformedValues() {
+        var account = new PlayerData(UUID.randomUUID());
+        PlayerClassLevelFields.load(null, json(Map.of())); PlayerClassLevelFields.load(account, null);
+        PlayerClassLevelFields.load(account, json(Map.of("account-class-level", "6")));
+        assertFalse(account.hasAccountClassLevel()); assertEquals(1, account.getAccountClassLevel());
+        var empty = new HashMap<String, Object>(); PlayerClassLevelFields.save(empty, account); assertTrue(empty.isEmpty());
+        PlayerClassLevelFields.load(account, json(Map.of("account-class-level", 6L)));
+        assertEquals(6, account.getAccountClassLevel()); assertEquals(0.0, account.getAccountClassExperience());
+        PlayerClassLevelFields.load(account, json(Map.of("account-class-level", 4L, "account-class-exp", 12.5)));
+        var saved = new HashMap<String, Object>(); PlayerClassLevelFields.save(saved, account);
+        var reloaded = new PlayerData(UUID.randomUUID()); PlayerClassLevelFields.load(reloaded, json(saved));
+        assertEquals(4, reloaded.getAccountClassLevel()); assertEquals(12.5, reloaded.getAccountClassExperience());
+        account.setAccountClassProgress(0, -3.0);
+        assertEquals(1, account.getAccountClassLevel()); assertEquals(0.0, account.getAccountClassExperience());
+    }
+
     @Test void rosterSafetyIgnoresBlankFileIdsButStillRequiresEveryActualCharacter() {
         assertFalse(RosterPushPolicy.wouldDropSavedCharacters(Set.of("alice"), Arrays.asList(null, "", " ", "alice")));
         assertFalse(RosterPushPolicy.wouldDropSavedCharacters(null, Arrays.asList(null, " ")));

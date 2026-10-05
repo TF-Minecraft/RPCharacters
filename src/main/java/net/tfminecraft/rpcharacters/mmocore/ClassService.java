@@ -1,5 +1,6 @@
 package net.tfminecraft.rpcharacters.mmocore;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import net.Indyuce.mmocore.MMOCore;
@@ -36,7 +38,49 @@ public final class ClassService {
 			return;
 		}
 		PlayerData pd = PlayerData.get(player);
-		ACCOUNT_PROGRESS.put(player.getUniqueId(), new Progression(pd.getLevel(), pd.getExperience()));
+		Progression known = knownProgress(player);
+		// MMOCore holds a player at the cap of the class being played, also when it loads them.
+		// That cap is not the account's level: keep the higher one for classes that allow it.
+		if (known != null && known.level > pd.getLevel() && pd.hasReachedMaxLevel()) {
+			return;
+		}
+		remember(player, new Progression(pd.getLevel(), pd.getExperience()));
+	}
+
+	/**
+	 * The account's level: this session's, else the one saved in the player file, else the level in
+	 * MMOCore's own save from before MMOCore capped it (for accounts saved before the player file kept it).
+	 */
+	private static Progression knownProgress(Player player) {
+		Progression known = ACCOUNT_PROGRESS.get(player.getUniqueId());
+		if (known != null) {
+			return known;
+		}
+		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
+		if (pd != null && pd.hasAccountClassLevel()) {
+			return new Progression(pd.getAccountClassLevel(), pd.getAccountClassExperience());
+		}
+		return savedMmoProgress(player.getUniqueId());
+	}
+
+	private static Progression savedMmoProgress(UUID uuid) {
+		File file = new File(new File(MMOCore.plugin.getDataFolder(), "userdata"), uuid + ".yml");
+		if (!file.isFile()) {
+			return null;
+		}
+		YamlConfiguration saved = YamlConfiguration.loadConfiguration(file);
+		if (!saved.isInt("level")) {
+			return null;
+		}
+		return new Progression(saved.getInt("level"), saved.getDouble("experience"));
+	}
+
+	private static void remember(Player player, Progression progress) {
+		ACCOUNT_PROGRESS.put(player.getUniqueId(), progress);
+		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
+		if (pd != null) {
+			pd.setAccountClassProgress(progress.level, progress.exp);
+		}
 	}
 
 	public static void migrateSkillPointsIfNeeded(Player player) {
@@ -177,7 +221,10 @@ public final class ClassService {
 		}
 
 		UUID uuid = player.getUniqueId();
-		Progression saved = ACCOUNT_PROGRESS.getOrDefault(uuid, new Progression(mmoPd.getLevel(), mmoPd.getExperience()));
+		Progression saved = knownProgress(player);
+		if (saved == null) {
+			saved = new Progression(mmoPd.getLevel(), mmoPd.getExperience());
+		}
 		int level = saved.level;
 		double exp = saved.exp;
 		// Attribute bases belong to the character, not the class. Capture them before
@@ -203,7 +250,7 @@ public final class ClassService {
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
 			applyFreeAttributePointsIfActive(player);
-			ACCOUNT_PROGRESS.put(uuid, new Progression(level, exp));
+			remember(player, new Progression(level, exp));
 		} finally {
 			APPLYING.remove(uuid);
 		}
@@ -229,7 +276,7 @@ public final class ClassService {
 		if (player == null || APPLYING.contains(player.getUniqueId())) {
 			return;
 		}
-		Progression saved = ACCOUNT_PROGRESS.get(player.getUniqueId());
+		Progression saved = knownProgress(player);
 		if (saved == null) {
 			return;
 		}

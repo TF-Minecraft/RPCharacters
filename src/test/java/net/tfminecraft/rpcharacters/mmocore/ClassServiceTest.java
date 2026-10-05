@@ -71,6 +71,48 @@ class ClassServiceTest extends MmoServiceFixture {
         assertTrue(ClassService.applyClass(player,"mage"));assertSame(mage,current.get());assertEquals(5,level.get());assertEquals(30.0,experience.get());assertFalse(ClassService.isApplying(owner));level.set(2);experience.set(1.0);ClassService.restoreAccountProgression(player);assertEquals(5,level.get());assertEquals(30.0,experience.get());
     }
 
+    @Test void cappedClassDoesNotLowerTheLevelOtherClassesUse(){
+        var berserker=playerClass("berserker",1);saved(berserker);
+        ClassService.trackFromPlayer(player);
+        level.set(2);experience.set(0.0);when(mmo.hasReachedMaxLevel()).thenReturn(true);
+        ClassService.trackFromPlayer(player);
+        verify(account,never()).setAccountClassProgress(2,0.0);
+        assertTrue(ClassService.applyClass(player,"berserker"));
+        assertEquals(5,level.get(),"A base class capped at 2 must not drop the account to 2 for its subclasses");
+        assertEquals(30.0,experience.get());
+        verify(account,atLeastOnce()).setAccountClassProgress(5,30.0);
+    }
+
+    @Test void levelsBelowTheCapAndAboveTheAccountStillFollowMmoCore(){
+        var mage=playerClass("mage",1);saved(mage);
+        ClassService.trackFromPlayer(player);level.set(3);experience.set(4.0);ClassService.trackFromPlayer(player);
+        level.set(1);assertTrue(ClassService.applyClass(player,"mage"));assertEquals(3,level.get());assertEquals(4.0,experience.get());
+        level.set(7);when(mmo.hasReachedMaxLevel()).thenReturn(true);ClassService.trackFromPlayer(player);
+        verify(account).setAccountClassProgress(7,4.0);
+    }
+
+    @Test void savedAccountLevelOutlivesARestartThatCappedMmoCore(){
+        when(account.hasAccountClassLevel()).thenReturn(true);when(account.getAccountClassLevel()).thenReturn(6);when(account.getAccountClassExperience()).thenReturn(12.0);
+        level.set(2);experience.set(0.0);when(mmo.hasReachedMaxLevel()).thenReturn(true);
+        ClassService.trackFromPlayer(player);
+        var berserker=playerClass("berserker",1);saved(berserker);
+        assertTrue(ClassService.applyClass(player,"berserker"));assertEquals(6,level.get());assertEquals(12.0,experience.get());
+    }
+
+    @Test void accountsWithoutASavedLevelStartFromMmoCoresOwnSave() throws Exception {
+        write("userdata/"+owner+".yml","class: PALADIN\nlevel: 6\nexperience: 4.5\n");
+        level.set(2);experience.set(0.0);when(mmo.hasReachedMaxLevel()).thenReturn(true);
+        ClassService.trackFromPlayer(player);
+        var berserker=playerClass("berserker",1);saved(berserker);
+        assertTrue(ClassService.applyClass(player,"berserker"));assertEquals(6,level.get());assertEquals(4.5,experience.get());
+    }
+
+    @Test void mmoCoreSavesWithoutALevelLeaveNothingToRestore() throws Exception {
+        write("userdata/"+owner+".yml","class: PALADIN\n");
+        level.set(2);ClassService.restoreAccountProgression(player);assertEquals(2,level.get());
+        var mage=playerClass("mage",1);saved(mage);assertTrue(ClassService.applyClass(player,"mage"));assertEquals(2,level.get());
+    }
+
     @Test void firstVisitUsesDefaultClassInformationAndCurrentProgression(){
         var mage=playerClass("mage",1);try(var constructed=mockConstruction(SavedClassInformation.class,(info,context)->{when(info.mapSkillLevels()).thenReturn(new HashMap<>());when(info.mapAttributeLevels()).thenReturn(new HashMap<>());doAnswer(c->{assertTrue(ClassService.isApplying(owner));current.set(mage);return null;}).when(info).load(mage,mmo);})){assertTrue(ClassService.applyClass(player,"mage"));assertEquals(1,constructed.constructed().size());assertEquals(5,level.get());assertEquals(30.0,experience.get());}
         players.when(() -> PlayerManager.get(player)).thenReturn(null);assertTrue(ClassService.applyClass(player,"mage"));

@@ -399,7 +399,8 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
     }
 
     @Test
-    void onlyActualLevelUpsTrackProgression() {
+    void onlyActualLevelUpsTrackAndSaveProgression() {
+        tracked.clear(); tracked.add(data);
         PlayerLevelChangeEvent event = mock(PlayerLevelChangeEvent.class);
         when(event.getPlayer()).thenReturn(player);
         for (PlayerLevelChangeEvent.Reason reason : PlayerLevelChangeEvent.Reason.values()) {
@@ -407,6 +408,7 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
             manager.levelUp(event);
         }
         classes.verify(() -> ClassService.trackFromPlayer(player), times(1));
+        verify(database, times(1)).savePlayer(data);
     }
 
     @Test
