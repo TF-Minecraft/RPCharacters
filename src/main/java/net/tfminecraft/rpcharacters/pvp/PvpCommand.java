@@ -24,6 +24,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
 
+import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -36,7 +37,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 
 	public static final String COMMAND = "pvp";
 
-	private final Map<PvpSituation, Long> armorWarnings = new IdentityHashMap<>();
 	private final Map<PvpSituation, List<BukkitTask>> tasksBySituation = new IdentityHashMap<>();
 
 	@Override
@@ -109,7 +109,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				targets.add(nearby.getUniqueId());
 			}
 		}
-		long expiry = System.currentTimeMillis() + PvpLoader.getStartWarnSeconds() * 1000L;
 		PvpSituation previous = PvpSituations.openFor(player.getUniqueId());
 		if (previous != null) {
 			finish(previous);
@@ -117,7 +116,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets);
 		PvpSituations.track(situation);
 		tasksBySituation.put(situation, new ArrayList<>());
-		armorWarnings.put(situation, expiry);
+		takeOffRecentArmour(targets);
 
 		String warning = PvpLoader.getStartWarning()
 				.replace("{seconds}", String.valueOf(PvpLoader.getStartWarnSeconds()));
@@ -184,7 +183,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	/** Drop scheduled warnings. After the fight has started, title anyone who has not died. */
 	private void finish(PvpSituation situation) {
 		List<UUID> recipients = situation.close();
-		armorWarnings.remove(situation);
 		List<BukkitTask> tasks = tasksBySituation.remove(situation);
 		if (tasks != null) {
 			for (BukkitTask task : tasks) {
@@ -211,7 +209,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	public void shutdown() {
 		for (PvpSituation situation : new ArrayList<>(tasksBySituation.keySet())) {
 			situation.close();
-			armorWarnings.remove(situation);
 			List<BukkitTask> tasks = tasksBySituation.remove(situation);
 			if (tasks != null) {
 				for (BukkitTask task : tasks) {
@@ -232,23 +229,32 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		tasks.add(task);
 	}
 
+	/** Everyone caught in an open fight keeps the armour they had when it was called. */
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
 	public void onArmorEquip(ArmorEquipEvent event) {
 		Player player = event.getPlayer();
-		if (player == null) {
-			return;
-		}
-		UUID id = player.getUniqueId();
-		long now = System.currentTimeMillis();
-		armorWarnings.entrySet().removeIf(entry -> now >= entry.getValue());
-		boolean blocked = armorWarnings.keySet().stream().anyMatch(situation -> situation.includes(id));
-		if (!blocked) {
-			return;
-		}
-		if (event.getNewArmorPiece() == null) {
+		if (player == null || event.getNewArmorPiece() == null
+				|| !PvpSituations.locksArmour(player.getUniqueId())) {
 			return;
 		}
 		event.setCancelled(true);
+		RPTexts.send(player, PvpLoader.getArmourLocked());
+	}
+
+	/** Armour put on just before the fight was called hadn't been fastened yet. */
+	private void takeOffRecentArmour(List<UUID> targets) {
+		long now = System.currentTimeMillis();
+		for (UUID id : targets) {
+			Player online = Bukkit.getPlayer(id);
+			if (online == null || !ArmourDonning.takeOffRecent(online, now)) {
+				continue;
+			}
+			String notice = PvpLoader.getArmourStrippedOthers()
+					.replace("{name}", DisplayIdentityService.resolveDisplay(online));
+			List<UUID> others = new ArrayList<>(targets);
+			others.remove(id);
+			broadcast(others, notice);
+		}
 	}
 
 	private void broadcast(List<UUID> targets, String raw) {

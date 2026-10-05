@@ -103,6 +103,7 @@ import net.tfminecraft.rpcharacters.grave.LastSolidTracker;
 import net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener;
 import net.tfminecraft.rpcharacters.playerlist.PlayerListCommand;
 import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
+import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
 import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
@@ -298,6 +299,7 @@ public class RPCharacters extends JavaPlugin{
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
 		PvpStrikeService.shutdown();
+		ArmourDonning.shutdown();
 		LastSolidTracker.get().shutdown();
 		GraveManager.get().saveAll();
 		PaidChangeListener.settleAll();
@@ -358,6 +360,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(rpInjureListener, this);
 		getServer().getPluginManager().registerEvents(pvpKnockoutManager, this);
 		getServer().getPluginManager().registerEvents(pvpCommand, this);
+		getServer().getPluginManager().registerEvents(new ArmourDonning(), this);
 		getServer().getPluginManager().registerEvents(partyListener, this);
 		getServer().getPluginManager().registerEvents(new GraveDeathListener(), this);
 		getServer().getPluginManager().registerEvents(new GraveInteractListener(), this);
@@ -379,6 +382,7 @@ public class RPCharacters extends JavaPlugin{
 		pvpKnockoutManager.start();
 		EvilRpService.start();
 		PvpStrikeService.start();
+		ArmourDonning.start();
 		LastSolidTracker.get().start();
 	}
 	public void loadConfigs() {

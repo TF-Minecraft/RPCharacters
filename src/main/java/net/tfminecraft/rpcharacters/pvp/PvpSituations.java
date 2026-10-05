@@ -42,6 +42,19 @@ public final class PvpSituations {
 		}
 	}
 
+	/** From {@code /pvp start} until the fight closes, nobody in it who is still alive may put armour on. */
+	public static boolean locksArmour(UUID playerId) {
+		if (playerId == null) {
+			return false;
+		}
+		for (PvpSituation situation : open) {
+			if (situation.isOpen() && situation.includes(playerId) && !situation.hasDied(playerId)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Another fight still covers this player, so ending one must not clear their session. */
 	public static boolean remainsActiveElsewhere(UUID playerId, PvpSituation except) {
 		for (PvpSituation situation : open) {
