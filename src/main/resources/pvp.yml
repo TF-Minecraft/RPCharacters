@@ -35,6 +35,24 @@ strikes:
     enabled: false
     days: 14
 
+# Armour can't be thrown on the moment a fight looks likely.
+armour:
+  # Seconds to fasten each piece. Pieces go on one after another, with the
+  # player slowed. Taking or dealing damage, sprinting, dying or logging out
+  # stops it. 0 puts that piece on at once. Masks, heads and elytras are never
+  # delayed, nor are creative or spectator players.
+  don-seconds:
+    helmet: 1
+    chestplate: 20
+    leggings: 12
+    boots: 8
+  # Slowness while fastening (0 = Slowness I). -1 for none.
+  slowness-amplifier: 1
+  # /pvp start takes off armour that anyone in range put on within this many
+  # seconds, and from then until the fight ends nobody in it can put armour on.
+  # Someone who dies in the fight can gear up again. 0 takes nothing off.
+  recent-seconds: 180
+
 messages:
   start-warning: "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes."
   countdown: "&c{count}"
@@ -50,3 +68,11 @@ messages:
   no-character: "&cYou need an active character to set PvP mode."
   current: "&7This character's PvP mode: {mode}"
   players-only: "&cPlayers only."
+  armour-locked: "&cYou can't put armour on during a PvP situation."
+  don-progress: "&eFastening your {piece} &7[{bar}&7] &f{seconds}s{queued}"
+  don-queued: " &7(+{count} queued)"
+  don-done: "&aYou've put on your {piece}."
+  don-interrupted: "&cYou stopped fastening your {piece}."
+  don-missing: "&cYou no longer have the {piece} you were putting on."
+  armour-stripped: "&cYou hadn't finished fastening your {pieces}. It's back in your inventory."
+  armour-stripped-others: "&7{name} hadn't finished fastening their armour."

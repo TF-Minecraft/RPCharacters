@@ -62,8 +62,15 @@ class PvpCommandTest extends PvpRuntimeFixture {
         var malformed=mock(ArmorEquipEvent.class);handler.onArmorEquip(malformed);var allowed=armor(victim,true);handler.onArmorEquip(allowed);assertFalse(allowed.isCancelled());start();var adding=armor(victim,true);handler.onArmorEquip(adding);assertTrue(adding.isCancelled());var removing=armor(victim,false);handler.onArmorEquip(removing);assertFalse(removing.isCancelled());var distant=armor(other,true);handler.onArmorEquip(distant);assertFalse(distant.isCancelled());
     }
 
-    @Test void expiredArmourWarningsAreDiscarded() throws Exception {
-        config.when(PvpLoader::getStartWarnSeconds).thenReturn(1);start();Thread.sleep(1_025);var event=armor(victim,true);handler.onArmorEquip(event);assertFalse(event.isCancelled());handler.onArmorEquip(armor(victim,true));
+    @Test void armourStaysLockedAfterTheCountdownUntilDeathOrTheEnd() {
+        start();countdown();var afterCountdown=armor(victim,true);handler.onArmorEquip(afterCountdown);assertTrue(afterCountdown.isCancelled(),"The lock must last for the whole fight, not only the warning");assertTrue(text(victim).contains("can't put armour on"));
+        var death=mock(PlayerDeathEvent.class);when(death.getEntity()).thenReturn(killer);handler.onDeath(death);var respawned=armor(killer,true);handler.onArmorEquip(respawned);assertFalse(respawned.isCancelled(),"Someone who died in the fight can gear up again");
+        command("end");var released=armor(victim,true);handler.onArmorEquip(released);assertFalse(released.isCancelled());
+    }
+
+    @Test void startTakesOffRecentArmourAndTellsTheOthersAtOnce() {
+        try(var donning=mockStatic(ArmourDonning.class)){donning.when(()->ArmourDonning.takeOffRecent(eq(victim),anyLong())).thenReturn(true);start();
+            donning.verify(()->ArmourDonning.takeOffRecent(eq(killer),anyLong()));donning.verify(()->ArmourDonning.takeOffRecent(eq(other),anyLong()),never());assertTrue(text(killer).contains("Victim hadn't finished fastening their armour"));assertFalse(text(victim).contains("hadn't finished fastening their"));assertTrue(allTasks.stream().allMatch(task->task.delay()>0),"Armour comes off when the command runs, before the countdown");}
     }
 
     @Test void cancellingTheOnlyCountdownImmediatelyReleasesItsArmourRestriction() {
