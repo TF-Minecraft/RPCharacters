@@ -350,6 +350,14 @@ public final class ArmourDonning implements Listener {
 			RPTexts.send(player, PvpLoader.getDonInterrupted().replace("{piece}", pieceName(piece.type())));
 			return false;
 		}
+		// A listener may have moved or used the piece, so look it up again.
+		slot = find(player, piece.item());
+		if (slot == NOT_FOUND) {
+			RPTexts.send(player, PvpLoader.getDonMissing().replace("{piece}", pieceName(piece.type())));
+			return false;
+		}
+		source = slot == CURSOR ? player.getItemOnCursor() : inventory.getItem(slot);
+		worn = armour(inventory, piece.type());
 		source.setAmount(source.getAmount() - 1);
 		ItemStack rest = source.getAmount() > 0 ? source : null;
 		if (slot == CURSOR) {

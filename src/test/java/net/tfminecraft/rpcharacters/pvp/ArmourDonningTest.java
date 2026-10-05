@@ -200,6 +200,24 @@ class ArmourDonningTest {
         assertEquals(Material.IRON_BOOTS, player.getInventory().getItem(0).getType());
     }
 
+    @Test void aPieceMovedOrUsedDuringTheEquipEventIsLookedUpAgain() {
+        ItemStack stone = new ItemStack(Material.STONE);
+        player.getInventory().setItem(0, chestplate.clone());
+        otherPlugins = event -> { player.getInventory().setItem(5, player.getInventory().getItem(0)); player.getInventory().setItem(0, stone); };
+        equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
+        tickAt(System.currentTimeMillis() + 21_000L);
+        assertEquals(Material.IRON_CHESTPLATE, player.getInventory().getChestplate().getType());
+        assertEquals(stone, player.getInventory().getItem(0), "Whatever the listener put in the old slot stays");
+        assertNull(player.getInventory().getItem(5));
+        player.getInventory().setChestplate(null);
+        player.getInventory().setItem(1, chestplate.clone());
+        otherPlugins = event -> player.getInventory().setItem(1, null);
+        equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
+        tickAt(now + 21_000L);
+        assertTrue(said("no longer have the chestplate"));
+        assertNull(player.getInventory().getChestplate(), "A piece used up during the event is not created from nothing");
+    }
+
     @Test void creativeHelmetsZeroTimesAndDispensersAreNotQueued() throws Exception {
         assertFalse(equip(ArmorType.HELMET, new ItemStack(Material.PLAYER_HEAD), EquipMethod.HOTBAR).isCancelled());
         player.setGameMode(GameMode.CREATIVE);
