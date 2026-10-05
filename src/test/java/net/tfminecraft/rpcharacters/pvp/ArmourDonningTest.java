@@ -58,7 +58,7 @@ class ArmourDonningTest {
     @BeforeEach void setup() throws Exception {
         server = MockBukkit.mock();
         chestplate = new ItemStack(Material.IRON_CHESTPLATE); boots = new ItemStack(Material.IRON_BOOTS);
-        state = new RuntimeTestState(PvpLoader.class, ArmourDonning.class, PvpSituations.class);
+        state = new RuntimeTestState(RPCharacters.class, PvpLoader.class, ArmourDonning.class, PvpSituations.class);
         ArmourDonning.clear(); PvpSituations.clear();
         RPCharacters.plugin = mock(RPCharacters.class);
         loadConfig("");
