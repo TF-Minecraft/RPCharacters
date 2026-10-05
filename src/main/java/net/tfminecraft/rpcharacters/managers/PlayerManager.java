@@ -902,6 +902,8 @@ public class PlayerManager implements Listener{
 			return;
 		}
 		ClassService.trackFromPlayer(e.getPlayer());
+		// The account level now lives in the player file; don't wait for quit to keep it.
+		savePlayer(e.getPlayer());
 	}
 
 	@EventHandler
