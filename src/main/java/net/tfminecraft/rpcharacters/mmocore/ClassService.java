@@ -21,6 +21,7 @@ import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.api.player.profess.SavedClassInformation;
 import net.Indyuce.mmocore.experience.droptable.ExperienceTable;
 import net.Indyuce.mmocore.skill.ClassSkill;
+import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -213,6 +214,7 @@ public final class ClassService {
 				sanitizeForeignSkillLevels(target, mmoPd.getClassInfo(target));
 			}
 			sanitizeForeignSkillLevels(mmoPd);
+			unbindLockedSkills(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
@@ -246,6 +248,7 @@ public final class ClassService {
 			mmoPd.setLevel(level);
 			mmoPd.setExperience(exp);
 			sanitizeForeignSkillLevels(mmoPd);
+			unbindLockedSkills(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
@@ -253,6 +256,21 @@ public final class ClassService {
 			remember(player, new Progression(level, exp));
 		} finally {
 			APPLYING.remove(uuid);
+		}
+	}
+
+	/**
+	 * Unbinds skills the current class has not unlocked. MMOCore gives every class every skill (the
+	 * ones its file doesn't list are locked) and keeps saved bindings, so a skill bound under another
+	 * class, or before the class file dropped it, stays on the skill bar and can still be cast.
+	 */
+	private static void unbindLockedSkills(PlayerData mmoPd) {
+		PlayerClass profess = mmoPd.getProfess();
+		for (Map.Entry<Integer, BoundSkillInfo> bound : new ArrayList<>(mmoPd.getBoundSkills().entrySet())) {
+			ClassSkill skill = profess.getSkill(bound.getValue().getClassSkill().getSkill().getId());
+			if (skill == null || !mmoPd.hasUnlocked(skill)) {
+				mmoPd.unbindSkill(bound.getKey());
+			}
 		}
 	}
 

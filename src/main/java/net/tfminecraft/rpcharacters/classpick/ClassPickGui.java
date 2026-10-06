@@ -113,6 +113,8 @@ public final class ClassPickGui {
 	private static void place(Holder holder, int slot, Option option, RPCharacter character, int level) {
 		String classId = option.playerClass().getId();
 		boolean current = classId.equalsIgnoreCase(character.getMMOClass());
+		// A subclass replaces its base class, so the base is not "current" but is still the player's path.
+		PlayerClass subclass = option.isSubclass() ? null : ClassPickService.subclassOf(character, option.playerClass());
 		boolean unlocked = level >= option.requiredLevel();
 		holder.classBySlot.put(slot, classId);
 		if (!current && unlocked) {
@@ -130,13 +132,18 @@ public final class ClassPickGui {
 		} else if (!unlocked) {
 			lore.add(RPTexts.ERROR + "Unlocks at level " + option.requiredLevel());
 		} else {
+			if (subclass != null) {
+				String name = ClassPickService.className(subclass);
+				lore.add(RPTexts.SUCCESS + "Your class, via " + name);
+				lore.add(RPTexts.ERROR + "Picking it removes your " + name + RPTexts.ERROR + " subclass.");
+			}
 			lore.add(RPTexts.MUTED + "Cost: " + RPTexts.WARN
 					+ ClassPickService.priceText(ClassPickService.price(character, option)));
 			lore.add(pending ? RPTexts.WARN + "Click again to confirm" : RPTexts.MUTED + "Click to choose");
 		}
 		ItemStack icon = option.playerClass().getIcon();
 		ItemStack item = icon == null || icon.getType() == Material.AIR ? new ItemStack(Material.PAPER) : icon.clone();
-		decorate(item, ClassPickService.className(option.playerClass()), lore, pending || current);
+		decorate(item, ClassPickService.className(option.playerClass()), lore, pending || current || subclass != null);
 		holder.inventory.setItem(slot, item);
 	}
 

@@ -285,6 +285,17 @@ class ClassPickTest {
         assertTrue(lore(top.getItem(10)).contains("Cost: Free"));
     }
 
+    @Test void baseClassOfTheCurrentSubclassIsMarkedAndWarnsThatPickingItRemovesTheSubclass() {
+        level.set(2); character.setMMOClass("berserker"); character.setSubclassPicked(true);
+        assertSame(berserker, ClassPickService.subclassOf(character, warrior)); assertNull(ClassPickService.subclassOf(character, mage));
+        var top = openPicker(); var base = top.getItem(10);
+        assertTrue(lore(base).contains("Your class, via Berserker")); assertTrue(lore(base).contains("Picking it removes your Berserker subclass."));
+        assertFalse(lore(base).contains("Your current class")); assertTrue(base.getItemMeta().getEnchantmentGlintOverride());
+        assertFalse(lore(top.getItem(11)).contains("Your class, via")); assertFalse(top.getItem(11).getItemMeta().hasEnchantmentGlintOverride());
+        character.setMMOClass("warrior"); assertNull(ClassPickService.subclassOf(character, warrior));
+        character.setMMOClass(null); assertNull(ClassPickService.subclassOf(character, warrior));
+    }
+
     @Test void staleSubclassWindowCannotPickAnotherClassesSubclassOrCharge() {
         level.set(2); var top = openSubclasses(); var holder = (ClassPickGui.Holder) top.getHolder();
         ClassPickGui.click(player, holder, 10); character.setMMOClass("mage");
