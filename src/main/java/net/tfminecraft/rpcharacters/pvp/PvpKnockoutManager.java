@@ -29,6 +29,7 @@ import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathService;
 
 public final class PvpKnockoutManager implements Listener {
@@ -82,10 +83,10 @@ public final class PvpKnockoutManager implements Listener {
 		if (!(event.getEntity() instanceof Player player)) {
 			return;
 		}
-		if (shouldSkipKnockout(player)) {
+		if (player.getHealth() - event.getFinalDamage() > 0) {
 			return;
 		}
-		if (player.getHealth() - event.getFinalDamage() > 0) {
+		if (shouldSkipKnockout(player)) {
 			return;
 		}
 		if (isKnockedOut(player) && downedPlayerSurvives(event)) {
@@ -231,6 +232,10 @@ public final class PvpKnockoutManager implements Listener {
 			return true;
 		}
 		if (CreationManager.activeCreators.containsKey(player)) {
+			return true;
+		}
+		// SimpleFactions counts battle lives and routes respawns from the death, so battles stay lethal.
+		if (PermadeathBattleExemption.isInStartedBattle(player)) {
 			return true;
 		}
 		return false;

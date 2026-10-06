@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -97,6 +98,50 @@ class PvpKnockoutManagerTest {
         invoke(manager, "applyKnockout", victim);
         manager.onLethalDamage(event);
         verify(event).setCancelled(true);
+    }
+
+    @Test void nonlethalBlowStillKillsInStartedBattle() {
+        Player attacker = player(), victim = knockoutPlayer();
+        when(victim.getHealth()).thenReturn(2.0);
+        var event = mock(EntityDamageByEntityEvent.class);
+        when(event.getEntity()).thenReturn(victim);
+        when(event.getDamager()).thenReturn(attacker);
+        when(event.getFinalDamage()).thenReturn(4.0);
+        var manager = new PvpKnockoutManager();
+        PlayerData nonlethal = data(false);
+        try (var players = mockStatic(PlayerManager.class); var strikes = mockStatic(PvpStrikeService.class)) {
+            players.when(() -> PlayerManager.get(attacker)).thenReturn(nonlethal);
+            // SimpleFactions only counts a battle life when the victim really dies.
+            PermadeathBattleExemption.set(p -> p == victim);
+            manager.onLethalDamage(event);
+            verify(event, never()).setCancelled(true);
+            verify(victim, never()).setHealth(anyDouble());
+            strikes.verifyNoInteractions();
+            PermadeathBattleExemption.set(null);
+            manager.onLethalDamage(event);
+            verify(event).setCancelled(true);
+            strikes.verify(() -> PvpStrikeService.handleKnockout(victim, attacker));
+        } finally {
+            PermadeathBattleExemption.set(null);
+        }
+    }
+
+    @Test void playerDownedBeforeBattleStartsCanStillDie() throws Exception {
+        Player victim = knockoutPlayer();
+        when(victim.getHealth()).thenReturn(1.0);
+        var manager = new PvpKnockoutManager();
+        var event = mock(EntityDamageEvent.class);
+        when(event.getEntity()).thenReturn(victim);
+        when(event.getCause()).thenReturn(EntityDamageEvent.DamageCause.FALL);
+        when(event.getFinalDamage()).thenReturn(4.0);
+        invoke(manager, "applyKnockout", victim);
+        try {
+            PermadeathBattleExemption.set(p -> p == victim);
+            manager.onLethalDamage(event);
+            verify(event, never()).setCancelled(true);
+        } finally {
+            PermadeathBattleExemption.set(null);
+        }
     }
 
     @ParameterizedTest
