@@ -146,6 +146,14 @@ public final class ClassPickService {
 				.map(subclass -> new Option(subclass.getProfess(), base, subclass.getLevel())).toList();
 	}
 
+	/** The character's current class when it is a subclass of {@code base}, else null. */
+	public static PlayerClass subclassOf(RPCharacter character, PlayerClass base) {
+		Option current = option(character.getMMOClass());
+		return current != null && current.isSubclass() && current.base().getId().equalsIgnoreCase(base.getId())
+				? current.playerClass()
+				: null;
+	}
+
 	/** Free for the first class, the first subclass in the current class family, and on infinite points. */
 	public static BigDecimal price(RPCharacter character, Option option) {
 		if (settings.infinitePoints() || !character.hasMMOClass()) {

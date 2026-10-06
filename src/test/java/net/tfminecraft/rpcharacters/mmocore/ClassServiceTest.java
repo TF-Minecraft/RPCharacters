@@ -15,6 +15,7 @@ import net.Indyuce.mmocore.api.player.attribute.*;
 import net.Indyuce.mmocore.manager.*;
 import net.Indyuce.mmocore.manager.data.PlayerDataManager;
 import net.Indyuce.mmocore.skill.ClassSkill;
+import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
 import net.Indyuce.mmocore.experience.droptable.ExperienceTable;
 import net.tfminecraft.rpcharacters.*;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -178,6 +179,20 @@ class ClassServiceTest extends MmoServiceFixture {
         doAnswer(c->{skillPoints.addAndGet(2);return null;}).when(table).claim(mmo,5,mage);
         assertTrue(ClassService.applyClass(player,"mage"));for(int claimed=1;claimed<=5;claimed++){int at=claimed;verify(table).claim(mmo,at,mage);}verify(table,never()).claim(mmo,6,mage);assertEquals(accountSkills.get(),skillPoints.get(),"Points a replayed trigger gives must not grow the account pool");
         clearInvocations(table);assertTrue(ClassService.applyClass(player,"mage"));verify(table,times(5)).claim(eq(mmo),anyInt(),eq(mage));
+    }
+
+    @Test void boundSkillsTheClassHasNotUnlockedAreUnboundWhenItIsApplied(){
+        var bound=new LinkedHashMap<Integer,BoundSkillInfo>();when(mmo.getBoundSkills()).thenReturn(bound);when(mmo.unbindSkill(anyInt())).thenAnswer(c->bound.remove(c.<Integer>getArgument(0)));
+        var warrior=current.get();var strike=bind(bound,1,warrior,"STRIKE",true);bind(bound,2,warrior,"ARROW_VOLLEY",false);bind(bound,3,warrior,"REMOVED",null);
+        assertTrue(ClassService.applyClass(player,"warrior"));assertEquals(Map.of(1,strike),bound,"Skills left locked or removed by the class file must leave the skill bar");
+        var mage=playerClass("mage",1);saved(mage);var bolt=bind(bound,2,mage,"BOLT",true);
+        assertTrue(ClassService.applyClass(player,"mage"));assertEquals(Map.of(2,bolt),bound,"A skill bound under the old class must not follow the player to a class that lacks it");
+    }
+
+    BoundSkillInfo bind(Map<Integer,BoundSkillInfo> bound,int slot,PlayerClass owner,String id,Boolean unlocked){
+        var skill=mock(ClassSkill.class);SkillHandler<?> handler=mock(SkillHandler.class);when(handler.getId()).thenReturn(id);doReturn(handler).when(skill).getSkill();
+        if(unlocked!=null){when(owner.getSkill(id)).thenReturn(skill);when(mmo.hasUnlocked(skill)).thenReturn(unlocked);}
+        var info=mock(BoundSkillInfo.class);when(info.getClassSkill()).thenReturn(skill);bound.put(slot,info);return info;
     }
 
     @Test void unstableMmoDataAndConcurrentModificationFailSoftAndReleaseApplyingFlag(){
