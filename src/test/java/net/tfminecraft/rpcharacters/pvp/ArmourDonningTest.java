@@ -384,6 +384,10 @@ class ArmourDonningTest {
         assertTrue(player.getInventory().contains(Material.IRON_CHESTPLATE));
         assertEquals(1, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "What doesn't fit is dropped at their feet");
         assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L), "Each piece comes off once");
+        ItemStack elytra = new ItemStack(Material.ELYTRA); player.getInventory().setChestplate(elytra.clone());
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.CHESTPLATE, null, elytra));
+        assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L));
+        assertEquals(Material.ELYTRA, player.getInventory().getChestplate().getType(), "Elytras aren't armour");
     }
 
     @Test void onlyThoseInBodyArmourMayPutAHelmetOnInAFight() {
