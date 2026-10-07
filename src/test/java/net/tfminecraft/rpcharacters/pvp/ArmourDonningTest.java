@@ -330,7 +330,7 @@ class ArmourDonningTest {
     }
 
     @Test void leggingsGoOnAndShutdownStopsFastening() {
-        assertFalse(PvpSituations.locksArmour(null));
+        assertFalse(PvpSituations.locksArmour(null, ArmorType.HELMET));
         ItemStack leggings = new ItemStack(Material.IRON_LEGGINGS);
         player.getInventory().setItem(0, leggings.clone());
         equip(ArmorType.LEGGINGS, leggings, EquipMethod.SHIFT_CLICK);
@@ -360,8 +360,8 @@ class ArmourDonningTest {
         listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
         listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, helmet, null));
         long put = System.currentTimeMillis();
-        player.getInventory().setHelmet(new ItemStack(Material.PLAYER_HEAD));
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.HELMET, null, new ItemStack(Material.PLAYER_HEAD)));
+        player.getInventory().setHelmet(helmet.clone());
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
         player.getInventory().setChestplate(chestplate.clone());
         listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.CHESTPLATE, null, chestplate));
         player.getInventory().setBoots(boots.clone());
@@ -380,10 +380,39 @@ class ArmourDonningTest {
         assertTrue(lines.stream().anyMatch(line -> line.contains("stopped fastening your boots")));
         assertNull(player.getInventory().getChestplate());
         assertNull(player.getInventory().getBoots());
-        assertEquals(Material.PLAYER_HEAD, player.getInventory().getHelmet().getType(), "Heads aren't armour");
+        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Helmets stay on for roleplay");
         assertTrue(player.getInventory().contains(Material.IRON_CHESTPLATE));
         assertEquals(1, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "What doesn't fit is dropped at their feet");
         assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L), "Each piece comes off once");
+    }
+
+    @Test void onlyThoseInBodyArmourMayPutAHelmetOnInAFight() {
+        ItemStack helmet = new ItemStack(Material.IRON_HELMET), leggings = new ItemStack(Material.IRON_LEGGINGS);
+        assertFalse(ArmourDonning.wearsBodyArmour(player));
+        player.getInventory().setChestplate(chestplate.clone()); player.getInventory().setLeggings(leggings.clone());
+        player.getInventory().setBoots(new ItemStack(Material.ELYTRA));
+        assertFalse(ArmourDonning.wearsBodyArmour(player), "Boots are needed too");
+        player.getInventory().setBoots(boots.clone());
+        assertTrue(ArmourDonning.wearsBodyArmour(player));
+
+        PvpSituations.track(new PvpSituation(player.getUniqueId(), List.of(player.getUniqueId()), List.of(player.getUniqueId())));
+        assertFalse(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.HELMET));
+        assertTrue(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.CHESTPLATE));
+        player.getInventory().setItem(0, helmet.clone());
+        equip(ArmorType.HELMET, helmet, EquipMethod.SHIFT_CLICK);
+        tickAt(System.currentTimeMillis() + 2_000L);
+        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Armoured fighters can put their helmet back on");
+
+        ItemStack hood = new ItemStack(Material.LEATHER_HELMET);
+        player.getInventory().setItemInOffHand(hood.clone());
+        player.getInventory().setHelmet(hood.clone()); player.getInventory().setItemInOffHand(helmet.clone());
+        ArmourDonning.undoSwap(player, ArmorType.HELMET, 40, hood, helmet);
+        tickAt(System.currentTimeMillis() + 4_000L);
+        assertEquals(Material.LEATHER_HELMET, player.getInventory().getHelmet().getType(), "A helmet swap is fastened, not refused");
+        assertFalse(said("can't put armour on"));
+
+        lockInFight();
+        assertTrue(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.HELMET), "Another fight they came into unarmoured still locks it");
     }
 
     static EntityDamageByEntityEvent hit(org.bukkit.entity.Entity damager, org.bukkit.entity.Entity victim) {

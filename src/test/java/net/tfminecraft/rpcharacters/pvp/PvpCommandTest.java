@@ -68,6 +68,14 @@ class PvpCommandTest extends PvpRuntimeFixture {
         command("end");var released=armor(victim,true);handler.onArmorEquip(released);assertFalse(released.isCancelled());
     }
 
+    @Test void helmetsStayFreeForThoseWhoCameInBodyArmour() {
+        var inventory=victim.getInventory();when(inventory.getChestplate()).thenReturn(new ItemStack(Material.IRON_CHESTPLATE));when(inventory.getLeggings()).thenReturn(new ItemStack(Material.IRON_LEGGINGS));when(inventory.getBoots()).thenReturn(new ItemStack(Material.IRON_BOOTS));
+        try(var masks=mockStatic(net.tfminecraft.rpcharacters.identity.MaskService.class)){start();}countdown();
+        var helmet=armor(victim,true);handler.onArmorEquip(helmet);assertFalse(helmet.isCancelled(),"Armoured fighters keep their helmet free");
+        var chestplate=new ArmorEquipEvent(victim,ArmorEquipEvent.EquipMethod.SHIFT_CLICK,ArmorType.CHESTPLATE,null,new ItemStack(Material.IRON_CHESTPLATE));handler.onArmorEquip(chestplate);assertTrue(chestplate.isCancelled());
+        var unarmoured=armor(killer,true);handler.onArmorEquip(unarmoured);assertTrue(unarmoured.isCancelled(),"Without body armour a helmet stays off");var removing=armor(killer,false);handler.onArmorEquip(removing);assertFalse(removing.isCancelled());
+    }
+
     @Test void startTakesOffRecentArmourAndTellsTheOthersAtOnce() {
         try(var donning=mockStatic(ArmourDonning.class)){donning.when(()->ArmourDonning.takeOffRecent(eq(victim),anyLong())).thenReturn(true);start();
             donning.verify(()->ArmourDonning.takeOffRecent(eq(killer),anyLong()));donning.verify(()->ArmourDonning.takeOffRecent(eq(other),anyLong()),never());assertTrue(text(killer).contains("Victim hadn't finished fastening their armour"));assertFalse(text(victim).contains("hadn't finished fastening their"));assertTrue(allTasks.stream().allMatch(task->task.delay()>0),"Armour comes off when the command runs, before the countdown");}
