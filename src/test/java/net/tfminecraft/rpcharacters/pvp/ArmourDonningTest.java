@@ -376,13 +376,13 @@ class ArmourDonningTest {
         equip(ArmorType.BOOTS, boots, EquipMethod.SHIFT_CLICK);
         assertTrue(ArmourDonning.takeOffRecent(player, put + 60_000L));
         List<String> lines = messages();
-        assertTrue(lines.stream().anyMatch(line -> line.contains("chestplate, boots")), lines.toString());
+        assertTrue(lines.stream().anyMatch(line -> line.contains("chestplate, boots, helmet")), lines.toString());
         assertTrue(lines.stream().anyMatch(line -> line.contains("stopped fastening your boots")));
         assertNull(player.getInventory().getChestplate());
         assertNull(player.getInventory().getBoots());
-        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Helmets stay on for roleplay");
+        assertNull(player.getInventory().getHelmet(), "Without body armour a recent helmet comes off too");
         assertTrue(player.getInventory().contains(Material.IRON_CHESTPLATE));
-        assertEquals(1, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "What doesn't fit is dropped at their feet");
+        assertEquals(2, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "What doesn't fit is dropped at their feet");
         assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L), "Each piece comes off once");
         ItemStack elytra = new ItemStack(Material.ELYTRA); player.getInventory().setChestplate(elytra.clone());
         listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.CHESTPLATE, null, elytra));
@@ -417,6 +417,34 @@ class ArmourDonningTest {
 
         lockInFight();
         assertTrue(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.HELMET), "Another fight they came into unarmoured still locks it");
+    }
+
+    @Test void recentHeadwearComesOffOnlyForThoseOutOfBodyArmour() {
+        ItemStack helmet = new ItemStack(Material.IRON_HELMET), head = new ItemStack(Material.PLAYER_HEAD);
+        player.getInventory().setChestplate(chestplate.clone());
+        player.getInventory().setLeggings(new ItemStack(Material.IRON_LEGGINGS));
+        player.getInventory().setBoots(boots.clone());
+        player.getInventory().setHelmet(helmet.clone());
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
+        long put = System.currentTimeMillis();
+        assertFalse(ArmourDonning.takeOffRecent(player, put + 1_000L));
+        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Fighters in body armour keep a last-minute helmet");
+
+        player.getInventory().setBoots(null);
+        player.getInventory().setHelmet(head.clone());
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.HELMET, helmet, head));
+        messages();
+        assertTrue(ArmourDonning.takeOffRecent(player, put + 1_000L));
+        assertNull(player.getInventory().getHelmet(), "Masks and heads come off like helmets");
+        assertTrue(said("headwear"));
+        assertTrue(player.getInventory().contains(Material.PLAYER_HEAD));
+
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
+        assertFalse(ArmourDonning.takeOffRecent(player, put + 1_000L), "Nothing on the head any more");
+        player.getInventory().setHelmet(helmet.clone());
+        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
+        assertFalse(ArmourDonning.takeOffRecent(player, System.currentTimeMillis() + 181_000L), "Headwear on for longer stays");
+        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType());
     }
 
     static EntityDamageByEntityEvent hit(org.bukkit.entity.Entity damager, org.bukkit.entity.Entity victim) {

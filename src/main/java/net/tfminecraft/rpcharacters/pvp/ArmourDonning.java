@@ -53,7 +53,8 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  * slowed. Taking or dealing damage, sprinting, dying or logging out stops it.
  * Masks, heads and elytras go on at once, and creative or spectator players
  * are never delayed. {@code /pvp start} takes off any body armour put on
- * recently. Helmets are left alone, so they can come off and on for roleplay.
+ * recently. Those left in full body armour keep their helmet free for roleplay;
+ * anyone else also loses whatever they recently put on their head.
  */
 public final class ArmourDonning implements Listener {
 
@@ -236,8 +237,10 @@ public final class ArmourDonning implements Listener {
 
 	/**
 	 * For {@code /pvp start}: stop fastening, and take off any body armour put on
-	 * within {@code armour.recent-seconds}. The helmet stays. Returns whether
-	 * anything came off.
+	 * within {@code armour.recent-seconds}. Someone still in full body armour keeps
+	 * their helmet. Anyone else also loses a helmet, mask or head put on in that
+	 * time, since they can't put one on during the fight. Returns whether anything
+	 * came off.
 	 */
 	public static boolean takeOffRecent(Player player, long nowMs) {
 		stop(player, true);
@@ -246,26 +249,40 @@ public final class ArmourDonning implements Listener {
 		if (times == null || windowMs <= 0L) {
 			return false;
 		}
-		PlayerInventory inventory = player.getInventory();
 		List<String> pieces = new ArrayList<>();
 		for (ArmorType type : ArmorType.values()) {
-			Long at = times.get(type);
-			if (type == ArmorType.HELMET || at == null || nowMs - at > windowMs) {
-				continue;
+			if (type != ArmorType.HELMET && takeOffIfRecent(player, times, type, nowMs, windowMs)) {
+				pieces.add(pieceName(type));
 			}
-			times.remove(type);
-			ItemStack worn = armour(inventory, type);
-			if (!isArmourPiece(worn)) {
-				continue;
+		}
+		if (!wearsBodyArmour(player)) {
+			String head = isArmourPiece(player.getInventory().getHelmet()) ? pieceName(ArmorType.HELMET) : "headwear";
+			if (takeOffIfRecent(player, times, ArmorType.HELMET, nowMs, windowMs)) {
+				pieces.add(head);
 			}
-			setArmour(inventory, type, null);
-			giveBack(player, worn);
-			pieces.add(pieceName(type));
 		}
 		if (pieces.isEmpty()) {
 			return false;
 		}
 		RPTexts.send(player, PvpLoader.getArmourStripped().replace("{pieces}", String.join(", ", pieces)));
+		return true;
+	}
+
+	/** Body slots only count real armour; anything worn on the head counts. */
+	private static boolean takeOffIfRecent(Player player, EnumMap<ArmorType, Long> times, ArmorType type,
+			long nowMs, long windowMs) {
+		Long at = times.get(type);
+		if (at == null || nowMs - at > windowMs) {
+			return false;
+		}
+		times.remove(type);
+		PlayerInventory inventory = player.getInventory();
+		ItemStack worn = armour(inventory, type);
+		if (type == ArmorType.HELMET ? isEmpty(worn) : !isArmourPiece(worn)) {
+			return false;
+		}
+		setArmour(inventory, type, null);
+		giveBack(player, worn);
 		return true;
 	}
 
