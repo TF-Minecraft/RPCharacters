@@ -48,9 +48,13 @@ armour:
     boots: 8
   # Slowness while fastening (0 = Slowness I). -1 for none.
   slowness-amplifier: 1
-  # /pvp start takes off armour that anyone in range put on within this many
-  # seconds, and from then until the fight ends nobody in it can put armour on.
-  # Someone who dies in the fight can gear up again. 0 takes nothing off.
+  # /pvp start takes off body armour that anyone in range put on within this
+  # many seconds, and from then until the fight ends nobody in it can put armour
+  # on. Helmets are never taken off. Whoever is still in a chestplate, leggings
+  # and boots when the fight is called can take their helmet off and put it back
+  # on until it ends; anyone else can't put one on. Someone who dies in the fight
+  # can gear up again.
+  # 0 takes nothing off.
   recent-seconds: 180
 
 messages:

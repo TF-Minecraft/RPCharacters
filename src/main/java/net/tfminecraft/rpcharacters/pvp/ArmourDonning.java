@@ -52,7 +52,8 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  * looks likely. Pieces are fastened one after another while the player is
  * slowed. Taking or dealing damage, sprinting, dying or logging out stops it.
  * Masks, heads and elytras go on at once, and creative or spectator players
- * are never delayed. {@code /pvp start} takes off anything put on recently.
+ * are never delayed. {@code /pvp start} takes off any body armour put on
+ * recently. Helmets are left alone, so they can come off and on for roleplay.
  */
 public final class ArmourDonning implements Listener {
 
@@ -109,6 +110,13 @@ public final class ArmourDonning implements Listener {
 		boolean armour = name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
 				|| name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
 		return armour && !MaskService.isMaskItem(item);
+	}
+
+	/** Wearing a real chestplate, leggings and boots. The helmet doesn't count. */
+	public static boolean wearsBodyArmour(Player player) {
+		PlayerInventory inventory = player.getInventory();
+		return isArmourPiece(inventory.getChestplate()) && isArmourPiece(inventory.getLeggings())
+				&& isArmourPiece(inventory.getBoots());
 	}
 
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -178,7 +186,7 @@ public final class ArmourDonning implements Listener {
 				|| !previous.isSimilar(inventory.getItem(handSlot))) {
 			return;
 		}
-		boolean locked = PvpSituations.locksArmour(player.getUniqueId());
+		boolean locked = PvpSituations.locksArmour(player.getUniqueId(), type);
 		if (!locked && !delays(player, type, wanted)) {
 			return;
 		}
@@ -227,8 +235,9 @@ public final class ArmourDonning implements Listener {
 	}
 
 	/**
-	 * For {@code /pvp start}: stop fastening, and take off any piece put on within
-	 * {@code armour.recent-seconds}. Returns whether anything came off.
+	 * For {@code /pvp start}: stop fastening, and take off any body armour put on
+	 * within {@code armour.recent-seconds}. The helmet stays. Returns whether
+	 * anything came off.
 	 */
 	public static boolean takeOffRecent(Player player, long nowMs) {
 		stop(player, true);
@@ -241,7 +250,7 @@ public final class ArmourDonning implements Listener {
 		List<String> pieces = new ArrayList<>();
 		for (ArmorType type : ArmorType.values()) {
 			Long at = times.get(type);
-			if (at == null || nowMs - at > windowMs) {
+			if (type == ArmorType.HELMET || at == null || nowMs - at > windowMs) {
 				continue;
 			}
 			times.remove(type);
@@ -318,7 +327,7 @@ public final class ArmourDonning implements Listener {
 
 	private static void finish(Player player, Donning state, long nowMs) {
 		Piece piece = state.current;
-		if (PvpSituations.locksArmour(player.getUniqueId())) {
+		if (PvpSituations.locksArmour(player.getUniqueId(), piece.type())) {
 			RPTexts.send(player, PvpLoader.getArmourLocked());
 			stop(player, false);
 			return;

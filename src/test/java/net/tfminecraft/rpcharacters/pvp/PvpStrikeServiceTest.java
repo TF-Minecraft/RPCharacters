@@ -25,6 +25,7 @@ import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.scheduler.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.*;
@@ -191,7 +192,7 @@ abstract class PvpRuntimeFixture {
         config=mockStatic(PvpLoader.class,CALLS_REAL_METHODS);mocks.add(config);var identities=boundary(DisplayIdentityService.class);identities.when(()->DisplayIdentityService.resolveDisplay(any(Player.class))).thenAnswer(call->((Player)call.getArgument(0)).getName());evil=boundary(EvilRpService.class);evil.when(()->EvilRpService.applyStrike(any(Player.class),any(RPCharacter.class),any(),anyBoolean())).thenAnswer(call->{RPCharacter c=call.getArgument(1);c.setEvilRpStrikes(c.getEvilRpStrikes()+1);if(c.getEvilRpStrikes()>=3)c.setStatus(Status.DEAD);return StrikeOutcome.forStrike(c.getEvilRpStrikes());});evil.when(()->EvilRpService.killByStrike(any(),any(),any(),anyBoolean())).thenAnswer(call->{((RPCharacter)call.getArgument(1)).setStatus(Status.DEAD);return true;});injuries=boundary(PermadeathService.class);battles=boundary(PermadeathBattleExemption.class);tutorials=boundary(TutorialService.class);injury=mock(Trait.class);var traits=boundary(TraitChangeService.class);traits.when(()->TraitChangeService.resolveGainedMessage(injury)).thenReturn("Injured");
     }
     <T> MockedStatic<T> boundary(Class<T> type){var b=mockStatic(type);mocks.add(b);return b;}
-    Player player(String name,double x){var p=mock(Player.class);var id=UUID.randomUUID();when(p.getUniqueId()).thenReturn(id);when(p.getName()).thenReturn(name);when(p.isOnline()).thenReturn(true);when(p.getWorld()).thenReturn(world);when(p.getLocation()).thenAnswer(call->new Location(world,x,64,0));online.put(id,p);messages.put(p,new ArrayList<>());components.put(p,new ArrayList<>());doAnswer(call->{messages.get(p).add(call.getArgument(0));return null;}).when(p).sendMessage(anyString());doAnswer(call->{components.get(p).add(call.getArgument(0));return null;}).when(p).sendMessage(any(Component.class));return p;}
+    Player player(String name,double x){var p=mock(Player.class);var id=UUID.randomUUID();when(p.getUniqueId()).thenReturn(id);when(p.getName()).thenReturn(name);when(p.isOnline()).thenReturn(true);when(p.getWorld()).thenReturn(world);when(p.getInventory()).thenReturn(mock(PlayerInventory.class));when(p.getLocation()).thenAnswer(call->new Location(world,x,64,0));online.put(id,p);messages.put(p,new ArrayList<>());components.put(p,new ArrayList<>());doAnswer(call->{messages.get(p).add(call.getArgument(0));return null;}).when(p).sendMessage(anyString());doAnswer(call->{components.get(p).add(call.getArgument(0));return null;}).when(p).sendMessage(any(Component.class));return p;}
     String text(Player p){return String.join("\n",messages.get(p));}
     void runNext(){assertFalse(delayed.isEmpty());delayed.removeFirst().run.run();}
     @AfterEach void cleanupPvp() throws Exception {PvpStrikeService.shutdown();for(int i=mocks.size()-1;i>=0;i--)mocks.get(i).close();MockBukkit.unmock();state.close();}

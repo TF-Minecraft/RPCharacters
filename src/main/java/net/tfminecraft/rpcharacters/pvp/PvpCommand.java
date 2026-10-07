@@ -113,10 +113,10 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		if (previous != null) {
 			finish(previous);
 		}
-		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets);
+		takeOffRecentArmour(targets);
+		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets, armoured(targets));
 		PvpSituations.track(situation);
 		tasksBySituation.put(situation, new ArrayList<>());
-		takeOffRecentArmour(targets);
 
 		String warning = PvpLoader.getStartWarning()
 				.replace("{seconds}", String.valueOf(PvpLoader.getStartWarnSeconds()));
@@ -229,12 +229,15 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		tasks.add(task);
 	}
 
-	/** Everyone caught in an open fight keeps the armour they had when it was called. */
+	/**
+	 * Everyone caught in an open fight keeps the armour they had when it was called.
+	 * Those in body armour may still put a helmet on.
+	 */
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
 	public void onArmorEquip(ArmorEquipEvent event) {
 		Player player = event.getPlayer();
 		if (player == null || event.getNewArmorPiece() == null
-				|| !PvpSituations.locksArmour(player.getUniqueId())) {
+				|| !PvpSituations.locksArmour(player.getUniqueId(), event.getType())) {
 			return;
 		}
 		event.setCancelled(true);
@@ -255,6 +258,18 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 			others.remove(id);
 			broadcast(others, notice);
 		}
+	}
+
+	/** Who is still in a chestplate, leggings and boots once recent armour is off. */
+	private static List<UUID> armoured(List<UUID> targets) {
+		List<UUID> armoured = new ArrayList<>();
+		for (UUID id : targets) {
+			Player online = Bukkit.getPlayer(id);
+			if (online != null && ArmourDonning.wearsBodyArmour(online)) {
+				armoured.add(id);
+			}
+		}
+		return armoured;
 	}
 
 	private void broadcast(List<UUID> targets, String raw) {
