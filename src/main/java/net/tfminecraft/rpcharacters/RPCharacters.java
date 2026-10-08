@@ -112,6 +112,7 @@ import net.tfminecraft.rpcharacters.party.PartyListener;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolverRegistry;
 import net.tfminecraft.rpcharacters.factions.RealmChatDependencyListener;
 import net.tfminecraft.rpcharacters.roll.RollManager;
+import net.tfminecraft.rpcharacters.placeholder.CodexPopulationService;
 import net.tfminecraft.rpcharacters.placeholder.RpCharactersExpansion;
 import net.tfminecraft.rpcharacters.speechbubble.SpeechBubbleListener;
 import net.tfminecraft.rpcharacters.speechbubble.SpeechBubbleManager;
@@ -281,6 +282,7 @@ public class RPCharacters extends JavaPlugin{
 	}
 	@Override
 	public void onDisable() {
+		CodexPopulationService.stop();
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID);
@@ -759,6 +761,7 @@ public class RPCharacters extends JavaPlugin{
 	private void registerPlaceholderApi() {
 		if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
 			new RpCharactersExpansion().register();
+			CodexPopulationService.start(this);
 			getLogger().info("Registered PlaceholderAPI expansion: rpcharacters");
 		} else {
 			getLogger().warning("PlaceholderAPI not found — %rpcharacters_*% placeholders will not work.");

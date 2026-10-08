@@ -60,4 +60,20 @@ class RpCharactersExpansionTest {
         assertEquals("§fAria", expansion.onRequest(player, "DISPLAY"));
         assertEquals("Unset", expansion.onRequest(null, "BIRTHDAY"));
     }
+    @Test void codexPopulationPlaceholdersAreGlobalAndBlankUntilASnapshotExists() {
+        assertNull(expansion.onRequest(player, "codex_percent"));
+        assertEquals("", expansion.onRequest(null, "codex_holders"));
+        assertEquals("", expansion.onRequest(player, "codex_percent_research:alchemy"));
+        assertEquals("", expansion.onRequest(null, "codex_holders_research:alchemy"));
+        assertEquals("", expansion.onRequest(player, "codex_percent_research"));
+        var snapshot = new CodexPopulation.Snapshot(Set.of("research:alchemy"), Map.of("research:alchemy", 1), 2);
+        CodexPopulationService.replaceSnapshot(snapshot);
+        try {
+            assertEquals("50", expansion.onRequest(player, "codex_percent_research:alchemy"));
+            assertEquals("1", expansion.onRequest(null, "CODEX_HOLDERS_RESEARCH:ALCHEMY"));
+            assertEquals("", expansion.onRequest(player, "codex_percent_research:missing"));
+        } finally {
+            CodexPopulationService.stop();
+        }
+    }
 }
