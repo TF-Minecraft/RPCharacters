@@ -42,6 +42,10 @@ public final class RpCharactersExpansion extends PlaceholderExpansion {
 		if (params == null) {
 			return null;
 		}
+		String population = CodexPopulationService.placeholder(params);
+		if (population != null) {
+			return population;
+		}
 		Player player = offlinePlayer != null ? offlinePlayer.getPlayer() : null;
 		if (player == null) {
 			return resolveOffline(params);
