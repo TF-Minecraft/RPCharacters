@@ -110,7 +110,7 @@ import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
 import net.tfminecraft.rpcharacters.party.PartyChatRecipientResolver;
 import net.tfminecraft.rpcharacters.party.PartyListener;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolverRegistry;
-import net.tfminecraft.rpcharacters.factions.RealmOocChatRecipientResolver;
+import net.tfminecraft.rpcharacters.factions.RealmChatDependencyListener;
 import net.tfminecraft.rpcharacters.roll.RollManager;
 import net.tfminecraft.rpcharacters.placeholder.RpCharactersExpansion;
 import net.tfminecraft.rpcharacters.speechbubble.SpeechBubbleListener;
@@ -142,6 +142,7 @@ public class RPCharacters extends JavaPlugin{
 	private final PermadeathZoneListener permadeathZoneListener = new PermadeathZoneListener();
 	private final PermadeathDependencyListener permadeathDependencyListener =
 			new PermadeathDependencyListener();
+	private final RealmChatDependencyListener realmChatDependencyListener = new RealmChatDependencyListener();
 	private final AttributePointCommandListener attributePointCommandListener = new AttributePointCommandListener();
 	private final AttributePointSpendListener attributePointSpendListener = new AttributePointSpendListener();
 	private final ConversationManager conversationManager = new ConversationManager();
@@ -275,9 +276,7 @@ public class RPCharacters extends JavaPlugin{
 		ChatRecipientResolverRegistry.register(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID,
 				partyChatRecipientResolver);
-		if (Bukkit.getPluginManager().isPluginEnabled("SimpleFactions")) {
-			ChatRecipientResolverRegistry.register("simplefactions:realm", new RealmOocChatRecipientResolver());
-		}
+		realmChatDependencyListener.registerIfPresent();
 		registerPlaceholderApi();
 	}
 	@Override
@@ -285,7 +284,7 @@ public class RPCharacters extends JavaPlugin{
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID);
-		ChatRecipientResolverRegistry.unregister("simplefactions:realm");
+		ChatRecipientResolverRegistry.unregister(RealmChatDependencyListener.RESOLVER_ID);
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.stopPeriodicPull();
 		WardrobeService.stopSoftRefresh();
 		ProtocolLibBridge.shutdown();
@@ -338,6 +337,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(prostheticInstallListener, this);
 		getServer().getPluginManager().registerEvents(permadeathZoneListener, this);
 		getServer().getPluginManager().registerEvents(permadeathDependencyListener, this);
+		getServer().getPluginManager().registerEvents(realmChatDependencyListener, this);
 		getServer().getPluginManager().registerEvents(attributePointCommandListener, this);
 		getServer().getPluginManager().registerEvents(attributePointSpendListener, this);
 		getServer().getPluginManager().registerEvents(commandManager, this);
