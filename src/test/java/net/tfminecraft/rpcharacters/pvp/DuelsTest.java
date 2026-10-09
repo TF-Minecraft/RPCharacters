@@ -21,7 +21,12 @@ import org.bukkit.entity.*;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.AreaEffectCloudApplyEvent;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -81,18 +86,26 @@ class DuelsTest extends PvpRuntimeFixture {
 
     @Test void onlyTheOpponentsDamageIsGivenBackSoADuelCannotHeal() {
         health.put(victim,12.0);duel();land(hit(victim,killer,5));land(hurt(victim,DamageCause.FALL,3));land(hurt(victim,DamageCause.POISON,1));assertEquals(3.0,health.get(victim));
-        command(victim,"yield");assertEquals(9.0,health.get(victim),"Fall damage stays; the opponent's hit and their poison come back");assertTrue(text(victim).contains("You yielded the duel to Killer"));assertTrue(text(killer).contains("Victim yielded. You won the duel."));
-        land(hurt(victim,DamageCause.POISON,1));assertEquals(8.0,health.get(victim));command(victim,"yield");assertTrue(text(victim).contains("You aren't in a duel"));
+        command(victim,"yield");assertEquals(8.0,health.get(victim),"Only the opponent's hit comes back; the fall and the poison nobody can pin on them stay");assertTrue(text(victim).contains("You yielded the duel to Killer"));assertTrue(text(killer).contains("Victim yielded. You won the duel."));
+        land(hurt(victim,DamageCause.POISON,1));assertEquals(7.0,health.get(victim));command(victim,"yield");assertTrue(text(victim).contains("You aren't in a duel"));
     }
 
-    @Test void lingeringDamageCountsOnlyWhenTheOpponentCanAccountForIt() throws Exception {
-        duel();land(hurt(victim,DamageCause.POISON,1));land(hurt(victim,DamageCause.WITHER,1));assertEquals(18.0,health.get(victim),"No opponent hit yet, so this poison and wither are someone else's");
-        land(hit(victim,killer,2));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(15.0,health.get(victim));
-        land(hurt(victim,DamageCause.LAVA,4));sleep(5);land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(10.0,health.get(victim));
-        var lethalBurn=hurt(victim,DamageCause.FIRE_TICK,30);cancelTracking(lethalBurn);assertFalse(Duels.settleLethalBlow(lethalBurn,victim),"Burning from lava can still kill");
-        sleep(5);land(hit(victim,killer,1));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(8.0,health.get(victim),"A new hit by the opponent makes the burning theirs again");
-        var f=Duels.class.getDeclaredField("duelsByPlayer");f.setAccessible(true);var running=((Map<?,?>)f.get(null)).get(victim.getUniqueId());((Duel)running).hitByOpponent(victim.getUniqueId(),System.currentTimeMillis()-Duels.LINGER_MS-1);land(hurt(victim,DamageCause.POISON,1));assertEquals(7.0,health.get(victim));
-        command(victim,"yield");assertEquals(12.0,health.get(victim),"Given back: the 2 and 1 hits and the two fire ticks they caused, 5 in all; not the 8 from elsewhere");
+    EntityPotionEffectEvent effect(Entity target,PotionEffectType type,EntityPotionEffectEvent.Action action){var e=mock(EntityPotionEffectEvent.class);when(e.getEntity()).thenReturn((LivingEntity)target);when(e.getModifiedType()).thenReturn(type);when(e.getAction()).thenReturn(action);return e;}
+    EntityCombustEvent combust(Entity target,Entity by){var e=by==null?mock(EntityCombustEvent.class):mock(EntityCombustByEntityEvent.class);when(e.getEntity()).thenReturn(target);if(by!=null)when(((EntityCombustByEntityEvent)e).getCombuster()).thenReturn(by);return e;}
+
+    @Test void lingeringDamageCountsOnlyWhenTheOpponentCausedIt() {
+        int[] tick={100};bukkit.when(org.bukkit.Bukkit::getCurrentTick).thenAnswer(c->tick[0]);var ADDED=EntityPotionEffectEvent.Action.ADDED;
+        duel();handler.onEffect(effect(victim,PotionEffectType.POISON,ADDED));land(hurt(victim,DamageCause.POISON,1));assertEquals(19.0,health.get(victim),"Poison from nowhere the opponent can be blamed for stays");
+        tick[0]=101;land(hit(victim,killer,2));handler.onEffect(effect(victim,PotionEffectType.POISON,ADDED));handler.onEffect(effect(victim,PotionEffectType.WITHER,EntityPotionEffectEvent.Action.CHANGED));land(hurt(victim,DamageCause.POISON,1));land(hurt(victim,DamageCause.WITHER,1));assertEquals(15.0,health.get(victim));
+        tick[0]=102;handler.onEffect(effect(victim,PotionEffectType.POISON,EntityPotionEffectEvent.Action.CHANGED));handler.onEffect(effect(victim,PotionEffectType.WITHER,EntityPotionEffectEvent.Action.REMOVED));land(hurt(victim,DamageCause.POISON,1));land(hurt(victim,DamageCause.WITHER,1));assertEquals(13.0,health.get(victim),"Someone else's poison replaced the opponent's");
+        handler.onCombust(combust(victim,killer));land(hurt(victim,DamageCause.FIRE_TICK,1));var flame=mock(Arrow.class);when(flame.getShooter()).thenReturn(killer);handler.onCombust(combust(victim,flame));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(11.0,health.get(victim));
+        handler.onCombust(combust(victim,null));land(hurt(victim,DamageCause.FIRE_TICK,1));var lethalBurn=hurt(victim,DamageCause.FIRE_TICK,30);assertFalse(Duels.settleLethalBlow(lethalBurn,victim),"Burning from lava can still kill");
+        var dispenser=mock(Arrow.class);when(dispenser.getShooter()).thenReturn(mock(org.bukkit.projectiles.BlockProjectileSource.class));handler.onCombust(combust(victim,dispenser));land(hurt(victim,DamageCause.FIRE_TICK,1));var zombie=mock(Zombie.class);when(zombie.getUniqueId()).thenReturn(UUID.randomUUID());handler.onCombust(combust(victim,zombie));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(8.0,health.get(victim));
+        tick[0]=103;var splash=mock(PotionSplashEvent.class);var potion=mock(ThrownPotion.class);when(potion.getShooter()).thenReturn(killer);when(splash.getPotion()).thenReturn(potion);when(splash.getAffectedEntities()).thenReturn(List.of(victim,zombie,other));handler.onSplash(splash);handler.onEffect(effect(victim,PotionEffectType.POISON,ADDED));land(hurt(victim,DamageCause.POISON,1));assertEquals(7.0,health.get(victim),"The opponent's splash potion poison is theirs");
+        tick[0]=104;var cloud=mock(AreaEffectCloudApplyEvent.class);var area=mock(AreaEffectCloud.class);when(area.getSource()).thenReturn(mock(org.bukkit.projectiles.BlockProjectileSource.class));when(cloud.getEntity()).thenReturn(area);when(cloud.getAffectedEntities()).thenReturn(List.of(victim));handler.onCloud(cloud);handler.onEffect(effect(victim,PotionEffectType.POISON,EntityPotionEffectEvent.Action.CHANGED));land(hurt(victim,DamageCause.POISON,1));assertEquals(6.0,health.get(victim));
+        handler.onEffect(effect(victim,PotionEffectType.SPEED,ADDED));handler.onEffect(effect(zombie,PotionEffectType.POISON,ADDED));handler.onCombust(combust(zombie,killer));Duels.recordPotionCloud(other,List.of(victim));
+        command(victim,"yield");assertEquals(13.0,health.get(victim),"Given back: the 2 hit, the poison and wither it gave, two burns they lit and their splash poison, 7 in all");
+        handler.onCombust(combust(victim,killer));handler.onEffect(effect(victim,PotionEffectType.POISON,ADDED));
     }
 
     @Test void anOutsiderInterruptsAndDuellistsCannotHurtBystanders() {

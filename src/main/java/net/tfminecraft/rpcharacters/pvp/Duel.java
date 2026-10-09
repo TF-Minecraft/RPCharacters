@@ -2,10 +2,13 @@ package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
 /** Two players in one duel, from the accepted challenge until it ends. */
@@ -16,8 +19,9 @@ final class Duel {
 	private final Map<UUID, DuelSnapshot> snapshots = new HashMap<>();
 	private final Map<UUID, Double> damageTaken = new HashMap<>();
 	private final Map<UUID, String> names = new HashMap<>();
-	private final Map<UUID, Long> lastOpponentHitMs = new HashMap<>();
-	private final Map<UUID, Long> lastBurnMs = new HashMap<>();
+	private final Map<UUID, Integer> opponentTouchTick = new HashMap<>();
+	private final Set<UUID> burningFromOpponent = new HashSet<>();
+	private final Map<UUID, Set<PotionEffectType>> effectsFromOpponent = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
 	private boolean fighting;
 	private long fightStartedMs;
@@ -68,21 +72,39 @@ final class Duel {
 		damageTaken.merge(id, amount, Double::sum);
 	}
 
-	void hitByOpponent(UUID id, long nowMs) {
-		lastOpponentHitMs.put(id, nowMs);
+	/** The opponent's hit or thrown potion reached this player on this server tick. */
+	void touchedByOpponent(UUID id, int tick) {
+		opponentTouchTick.put(id, tick);
 	}
 
-	/** 0 if the opponent hasn't hit this player yet. */
-	long lastOpponentHitMs(UUID id) {
-		return lastOpponentHitMs.getOrDefault(id, 0L);
+	boolean touchedByOpponentAt(UUID id, int tick) {
+		Integer touched = opponentTouchTick.get(id);
+		return touched != null && touched == tick;
 	}
 
-	void burned(UUID id, long nowMs) {
-		lastBurnMs.put(id, nowMs);
+	void setBurningFromOpponent(UUID id, boolean fromOpponent) {
+		if (fromOpponent) {
+			burningFromOpponent.add(id);
+		} else {
+			burningFromOpponent.remove(id);
+		}
 	}
 
-	long lastBurnMs(UUID id) {
-		return lastBurnMs.getOrDefault(id, 0L);
+	boolean isBurningFromOpponent(UUID id) {
+		return burningFromOpponent.contains(id);
+	}
+
+	void setEffectFromOpponent(UUID id, PotionEffectType type, boolean fromOpponent) {
+		Set<PotionEffectType> types = effectsFromOpponent.computeIfAbsent(id, key -> new HashSet<>());
+		if (fromOpponent) {
+			types.add(type);
+		} else {
+			types.remove(type);
+		}
+	}
+
+	boolean hasEffectFromOpponent(UUID id, PotionEffectType type) {
+		return effectsFromOpponent.getOrDefault(id, Set.of()).contains(type);
 	}
 
 	boolean isFighting() {

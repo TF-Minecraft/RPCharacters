@@ -8,10 +8,10 @@
 # cleanses or heals anything the duel didn't cause.
 #
 # A blow from the opponent that would kill ends the duel instead: no death,
-# knockout, grave, dropped items or strike. Burning, poison and wither with no
-# attacker count as the opponent's when they hit you in the last 30 seconds.
-# Burning stops counting once you step in fire or lava yourself, so lava can
-# still kill a duellist.
+# knockout, grave, dropped items or strike. Burning counts as the opponent's
+# when they set you alight (fire aspect, flame arrows), and poison and wither
+# when their hit, tipped arrow or thrown potion gave them to you. Burning or
+# poison from anything else, like lava, stays real and can still kill.
 #
 # Everything else stays real. A hit from a third player or a mob, or a duellist
 # hitting a mob, interrupts the duel at once and only the duel's own damage is

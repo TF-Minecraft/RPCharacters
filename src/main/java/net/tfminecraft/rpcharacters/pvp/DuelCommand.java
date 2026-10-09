@@ -9,13 +9,19 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.AreaEffectCloudApplyEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.projectiles.ProjectileSource;
 
 import net.tfminecraft.rpcharacters.loaders.DuelLoader;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -88,6 +94,30 @@ public final class DuelCommand implements CommandExecutor, TabCompleter, Listene
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onDamageTaken(EntityDamageEvent event) {
 		Duels.recordDamage(event);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onCombust(EntityCombustEvent event) {
+		Duels.recordCombust(event);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onEffect(EntityPotionEffectEvent event) {
+		Duels.recordEffect(event);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onSplash(PotionSplashEvent event) {
+		Duels.recordPotionCloud(thrower(event.getPotion().getShooter()), event.getAffectedEntities());
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onCloud(AreaEffectCloudApplyEvent event) {
+		Duels.recordPotionCloud(thrower(event.getEntity().getSource()), event.getAffectedEntities());
+	}
+
+	private static Entity thrower(ProjectileSource source) {
+		return source instanceof Entity entity ? entity : null;
 	}
 
 	@EventHandler

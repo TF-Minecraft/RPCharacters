@@ -21,8 +21,12 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.kyori.adventure.text.Component;
@@ -73,19 +77,8 @@ public final class Duels {
 	private record Challenge(UUID challenger, UUID target, long expiresAtMs) {
 	}
 
-	/** Burning, poison and wither with no attacker can be what the opponent's hits left behind. */
-	private static final Set<EntityDamageEvent.DamageCause> LINGERING = Set.of(
-			EntityDamageEvent.DamageCause.FIRE_TICK,
-			EntityDamageEvent.DamageCause.POISON,
-			EntityDamageEvent.DamageCause.WITHER);
-	/** Fire the duellist walked into themselves, after which burning is theirs. */
-	private static final Set<EntityDamageEvent.DamageCause> BURNS = Set.of(
-			EntityDamageEvent.DamageCause.FIRE,
-			EntityDamageEvent.DamageCause.LAVA,
-			EntityDamageEvent.DamageCause.HOT_FLOOR,
-			EntityDamageEvent.DamageCause.CAMPFIRE);
-	/** How long after the opponent's last hit its burning, poison or wither still counts. */
-	static final long LINGER_MS = 30_000L;
+	/** Effects whose damage has no attacker, so the duel tracks who applied them. */
+	private static final Set<PotionEffectType> LINGERING_EFFECTS = Set.of(PotionEffectType.POISON, PotionEffectType.WITHER);
 
 	private static final Map<UUID, Challenge> challengesByChallenger = new LinkedHashMap<>();
 	private static final Map<UUID, Duel> duelsByPlayer = new HashMap<>();
@@ -240,15 +233,11 @@ public final class Duels {
 		if (duel == null || !duel.isFighting()) {
 			return;
 		}
-		long now = System.currentTimeMillis();
-		if (BURNS.contains(event.getCause())) {
-			duel.burned(victim.getUniqueId(), now);
-		}
 		if (!countsForDuel(event, victim, duel)) {
 			return;
 		}
 		if (causingEntity(event) != null) {
-			duel.hitByOpponent(victim.getUniqueId(), now);
+			duel.touchedByOpponent(victim.getUniqueId(), Bukkit.getCurrentTick());
 		}
 		duel.addDamage(victim.getUniqueId(), Math.max(0.0, Math.min(event.getFinalDamage(), victim.getHealth())));
 	}
@@ -502,24 +491,66 @@ public final class Duels {
 	}
 
 	/**
-	 * Damage from the opponent, or burning, poison and wither with no attacker that their
-	 * recent hit can account for. Burning stops counting once the duellist steps in fire or
-	 * lava themselves, so a lava burn can still kill.
+	 * Damage from the opponent, or burning, poison or wither the opponent is known to have
+	 * caused. Lingering damage from anywhere else, such as a lava burn, stays real.
 	 */
 	private static boolean countsForDuel(EntityDamageEvent event, Player victim, Duel duel) {
 		Entity source = causingEntity(event);
 		if (source != null) {
 			return source.getUniqueId().equals(duel.opponentOf(victim.getUniqueId()));
 		}
-		if (!LINGERING.contains(event.getCause())) {
-			return false;
+		UUID id = victim.getUniqueId();
+		return switch (event.getCause()) {
+			case FIRE_TICK -> duel.isBurningFromOpponent(id);
+			case POISON -> duel.hasEffectFromOpponent(id, PotionEffectType.POISON);
+			case WITHER -> duel.hasEffectFromOpponent(id, PotionEffectType.WITHER);
+			default -> false;
+		};
+	}
+
+	/** Set alight by the opponent (fire aspect, a flame arrow), or by anything else. */
+	static void recordCombust(EntityCombustEvent event) {
+		Duel duel = fightingDuelOf(event.getEntity());
+		if (duel == null) {
+			return;
 		}
-		long hit = duel.lastOpponentHitMs(victim.getUniqueId());
-		if (hit <= 0L || System.currentTimeMillis() - hit > LINGER_MS) {
-			return false;
+		Entity combuster = event instanceof EntityCombustByEntityEvent byEntity ? byEntity.getCombuster() : null;
+		if (combuster instanceof Projectile projectile) {
+			combuster = projectile.getShooter() instanceof Entity shooter ? shooter : null;
 		}
-		return event.getCause() != EntityDamageEvent.DamageCause.FIRE_TICK
-				|| duel.lastBurnMs(victim.getUniqueId()) < hit;
+		UUID id = event.getEntity().getUniqueId();
+		duel.setBurningFromOpponent(id, combuster != null && combuster.getUniqueId().equals(duel.opponentOf(id)));
+	}
+
+	/** A splash or lingering potion thrown by the opponent counts like their hit for the effects it gives. */
+	static void recordPotionCloud(Entity thrower, Collection<? extends Entity> affected) {
+		for (Entity entity : affected) {
+			Duel duel = fightingDuelOf(entity);
+			if (duel != null && thrower != null && thrower.getUniqueId().equals(duel.opponentOf(entity.getUniqueId()))) {
+				duel.touchedByOpponent(entity.getUniqueId(), Bukkit.getCurrentTick());
+			}
+		}
+	}
+
+	/**
+	 * Poison and wither are the opponent's only when they arrive on the same tick as the
+	 * opponent's hit or thrown potion. Any other source takes them back.
+	 */
+	static void recordEffect(EntityPotionEffectEvent event) {
+		PotionEffectType type = event.getModifiedType();
+		Duel duel = fightingDuelOf(event.getEntity());
+		if (duel == null || !LINGERING_EFFECTS.contains(type)) {
+			return;
+		}
+		UUID id = event.getEntity().getUniqueId();
+		boolean added = event.getAction() == EntityPotionEffectEvent.Action.ADDED
+				|| event.getAction() == EntityPotionEffectEvent.Action.CHANGED;
+		duel.setEffectFromOpponent(id, type, added && duel.touchedByOpponentAt(id, Bukkit.getCurrentTick()));
+	}
+
+	private static Duel fightingDuelOf(Entity entity) {
+		Duel duel = entity instanceof Player ? duelsByPlayer.get(entity.getUniqueId()) : null;
+		return duel != null && duel.isFighting() ? duel : null;
 	}
 
 	static Entity causingEntity(EntityDamageEvent event) {
