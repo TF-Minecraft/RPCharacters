@@ -15,6 +15,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Character focus** — share a regenerating character resource across Research and Magic, with focus-restoring items.
 - **Injuries and recovery** — manage injuries and prosthetics; healing continues in real time while players are offline.
 - **Combat and consequences** — support lethal or nonlethal PvP, timed conflicts, character strikes, armour preparation, graves, and investigation clues.
+- **Friendly duels** — challenge a nearby player with `/duel` to a fight nobody dies or loses anything in: the duel's own damage, hunger, mana and effects come back when it ends, while outside hits stay real.
 - **Codex rarity** — expose discovery ownership counts and percentages through PlaceholderAPI.
 
 ## Beyond the game

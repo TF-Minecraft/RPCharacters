@@ -37,6 +37,10 @@ commands:
     usage: /<command> <start|end|lethal|nonlethal>
     description: PvP start warning, situation timeout, and lethal or nonlethal mode
     permission: rpchar.pvp
+  duel:
+    usage: /<command> [player] | accept [player] | decline [player] | cancel | yield
+    description: Challenge a player to a friendly duel that nobody dies or loses anything in
+    permission: rpchar.duel
   grave:
     usage: /<command> unlock
     description: Unlock your newest grave so others can loot it
@@ -53,6 +57,9 @@ permissions:
     description: Open the online player list
     default: true
   rpchar.pvp:
+    default: true
+  rpchar.duel:
+    description: Challenge players to friendly duels
     default: true
   rpchar.injure:
     default: true

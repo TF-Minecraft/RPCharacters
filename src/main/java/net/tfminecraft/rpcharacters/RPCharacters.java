@@ -44,6 +44,7 @@ import net.tfminecraft.rpcharacters.loaders.FuelTemplateLoader;
 import net.tfminecraft.rpcharacters.loaders.ProstheticLoader;
 import net.tfminecraft.rpcharacters.loaders.KitLoader;
 import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
+import net.tfminecraft.rpcharacters.loaders.DuelLoader;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.loaders.PartyLoader;
 import net.tfminecraft.rpcharacters.managers.CommandManager;
@@ -104,6 +105,8 @@ import net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener;
 import net.tfminecraft.rpcharacters.playerlist.PlayerListCommand;
 import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
 import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
+import net.tfminecraft.rpcharacters.pvp.DuelCommand;
+import net.tfminecraft.rpcharacters.pvp.Duels;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
 import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
@@ -186,11 +189,13 @@ public class RPCharacters extends JavaPlugin{
 	private ProstheticLoader prostheticLoader;
 	private KitLoader kitLoader;
 	private PvpLoader pvpLoader;
+	private DuelLoader duelLoader;
 	private PartyLoader partyLoader;
 	private GraveLoader graveLoader;
 	private TutorialLoader tutorialLoader;
 	private EvilRpLoader evilRpLoader;
 	private final PvpCommand pvpCommand = new PvpCommand();
+	private final DuelCommand duelCommand = new DuelCommand();
 	private final PlayerListCommand playerListCommand = new PlayerListCommand();
 	private final GraveCommand graveCommand = new GraveCommand();
 	private final PvpKnockoutManager pvpKnockoutManager = new PvpKnockoutManager();
@@ -230,6 +235,7 @@ public class RPCharacters extends JavaPlugin{
 		prostheticLoader = new ProstheticLoader();
 		kitLoader = new KitLoader();
 		pvpLoader = new PvpLoader();
+		duelLoader = new DuelLoader();
 		partyLoader = new PartyLoader();
 		graveLoader = new GraveLoader();
 		tutorialLoader = new TutorialLoader();
@@ -271,6 +277,8 @@ public class RPCharacters extends JavaPlugin{
 		getCommand("channeltoggle").setTabCompleter(chatChannelCommandHandler);
 		getCommand(PvpCommand.COMMAND).setExecutor(pvpCommand);
 		getCommand(PvpCommand.COMMAND).setTabCompleter(pvpCommand);
+		getCommand(DuelCommand.COMMAND).setExecutor(duelCommand);
+		getCommand(DuelCommand.COMMAND).setTabCompleter(duelCommand);
 		getCommand(GraveCommand.COMMAND).setExecutor(graveCommand);
 		getCommand(GraveCommand.COMMAND).setTabCompleter(graveCommand);
 		getCommand(PlayerListCommand.COMMAND).setExecutor(playerListCommand);
@@ -297,6 +305,7 @@ public class RPCharacters extends JavaPlugin{
 		spawnedClueManager.shutdown();
 		net.tfminecraft.rpcharacters.playtime.PlaytimeService.shutdown();
 		pvpCommand.shutdown();
+		Duels.shutdown();
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
 		PvpStrikeService.shutdown();
@@ -362,6 +371,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(rpInjureListener, this);
 		getServer().getPluginManager().registerEvents(pvpKnockoutManager, this);
 		getServer().getPluginManager().registerEvents(pvpCommand, this);
+		getServer().getPluginManager().registerEvents(duelCommand, this);
 		getServer().getPluginManager().registerEvents(new ArmourDonning(), this);
 		getServer().getPluginManager().registerEvents(partyListener, this);
 		getServer().getPluginManager().registerEvents(new GraveDeathListener(), this);
@@ -382,6 +392,7 @@ public class RPCharacters extends JavaPlugin{
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.startPeriodicPull(this);
 		WardrobeService.startSoftRefresh(this);
 		pvpKnockoutManager.start();
+		Duels.start(pvpKnockoutManager::isDown);
 		EvilRpService.start();
 		PvpStrikeService.start();
 		ArmourDonning.start();
@@ -434,6 +445,7 @@ public class RPCharacters extends JavaPlugin{
 		stageLoader.load(new File(getDataFolder(), "stages.yml"));
 		kitLoader.loadPreferred(getDataFolder());
 		pvpLoader.load(new File(getDataFolder(), "pvp.yml"));
+		duelLoader.load(new File(getDataFolder(), "duel.yml"));
 		partyLoader.load(new File(getDataFolder(), "party.yml"));
 		graveLoader.load(new File(getDataFolder(), "graves.yml"));
 		tutorialLoader.load(new File(getDataFolder(), "tutorials.yml"));
@@ -488,6 +500,7 @@ public class RPCharacters extends JavaPlugin{
 				"prosthetics.yml",
 				"kits.yml",
 				"pvp.yml",
+				"duel.yml",
 				"party.yml",
 				"graves.yml",
 				"tutorials.yml",

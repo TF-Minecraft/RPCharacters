@@ -1,0 +1,80 @@
+# /duel: a friendly fight between two players that nobody dies or loses anything in.
+#
+# Look at a player (or name them) and run /duel. They accept or decline from chat.
+# After a short countdown only the two of them can hurt each other. When the duel
+# ends, each gets back the health the other took, and hunger, saturation, mana,
+# stamina, burning and potion effects go back to how they were at the start.
+# Debuffs a player already had stay, with the time they had left, so a duel never
+# cleanses or heals anything the duel didn't cause.
+#
+# A blow from the opponent that would kill ends the duel instead: no death,
+# knockout, grave, dropped items or strike. Burning, poison and wither with no
+# attacker count as the opponent's too.
+#
+# Everything else stays real. A hit from a third player or a mob, or a duellist
+# hitting a mob, interrupts the duel at once and only the duel's own damage is
+# given back, so a duel can't be used as a shield, a free heal or free mana.
+# Duellists can't hurt bystanders. /pvp start,
+# a SimpleFactions battle, logging out, dying, leaving survival or moving too
+# far apart ends the duel as a draw. Duels follow WorldGuard's pvp flag like any
+# other fight.
+
+# The target must be within this many blocks to be challenged or to accept.
+challenge-range: 16
+# Seconds a challenge stays open.
+challenge-seconds: 30
+# Seconds of countdown before hits count. 0 starts at once.
+countdown-seconds: 3
+# Moving further apart than this ends the duel as a draw.
+leash-range: 32
+# The longest a duel can last, in minutes. 0 for no limit.
+max-minutes: 10
+# Players this close see when a duel starts and who won. 0 tells nobody.
+announce-radius: 24
+
+messages:
+  usage: "&7Usage: /duel [player] | accept [player] | decline [player] | cancel | yield"
+  players-only: "&cPlayers only."
+  no-target: "&cLook at the player you want to duel, or name them: /duel <player>"
+  not-found: "&cNobody called {name} is online."
+  self: "&cYou can't duel yourself."
+  too-far: "&c{name} is too far away. Stand within {range} blocks to challenge them."
+  you-busy: "&cYou can't duel right now: you're {why}."
+  other-busy: "&c{name} can't duel right now: they're {why}."
+  why-duelling: "already duelling"
+  why-fight: "in a PvP fight"
+  why-battle: "in a battle"
+  why-down: "knocked out"
+  why-character: "without an active character"
+  why-gamemode: "not in survival"
+  challenge-sent: "&eYou challenged {name} to a duel. &7They have {seconds} seconds to accept."
+  challenge-received: "&e{name} challenges you to a duel. &7Nobody dies or loses anything: what the duel takes is given back."
+  challenge-expired-challenger: "&7{name} didn't answer your duel challenge."
+  challenge-expired-target: "&7The duel challenge from {name} has expired."
+  no-challenge: "&cYou have no duel challenge to answer."
+  declined-challenger: "&7{name} declined your duel."
+  declined-target: "&7You declined the duel with {name}."
+  withdrawn-challenger: "&7You withdrew your duel challenge to {name}."
+  withdrawn-target: "&7{name} withdrew their duel challenge."
+  nothing-to-cancel: "&cYou have no open duel challenge."
+  not-duelling: "&cYou aren't in a duel."
+  countdown: "&6{count}"
+  fight-title: "&6&lDUEL"
+  started: "&6Your duel with {name} has begun. &7Only their hits count, and you get back what they take when it ends. &f/duel yield &7gives up."
+  announce-start: "&7{a} and {b} begin a duel."
+  won: "&6You won the duel against {name}."
+  lost: "&7{name} won the duel. Your wounds from it are mended."
+  yield-winner: "&6{name} yielded. You won the duel."
+  yield-loser: "&7You yielded the duel to {name}. Your wounds from it are mended."
+  announce-win: "&7{winner} won a duel against {loser}."
+  announce-yield: "&7{loser} yielded a duel to {winner}."
+  draw: "&7Your duel with {name} is over: {reason}. Your wounds from it are mended."
+  reason-timeout: "time ran out"
+  reason-apart: "you moved too far apart"
+  reason-left: "{name} left"
+  reason-fight: "a real fight was called"
+  reason-battle: "a battle started"
+  reason-gamemode: "{name} is no longer in survival"
+  reason-died: "{name} died"
+  reason-stopped: "the server is restarting"
+  interrupted: "&cYour duel with {name} was interrupted: {victim} got into another fight. &7Only the damage from the duel was given back."
