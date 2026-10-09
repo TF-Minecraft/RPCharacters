@@ -9,7 +9,9 @@
 #
 # A blow from the opponent that would kill ends the duel instead: no death,
 # knockout, grave, dropped items or strike. Burning, poison and wither with no
-# attacker count as the opponent's too.
+# attacker count as the opponent's when they hit you in the last 30 seconds.
+# Burning stops counting once you step in fire or lava yourself, so lava can
+# still kill a duellist.
 #
 # Everything else stays real. A hit from a third player or a mob, or a duellist
 # hitting a mob, interrupts the duel at once and only the duel's own damage is

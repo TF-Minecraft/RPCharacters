@@ -85,6 +85,16 @@ class DuelsTest extends PvpRuntimeFixture {
         land(hurt(victim,DamageCause.POISON,1));assertEquals(8.0,health.get(victim));command(victim,"yield");assertTrue(text(victim).contains("You aren't in a duel"));
     }
 
+    @Test void lingeringDamageCountsOnlyWhenTheOpponentCanAccountForIt() throws Exception {
+        duel();land(hurt(victim,DamageCause.POISON,1));land(hurt(victim,DamageCause.WITHER,1));assertEquals(18.0,health.get(victim),"No opponent hit yet, so this poison and wither are someone else's");
+        land(hit(victim,killer,2));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(15.0,health.get(victim));
+        land(hurt(victim,DamageCause.LAVA,4));sleep(5);land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(10.0,health.get(victim));
+        var lethalBurn=hurt(victim,DamageCause.FIRE_TICK,30);cancelTracking(lethalBurn);assertFalse(Duels.settleLethalBlow(lethalBurn,victim),"Burning from lava can still kill");
+        sleep(5);land(hit(victim,killer,1));land(hurt(victim,DamageCause.FIRE_TICK,1));assertEquals(8.0,health.get(victim),"A new hit by the opponent makes the burning theirs again");
+        var f=Duels.class.getDeclaredField("duelsByPlayer");f.setAccessible(true);var running=((Map<?,?>)f.get(null)).get(victim.getUniqueId());((Duel)running).hitByOpponent(victim.getUniqueId(),System.currentTimeMillis()-Duels.LINGER_MS-1);land(hurt(victim,DamageCause.POISON,1));assertEquals(7.0,health.get(victim));
+        command(victim,"yield");assertEquals(12.0,health.get(victim),"Given back: the 2 and 1 hits and the two fire ticks they caused, 5 in all; not the 8 from elsewhere");
+    }
+
     @Test void anOutsiderInterruptsAndDuellistsCannotHurtBystanders() {
         var zombie=mock(Zombie.class);when(zombie.getUniqueId()).thenReturn(UUID.randomUUID());duel();
         var stray=hit(other,killer,4);cancelTracking(stray);land(stray);assertTrue(stray.isCancelled(),"Duellists can't hurt bystanders");
@@ -172,7 +182,7 @@ class DuelsTest extends PvpRuntimeFixture {
     }
 
     @Test void quittingDyingAndRealFightsEndDuels() {
-        duel();land(hit(killer,victim,5));var quit=mock(PlayerQuitEvent.class);when(quit.getPlayer()).thenReturn(killer);handler.onQuit(quit);assertEquals(20.0,health.get(killer),"The quitter is mended before they are saved");assertTrue(text(victim).contains("Killer left"));assertFalse(text(killer).contains("Killer left"));
+        duel();land(hit(killer,victim,5));when(killer.getName()).thenReturn("Unknown");var quit=mock(PlayerQuitEvent.class);when(quit.getPlayer()).thenReturn(killer);handler.onQuit(quit);assertEquals(20.0,health.get(killer),"The quitter is mended before they are saved");assertTrue(text(victim).contains("Your duel with Killer is over: Killer left"));assertFalse(text(killer).contains("left"));when(killer.getName()).thenReturn("Killer");
         command(victim,"Killer");handler.onQuit(quit);command(killer,"accept");assertTrue(text(killer).contains("no duel challenge"),"Leaving drops challenges both ways");
         duel();land(hit(killer,victim,5));health.put(killer,0.0);var death=mock(PlayerDeathEvent.class);when(death.getEntity()).thenReturn(killer);handler.onDeath(death);assertEquals(0.0,health.get(killer));assertTrue(text(victim).contains("Killer died"));
         handler.onDeath(death);handler.onQuit(quit);

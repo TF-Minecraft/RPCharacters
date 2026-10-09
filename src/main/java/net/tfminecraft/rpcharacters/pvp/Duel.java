@@ -15,6 +15,9 @@ final class Duel {
 	private final UUID second;
 	private final Map<UUID, DuelSnapshot> snapshots = new HashMap<>();
 	private final Map<UUID, Double> damageTaken = new HashMap<>();
+	private final Map<UUID, String> names = new HashMap<>();
+	private final Map<UUID, Long> lastOpponentHitMs = new HashMap<>();
+	private final Map<UUID, Long> lastBurnMs = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
 	private boolean fighting;
 	private long fightStartedMs;
@@ -44,6 +47,14 @@ final class Duel {
 		snapshots.put(id, snapshot);
 	}
 
+	void name(UUID id, String name) {
+		names.put(id, name);
+	}
+
+	String nameOf(UUID id) {
+		return names.getOrDefault(id, "");
+	}
+
 	DuelSnapshot snapshotOf(UUID id) {
 		return snapshots.get(id);
 	}
@@ -55,6 +66,23 @@ final class Duel {
 
 	void addDamage(UUID id, double amount) {
 		damageTaken.merge(id, amount, Double::sum);
+	}
+
+	void hitByOpponent(UUID id, long nowMs) {
+		lastOpponentHitMs.put(id, nowMs);
+	}
+
+	/** 0 if the opponent hasn't hit this player yet. */
+	long lastOpponentHitMs(UUID id) {
+		return lastOpponentHitMs.getOrDefault(id, 0L);
+	}
+
+	void burned(UUID id, long nowMs) {
+		lastBurnMs.put(id, nowMs);
+	}
+
+	long lastBurnMs(UUID id) {
+		return lastBurnMs.getOrDefault(id, 0L);
 	}
 
 	boolean isFighting() {

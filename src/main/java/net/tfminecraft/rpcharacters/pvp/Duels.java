@@ -73,11 +73,19 @@ public final class Duels {
 	private record Challenge(UUID challenger, UUID target, long expiresAtMs) {
 	}
 
-	/** Burning, poison and wither with no attacker are what a duellist's hits leave behind. */
+	/** Burning, poison and wither with no attacker can be what the opponent's hits left behind. */
 	private static final Set<EntityDamageEvent.DamageCause> LINGERING = Set.of(
 			EntityDamageEvent.DamageCause.FIRE_TICK,
 			EntityDamageEvent.DamageCause.POISON,
 			EntityDamageEvent.DamageCause.WITHER);
+	/** Fire the duellist walked into themselves, after which burning is theirs. */
+	private static final Set<EntityDamageEvent.DamageCause> BURNS = Set.of(
+			EntityDamageEvent.DamageCause.FIRE,
+			EntityDamageEvent.DamageCause.LAVA,
+			EntityDamageEvent.DamageCause.HOT_FLOOR,
+			EntityDamageEvent.DamageCause.CAMPFIRE);
+	/** How long after the opponent's last hit its burning, poison or wither still counts. */
+	static final long LINGER_MS = 30_000L;
 
 	private static final Map<UUID, Challenge> challengesByChallenger = new LinkedHashMap<>();
 	private static final Map<UUID, Duel> duelsByPlayer = new HashMap<>();
@@ -229,8 +237,18 @@ public final class Duels {
 			return;
 		}
 		Duel duel = duelsByPlayer.get(victim.getUniqueId());
-		if (duel == null || !duel.isFighting() || !countsForDuel(event, victim, duel)) {
+		if (duel == null || !duel.isFighting()) {
 			return;
+		}
+		long now = System.currentTimeMillis();
+		if (BURNS.contains(event.getCause())) {
+			duel.burned(victim.getUniqueId(), now);
+		}
+		if (!countsForDuel(event, victim, duel)) {
+			return;
+		}
+		if (causingEntity(event) != null) {
+			duel.hitByOpponent(victim.getUniqueId(), now);
 		}
 		duel.addDamage(victim.getUniqueId(), Math.max(0.0, Math.min(event.getFinalDamage(), victim.getHealth())));
 	}
@@ -331,6 +349,8 @@ public final class Duels {
 		long now = System.currentTimeMillis();
 		duel.snapshot(first.getUniqueId(), DuelSnapshot.take(first, now));
 		duel.snapshot(second.getUniqueId(), DuelSnapshot.take(second, now));
+		duel.name(first.getUniqueId(), name(first));
+		duel.name(second.getUniqueId(), name(second));
 		duelsByPlayer.put(first.getUniqueId(), duel);
 		duelsByPlayer.put(second.getUniqueId(), duel);
 		int countdown = DuelLoader.getCountdownSeconds();
@@ -380,38 +400,40 @@ public final class Duels {
 		tell(duel, ending, subject, first, second);
 	}
 
+	/** Names come from the start of the duel: someone logging out no longer has a character to name. */
 	private static void tell(Duel duel, Ending ending, Player subject, Player first, Player second) {
+		String subjectName = subject == null ? "" : duel.nameOf(subject.getUniqueId());
 		if (ending == Ending.WON || ending == Ending.YIELDED) {
 			Player winner = subject.getUniqueId().equals(duel.first()) ? second : first;
 			if (winner == null) {
 				return;
 			}
+			String winnerName = duel.nameOf(winner.getUniqueId());
 			boolean yielded = ending == Ending.YIELDED;
-			send(winner, yielded ? "yield-winner" : "won", "{name}", name(subject));
-			send(subject, yielded ? "yield-loser" : "lost", "{name}", name(winner));
+			send(winner, yielded ? "yield-winner" : "won", "{name}", subjectName);
+			send(subject, yielded ? "yield-loser" : "lost", "{name}", winnerName);
 			announce(winner, subject, text(yielded ? "announce-yield" : "announce-win",
-					"{winner}", name(winner), "{loser}", name(subject)));
+					"{winner}", winnerName, "{loser}", subjectName));
 			return;
 		}
 		if (ending == Ending.INTERRUPTED) {
-			sendAbout(first, second, "interrupted", "{victim}", name(subject));
-			sendAbout(second, first, "interrupted", "{victim}", name(subject));
+			sendAbout(duel, first, "interrupted", "{victim}", subjectName);
+			sendAbout(duel, second, "interrupted", "{victim}", subjectName);
 			return;
 		}
-		String reason = text(ending.reasonKey, "{name}", subject == null ? "" : name(subject));
+		String reason = text(ending.reasonKey, "{name}", subjectName);
 		// Whoever left or died doesn't need telling.
 		boolean subjectGone = ending == Ending.LEFT || ending == Ending.DIED;
 		for (Player player : new Player[] { first, second }) {
-			Player other = player == first ? second : first;
-			if (player != null && !(subjectGone && player == subject)) {
-				sendAbout(player, other, "draw", "{reason}", reason);
+			if (!(subjectGone && player == subject)) {
+				sendAbout(duel, player, "draw", "{reason}", reason);
 			}
 		}
 	}
 
-	private static void sendAbout(Player to, Player opponent, String key, String placeholder, String value) {
+	private static void sendAbout(Duel duel, Player to, String key, String placeholder, String value) {
 		if (to != null) {
-			send(to, key, "{name}", opponent == null ? "" : name(opponent), placeholder, value);
+			send(to, key, "{name}", duel.nameOf(duel.opponentOf(to.getUniqueId())), placeholder, value);
 		}
 	}
 
@@ -479,13 +501,25 @@ public final class Duels {
 		return mode == GameMode.SURVIVAL || mode == GameMode.ADVENTURE;
 	}
 
-	/** Damage from the opponent, or burning, poison and wither with no attacker at all. */
+	/**
+	 * Damage from the opponent, or burning, poison and wither with no attacker that their
+	 * recent hit can account for. Burning stops counting once the duellist steps in fire or
+	 * lava themselves, so a lava burn can still kill.
+	 */
 	private static boolean countsForDuel(EntityDamageEvent event, Player victim, Duel duel) {
 		Entity source = causingEntity(event);
 		if (source != null) {
 			return source.getUniqueId().equals(duel.opponentOf(victim.getUniqueId()));
 		}
-		return LINGERING.contains(event.getCause());
+		if (!LINGERING.contains(event.getCause())) {
+			return false;
+		}
+		long hit = duel.lastOpponentHitMs(victim.getUniqueId());
+		if (hit <= 0L || System.currentTimeMillis() - hit > LINGER_MS) {
+			return false;
+		}
+		return event.getCause() != EntityDamageEvent.DamageCause.FIRE_TICK
+				|| duel.lastBurnMs(victim.getUniqueId()) < hit;
 	}
 
 	static Entity causingEntity(EntityDamageEvent event) {
