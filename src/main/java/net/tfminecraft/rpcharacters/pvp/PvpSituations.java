@@ -61,6 +61,16 @@ public final class PvpSituations {
 		return false;
 	}
 
+	/** Caught in an open fight, from the warning until it closes, unless they died in it. */
+	public static boolean involves(UUID playerId) {
+		for (PvpSituation situation : open) {
+			if (situation.isOpen() && situation.includes(playerId) && !situation.hasDied(playerId)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Another fight still covers this player, so ending one must not clear their session. */
 	public static boolean remainsActiveElsewhere(UUID playerId, PvpSituation except) {
 		for (PvpSituation situation : open) {

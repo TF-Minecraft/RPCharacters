@@ -86,6 +86,10 @@ public final class PvpKnockoutManager implements Listener {
 		if (player.getHealth() - event.getFinalDamage() > 0) {
 			return;
 		}
+		// A duel's own blow only ends the duel.
+		if (Duels.settleLethalBlow(event, player)) {
+			return;
+		}
 		if (shouldSkipKnockout(player)) {
 			return;
 		}
@@ -173,6 +177,10 @@ public final class PvpKnockoutManager implements Listener {
 		if (crawl != null) {
 			crawl.release(player);
 		}
+	}
+
+	public boolean isDown(Player player) {
+		return isKnockedOut(player);
 	}
 
 	private boolean isKnockedOut(Player player) {

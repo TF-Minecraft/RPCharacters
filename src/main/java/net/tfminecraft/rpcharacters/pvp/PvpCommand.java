@@ -109,6 +109,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				targets.add(nearby.getUniqueId());
 			}
 		}
+		Duels.endFor(targets, Duels.Ending.FIGHT);
 		PvpSituation previous = PvpSituations.openFor(player.getUniqueId());
 		if (previous != null) {
 			finish(previous);
