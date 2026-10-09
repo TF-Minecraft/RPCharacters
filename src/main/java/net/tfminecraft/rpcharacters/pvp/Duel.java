@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.pvp;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -19,7 +20,7 @@ final class Duel {
 	private final Map<UUID, DuelSnapshot> snapshots = new HashMap<>();
 	private final Map<UUID, Double> damageTaken = new HashMap<>();
 	private final Map<UUID, String> names = new HashMap<>();
-	private final Map<UUID, Integer> opponentTouchTick = new HashMap<>();
+	private final Map<UUID, Map<Touch, Integer>> opponentTouchTicks = new HashMap<>();
 	private final Set<UUID> burningFromOpponent = new HashSet<>();
 	private final Map<UUID, Set<PotionEffectType>> effectsFromOpponent = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
@@ -72,14 +73,25 @@ final class Duel {
 		damageTaken.merge(id, amount, Double::sum);
 	}
 
-	/** The opponent's hit or thrown potion reached this player on this server tick. */
-	void touchedByOpponent(UUID id, int tick) {
-		opponentTouchTick.put(id, tick);
+	/** How the opponent last reached a player, to match against how an effect was applied. */
+	enum Touch {
+		HIT, PROJECTILE, POTION
 	}
 
-	boolean touchedByOpponentAt(UUID id, int tick) {
-		Integer touched = opponentTouchTick.get(id);
-		return touched != null && touched == tick;
+	/** The opponent's hit, projectile or thrown potion reached this player on this server tick. */
+	void touchedByOpponent(UUID id, Touch touch, int tick) {
+		opponentTouchTicks.computeIfAbsent(id, key -> new EnumMap<>(Touch.class)).put(touch, tick);
+	}
+
+	boolean touchedByOpponentAt(UUID id, Set<Touch> touches, int tick) {
+		Map<Touch, Integer> ticks = opponentTouchTicks.getOrDefault(id, Map.of());
+		for (Touch touch : touches) {
+			Integer at = ticks.get(touch);
+			if (at != null && at == tick) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	void setBurningFromOpponent(UUID id, boolean fromOpponent) {

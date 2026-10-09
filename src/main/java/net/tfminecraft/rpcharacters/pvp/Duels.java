@@ -237,7 +237,8 @@ public final class Duels {
 			return;
 		}
 		if (causingEntity(event) != null) {
-			duel.touchedByOpponent(victim.getUniqueId(), Bukkit.getCurrentTick());
+			duel.touchedByOpponent(victim.getUniqueId(), directlyByProjectile(event) ? Duel.Touch.PROJECTILE : Duel.Touch.HIT,
+					Bukkit.getCurrentTick());
 		}
 		duel.addDamage(victim.getUniqueId(), Math.max(0.0, Math.min(event.getFinalDamage(), victim.getHealth())));
 	}
@@ -527,14 +528,16 @@ public final class Duels {
 		for (Entity entity : affected) {
 			Duel duel = fightingDuelOf(entity);
 			if (duel != null && thrower != null && thrower.getUniqueId().equals(duel.opponentOf(entity.getUniqueId()))) {
-				duel.touchedByOpponent(entity.getUniqueId(), Bukkit.getCurrentTick());
+				duel.touchedByOpponent(entity.getUniqueId(), Duel.Touch.POTION, Bukkit.getCurrentTick());
 			}
 		}
 	}
 
 	/**
-	 * Poison and wither are the opponent's only when they arrive on the same tick as the
-	 * opponent's hit or thrown potion. Any other source takes them back.
+	 * Poison and wither are the opponent's only when the way they were applied matches
+	 * something the opponent did on that same tick: a tipped arrow with their arrow's hit,
+	 * an attack or skill (plugin) effect with their hit, a splash or cloud with their potion.
+	 * Commands, food, drinks and every other cause never count, and take a mark back.
 	 */
 	static void recordEffect(EntityPotionEffectEvent event) {
 		PotionEffectType type = event.getModifiedType();
@@ -545,7 +548,27 @@ public final class Duels {
 		UUID id = event.getEntity().getUniqueId();
 		boolean added = event.getAction() == EntityPotionEffectEvent.Action.ADDED
 				|| event.getAction() == EntityPotionEffectEvent.Action.CHANGED;
-		duel.setEffectFromOpponent(id, type, added && duel.touchedByOpponentAt(id, Bukkit.getCurrentTick()));
+		Set<Duel.Touch> from = matchingTouches(event.getCause());
+		duel.setEffectFromOpponent(id, type, added && duel.touchedByOpponentAt(id, from, Bukkit.getCurrentTick()));
+	}
+
+	private static Set<Duel.Touch> matchingTouches(EntityPotionEffectEvent.Cause cause) {
+		if (cause == null) {
+			return Set.of();
+		}
+		return switch (cause) {
+			case ARROW -> Set.of(Duel.Touch.PROJECTILE);
+			case ATTACK, PLUGIN -> Set.of(Duel.Touch.HIT, Duel.Touch.PROJECTILE);
+			case POTION_SPLASH, AREA_EFFECT_CLOUD -> Set.of(Duel.Touch.POTION);
+			default -> Set.of();
+		};
+	}
+
+	private static boolean directlyByProjectile(EntityDamageEvent event) {
+		if (event.getDamageSource() != null && event.getDamageSource().getDirectEntity() != null) {
+			return event.getDamageSource().getDirectEntity() instanceof Projectile;
+		}
+		return event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Projectile;
 	}
 
 	private static Duel fightingDuelOf(Entity entity) {
