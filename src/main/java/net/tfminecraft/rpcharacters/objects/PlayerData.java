@@ -30,6 +30,7 @@ public class PlayerData {
 	private List<String> completedStages = new ArrayList<>();
 	private int createdAtEpochSeconds;
 	private Integer accountSkillPointsTotal;
+	private int accountRewardSkillPoints;
 	private Integer accountAttributePointsTotal;
 	private Integer accountClassLevel;
 	private double accountClassExperience;
@@ -122,6 +123,15 @@ public class PlayerData {
 			return;
 		}
 		setAccountSkillPointsTotal((int) Math.min(Integer.MAX_VALUE, (long) getAccountSkillPointsTotal() + amount));
+	}
+
+	/** Skill points from class exp-table rewards already added to the account total. */
+	public int getAccountRewardSkillPoints() {
+		return accountRewardSkillPoints;
+	}
+
+	public void setAccountRewardSkillPoints(int accountRewardSkillPoints) {
+		this.accountRewardSkillPoints = Math.max(0, accountRewardSkillPoints);
 	}
 
 	/**

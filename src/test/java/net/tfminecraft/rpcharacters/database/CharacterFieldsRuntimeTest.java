@@ -118,6 +118,19 @@ class CharacterFieldsRuntimeTest {
         var empty = new HashMap<String, Object>(); PlayerTutorialFields.save(empty, new PlayerData(UUID.randomUUID())); assertTrue(empty.isEmpty());
     }
 
+    @Test void rewardSkillPointFieldsRoundTripAndIgnoreMissingOrMalformedValues() {
+        var account = new PlayerData(UUID.randomUUID());
+        PlayerSkillRewardFields.load(null, json(Map.of())); PlayerSkillRewardFields.load(account, null);
+        PlayerSkillRewardFields.load(account, json(Map.of("account-reward-skill-points", "2")));
+        assertEquals(0, account.getAccountRewardSkillPoints());
+        var empty = new HashMap<String, Object>(); PlayerSkillRewardFields.save(empty, account); assertTrue(empty.isEmpty());
+        PlayerSkillRewardFields.load(account, json(Map.of("account-reward-skill-points", 4L)));
+        var saved = new HashMap<String, Object>(); PlayerSkillRewardFields.save(saved, account);
+        var reloaded = new PlayerData(UUID.randomUUID()); PlayerSkillRewardFields.load(reloaded, json(saved));
+        assertEquals(4, reloaded.getAccountRewardSkillPoints());
+        account.setAccountRewardSkillPoints(-3); assertEquals(0, account.getAccountRewardSkillPoints());
+    }
+
     @Test void classLevelFieldsRoundTripAndIgnoreMissingOrMalformedValues() {
         var account = new PlayerData(UUID.randomUUID());
         PlayerClassLevelFields.load(null, json(Map.of())); PlayerClassLevelFields.load(account, null);
