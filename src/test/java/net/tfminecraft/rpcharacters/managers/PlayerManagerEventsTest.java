@@ -409,6 +409,9 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
         }
         classes.verify(() -> ClassService.trackFromPlayer(player), times(1));
         verify(database, times(1)).savePlayer(data);
+        classes.verify(() -> ClassService.creditLevelRewardSkillPoints(player), never());
+        server.getScheduler().performOneTick();
+        classes.verify(() -> ClassService.creditLevelRewardSkillPoints(player), times(1));
     }
 
     @Test

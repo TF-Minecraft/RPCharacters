@@ -224,6 +224,29 @@ class ClassServiceTest extends MmoServiceFixture {
     @Test void fallbackCannotConsumeASlotExplicitlyReservedForALaterClass(){
         playerClass("mage",2);var result=MmoCoreClassGuiHelper.buildClassOptions(54,Map.of("mage",10));assertEquals(10,result.getSlots().get(1));assertNotEquals(result.getSlots().getFirst(),result.getSlots().get(1),"Earlier fallback must respect later configured positions");
     }
+
+    @Test void claimedRewardPointsReachTheAccountPoolSoSpendingThemSurvivesTheNextApply(){
+        var rewards=rewardPoints();var claimed=new AtomicInteger(2);boundary(ExpTableSkillPoints.class).when(() -> ExpTableSkillPoints.claimed(mmo)).thenAnswer(c->claimed.get());
+        accountSkills.set(0);skillPoints.set(0);skillLevels.put("known",3);assertTrue(ClassService.applyClass(player,"warrior"));assertEquals(3,skillLevels.get("known"),"Upgrades bought with level-reward points must not be taken back");assertEquals(2,accountSkills.get());assertEquals(2,rewards.get());assertEquals(0,skillPoints.get());
+        assertTrue(ClassService.applyClass(player,"warrior"));assertEquals(2,accountSkills.get(),"A reward counts once");
+        skillLevels.put("known",1);assertTrue(ClassService.applyClass(player,"warrior"));assertEquals(2,skillPoints.get());
+    }
+
+    @Test void laterRewardsAddToTomePointsAndOtherClassesDoNotCountTheSameRewardAgain(){
+        var rewards=rewardPoints();var claimed=new AtomicInteger(2);boundary(ExpTableSkillPoints.class).when(() -> ExpTableSkillPoints.claimed(mmo)).thenAnswer(c->claimed.get());
+        accountSkills.set(0);skillPoints.set(0);assertTrue(ClassService.applyClass(player,"warrior"));ClassService.grantSkillPoints(player,1);assertEquals(3,accountSkills.get());
+        claimed.set(4);assertTrue(ClassService.applyClass(player,"warrior"));assertEquals(5,accountSkills.get(),"A tome point must survive the next reward");assertEquals(5,skillPoints.get());assertEquals(4,rewards.get());
+        var mage=playerClass("mage",1);saved(mage);claimed.set(2);assertTrue(ClassService.applyClass(player,"mage"));assertEquals(5,accountSkills.get());assertEquals(4,rewards.get());
+    }
+
+    @Test void levelUpCreditSavesOnlyNewRewardPointsForOnlineAccounts(){
+        var rewards=rewardPoints();var claimed=new AtomicInteger(0);boundary(ExpTableSkillPoints.class).when(() -> ExpTableSkillPoints.claimed(mmo)).thenAnswer(c->claimed.get());
+        accountSkills.set(1);skillPoints.set(1);ClassService.creditLevelRewardSkillPoints(null);ClassService.creditLevelRewardSkillPoints(player);verify(manager,never()).savePlayer(any());
+        claimed.set(2);when(player.isOnline()).thenReturn(false);ClassService.creditLevelRewardSkillPoints(player);players.when(() -> PlayerManager.get(player)).thenReturn(null);when(player.isOnline()).thenReturn(true);ClassService.creditLevelRewardSkillPoints(player);verify(manager,never()).savePlayer(any());assertEquals(1,accountSkills.get());
+        players.when(() -> PlayerManager.get(player)).thenReturn(account);ClassService.creditLevelRewardSkillPoints(player);assertEquals(3,accountSkills.get());assertEquals(3,skillPoints.get());assertEquals(2,rewards.get());verify(manager).savePlayer(player);
+    }
+
+    AtomicInteger rewardPoints(){var rewards=new AtomicInteger();when(account.getAccountRewardSkillPoints()).thenAnswer(c->rewards.get());doAnswer(c->{rewards.set(c.getArgument(0));return null;}).when(account).setAccountRewardSkillPoints(anyInt());return rewards;}
 }
 
 abstract class MmoServiceFixture {

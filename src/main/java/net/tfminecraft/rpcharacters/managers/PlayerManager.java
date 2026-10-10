@@ -903,9 +903,14 @@ public class PlayerManager implements Listener{
 		if (e.getReason() != PlayerLevelChangeEvent.Reason.LEVEL_UP) {
 			return;
 		}
-		ClassService.trackFromPlayer(e.getPlayer());
+		Player player = e.getPlayer();
+		ClassService.trackFromPlayer(player);
 		// The account level now lives in the player file; don't wait for quit to keep it.
-		savePlayer(e.getPlayer());
+		savePlayer(player);
+		if (RPCharacters.plugin != null) {
+			Bukkit.getScheduler().runTask(RPCharacters.plugin,
+					() -> ClassService.creditLevelRewardSkillPoints(player));
+		}
 	}
 
 	@EventHandler

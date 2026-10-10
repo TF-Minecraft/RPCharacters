@@ -111,6 +111,41 @@ public final class ClassService {
 		RPCharacters.getPlayerManager().savePlayer(player);
 	}
 
+	/**
+	 * Adds the skill points the class's exp-table rewards gave after a level-up. MMOCore claims those
+	 * rewards after it fires the level change, so call this a tick later.
+	 */
+	public static void creditLevelRewardSkillPoints(Player player) {
+		if (player == null || !player.isOnline()) {
+			return;
+		}
+		if (!creditRewardSkillPoints(player, PlayerData.get(player))) {
+			return;
+		}
+		applyFreeSkillPoints(player);
+		RPCharacters.getPlayerManager().savePlayer(player);
+	}
+
+	/**
+	 * Adds the skill points the current class's claimed exp-table rewards gave and the account has not
+	 * counted yet. Each reward counts once per account: the same level's reward claimed again under
+	 * another class adds nothing.
+	 */
+	private static boolean creditRewardSkillPoints(Player player, PlayerData mmoPd) {
+		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
+		if (pd == null) {
+			return false;
+		}
+		int claimed = ExpTableSkillPoints.claimed(mmoPd);
+		int credited = pd.getAccountRewardSkillPoints();
+		if (claimed <= credited) {
+			return false;
+		}
+		pd.addAccountSkillPoints(claimed - credited);
+		pd.setAccountRewardSkillPoints(claimed);
+		return true;
+	}
+
 	public static void applyFreeSkillPoints(Player player) {
 		if (player == null) {
 			return;
@@ -216,6 +251,7 @@ public final class ClassService {
 			sanitizeForeignSkillLevels(mmoPd);
 			unbindLockedSkills(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
+			creditRewardSkillPoints(player, mmoPd);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
 			applyFreeAttributePointsIfActive(player);
@@ -250,6 +286,7 @@ public final class ClassService {
 			sanitizeForeignSkillLevels(mmoPd);
 			unbindLockedSkills(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
+			creditRewardSkillPoints(player, mmoPd);
 			clampExcessSkillPool(player);
 			applyFreeSkillPoints(player);
 			applyFreeAttributePointsIfActive(player);
@@ -278,7 +315,8 @@ public final class ClassService {
 	 * Claims the class's exp-table rewards for every level up to the current one that it has not
 	 * claimed yet. The level is shared across classes, so a class picked at level 12 never levelled
 	 * through 7 or 12 and would otherwise miss the skill slots unlocked there. MMOCore counts claims,
-	 * so a reward is never given twice. Skill points the triggers give are reset to the account pool.
+	 * so a reward is never given twice. Their skill points reach the account pool through
+	 * {@link #creditRewardSkillPoints}, once per account.
 	 */
 	private static void claimMissedLevelRewards(PlayerData mmoPd, PlayerClass profess) {
 		if (!profess.hasExperienceTable()) {
