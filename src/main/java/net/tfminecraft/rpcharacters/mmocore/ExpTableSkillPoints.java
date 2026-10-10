@@ -25,7 +25,7 @@ final class ExpTableSkillPoints {
 
 	private static Field triggersField;
 	private static Field commandField;
-	private static boolean unreadable;
+	private static boolean warned;
 
 	private ExpTableSkillPoints() {}
 
@@ -45,80 +45,46 @@ final class ExpTableSkillPoints {
 	}
 
 	static int pointsPerClaim(ExperienceItem item) {
-		List<?> triggers = read(triggersField(), item, List.class);
-		if (triggers == null) {
-			return 0;
-		}
 		long points = 0;
-		for (Object trigger : triggers) {
-			if (!(trigger instanceof CommandTrigger)) {
-				continue;
+		try {
+			if (triggersField == null) {
+				triggersField = accessible(ExperienceItem.class, "triggers");
+				commandField = accessible(CommandTrigger.class, "command");
 			}
-			String command = read(commandField(), trigger, String.class);
-			if (command == null) {
-				continue;
+			for (Object trigger : (List<?>) triggersField.get(item)) {
+				if (trigger instanceof CommandTrigger) {
+					Matcher give = GIVE.matcher(String.valueOf(commandField.get(trigger)).trim());
+					if (give.matches()) {
+						points += Integer.parseInt(give.group(1));
+					}
+				}
 			}
-			Matcher give = GIVE.matcher(command.trim());
-			if (give.matches()) {
-				points += Integer.parseInt(give.group(1));
-			}
+		} catch (ReflectiveOperationException | RuntimeException ex) {
+			warnOnce(ex);
+			return 0;
 		}
 		return (int) Math.min(Integer.MAX_VALUE, points);
 	}
 
-	private static Field triggersField() {
-		if (triggersField == null && !unreadable) {
-			triggersField = accessible(ExperienceItem.class, "triggers");
-		}
-		return triggersField;
+	private static Field accessible(Class<?> owner, String name) throws ReflectiveOperationException {
+		Field field = owner.getDeclaredField(name);
+		field.setAccessible(true);
+		return field;
 	}
 
-	private static Field commandField() {
-		if (commandField == null && !unreadable) {
-			commandField = accessible(CommandTrigger.class, "command");
-		}
-		return commandField;
-	}
-
-	private static Field accessible(Class<?> owner, String name) {
-		try {
-			Field field = owner.getDeclaredField(name);
-			field.setAccessible(true);
-			return field;
-		} catch (ReflectiveOperationException | RuntimeException ex) {
-			unreadable("no " + owner.getSimpleName() + "." + name + " field", ex);
-			return null;
-		}
-	}
-
-	private static <T> T read(Field field, Object owner, Class<T> type) {
-		if (field == null) {
-			return null;
-		}
-		try {
-			Object value = field.get(owner);
-			return type.isInstance(value) ? type.cast(value) : null;
-		} catch (ReflectiveOperationException | RuntimeException ex) {
-			unreadable("could not read " + field.getName(), ex);
-			return null;
-		}
-	}
-
-	private static void unreadable(String reason, Exception ex) {
-		if (unreadable) {
+	private static void warnOnce(Exception ex) {
+		if (warned) {
 			return;
 		}
-		unreadable = true;
-		if (RPCharacters.plugin != null) {
-			RPCharacters.plugin.getLogger().warning("Cannot count exp-table skill points (" + reason
-					+ "); level rewards will not reach the account skill pool: " + ex);
-		}
+		warned = true;
+		RPCharacters.plugin.getLogger().warning("Cannot count exp-table skill points; level rewards will not"
+				+ " reach the account skill pool: " + ex);
 	}
 
 	/** For tests: forget cached reflection results. */
 	static void reset() {
 		triggersField = null;
 		commandField = null;
-		unreadable = false;
+		warned = false;
 	}
 }

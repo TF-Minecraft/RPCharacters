@@ -1,7 +1,6 @@
 package net.tfminecraft.rpcharacters.mmocore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -91,27 +90,20 @@ class ExpTableSkillPointsTest {
 	}
 
 	@Test
-	void unreadableTriggerListCountsNothingAndWarnsOnce() throws Exception {
+	void unreadableRewardsCountNothingAndWarnOnce() throws Exception {
 		ExperienceItem item = item("skill_points_7", command("mmocore admin skill-points give %player% 2"));
 		Field triggers = ExperienceItem.class.getDeclaredField("triggers");
 		triggers.setAccessible(true);
 		triggers.set(item, null);
 		assertEquals(0, ExpTableSkillPoints.pointsPerClaim(item));
-		verify(logger, times(0)).warning(any(String.class));
 		ExpTableSkillPoints.reset();
-		Field broken = ExpTableSkillPointsTest.class.getDeclaredField("logger");
-		assertEquals(0, readWith(broken, item));
-		assertEquals(0, readWith(broken, item));
-		verify(logger, times(1)).warning(contains("Cannot count exp-table skill points"));
-	}
-
-	/** Reads a field of the wrong class, which throws, as a stand-in for an MMOCore that renamed it. */
-	private static int readWith(Field wrongField, ExperienceItem item) throws Exception {
+		// A field of another class stands in for an MMOCore that renamed or retyped "triggers".
 		Field cached = ExpTableSkillPoints.class.getDeclaredField("triggersField");
 		cached.setAccessible(true);
-		wrongField.setAccessible(true);
-		cached.set(null, wrongField);
-		return ExpTableSkillPoints.pointsPerClaim(item);
+		cached.set(null, ExpTableSkillPointsTest.class.getDeclaredField("logger"));
+		assertEquals(0, ExpTableSkillPoints.pointsPerClaim(item("seven", command("mmocore admin skill-points give %player% 2"))));
+		assertEquals(0, ExpTableSkillPoints.pointsPerClaim(item("seven", command("mmocore admin skill-points give %player% 2"))));
+		verify(logger, times(2)).warning(contains("Cannot count exp-table skill points"));
 	}
 
 	private static PlayerClass classWith(ExperienceItem... items) {
