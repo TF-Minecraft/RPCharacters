@@ -87,6 +87,7 @@ channels:
 
   looc:
     commands: [looc]
+    require-character: false
     use-perm: rpchar.chat.use
     read-perm: rpchar.chat.use
     color-code-perm: rpchar.chat.colors
