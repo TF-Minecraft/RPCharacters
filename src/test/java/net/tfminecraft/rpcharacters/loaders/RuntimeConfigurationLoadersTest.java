@@ -166,11 +166,6 @@ class RuntimeConfigurationLoadersTest {
         assertEquals(0, Cache.calendarAgeMinimum); assertEquals("Unknown", Cache.calendarAgeUnsetLabel);
         new CalendarLoader().load(yaml("{}")); assertEquals(25, Cache.calendarYearOffset);
         Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-        new WebCreatorLoader().load(yaml("by-realm:\n  scalar: ignored\n  ' MAIN ': {min-tier: -2, min-group-id: ' gold '}\n"));
-        assertEquals(Set.of("main"), Cache.webCreatorAccessByRealm.keySet());
-        var access = Cache.webCreatorAccessByRealm.get("main"); assertEquals(0, access.getMinTier()); assertEquals("gold", access.getMinGroupId());
-        assertEquals("", new WebCreatorRealmAccess(-1, null).getMinGroupId());
-        new WebCreatorLoader().load(yaml("{}")); assertTrue(Cache.webCreatorAccessByRealm.isEmpty());
         new PlayerListLoader().load(yaml("""
             permission: list.custom
             portrait: false
@@ -214,11 +209,10 @@ class RuntimeConfigurationLoadersTest {
     @Test void invalidYamlAndMissingFilesLeaveLoadersUsableForAValidReload() throws Exception {
         List<LoaderInterface> loaders = List.of(new AttributePointTomeLoader(), new SkillPointTomeLoader(),
             new FuelTemplateLoader(), new MagnifyingGlassLoader(), new PermissionGroupsLoader(), new CalendarLoader(),
-            new WebCreatorLoader(), new PlayerListLoader(), new ProfileViewLoader(), new ProfileLoader(), new PersonaLoader(), new ConfigLoader());
+            new PlayerListLoader(), new ProfileViewLoader(), new ProfileLoader(), new PersonaLoader(), new ConfigLoader());
         File malformed = yaml("broken: [unterminated");
         for (LoaderInterface loader : loaders) assertDoesNotThrow(() -> loader.load(malformed), loader.getClass().getSimpleName());
         assertTrue(FuelTemplateLoader.getAll().isEmpty()); assertTrue(Cache.permissionGroups.isEmpty());
-        assertTrue(Cache.webCreatorAccessByRealm.isEmpty());
         File missing = directory.resolve("absent.yml").toFile();
         for (LoaderInterface loader : loaders) assertDoesNotThrow(() -> loader.load(missing));
         new CalendarLoader().load(yaml("year-offset: 123\n")); assertEquals(123, Cache.calendarYearOffset);

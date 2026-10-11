@@ -29,7 +29,6 @@ public class Cache {
 
 	public static Map<String, Integer> permissionGroupDefaults = new HashMap<>();
 	public static List<net.tfminecraft.rpcharacters.objects.PermissionGroupDefinition> permissionGroups = new ArrayList<>();
-	public static Map<String, net.tfminecraft.rpcharacters.objects.WebCreatorRealmAccess> webCreatorAccessByRealm = new HashMap<>();
 
 	public static boolean requireCharacter;
 	/** Playtest server: tag in-game creates and stop syncing characters with the website. */

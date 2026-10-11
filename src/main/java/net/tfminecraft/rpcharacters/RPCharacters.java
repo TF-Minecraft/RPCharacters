@@ -22,7 +22,6 @@ import net.tfminecraft.rpcharacters.loaders.MaskLoader;
 import net.tfminecraft.rpcharacters.loaders.AttributePointTomeLoader;
 import net.tfminecraft.rpcharacters.loaders.SkillPointTomeLoader;
 import net.tfminecraft.rpcharacters.loaders.PermissionGroupsLoader;
-import net.tfminecraft.rpcharacters.loaders.WebCreatorLoader;
 import net.tfminecraft.rpcharacters.loaders.PersonaLoader;
 import net.tfminecraft.rpcharacters.loaders.PlayerListLoader;
 import net.tfminecraft.rpcharacters.loaders.ProfessionLoader;
@@ -168,7 +167,6 @@ public class RPCharacters extends JavaPlugin{
 	private ProfileLoader profileLoader;
 	private PersonaLoader personaLoader;
 	private PermissionGroupsLoader permissionGroupsLoader;
-	private WebCreatorLoader webCreatorLoader;
 	private MaskLoader maskLoader;
 	private SkillPointTomeLoader skillPointTomeLoader;
 	private AttributePointTomeLoader attributePointTomeLoader;
@@ -214,7 +212,6 @@ public class RPCharacters extends JavaPlugin{
 		profileLoader = new ProfileLoader();
 		personaLoader = new PersonaLoader();
 		permissionGroupsLoader = new PermissionGroupsLoader();
-		webCreatorLoader = new WebCreatorLoader();
 		maskLoader = new MaskLoader();
 		skillPointTomeLoader = new SkillPointTomeLoader();
 		attributePointTomeLoader = new AttributePointTomeLoader();
@@ -402,7 +399,6 @@ public class RPCharacters extends JavaPlugin{
 		configLoader.load(new File(getDataFolder(), "config.yml"));
 		personaLoader.load(new File(getDataFolder(), "persona.yml"));
 		permissionGroupsLoader.load(new File(getDataFolder(), "permission-groups.yml"));
-		webCreatorLoader.load(new File(getDataFolder(), "web-creator.yml"));
 		maskLoader.load(new File(getDataFolder(), "masks.yml"));
 		skillPointTomeLoader.load(new File(getDataFolder(), "items.yml"));
 		attributePointTomeLoader.load(new File(getDataFolder(), "items.yml"));
@@ -492,7 +488,6 @@ public class RPCharacters extends JavaPlugin{
 				"rolls.yml",
 				"calendar.yml",
 				"permission-groups.yml",
-				"web-creator.yml",
 				"zones.yml",
 				"injuries.yml",
 				"injury-progression.yml",
