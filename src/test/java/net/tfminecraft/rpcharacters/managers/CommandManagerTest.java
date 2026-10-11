@@ -179,7 +179,13 @@ class CommandManagerTest {
 
     @Test void creationNavigationChecksActiveDraftAndStageBeforeDelegating() {
         var slots = boundary(CharacterSlotService.class); run("create"); message("free character slot");
-        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true); run("create"); creators.verify(() -> CreationManager.initiateCreation(player));
+        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
+        try (var hunt = mockStatic(net.tfminecraft.rpcharacters.plots.PlotHunt.class); var plots = mockStatic(net.tfminecraft.rpcharacters.plots.PlotMenu.class)) {
+            hunt.when(() -> net.tfminecraft.rpcharacters.plots.PlotHunt.locked(player)).thenReturn(true);
+            run("create"); plots.verify(() -> net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(player));
+            creators.verifyNoInteractions();
+        }
+        run("create"); creators.verify(() -> CreationManager.initiateCreation(player));
         for (String verb : List.of("next", "back", "help", "cancel")) { run(verb); message("active creator"); }
         CharacterCreation creator = creator(player); run("create"); message("already creating"); run("next"); message("cannot use");
         when(creator.canNext()).thenReturn(true); run("next"); creators.verify(() -> CreationManager.next(player));

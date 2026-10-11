@@ -2,3 +2,11 @@
 [2026-10-11 12:38] Set the status of the character Recipient 7e4aaaef-10cb-44f8-97aa-032add923e6a to ALIVE
 [2026-10-11 12:38] Set the status of the character New name to DEAD
 [2026-10-11 12:38] Set the status of the character New name to ALIVE
+[2026-10-11 13:26] Set the status of the character Recipient 111a7683-92d2-4940-ae3c-c0798ba43fcb to DEAD
+[2026-10-11 13:26] Set the status of the character Recipient 111a7683-92d2-4940-ae3c-c0798ba43fcb to ALIVE
+[2026-10-11 13:26] Set the status of the character New name to DEAD
+[2026-10-11 13:26] Set the status of the character New name to ALIVE
+[2026-10-11 13:31] Set the status of the character Recipient 5f350894-20c0-49fb-9f7d-ae0bd5c77069 to DEAD
+[2026-10-11 13:31] Set the status of the character Recipient 5f350894-20c0-49fb-9f7d-ae0bd5c77069 to ALIVE
+[2026-10-11 13:31] Set the status of the character New name to DEAD
+[2026-10-11 13:31] Set the status of the character New name to ALIVE

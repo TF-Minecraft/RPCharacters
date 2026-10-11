@@ -34,6 +34,11 @@ class InventoryManagerViewsTest extends InventoryFixture {
         cooldowns.when(() -> PermissionGroupService.hasCharacterSwitchCooldown(player,data)).thenReturn(true);
         manager.characterView(player,character); assertEquals(Material.GRAY_STAINED_GLASS_PANE,top().getItem(6).getType());
         permissions.when(() -> Permissions.isAdmin(player)).thenReturn(true); manager.characterView(player,character); assertEquals(Material.EMERALD,top().getItem(6).getType());
+        try (var hunt = mockStatic(net.tfminecraft.rpcharacters.plots.PlotHunt.class)) {
+            hunt.when(() -> net.tfminecraft.rpcharacters.plots.PlotHunt.locked(player)).thenReturn(true);
+            manager.characterView(player,character); assertEquals(Material.RED_CONCRETE,top().getItem(InventoryManager.SWITCH_SLOT).getType());
+            assertEquals(Material.SPYGLASS,top().getItem(InventoryManager.INTRIGUE_SLOT).getType());
+        }
         when(character.getStatus()).thenReturn(Status.DEAD); manager.characterView(player,character); assertEquals(Material.TOTEM_OF_UNDYING,top().getItem(4).getType());
         slots.when(() -> CharacterSlotService.hasFreeSlot(player,data)).thenReturn(false); manager.characterView(player,character); assertEquals(Material.GRAY_DYE,top().getItem(4).getType());
     }

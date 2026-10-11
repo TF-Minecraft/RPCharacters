@@ -171,6 +171,29 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
     }
 
     @Test
+    void aHuntedCharacterCannotSwitchOrCreateAndThePlotsButtonOpensPlots() {
+        slots.when(() -> CharacterSlotService.isSlotUnlocked(player, 0)).thenReturn(true);
+        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
+        try (var hunt = mockStatic(net.tfminecraft.rpcharacters.plots.PlotHunt.class);
+                var plots = mockStatic(net.tfminecraft.rpcharacters.plots.PlotMenu.class);
+                var creation = mockStatic(CreationManager.class)) {
+            hunt.when(() -> net.tfminecraft.rpcharacters.plots.PlotHunt.locked(player)).thenReturn(true);
+            manager.confirmClick(player, character, ConfirmType.SWITCH);
+            plots.verify(() -> net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(player));
+            verify(data, never()).setActiveCharacter(any());
+            manager.selectionClick(menu("Character Menu", 10, new ItemStack(Material.YELLOW_CONCRETE), player));
+            creation.verifyNoInteractions();
+            plots.verify(() -> net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(player), times(2));
+            manager.selectionClick(menu("Character Info", InventoryManager.PLOTS_SLOT, null, player));
+            manager.selectionClick(menu("Character Info", InventoryManager.PLOTS_SLOT, new ItemStack(Material.GRAY_STAINED_GLASS_PANE), player));
+            manager.selectionClick(menu("Character Info", InventoryManager.PLOTS_SLOT, new ItemStack(Material.IRON_SWORD), server.addPlayer("Other")));
+            plots.verify(() -> net.tfminecraft.rpcharacters.plots.PlotMenu.open(any()), never());
+            manager.selectionClick(menu("Character Info", InventoryManager.PLOTS_SLOT, new ItemStack(Material.IRON_SWORD), player));
+            plots.verify(() -> net.tfminecraft.rpcharacters.plots.PlotMenu.open(player));
+        }
+    }
+
+    @Test
     void characterInfoClassButtonOpensThePickerForItsOwnerOnly() {
         try (var gui = mockStatic(ClassPickGui.class)) {
             ItemStack button = new ItemStack(Material.NETHERITE_SWORD);

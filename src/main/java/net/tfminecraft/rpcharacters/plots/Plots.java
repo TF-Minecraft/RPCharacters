@@ -38,7 +38,7 @@ public final class Plots {
         if (!listening) plugin.getServer().getPluginManager().registerEvents(new PlotListener(), plugin);
         listening = true;
         long period = PlotConfig.scanSeconds() * 20L;
-        task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+        task = org.bukkit.Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             PlotService.tick();
             PlotHunt.scan();
         }, period, period);

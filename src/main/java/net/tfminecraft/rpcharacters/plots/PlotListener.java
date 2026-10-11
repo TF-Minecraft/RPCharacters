@@ -49,7 +49,7 @@ public final class PlotListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         // Characters load after joining.
-        RPCharacters.plugin.getServer().getScheduler().runTaskLater(RPCharacters.plugin, () -> {
+        org.bukkit.Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
             if (player.isOnline()) PlotService.deliver(player);
         }, 100L);
     }
@@ -58,7 +58,7 @@ public final class PlotListener implements Listener {
     public void onPermakill(CharacterPermakillEvent event) {
         var character = event.getCharacter();
         // The death is committed after the event; confirm it next tick.
-        RPCharacters.plugin.getServer().getScheduler().runTask(RPCharacters.plugin, () -> {
+        org.bukkit.Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
             if (character.getStatus() == Status.DEAD) PlotHunt.characterDied(character.getId());
         });
     }
@@ -66,6 +66,6 @@ public final class PlotListener implements Listener {
     @EventHandler
     public void onActivated(CharacterActivatedEvent event) {
         Player player = event.getOwner();
-        if (player != null) RPCharacters.plugin.getServer().getScheduler().runTask(RPCharacters.plugin, () -> PlotService.deliver(player));
+        if (player != null) org.bukkit.Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> PlotService.deliver(player));
     }
 }
