@@ -463,6 +463,8 @@ public class PlayerData {
 			}
 			return;
 		}
+		// A temporary alias belongs to the character it was set on.
+		clearTempAlias();
 		Player player = resolveOnlinePlayer();
 		if (current != null && player != null) {
 			current.stampLastLocation(player.getLocation());
