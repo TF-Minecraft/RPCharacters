@@ -154,7 +154,7 @@ public final class CharacterIngestService {
 			ProvinceSystemClient.SimpleResult pending = ProvinceSystemClient.fetchPendingCreates();
 			if (!pending.ok) {
 				plugin.getLogger().warning("[character-ingest] pending fetch failed: " + pending.error);
-				RosterSyncService.pushRosterNow(playerUuid);
+				RosterSyncService.pushRosterAsync(playerUuid);
 				return;
 			}
 			List<JSONObject> mine = new ArrayList<>();
@@ -169,7 +169,7 @@ public final class CharacterIngestService {
 				ProvinceSystemClient.ackCreates(buildAckJson(results));
 			}
 			KitCustomiseIngestService.pullNow(plugin);
-			RosterSyncService.pushRosterNow(playerUuid);
+			RosterSyncService.pushRosterAsync(playerUuid);
 		});
 	}
 

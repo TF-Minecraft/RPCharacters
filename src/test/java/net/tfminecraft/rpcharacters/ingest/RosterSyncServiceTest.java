@@ -48,6 +48,22 @@ class RosterSyncServiceTest extends IngestFixture {
         runWorkers(); assertEquals(2,pushes.size()); assertEquals(owner.toString(),pushes.getFirst().get("player_uuid"));
     }
 
+    @Test void asyncPushReadsLiveCharactersOnTheMainThreadBeforeTheWorkerRuns() {
+        var pd=mockData();online(pd);var c=character("alpha");when(c.getName()).thenReturn("Aria");pd.getCharacters().add(c);slots.when(() -> CharacterSlotService.getMaxAliveCharacters(player)).thenReturn(3);
+        RosterSyncService.pushRosterAsync(owner);verify(c).update();verify(c,atLeastOnce()).getName();slots.verify(() -> CharacterSlotService.getMaxAliveCharacters(player));assertEquals(1,workers.size());
+        clearInvocations(pd,c);when(c.getName()).thenReturn("Changed");slots.when(() -> CharacterSlotService.getMaxAliveCharacters(player)).thenReturn(9);
+        runWorkers();verifyNoInteractions(pd,c);assertEquals("Aria",firstCharacter().get("name"));assertEquals(3L,pushes.getFirst().get("max_alive_characters"));
+    }
+
+    @Test void pushesFromOtherThreadsHopToTheMainThreadBeforeReadingCharacters() {
+        var pd=mockData();online(pd);pd.getCharacters().add(character("alpha"));clearInvocations(pd);List<Runnable> mainTasks=new ArrayList<>();
+        when(scheduler.runTask(any(org.bukkit.plugin.Plugin.class),any(Runnable.class))).thenAnswer(call->{mainTasks.add(call.getArgument(1));return mock(BukkitTask.class);});
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);RosterSyncService.pushRosterAsync(owner);RosterSyncService.pushRosterNow(owner);
+        assertEquals(2,mainTasks.size());assertTrue(workers.isEmpty());verify(pd,never()).getCharacters();players.verifyNoInteractions();
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);mainTasks.forEach(Runnable::run);assertEquals(2,workers.size());runWorkers();assertEquals(2,pushes.size());
+        players.when(() -> PlayerManager.get(player)).thenReturn(null);RosterSyncService.pushRosterAsync(owner);RosterSyncService.pushRosterNow(owner);assertTrue(workers.isEmpty());assertEquals(2,pushes.size());
+    }
+
     @Test void richRosterSerializesSheetAndAccountWithoutFormattingOrHiddenTraits() throws Exception {
         Locale.setDefault(Locale.forLanguageTag("tr-TR")); PlayerData pd=mockData(); online(pd); RPCharacter c=character("alpha"); when(pd.getCharacters()).thenReturn(List.of(c));
         when(c.getName()).thenReturn("Aria");when(c.getStatus()).thenReturn(Status.DEAD);when(c.getRace()).thenReturn(race);when(race.getName()).thenReturn("§aHuman");
