@@ -27,7 +27,6 @@ import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
 import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
-import net.tfminecraft.rpcharacters.enums.Status;
 
 public final class PermadeathService {
 
@@ -205,36 +204,13 @@ public final class PermadeathService {
 	 */
 	public static boolean killCharacter(Player player, RPCharacter character, PermakillCause cause, Player killer,
 			boolean killEntity) {
-		if (!character.getStatus().equals(Status.ALIVE)) {
-			return false;
-		}
-
-		CharacterPermakillEvent event = new CharacterPermakillEvent(player, character, cause, killer);
-		Bukkit.getPluginManager().callEvent(event);
-		if (event.isCancelled()) {
-			return false;
-		}
-
-		// Kills applied inside the death event respawn at world spawn once the player clicks respawn.
+		String killedName = character.getName();
+		var result = net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.kill(player, character, cause, killer);
+		if (!result.killed()) return false;
+		boolean wasActive = result.wasActive();
+		String replacementName = result.replacementName();
 		boolean duringDeath = cause == PermakillCause.PERMADEATH_ZONE
 				|| (cause == PermakillCause.STRIKES && player.isDead());
-		boolean wasActive = character.isActive();
-		String killedName = character.getName();
-		character.setStatus(Status.DEAD);
-		String replacementName = null;
-		if (wasActive) {
-			character.deactivate();
-			PlayerData pd = PlayerManager.get(player);
-			if (pd != null) {
-				pd.clearTempAlias();
-			}
-			if (pd != null && pd.getCharacters(Status.ALIVE).size() > 0) {
-				RPCharacter replacement = pd.getCharacters(Status.ALIVE).get(0);
-				pd.setActiveCharacter(replacement, character);
-				replacementName = replacement.getName();
-				net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(player);
-			}
-		}
 
 		RPCharacters.getPlayerManager().savePlayer(player);
 

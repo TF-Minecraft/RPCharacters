@@ -273,6 +273,130 @@ class PlayerManagerLifecycleTest extends PlayerManagerFixture {
     }
 
     @Test
+    void sharedSessionStartsOnlyAfterFinalMmoSetup() {
+        tracked.clear();
+        var runtime = mock(net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.class);
+        rpc.when(RPCharacters::getCharacterTransitions).thenReturn(runtime);
+        manager.initiatePlayer(player);
+        verify(runtime).beginJoin(data);
+        verify(runtime, never()).ready(any());
+        doAnswer(call -> {
+            classes.verify(() -> ClassService.applyFreeSkillPoints(player));
+            verify(mmo).setAttributeReallocationPoints(0);
+            return null;
+        }).when(runtime).ready(data);
+        mmoReady.getFirst().run();
+        verify(runtime).ready(data);
+        lifecycle.verify(() -> CharacterLifecycle.fireActivated(any(), any(), any(), any()), never());
+    }
+
+    @Test
+    void unreadableSharedDirectoryDisconnectsBeforeAdmittingTheAccount() {
+        tracked.clear();
+        var identity = mock(net.tfminecraft.rpcharacters.identity.CharacterIdentityService.class);
+        rpc.when(RPCharacters::getCharacterIdentity).thenReturn(identity);
+        when(identity.characters(player.getUniqueId())).thenReturn(java.util.Optional.empty());
+        manager.initiatePlayer(player);
+        assertNull(PlayerManager.get(player));
+        assertFalse(player.isOnline());
+        verify(database, never()).savePlayer(any());
+        assertTrue(mmoReady.isEmpty());
+    }
+
+    @Test
+    void partialLoadedCharacterSetIsRejectedWithoutSaving() {
+        tracked.clear();
+        var identity = mock(net.tfminecraft.rpcharacters.identity.CharacterIdentityService.class);
+        rpc.when(RPCharacters::getCharacterIdentity).thenReturn(identity);
+        when(identity.characters(player.getUniqueId())).thenReturn(java.util.Optional.of(List.of()));
+        manager.initiatePlayer(player);
+        assertNull(PlayerManager.get(player));
+        assertFalse(player.isOnline());
+        verify(database, never()).savePlayer(any());
+    }
+
+    @Test
+    void loadedCharactersMustMatchDirectoryIdsIncludingCaseInsensitiveUuids() {
+        tracked.clear();
+        var identity = mock(net.tfminecraft.rpcharacters.identity.CharacterIdentityService.class);
+        rpc.when(RPCharacters::getCharacterIdentity).thenReturn(identity);
+        var id = UUID.randomUUID();
+        var info = new net.tfminecraft.tlibs.character.CharacterInfo(
+                new net.tfminecraft.tlibs.character.CharacterRef(player.getUniqueId(), id), "Aria",
+                net.tfminecraft.tlibs.character.CharacterStatus.ALIVE, null, java.util.Set.of(), 0, null);
+        when(identity.characters(player.getUniqueId())).thenReturn(java.util.Optional.of(List.of(info)));
+        manager.initiatePlayer(player);
+        assertNull(PlayerManager.get(player));
+        assertFalse(player.isOnline());
+        // MockBukkit kick removes the player but leaves its reconnect flag set.
+        player.disconnect();
+        assertTrue(player.reconnect());
+        when(character.getId()).thenReturn(id.toString().toUpperCase(java.util.Locale.ROOT));
+        manager.initiatePlayer(player);
+        assertSame(data, PlayerManager.get(player));
+        assertTrue(player.isOnline());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void quitEndsSharedSessionWhileOutgoingDataIsLoadedBeforeSave() {
+        var runtime = mock(net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.class);
+        rpc.when(RPCharacters::getCharacterTransitions).thenReturn(runtime);
+        doAnswer(call -> {
+            assertSame(data, PlayerManager.get(player));
+            verify(database, never()).savePlayer(any());
+            return null;
+        }).when(runtime).leave(data, net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason.QUIT);
+        manager.onLeave(new PlayerQuitEvent(player, "quit"));
+        verify(runtime).leave(data, net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason.QUIT);
+        verify(database).savePlayer(data);
+        assertNull(PlayerManager.get(player));
+    }
+
+    @Test
+    void committedDeadActiveFlagIsClearedOnJoinWithoutLoadingItsBody() {
+        tracked.clear();
+        when(character.getStatus()).thenReturn(Status.DEAD);
+        when(data.getCharacters(Status.ALIVE)).thenReturn(List.of());
+        doAnswer(call -> { active.set(null); return null; }).when(character).setActiveState(false);
+        manager.initiatePlayer(player);
+        verify(character).setActiveState(false);
+        verify(character, never()).deactivate();
+        verify(database).savePlayer(data);
+        assertNull(active.get());
+    }
+
+    @Test
+    void exhaustedPendingAttributeRemovalsDisconnectWithoutPublishingReadiness() {
+        tracked.clear();
+        boundaries.remove(integrators);
+        integrators.close();
+        integrators = mockConstruction(Integrator.class, (integrator, context) ->
+                when(integrator.tryApplyPendingRemoves(any(), anyList())).thenReturn(false));
+        boundaries.add(integrators);
+        var runtime = mock(net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.class);
+        rpc.when(RPCharacters::getCharacterTransitions).thenReturn(runtime);
+        manager.initiatePlayer(player);
+        mmoReady.getFirst().run();
+        server.getScheduler().performTicks(15);
+        assertFalse(player.isOnline());
+        verify(data, times(4)).setPendingMmoAttributeRemoves(List.of("strength"));
+        verify(runtime, never()).ready(any());
+        verify(character, never()).applyStoredClass();
+    }
+
+    @Test
+    void unsuccessfulMmoSetupNeverMarksASharedSessionReady() {
+        tracked.clear(); when(character.applyStoredClass()).thenReturn(false);
+        var runtime = mock(net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.class);
+        rpc.when(RPCharacters::getCharacterTransitions).thenReturn(runtime);
+        manager.initiatePlayer(player); mmoReady.getFirst().run();
+        server.getScheduler().performTicks(15);
+        verify(runtime, never()).ready(any());
+        attributes.verify(() -> AttributePointService.syncOnActivate(character), never());
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     void joiningLoadsOnceRecoversPaidChangesAndDefersMmoUntilReady() {
         tracked.clear();
@@ -442,6 +566,7 @@ abstract class PlayerManagerFixture {
     List<Runnable> mmoReady;
     MockedConstruction<InventoryManager> inventories;
     MockedConstruction<Integrator> integrators;
+    MockedStatic<RPCharacters> rpc;
     MockedStatic<RPTexts> texts;
     MockedStatic<ClassService> classes;
     MockedStatic<AttributePointService> attributes;
@@ -509,7 +634,7 @@ abstract class PlayerManagerFixture {
         });
         boundaries.add(databases);
         manager = new PlayerManager(); database = databases.constructed().getLast();
-        boundary(RPCharacters.class).when(RPCharacters::getPlayerManager).thenReturn(manager);
+        rpc = boundary(RPCharacters.class); rpc.when(RPCharacters::getPlayerManager).thenReturn(manager);
         inventories = mockConstruction(InventoryManager.class); boundaries.add(inventories);
         integrators = mockConstruction(Integrator.class, (integrator, context) -> when(integrator.tryApplyPendingRemoves(any(), anyList())).thenReturn(true)); boundaries.add(integrators);
         texts = boundary(RPTexts.class); classes = boundary(ClassService.class);

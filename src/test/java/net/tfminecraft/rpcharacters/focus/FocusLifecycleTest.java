@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
-import net.tfminecraft.rpcharacters.lifecycle.CharacterActivatedEvent;
+import net.tfminecraft.tlibs.character.*;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 class FocusLifecycleTest {
@@ -65,18 +65,21 @@ class FocusLifecycleTest {
     void switchAndQuitPersistIndependentCharacterBalances() {
         var service = new FocusService(plugin, store);
         var listener = new FocusListener(service);
-        var alice = character("alice");
-        var bob = character("bob");
+        var alice = character(UUID.randomUUID().toString());
+        var bob = character(UUID.randomUUID().toString());
+        var aliceSession = new CharacterSession(new CharacterRef(player.getUniqueId(), UUID.fromString(alice.getId())), 1);
+        var bobSession = new CharacterSession(new CharacterRef(player.getUniqueId(), UUID.fromString(bob.getId())), 2);
         active.set(alice);
-        listener.onCharacterActivated(new CharacterActivatedEvent(player, player.getUniqueId(), alice, null));
+        listener.onSessionStart(new CharacterSessionStartEvent(player, aliceSession));
         assertTrue(service.trySpend(player, 40));
+        listener.onSessionEnd(new CharacterSessionEndEvent(player, aliceSession, CharacterSessionEndEvent.Reason.SWITCH));
         active.set(bob);
-        listener.onCharacterActivated(new CharacterActivatedEvent(player, player.getUniqueId(), bob, alice));
-        assertEquals(110, store.load("alice").getPoints());
+        listener.onSessionStart(new CharacterSessionStartEvent(player, bobSession));
+        assertEquals(110, store.load(alice.getId()).getPoints());
         assertEquals(150, service.getPoints(player));
         service.trySpend(player, 10);
-        listener.onQuit(new PlayerQuitEvent(player, (String) null));
-        assertEquals(140, store.load("bob").getPoints());
+        listener.onSessionEnd(new CharacterSessionEndEvent(player, bobSession, CharacterSessionEndEvent.Reason.QUIT));
+        assertEquals(140, store.load(bob.getId()).getPoints());
         assertEquals(0, service.getPoints(player));
         active.set(alice);
         service.activate(player, alice);

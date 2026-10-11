@@ -395,6 +395,13 @@ public class Database {
 			if (json.containsKey("online-playtime-seconds")) {
 				c.setOnlinePlaytimeSeconds(((Number) json.get("online-playtime-seconds")).intValue());
 			}
+			if (json.containsKey("last-played-at-ms")) {
+				c.setLastPlayedAt(java.time.Instant.ofEpochMilli(((Number) json.get("last-played-at-ms")).longValue()));
+			}
+			if (json.containsKey("death-id")) {
+				c.setDeathRecord(java.util.UUID.fromString((String) json.get("death-id")),
+						java.time.Instant.ofEpochMilli(((Number) json.get("died-at-ms")).longValue()));
+			}
 			c.setConversationCounts(loadConversationCounts(json));
 			c.setConversationLastAtMs(loadConversationLastAt(json));
 			loadPersonaFields(c, json);
@@ -551,6 +558,13 @@ public class Database {
 			// Distinct from the legacy "playtime-seconds" key, which DurationParser reads as a
 			// created-at fallback. Reusing that name would corrupt character ages.
 			defaults.put("online-playtime-seconds", c.getOnlinePlaytimeSeconds());
+			if (c.getLastPlayedAt() != null) {
+				defaults.put("last-played-at-ms", c.getLastPlayedAt().toEpochMilli());
+			}
+			if (c.getDeathId() != null) {
+				defaults.put("death-id", c.getDeathId().toString());
+				defaults.put("died-at-ms", c.getDiedAt().toEpochMilli());
+			}
 			defaults.put("conversations", toConversationCountsJson(c.getConversationCounts()));
 			defaults.put("conversation-last-at", toConversationLastAtJson(c.getConversationLastAtMs()));
 			savePersonaFields(defaults, c);
@@ -564,6 +578,7 @@ public class Database {
 			CharacterClassPickFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
 			if (!save(file, defaults)) return false;
+			net.tfminecraft.rpcharacters.identity.CharacterIdentityService.saved(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
 			return true;

@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
-import net.tfminecraft.rpcharacters.lifecycle.CharacterActivatedEvent;
+import net.tfminecraft.tlibs.character.*;
 import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.*;
@@ -89,11 +89,23 @@ class FocusListenerTest extends FocusRuntimeFixture {
 
     @Test void activationWithMissingOwnerOrCharacterDoesNotReplaceTheBalance() {
         service.trySpend(player, 25);
-        listener.onCharacterActivated(new CharacterActivatedEvent(null, player.getUniqueId(), character, null));
-        listener.onCharacterActivated(new CharacterActivatedEvent(player, player.getUniqueId(), null, character));
+        var session = new CharacterSession(new CharacterRef(player.getUniqueId(), java.util.UUID.randomUUID()), 1);
+        listener.onSessionStart(new CharacterSessionStartEvent(player, session));
+        try (var rpc = mockStatic(net.tfminecraft.rpcharacters.RPCharacters.class)) {
+            listener.onSessionStart(new CharacterSessionStartEvent(player, session));
+        }
         assertEquals(125, service.getPoints(player));
-        listener.onQuit(new PlayerQuitEvent(player, (String) null));
+        listener.onSessionEnd(new CharacterSessionEndEvent(player, session, CharacterSessionEndEvent.Reason.QUIT));
         assertEquals(125, store.load(character.getId()).getPoints()); assertEquals(0, service.getPoints(player));
+    }
+
+    @Test void uppercaseCharacterIdsLoadFocusForTheirCanonicalSessionId() {
+        String id = java.util.UUID.randomUUID().toString().toUpperCase(java.util.Locale.ROOT);
+        character.setId(id);
+        service.deactivate(player);
+        var session = new CharacterSession(new CharacterRef(player.getUniqueId(), java.util.UUID.fromString(id)), 1);
+        listener.onSessionStart(new CharacterSessionStartEvent(player, session));
+        assertEquals(FocusConfig.max, service.getPoints(player));
     }
 
     @Test void replacingTheHeldPotionDuringExternalMatchingCannotEraseTheNewStackOrGrantFocus() {

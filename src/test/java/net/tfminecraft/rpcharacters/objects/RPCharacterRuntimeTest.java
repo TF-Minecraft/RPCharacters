@@ -72,8 +72,9 @@ class RPCharacterRuntimeTest {
         assertFalse(c.applyStoredClass()); classes.verifyNoInteractions(); ready.when(() -> MmoCorePlayerReady.isReady(player)).thenReturn(true);
         var manager=installMmo(); assertTrue(c.applyStoredClass()); var klass=mock(PlayerClass.class); when(klass.getName()).thenReturn("Warrior"); when(manager.get("WARRIOR")).thenReturn(klass);
         classes.when(() -> ClassService.applyClass(player,"WARRIOR")).thenReturn(false); assertFalse(c.applyStoredClass());
+        assertFalse(c.tryActivate()); assertFalse(c.isActive()); points.verifyNoInteractions(); professions.verifyNoInteractions();
         classes.when(() -> ClassService.applyClass(player,"WARRIOR")).thenReturn(true); assertTrue(c.applyStoredClass()); verify(player,never()).sendMessage(anyString());
-        c.activate(); assertTrue(c.isActive()); verify(player).sendMessage(contains("Warrior")); points.verify(() -> AttributePointService.syncOnActivate(c)); professions.verify(() -> ProfessionIntegrator.apply(player,c));
+        assertTrue(c.tryActivate()); assertTrue(c.isActive()); verify(player).sendMessage(contains("Warrior")); points.verify(() -> AttributePointService.syncOnActivate(c)); professions.verify(() -> ProfessionIntegrator.apply(player,c));
         classes.when(() -> ClassService.isOnClass(player,"WARRIOR")).thenReturn(true); c.activate(); verify(player,times(1)).sendMessage(anyString());
         c.deactivate(); assertFalse(c.isActive()); points.verify(() -> AttributePointService.syncOnDeactivate(c)); professions.verify(() -> ProfessionIntegrator.remove(player,c));
         c.setOwner(null); assertTrue(c.applyStoredClass()); assertNull(c.getOwner()); c.setOwner(player); assertSame(player,c.getOwner());

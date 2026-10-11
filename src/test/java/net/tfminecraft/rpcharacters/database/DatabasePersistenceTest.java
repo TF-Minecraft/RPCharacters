@@ -38,6 +38,31 @@ class DatabasePersistenceTest extends DatabaseFixture {
         playtime.verify(() -> CharacterPlaytimeDirectory.upsert(owner,character));
     }
 
+    @Test void sessionTimestampAndDistinctDeathRecordsSurviveSaveReloadAndRevival() throws Exception {
+        var data = new PlayerData(owner);
+        var character = new RPCharacter(player);
+        character.setName("Aria"); character.setRace(race); data.addCharacter(character);
+        var played = java.time.Instant.parse("2026-10-11T22:00:00Z");
+        var died = played.plusSeconds(90);
+        var firstDeath = UUID.randomUUID();
+        character.setLastPlayedAt(played);
+        character.setDeathRecord(firstDeath, died);
+        character.setStatus(net.tfminecraft.rpcharacters.enums.Status.DEAD);
+        assertTrue(db.trySavePlayer(data));
+        var reloaded = db.loadPlayerData(owner).getCharacters().getFirst();
+        assertEquals(played, reloaded.getLastPlayedAt());
+        assertEquals(firstDeath, reloaded.getDeathId());
+        assertEquals(died, reloaded.getDiedAt());
+        character.setStatus(net.tfminecraft.rpcharacters.enums.Status.ALIVE);
+        assertTrue(db.trySavePlayer(data));
+        assertEquals(firstDeath, db.loadPlayerData(owner).getCharacters().getFirst().getDeathId());
+        var secondDeath = UUID.randomUUID();
+        character.setDeathRecord(secondDeath, died.plusSeconds(90));
+        character.setStatus(net.tfminecraft.rpcharacters.enums.Status.DEAD);
+        assertTrue(db.trySavePlayer(data));
+        assertEquals(secondDeath, db.loadPlayerData(owner).getCharacters().getFirst().getDeathId());
+    }
+
     @Test void emptyAccountsAndMinimalCharactersPersistWithoutOptionalFields() throws Exception {
         var data=new PlayerData(owner); data.setCreatedAtEpochSeconds(0); db.savePlayer(data);
         var account=read(playerFile); assertEquals("false",account.get("eighteen")); assertEquals(array(),account.get("completed stages")); assertFalse(account.containsKey("account-skill-points-total")); assertFalse(account.containsKey("created-at"));
