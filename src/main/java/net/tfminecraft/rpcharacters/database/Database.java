@@ -148,11 +148,47 @@ public class Database {
 		if (online != null) {
 			return file.exists() ? loadPlayer(online) : new PlayerData(online);
 		}
+		return loadSavedAccount(readSavedAccount(uuid));
+	}
+
+	/** An account's saved files as text, read before any races or traits are resolved. */
+	public record SavedAccount(java.util.UUID uuid, String playerJson, long playerModifiedMs,
+			List<SavedCharacter> characters) {
+	}
+
+	public record SavedCharacter(File file, String json, long modifiedMs) {
+	}
+
+	/**
+	 * Reads an offline account's files without parsing them, so it is safe on any thread.
+	 * Returns null when the account file exists but cannot be read.
+	 */
+	public static SavedAccount readSavedAccount(java.util.UUID uuid) {
+		File file = new File("plugins/RPCharacters/data/playerdata", uuid.toString() + ".json");
 		if (!file.exists()) {
+			return new SavedAccount(uuid, null, -1L, List.of());
+		}
+		try {
+			long modifiedMs = file.lastModified();
+			String playerJson = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+			return new SavedAccount(uuid, playerJson, modifiedMs, readCharacterFiles(uuid));
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			return null;
+		}
+	}
+
+	/** Main thread only: resolves races and traits, which a reload rebuilds there. */
+	public PlayerData loadSavedAccount(SavedAccount saved) {
+		if (saved == null) {
+			return null;
+		}
+		java.util.UUID uuid = saved.uuid();
+		if (saved.playerJson() == null) {
 			return new PlayerData(uuid);
 		}
 		try {
-			json = readObject(file);
+			json = (JSONObject) parser.parse(saved.playerJson());
 			Long lastCharacterSwitchAtMs = null;
 			if (json.containsKey("last-character-switch-ms")) {
 				lastCharacterSwitchAtMs = ((Number) json.get("last-character-switch-ms")).longValue();
@@ -175,7 +211,7 @@ public class Database {
 					json.containsKey("created-at") ? ((Number) json.get("created-at")).intValue() : 0,
 					json.containsKey("account-playtime-seconds"),
 					json.containsKey("account-playtime-seconds") ? ((Number) json.get("account-playtime-seconds")).intValue() : 0,
-					file);
+					saved.playerModifiedMs());
 			Integer accountSkillPointsTotal = null;
 			if (json.containsKey("account-skill-points-total")) {
 				accountSkillPointsTotal = ((Number) json.get("account-skill-points-total")).intValue();
@@ -197,7 +233,9 @@ public class Database {
 				pd.setLastKitGrantAtMs(((Number) json.get("last-kit-grant-ms")).longValue());
 			}
 			pd.setPendingMmoAttributeRemoves(pendingMmoRemoves(json));
-			loadCharacters(pd);
+			for (SavedCharacter character : saved.characters()) {
+				loadCharacter(pd, character);
+			}
 			return pd;
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -266,99 +304,123 @@ public class Database {
 	}
 
 	public void loadCharacters(PlayerData pd) {
-		File folder = characterFolder(pd.getUniqueId());
+		for (SavedCharacter character : readCharacterFiles(pd.getUniqueId())) {
+			loadCharacter(pd, character);
+		}
+	}
+
+	private static List<SavedCharacter> readCharacterFiles(java.util.UUID uuid) {
+		File folder = characterFolder(uuid);
 		if (!folder.exists() || !folder.isDirectory()) {
-			return;
+			return List.of();
 		}
 		File[] files = folder.listFiles();
 		if (files == null) {
-			String message = "Could not list character files for " + pd.getUniqueId()
+			String message = "Could not list character files for " + uuid
 					+ " in " + folder.getAbsolutePath() + "; roster push will be skipped";
 			if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
 				net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().severe(message);
 			} else {
 				System.err.println("[RPCharacters] " + message);
 			}
-			return;
+			return List.of();
 		}
-	for (final File file : files) {
-            if (!file.isDirectory() && !isStagingFile(file)) {
-	try {
-				json = readObject(file);
-				String id = (String) json.get("id");
-				String name = (String) json.get("name");
-				Status status = Status.valueOf(((String) json.get("status")).toUpperCase(Locale.ROOT));
-				Boolean active = Boolean.parseBoolean(String.valueOf(json.get("active")));
-				Race r = RaceLoader.getByString((String) json.get("race"));
-					String mmoClass = json.containsKey("class") ? (String) json.get("class") : null;
-				if(r == null) {
-					r = RaceLoader.get().get(0);
-				}
-				List<Trait> traits = new ArrayList<Trait>();
-				int i = 0;
-				JSONArray traitArray = (JSONArray) json.get("traits");
-				while(i < traitArray.size()) {
-					Trait t = TraitLoader.getByString(traitArray.get(i).toString());
-					if(t != null) {
-						traits.add(t);
-					}
-					i++;
-				}
-				List<String> clues = new ArrayList<>();
-				if (json.containsKey("clues")) {
-					JSONArray clueArray = (JSONArray) json.get("clues");
-					int j = 0;
-					while (j < clueArray.size()) {
-						clues.add(clueArray.get(j).toString());
-						j++;
-					}
-				}
-				RPCharacter c = new RPCharacter(pd.getPlayer(), id, name, active, status, r, traits, mmoClass, clues);
-				int createdAtEpochSeconds = DurationParser.resolveCreatedAtEpochSeconds(
-						json.containsKey("created-at"),
-						json.containsKey("created-at") ? ((Number) json.get("created-at")).intValue() : 0,
-						json.containsKey("playtime-seconds"),
-						json.containsKey("playtime-seconds") ? ((Number) json.get("playtime-seconds")).intValue() : 0,
-						file);
-				c.setCreatedAtEpochSeconds(createdAtEpochSeconds);
-				if (json.containsKey("online-playtime-seconds")) {
-					c.setOnlinePlaytimeSeconds(((Number) json.get("online-playtime-seconds")).intValue());
-				}
-				c.setConversationCounts(loadConversationCounts(json));
-				c.setConversationLastAtMs(loadConversationLastAt(json));
-				loadPersonaFields(c, json);
-				loadProfessionFields(c, json);
-				loadExtraAttributeAllocation(c, json);
-				loadTraitState(c, json);
-				loadLastLocation(c, json);
-				loadPvpLethal(c, json);
-				CharacterEvilRpFields.load(c, json);
-				CharacterStageChangeFields.load(c, json);
-				CharacterClassPickFields.load(c, json);
-				loadNutritionFields(c, json);
-				c.ensureTraitStateDefaults();
-				if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
-					c.update();
-				}
-				if (c.getSlug() == null || c.getSlug().isBlank()) {
-					pd.assignSlug(c);
-				}
-				pd.addCharacter(c);
-					net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
+		List<SavedCharacter> characters = new ArrayList<>();
+		for (final File file : files) {
+			if (file.isDirectory() || isStagingFile(file)) {
+				continue;
+			}
+			try {
+				long modifiedMs = file.lastModified();
+				String contents = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+				characters.add(new SavedCharacter(file, contents, modifiedMs));
 			} catch (Exception ex) {
-				String message = "Skipped character file " + file.getAbsolutePath()
-						+ " for " + pd.getUniqueId() + "; it stays on disk and will not be removed from the website roster";
-				if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
-					net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
-							java.util.logging.Level.SEVERE, message, ex);
-				} else {
-					System.err.println("[RPCharacters] " + message);
-					ex.printStackTrace();
+				logSkippedCharacter(uuid, file, ex);
+			}
+		}
+		return characters;
+	}
+
+	private static void logSkippedCharacter(java.util.UUID uuid, File file, Exception ex) {
+		String message = "Skipped character file " + file.getAbsolutePath()
+				+ " for " + uuid + "; it stays on disk and will not be removed from the website roster";
+		if (net.tfminecraft.rpcharacters.RPCharacters.plugin != null) {
+			net.tfminecraft.rpcharacters.RPCharacters.plugin.getLogger().log(
+					java.util.logging.Level.SEVERE, message, ex);
+		} else {
+			System.err.println("[RPCharacters] " + message);
+			ex.printStackTrace();
+		}
+	}
+
+	private void loadCharacter(PlayerData pd, SavedCharacter saved) {
+		try {
+			json = (JSONObject) parser.parse(saved.json());
+			String id = (String) json.get("id");
+			String name = (String) json.get("name");
+			Status status = Status.valueOf(((String) json.get("status")).toUpperCase(Locale.ROOT));
+			Boolean active = Boolean.parseBoolean(String.valueOf(json.get("active")));
+			Race r = RaceLoader.getByString((String) json.get("race"));
+				String mmoClass = json.containsKey("class") ? (String) json.get("class") : null;
+			if(r == null) {
+				r = RaceLoader.get().get(0);
+			}
+			List<Trait> traits = new ArrayList<Trait>();
+			int i = 0;
+			JSONArray traitArray = (JSONArray) json.get("traits");
+			while(i < traitArray.size()) {
+				Trait t = TraitLoader.getByString(traitArray.get(i).toString());
+				if(t != null) {
+					traits.add(t);
+				}
+				i++;
+			}
+			List<String> clues = new ArrayList<>();
+			if (json.containsKey("clues")) {
+				JSONArray clueArray = (JSONArray) json.get("clues");
+				int j = 0;
+				while (j < clueArray.size()) {
+					clues.add(clueArray.get(j).toString());
+					j++;
 				}
 			}
-            }
-        }
+			RPCharacter c = new RPCharacter(pd.getPlayer(), id, name, active, status, r, traits, mmoClass, clues);
+			int createdAtEpochSeconds = DurationParser.resolveCreatedAtEpochSeconds(
+					json.containsKey("created-at"),
+					json.containsKey("created-at") ? ((Number) json.get("created-at")).intValue() : 0,
+					json.containsKey("playtime-seconds"),
+					json.containsKey("playtime-seconds") ? ((Number) json.get("playtime-seconds")).intValue() : 0,
+					saved.modifiedMs());
+			c.setCreatedAtEpochSeconds(createdAtEpochSeconds);
+			if (json.containsKey("online-playtime-seconds")) {
+				c.setOnlinePlaytimeSeconds(((Number) json.get("online-playtime-seconds")).intValue());
+			}
+			c.setConversationCounts(loadConversationCounts(json));
+			c.setConversationLastAtMs(loadConversationLastAt(json));
+			loadPersonaFields(c, json);
+			loadProfessionFields(c, json);
+			loadExtraAttributeAllocation(c, json);
+			loadTraitState(c, json);
+			loadLastLocation(c, json);
+			loadPvpLethal(c, json);
+			CharacterEvilRpFields.load(c, json);
+			CharacterStageChangeFields.load(c, json);
+			CharacterClassPickFields.load(c, json);
+			loadNutritionFields(c, json);
+			c.ensureTraitStateDefaults();
+			if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
+				c.update();
+			}
+			if (c.getSlug() == null || c.getSlug().isBlank()) {
+				pd.assignSlug(c);
+			}
+			pd.addCharacter(c);
+			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
+		} catch (Exception ex) {
+			logSkippedCharacter(pd.getUniqueId(), saved.file(), ex);
+		}
 	}
+
 	public void savePlayer(PlayerData pd) {
 		trySavePlayer(pd);
 	}

@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -48,10 +49,29 @@ public final class RosterSyncService {
 			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> pushRosterAsync(playerUuid));
 			return;
 		}
-		Runnable push = prepare(playerUuid);
-		if (push != null) {
-			Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, push);
+		Player online = Bukkit.getPlayer(playerUuid);
+		BukkitScheduler scheduler = Bukkit.getScheduler();
+		if (online != null && PlayerManager.exists(online)) {
+			Roster roster = liveRoster(online);
+			if (roster != null) {
+				scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> send(roster));
+			}
+			return;
 		}
+		AccountLimits limits = online != null ? AccountLimits.of(online) : null;
+		scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> {
+			Database.SavedAccount saved = Database.readSavedAccount(playerUuid);
+			if (saved == null) {
+				return;
+			}
+			// A reload rebuilds races and traits on the main thread, so resolve saved characters there.
+			scheduler.runTask(RPCharacters.plugin, () -> {
+				Roster roster = savedRoster(saved, limits);
+				if (roster != null) {
+					scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> send(roster));
+				}
+			});
+		});
 	}
 
 	public static void pushRosterForPlayer(Player player) {
@@ -82,34 +102,30 @@ public final class RosterSyncService {
 			pushRosterAsync(playerUuid);
 			return;
 		}
-		Runnable push = prepare(playerUuid);
-		if (push != null) {
-			push.run();
+		Player online = Bukkit.getPlayer(playerUuid);
+		Roster roster;
+		if (online != null && PlayerManager.exists(online)) {
+			roster = liveRoster(online);
+		} else {
+			AccountLimits limits = online != null ? AccountLimits.of(online) : null;
+			roster = savedRoster(Database.readSavedAccount(playerUuid), limits);
+		}
+		if (roster != null) {
+			send(roster);
 		}
 	}
 
-	/**
-	 * Main thread only. Reads live character data now and returns the disk check and upload,
-	 * which are safe to run on any thread. Offline accounts are loaded from disk in that work.
-	 */
-	private static Runnable prepare(UUID playerUuid) {
-		Player online = Bukkit.getPlayer(playerUuid);
-		AccountLimits limits = online != null ? AccountLimits.of(online) : null;
-		if (online != null && PlayerManager.exists(online)) {
-			PlayerData pd = PlayerManager.get(online);
-			if (pd == null) {
-				return null;
-			}
-			Roster roster = build(playerUuid, pd, limits);
-			return () -> send(roster);
-		}
-		return () -> {
-			// Database keeps parser state per instance, so concurrent loads each need their own.
-			PlayerData pd = new Database().loadPlayerData(playerUuid);
-			if (pd != null) {
-				send(build(playerUuid, pd, limits));
-			}
-		};
+	/** Main thread only. Reads a loaded player's live characters. */
+	private static Roster liveRoster(Player online) {
+		PlayerData pd = PlayerManager.get(online);
+		return pd == null ? null : build(online.getUniqueId(), pd, AccountLimits.of(online));
+	}
+
+	/** Main thread only. Resolves an offline account's saved races and traits against the current registries. */
+	private static Roster savedRoster(Database.SavedAccount saved, AccountLimits limits) {
+		// Database keeps parser state per instance, so each load gets its own.
+		PlayerData pd = new Database().loadSavedAccount(saved);
+		return pd == null ? null : build(pd.getUniqueId(), pd, limits);
 	}
 
 	private record AccountLimits(int maxAliveCharacters, int nameColourStops, int wardrobeSkinSlots) {

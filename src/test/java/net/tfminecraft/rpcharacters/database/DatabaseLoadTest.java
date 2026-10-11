@@ -94,6 +94,14 @@ class DatabaseLoadTest extends DatabaseFixture {
         } finally {Files.setPosixFilePermissions(characterFolder,permissions);}
     }
 
+    @Test void unreadableFilesAreSkippedBeforeAnyParsing() throws Exception {
+        write(characterFile("good"),characterJson("good")); var locked=characterFolder.resolve("locked.json"); Files.writeString(locked,"{}"); Files.setPosixFilePermissions(locked,PosixFilePermissions.fromString("---------"));
+        var saved=Database.readSavedAccount(owner); assertNull(saved.playerJson()); assertTrue(saved.characters().isEmpty());
+        write(playerFile,obj("completed stages",array())); saved=Database.readSavedAccount(owner); assertEquals(List.of("good.json"),saved.characters().stream().map(c->c.file().getName()).toList());
+        verify(logger).log(eq(Level.SEVERE),contains("Skipped character file"),any(Throwable.class)); assertEquals(List.of("good"),db.loadSavedAccount(saved).getCharacters().stream().map(RPCharacter::getId).toList());
+        Files.delete(playerFile); Files.createDirectory(playerFile); assertNull(Database.readSavedAccount(owner)); assertNull(db.loadSavedAccount(null)); assertNull(db.loadPlayerData(owner)); Files.delete(playerFile);
+    }
+
     @Test void malformedCharactersStayOnDiskAndDoNotPreventHealthySiblingsLoading() throws Exception {
         Files.createDirectories(characterFolder); Files.createDirectory(characterFolder.resolve("folder")); var broken=characterFolder.resolve("broken.json"); Files.writeString(broken,"not-json"); write(characterFile("good"),characterJson("good"));
         var data=new PlayerData(owner); db.loadCharacters(data); assertEquals(List.of("good"),data.getCharacters().stream().map(RPCharacter::getId).toList()); assertEquals("not-json",Files.readString(broken));

@@ -71,14 +71,21 @@ public final class DurationParser {
 	 */
 	public static int resolveCreatedAtEpochSeconds(boolean hasCreatedAt, int createdAt, boolean hasLegacy, int legacy,
 			java.io.File sourceFile) {
+		return resolveCreatedAtEpochSeconds(hasCreatedAt, createdAt, hasLegacy, legacy,
+				sourceFile != null && sourceFile.exists() ? sourceFile.lastModified() : -1L);
+	}
+
+	/** As above, with the source file's modification time already read; negative means no file. */
+	public static int resolveCreatedAtEpochSeconds(boolean hasCreatedAt, int createdAt, boolean hasLegacy, int legacy,
+			long sourceModifiedMs) {
 		if (hasCreatedAt) {
 			return Math.max(0, createdAt);
 		}
 		if (hasLegacy && legacy >= EPOCH_THRESHOLD) {
 			return legacy;
 		}
-		if (sourceFile != null && sourceFile.exists()) {
-			return (int) Math.max(0L, sourceFile.lastModified() / 1000L);
+		if (sourceModifiedMs >= 0L) {
+			return (int) Math.max(0L, sourceModifiedMs / 1000L);
 		}
 		return (int) (System.currentTimeMillis() / 1000L);
 	}
