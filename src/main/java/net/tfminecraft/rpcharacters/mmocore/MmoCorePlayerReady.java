@@ -92,6 +92,10 @@ public final class MmoCorePlayerReady implements Listener {
 				PENDING.remove(id);
 				RPCharacters.plugin.getLogger().warning(
 						"MMOCore player data did not finish loading in time for " + id);
+                Player player = Bukkit.getPlayer(id);
+                if (RPCharacters.getCharacterTransitions() != null && player != null && player.isOnline()) {
+                    player.kickPlayer("Your character setup could not finish. Please reconnect or contact staff.");
+                }
 				return;
 			}
 			poll(id, tick + 1, generation);

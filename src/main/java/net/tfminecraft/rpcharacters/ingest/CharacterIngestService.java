@@ -430,6 +430,7 @@ public final class CharacterIngestService {
 			}
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.remove(createId);
 			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.remove(pd.getUniqueId(), createId);
+			net.tfminecraft.rpcharacters.identity.CharacterIdentityService.removed(pd.getUniqueId(), createId);
 			return ApplyOutcome.fail("could not save player data");
 		}
 

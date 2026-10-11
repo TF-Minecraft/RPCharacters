@@ -91,6 +91,15 @@ public class RPCharacter {
 	private Double lastLocationX;
 	private Double lastLocationY;
 	private Double lastLocationZ;
+	private java.time.Instant lastPlayedAt;
+	private UUID deathId;
+	private java.time.Instant diedAt;
+
+	public java.time.Instant getLastPlayedAt() { return lastPlayedAt; }
+	public void setLastPlayedAt(java.time.Instant at) { lastPlayedAt = at; }
+	public UUID getDeathId() { return deathId; }
+	public java.time.Instant getDiedAt() { return diedAt; }
+	public void setDeathRecord(UUID id, java.time.Instant at) { deathId = id; diedAt = at; }
 
 	/** Default lethal (vanilla death). Missing JSON key loads as true. */
 	private boolean pvpLethal = true;
@@ -400,6 +409,10 @@ public class RPCharacter {
 	public Boolean isActive() {
 		return active;
 	}
+	/** Persistence state; CharacterTransitions applies the corresponding gameplay changes. */
+	public void setActiveState(boolean active) {
+		this.active = active;
+	}
 	public boolean hasMMOClass() {
 		return mmoClass != null;
 	}
@@ -421,6 +434,14 @@ public class RPCharacter {
 
 	public void activate() {
 		syncMMOClass(true);
+		finishActivation();
+	}
+	public boolean tryActivate() {
+		if (!syncMMOClass(true)) return false;
+		finishActivation();
+		return true;
+	}
+	private void finishActivation() {
 		Database.log(owner, "Activated the character "+name);
 		active = true;
 		AttributePointService.syncOnActivate(this);

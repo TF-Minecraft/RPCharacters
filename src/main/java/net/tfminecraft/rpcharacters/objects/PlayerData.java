@@ -10,15 +10,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.identity.CharacterSlug;
 import net.tfminecraft.rpcharacters.enums.Status;
-import net.tfminecraft.rpcharacters.utils.ProstheticTraitRules;
-import net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle;
-import net.tfminecraft.rpcharacters.mail.MailRecipientDirectory;
 
 public class PlayerData {
 	private Player p;
@@ -452,32 +448,7 @@ public class PlayerData {
 
 	/** {@code ended} is a character already deactivated, such as one just permakilled, so listeners can save it. */
 	public void setActiveCharacter(RPCharacter c, RPCharacter ended) {
-		if (c == null) {
-			return;
-		}
-		boolean stripped = ProstheticTraitRules.stripReplacedInjuries(c);
-		RPCharacter current = getActiveCharacter();
-		if (current != null && current.getId() != null && current.getId().equals(c.getId())) {
-			if (stripped) {
-				c.update();
-			}
-			return;
-		}
-		// A temporary alias belongs to the character it was set on.
-		clearTempAlias();
-		Player player = resolveOnlinePlayer();
-		if (current != null && player != null) {
-			current.stampLastLocation(player.getLocation());
-			MailRecipientDirectory.upsert(uniqueId, current);
-		}
-		for(RPCharacter ch : characters) {
-			if(ch.isActive()) {
-				ch.deactivate();
-				recordCharacterSwitch();
-			}
-		}
-		c.activate();
-		CharacterLifecycle.fireActivated(player, uniqueId, c, current != null ? current : ended);
+		net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.switchCharacter(this, c, ended);
 	}
 
 	public void setPendingMmoAttributeRemoves(List<String> pending) {
@@ -495,11 +466,5 @@ public class PlayerData {
 		return taken;
 	}
 
-	private Player resolveOnlinePlayer() {
-		if (p != null) {
-			return p;
-		}
-		return Bukkit.getPlayer(uniqueId);
-	}
 	
 }

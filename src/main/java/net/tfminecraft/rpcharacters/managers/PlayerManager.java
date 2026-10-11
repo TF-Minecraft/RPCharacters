@@ -336,6 +336,11 @@ public class PlayerManager implements Listener{
 	@EventHandler
 	public void onLeave(PlayerQuitEvent e) {
 		Player p = e.getPlayer();
+		PlayerData outgoing = get(p);
+		if (outgoing != null && RPCharacters.getCharacterTransitions() != null) {
+			RPCharacters.getCharacterTransitions().leave(outgoing,
+					net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason.QUIT);
+		}
 		net.tfminecraft.rpcharacters.clues.discovery.ClueDiscoveryVisualManager.get().clearViewer(p.getUniqueId());
 		net.tfminecraft.rpcharacters.grave.GraveVisualManager.get().clearViewer(p.getUniqueId());
 		net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService.clear(p);
@@ -383,8 +388,24 @@ public class PlayerManager implements Listener{
 				return;
 			}
 			final PlayerData loaded = pd;
+			if (RPCharacters.getCharacterIdentity() != null) {
+				var saved = RPCharacters.getCharacterIdentity().characters(p.getUniqueId());
+				if (saved.isEmpty() || saved.get().size() != loaded.getCharacters().size()
+						|| saved.get().stream().anyMatch(info -> loaded.getCharacters().stream().noneMatch(
+								character -> info.ref().characterId().toString().equalsIgnoreCase(character.getId())))) {
+					p.kickPlayer("Your character records need repair. Please contact staff.");
+					return;
+				}
+			}
 			data.add(loaded);
+			if (RPCharacters.getCharacterTransitions() != null) RPCharacters.getCharacterTransitions().beginJoin(loaded);
 			boolean dirty = ProstheticTraitRules.sanitize(loaded);
+			for (RPCharacter character : loaded.getCharacters()) {
+				if (character.isActive() && character.getStatus() != Status.ALIVE) {
+					character.setActiveState(false);
+					dirty = true;
+				}
+			}
 			// On join only, not on offline loads, which may never be saved. A settled hold is saved on
 			// the normal schedule, the same way DenarEconomy saves the online balance it changed.
 			for (RPCharacter c : loaded.getCharacters()) {
@@ -432,6 +453,9 @@ public class PlayerManager implements Listener{
 			} else if (RPCharacters.plugin != null) {
 				RPCharacters.plugin.getLogger().warning("MMOCore attributes for " + p.getName()
 						+ " were unavailable after " + attempt + " retries; pending removals retained");
+				if (RPCharacters.getCharacterTransitions() != null) {
+					p.kickPlayer("Your character setup could not finish. Please reconnect or contact staff.");
+				}
 			}
 			return;
 		}
@@ -456,13 +480,18 @@ public class PlayerManager implements Listener{
 				if (RPCharacters.plugin != null) {
 					RPCharacters.plugin.getLogger().warning(
 							"Class for " + p.getName() + " was not applied after "
-									+ attempt + " retries; continuing join setup");
+									+ attempt + " retries");
+				}
+				if (RPCharacters.getCharacterTransitions() != null) {
+					p.kickPlayer("Your character setup could not finish. Please reconnect or contact staff.");
+					return;
 				}
 			}
 			AttributePointService.syncOnActivate(active);
 			net.tfminecraft.rpcharacters.professions.ProfessionIntegrator.apply(p, active);
-			net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireActivated(
-					p, pd.getUniqueId(), active, null);
+			if (RPCharacters.getCharacterTransitions() == null) {
+				net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireActivated(p, pd.getUniqueId(), active, null);
+			}
 		} else {
 			net.Indyuce.mmocore.api.player.PlayerData.get(p).setAttributePoints(0);
 		}
@@ -472,6 +501,7 @@ public class PlayerManager implements Listener{
 		ClassService.sanitizeForeignSkillLevels(p);
 		net.tfminecraft.rpcharacters.professions.ProfessionPointService.bootstrapLifetimeFromMmoCore(p);
 		ClassService.applyFreeSkillPoints(p);
+		if (RPCharacters.getCharacterTransitions() != null) RPCharacters.getCharacterTransitions().ready(pd);
 	}
 	public void confirmClick(Player p, RPCharacter c, ConfirmType t) {
 		if(t.equals(ConfirmType.KILL)) {

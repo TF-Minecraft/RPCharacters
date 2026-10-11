@@ -125,6 +125,17 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
 public class RPCharacters extends JavaPlugin{
 	public static RPCharacters plugin;
+	private net.tfminecraft.rpcharacters.identity.CharacterIdentityService characterIdentity;
+	private net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions characterTransitions;
+
+	public static net.tfminecraft.rpcharacters.identity.CharacterIdentityService getCharacterIdentity() {
+		return plugin == null ? null : plugin.characterIdentity;
+	}
+
+	public static net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions getCharacterTransitions() {
+		return plugin == null ? null : plugin.characterTransitions;
+	}
+
 	private net.tfminecraft.rpcharacters.focus.FocusModule focusModule;
 	
 	private final CommandManager commandManager = new CommandManager();
@@ -255,9 +266,20 @@ public class RPCharacters extends JavaPlugin{
 				getDataFolder().toPath().resolve("data/characterdata"), getLogger()::warning);
 		GraveManager.get().loadAll();
 		MailRecipientDirectory.scanFromDisk();
-		loadPlayers();
+		try {
+			var directory = net.tfminecraft.rpcharacters.identity.CharacterDirectory.load(
+					getDataFolder().toPath().resolve("data"), getLogger()::warning);
+			characterTransitions = new net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions(
+					new net.tfminecraft.rpcharacters.database.Database(), directory);
+			characterIdentity = new net.tfminecraft.rpcharacters.identity.CharacterIdentityService(directory, characterTransitions);
+			getServer().getServicesManager().register(net.tfminecraft.tlibs.character.CharacterIdentity.class,
+					characterIdentity, this, org.bukkit.plugin.ServicePriority.Normal);
+		} catch (java.io.IOException ex) {
+			throw new IllegalStateException("Could not load the character directory", ex);
+		}
 		focusModule = new net.tfminecraft.rpcharacters.focus.FocusModule(this);
 		focusModule.start();
+		loadPlayers();
 		var focusCommand = new net.tfminecraft.rpcharacters.focus.FocusCommand(this);
 		getCommand("focus").setExecutor(focusCommand);
 		getCommand("focus").setTabCompleter(focusCommand);
@@ -287,6 +309,10 @@ public class RPCharacters extends JavaPlugin{
 	}
 	@Override
 	public void onDisable() {
+		if (characterTransitions != null) characterTransitions.shutdown();
+		if (characterIdentity != null) getServer().getServicesManager().unregister(characterIdentity);
+		characterIdentity = null;
+		characterTransitions = null;
 		CodexPopulationService.stop();
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(

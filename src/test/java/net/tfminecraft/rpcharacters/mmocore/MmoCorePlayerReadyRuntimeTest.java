@@ -73,6 +73,17 @@ class MmoCorePlayerReadyRuntimeTest {
         MmoCorePlayerReady.runWhenLoaded(player, calls::incrementAndGet); assertEquals(1, calls.get());
     }
 
+    @Test void timeoutDisconnectsWhenTheIdentityProviderRequiresAReadySession() {
+        try (var plugin = mockStatic(RPCharacters.class)) {
+            plugin.when(RPCharacters::getCharacterTransitions).thenReturn(mock(net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.class));
+            MmoCorePlayerReady.runWhenLoaded(player, calls::incrementAndGet);
+            server.getScheduler().performTicks(105);
+            assertFalse(player.isOnline());
+            assertEquals(0, calls.get());
+            assertEquals(0, queued());
+        }
+    }
+
     @Test void cancellationStopsPollingWithoutWaitingForTheTimeout() {
         MmoCorePlayerReady.runWhenLoaded(player, calls::incrementAndGet);
         MmoCorePlayerReady.cancel(player.getUniqueId()); server.getScheduler().performTicks(2);

@@ -8,11 +8,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.rpcharacters.lifecycle.CharacterActivatedEvent;
+import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.tlibs.character.CharacterSessionStartEvent;
+import net.tfminecraft.tlibs.character.CharacterSessionEndEvent;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.tlibs.TLibs;
 
@@ -25,19 +26,16 @@ public final class FocusListener implements Listener {
     }
 
     @EventHandler
-    public void onCharacterActivated(CharacterActivatedEvent event) {
-        Player owner = event.getOwner();
-        if (owner == null || event.getCharacter() == null) {
-            return;
+    public void onSessionStart(CharacterSessionStartEvent event) {
+        Player owner = event.getPlayer();
+        var character = RPCharacters.getActiveCharacter(owner);
+        if (character != null && event.getSession().ref().characterId().toString().equalsIgnoreCase(character.getId())) {
+            service.activate(owner, character);
         }
-        if (event.getPrevious() != null) {
-            service.savePrevious(owner, event.getPrevious());
-        }
-        service.activate(owner, event.getCharacter());
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
+    public void onSessionEnd(CharacterSessionEndEvent event) {
         service.deactivate(event.getPlayer());
     }
 
