@@ -225,6 +225,9 @@ public final class PermadeathService {
 		if (wasActive) {
 			character.deactivate();
 			PlayerData pd = PlayerManager.get(player);
+			if (pd != null) {
+				pd.clearTempAlias();
+			}
 			if (pd != null && pd.getCharacters(Status.ALIVE).size() > 0) {
 				RPCharacter replacement = pd.getCharacters(Status.ALIVE).get(0);
 				pd.setActiveCharacter(replacement);

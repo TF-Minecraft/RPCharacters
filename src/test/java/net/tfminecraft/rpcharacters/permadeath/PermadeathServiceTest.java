@@ -138,6 +138,11 @@ class PermadeathServiceTest extends PermadeathRuntimeFixture {
         runTask();verify(player).setHealth(0);die();strikes.verifyNoInteractions();assertTrue(next.getTraits().isEmpty());
     }
 
+    @Test void killingTheActiveCharacterEndsItsTemporaryAlias() {
+        data.setTempAlias("Stranger");assertTrue(PermadeathService.killCharacter(player,character,PermakillCause.COMMAND));assertNull(data.getTempAlias());
+        RPCharacter next=character("Bryn",false);data.addCharacter(next);data.setActiveCharacter(next);data.setTempAlias("Wanderer");RPCharacter inactive=character("Other",false);data.addCharacter(inactive);assertTrue(PermadeathService.killCharacter(player,inactive));assertEquals("Wanderer",data.getTempAlias());
+    }
+
     @Test void activeCharacterWithMissingPlayerDataStillDiesAndSaves() {
         loaded.clear();assertTrue(PermadeathService.killCharacter(player,character,PermakillCause.COMMAND));assertFalse(character.isActive());verify(player).sendTitle(anyString(),contains("no active character"),eq(10),eq(400),eq(20));verify(manager).savePlayer(player);
     }

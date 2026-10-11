@@ -97,6 +97,11 @@ class PlayerDataRuntimeTest {
             data.setActiveCharacter(second); assertEquals(List.of(replacement), second.getTraits()); assertEquals(3, second.getAttributeData().getAmount(new AttributeModifier("strength", 0))); assertSame(second, data.getActiveCharacter());
         }
     }
+    @Test void aTemporaryAliasEndsWhenTheActiveCharacterChanges() {
+        RPCharacter first = character("First"), second = character("Second"); PlayerData data = new PlayerData(player.getUniqueId()); data.addCharacter(first); data.addCharacter(second); data.bindPlayer(player); data.setActiveCharacter(first);
+        data.setTempAlias("Stranger"); data.setActiveCharacter(first); assertEquals("Stranger", data.getTempAlias());
+        data.setActiveCharacter(second); assertNull(data.getTempAlias()); data.setActiveCharacter(first); assertNull(data.getTempAlias());
+    }
     @Test void attributeDataSeedsAliasesAndCombinesExperienceAndAttributeDeltasWithoutSharing() {
         Cache.attributes = new ArrayList<>(List.of("strength")); Cache.professions = new ArrayList<>(List.of("mining(Miner)", "fishing")); Cache.startingProfessionFactor = 10;
         AttributeData data = new AttributeData(); assertTrue(data.hasModifiers()); assertEquals("Miner", data.getExperienceModifiers().get(0).getAlias()); assertEquals("fishing", data.getExperienceModifiers().get(1).getAlias());
