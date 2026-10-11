@@ -41,8 +41,32 @@ class RemainingStagesTest extends StageFixture {
     @Test void setterNameCapitalizationDoesNotDependOnTurkishHostLocale(){Locale.setDefault(Locale.forLanguageTag("tr-TR"));assertEquals("Arianna",setter("name").capitalizeWords("ARIANNA"));}
 
     @Test void setterRealAgePersistsOnlyOutsidePreviewAndRejectsUnknownAnswers(){
-        var stage=setter("real_age");stage.finish("maybe",player,creation);assertTrue(later.isEmpty());stage.finish("yes",player,creation);verify(playerData).setEighteen(true);verify(manager).savePlayer(player);roster.verify(() -> RosterSyncService.pushRosterForPlayer(player));stage.execute(player,creation);stage.finish("no",player,creation);verify(playerData).setEighteen(false);verify(manager,times(2)).savePlayer(player);
-        when(creation.isPreview()).thenReturn(true);stage.execute(player,creation);stage.finish("yes",player,creation);stage.execute(player,creation);stage.finish("no",player,creation);verify(manager,times(2)).savePlayer(player);assertEquals(4,later.size());
+        var stage = setter("real_age");
+        stage.execute(player, creation);
+        stage.finish("maybe", player, creation);
+        assertTrue(later.isEmpty());
+        verify(playerData, never()).addCompletedStage(any());
+        verify(manager, never()).savePlayer(player);
+        for (String answer : List.of("yes", "no")) {
+            stage.execute(player, creation);
+            stage.finish(answer, player, creation);
+            var order = inOrder(playerData, manager);
+            order.verify(playerData).setEighteen(answer.equals("yes"));
+            order.verify(playerData).addCompletedStage(stage);
+            order.verify(manager).savePlayer(player);
+            clearInvocations(playerData, manager);
+        }
+        roster.verify(() -> RosterSyncService.pushRosterForPlayer(player), times(2));
+        // Both the answer and completion are durable before delayed advancement.
+        assertEquals(2, later.size());
+        when(creation.isPreview()).thenReturn(true);
+        for (String answer : List.of("yes", "no")) {
+            stage.execute(player, creation);
+            stage.finish(answer, player, creation);
+        }
+        verifyNoInteractions(playerData, manager);
+        roster.verify(() -> RosterSyncService.pushRosterForPlayer(player), times(2));
+        assertEquals(4, later.size());
     }
 
     @Test void setterDescriptionAndRaceAgeValidateBeforeWriting(){
