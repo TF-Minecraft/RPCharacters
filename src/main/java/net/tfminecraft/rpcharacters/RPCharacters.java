@@ -287,9 +287,11 @@ public class RPCharacters extends JavaPlugin{
 				partyChatRecipientResolver);
 		realmChatDependencyListener.registerIfPresent();
 		registerPlaceholderApi();
+		net.tfminecraft.rpcharacters.plots.Plots.start(this);
 	}
 	@Override
 	public void onDisable() {
+		net.tfminecraft.rpcharacters.plots.Plots.stop();
 		CodexPopulationService.stop();
 		if (focusModule != null) focusModule.shutdown();
 		ChatRecipientResolverRegistry.unregister(

@@ -1,0 +1,185 @@
+# Character plots. Every character's Intrigue is rolled once for life with the Spymaster formula
+# (SimpleFactions special-positions.yml); characters that already rolled as Spymaster keep their roll.
+# A player requests a plot in the Plots menu (/plot or the Character Info menu) and opens a ticket
+# with its code. Staff link the target with /plot approve <code> <target player>.
+# Times are real days. New keys are added to this file on startup; reload with /plot reload.
+staff-permission: rpchar.plots.staff
+# An unapproved request is dropped after this many days.
+request-expiry-days: 7.0
+# The plot master must recruit and start the plot within this many days, or it dissolves and that
+# player (any of their characters) cannot target the same character again for retarget-cooldown-days.
+recruiting-days: 7.0
+retarget-cooldown-days: 7.0
+# Proposals happen in person: the plot master must stand within this many blocks. The proposal names
+# no target; only those who accept learn it.
+invite-radius: 8
+invite-minutes: 10
+# Conspirators besides the plot master. Recruits wait without a role until the master gives them one,
+# so a plot holds at most max-assassins + max-collaborators members. Each player takes part in one plot.
+roles:
+  max-assassins: 2
+  max-collaborators: 2
+# Messages kept for a character who is not being played, until they are. Older ones are dropped first.
+notice-limit: 30
+checks:
+  # Every plot roll = Intrigue x intrigue-multiplier + luck averaged over luck-draws draws of
+  # -luck-spread to +luck-spread. Averaging makes extreme luck rare but possible.
+  intrigue-multiplier: 1.25
+  luck-spread: 75
+  luck-draws: 3
+approach:
+  # Intrigue added to a character's plotting (offense) and to their defence against plots.
+  change-cooldown-hours: 24.0
+  offensive:
+    offense: 15
+    defense: 0
+  neutral:
+    offense: 8
+    defense: 8
+  defensive:
+    offense: 0
+    defense: 15
+defense:
+  # Protection when a character watches out for themselves: alone-share x their Intrigue.
+  alone-share: 0.5
+  # With a confidant (who serves only one character): (confidant-share x own Intrigue
+  # + confidant-share x the confidant's Intrigue) / 2.
+  confidant-share: 0.75
+  # With the faction Spymaster, who chooses which faction members to protect: spymaster-share x the
+  # Spymaster's office Intrigue.
+  spymaster-share: 1.0
+  confidant-change-cooldown-hours: 24.0
+  # A Spymaster or confidant hears of leaks first and decides whether to warn. If they have not been
+  # online for inactive-days, the character defends themselves and hears of leaks directly; the
+  # protection resumes when the protector returns.
+  inactive-days: 3.0
+building:
+  # The plot bar fills in about this many days at normal speed. Each day rolls its own luck.
+  days: 7.0
+  # A ready plot keeps losing secrecy, and the defender keeps rolling, every day it waits. If the
+  # plot master doesn't begin the final phase within ready-days, the plot fails.
+  ready-days: 7.0
+  luck-min: 0.5
+  luck-max: 1.5
+  # Speed added by each Progress collaborator at 100 Intrigue (0.5 = 50% faster).
+  progress-per-collaborator: 0.5
+  strength:
+    # Daily strength = Intrigue x weight for each member, times the day's luck.
+    master: 0.09
+    assassin: 0.055
+    strength-collaborator: 0.13
+    other-collaborator: 0.03
+    # The plot needs required-base + protection x required-per-protection by the time its bar fills.
+    required-base: 20.0
+    required-per-protection: 1.3
+  secrecy:
+    # Secrecy starts at 100 and falls every day by daily-loss + loss-per-member x members
+    # (master included), less hide-per-collaborator for each Hide collaborator at 100 Intrigue.
+    daily-loss: 1.5
+    loss-per-member: 1.5
+    hide-per-collaborator: 6.0
+    minimum-loss: 0.5
+    # Extra secrecy lost whenever the defender wins the daily roll.
+    leak-loss: 3.0
+  # A won defence roll tells more once secrecy is at or below these values. At 0 the names come out.
+  reveal:
+    member-count: 60.0
+    progress: 40.0
+    assassins: 20.0
+    # How progress is described: below early-progress "in its early days", below late-progress
+    # "well under way", otherwise "nearly complete".
+    early-progress: 34.0
+    late-progress: 67.0
+betrayal:
+  # A target's own Spymaster or confidant inside the plot: the plot moves this much faster and always
+  # has enough strength. A betraying Spymaster lets nothing leak before the final phase.
+  speed-multiplier: 2.0
+  spymaster-investigation-penalty: 40
+  confidant-investigation-penalty: 20
+  # Each building or waiting day, the betrayed character may sense it: their Intrigue roll against the
+  # betrayer's, which gets this much extra. Success tells them their protector's reports don't add up.
+  suspicion-difficulty: 20
+investigation:
+  # After the plot is launched, the target and up to max-investigators characters they choose
+  # (only if the target knows of the plot) roll once per conspirator they come near.
+  days: 3.0
+  radius: 6.0
+  scan-seconds: 5
+  max-investigators: 2
+  known-bonus: 15
+  unknown-penalty: 15
+  # A roll that wins by at least this margin gives the stronger hint.
+  strong-margin: 40
+  difficulty:
+    informed: 0
+    collaborator: 10
+    unassigned: 10
+    assassin: 20
+    master: 30
+  # {name} is the name the investigator sees (a mask hides the character). & colours and #rrggbb work.
+  hints:
+    informed:
+      weak: "&7&o{name} seems to know something they are not saying."
+      strong: "&7&o{name} looks at you a moment too long, as if they know what is coming."
+    collaborator:
+      weak: "&7&o{name} is acting strangely around you."
+      strong: "&7&o{name} is hiding something, and it concerns you."
+    unassigned:
+      weak: "&7&o{name} is acting strangely around you."
+      strong: "&7&o{name} is hiding something, and it concerns you."
+    assassin:
+      weak: "&7&oSomething about {name} unsettles you."
+      strong: "&7&o{name} watches you the way a hunter watches prey."
+    master:
+      weak: "&7&o{name} takes an unusual interest in your movements."
+      strong: "&7&o{name} carries themselves like someone with a plan, and you are part of it."
+execution:
+  # The hunt lasts this many hunt days. A day counts once the target has been findable for
+  # findable-minutes that day: online, playing the targeted character and out in the open. Days the
+  # target is offline, plays another character or stays underground don't count; days the assassins
+  # miss still do. When the hunt days run out, or max-days real days pass, the target survives and
+  # none of the plot's master and members may ever plot against that character again.
+  # A target who knows of the plot can't switch or create characters while hunted.
+  hunt-days: 4
+  findable-minutes: 30
+  max-days: 21.0
+  findable:
+    # Out in the open: no more than this many blocks below the highest block above them.
+    max-depth: 16
+    # Worlds where the target can be found. Empty means every world.
+    worlds: []
+  # A player killed this many seconds after another player's hit counts as killed by them.
+  hit-window-seconds: 120
+  # Only deaths while an assassin hunts count. Assassins start with /plot hunt or the Plots menu; the
+  # hunt takes effect after warmup-seconds, can't be called off for minimum-minutes, keeps their evil
+  # RP session running and blocks warbands and battles. Logging off or switching character ends it.
+  hunt:
+    warmup-seconds: 60
+    minimum-minutes: 10
+    # A target who knows of the plot is warned, if online, at the moment a hunt takes effect once the
+    # plot's secrecy is at or below this value. Never on login and never when a hunt ends.
+    alert-secrecy: 40.0
+  area:
+    # Every hunting assassin hears the target's rough area this often, rounded to a grid of size blocks.
+    interval-seconds: 120
+    size: 250
+  # When the target comes out in the open after at least sighting-gap-minutes unseen, every assassin
+  # online hears it, at most once per sighting-gap-minutes.
+  sighting-gap-minutes: 15
+  # Strength beyond what the plot needed sharpens the hunt, up to max-surplus times the requirement:
+  # the area grid and interval shrink in proportion, and every extra-day-per-surplus above 1 adds a hunt day.
+  max-surplus: 2.0
+  extra-day-per-surplus: 0.5
+  max-extra-days: 2
+  # A successful assassination leaves clues of the killer (and of hunting assassins within
+  # accomplice-radius) at the scene, for investigators to find.
+  crime-scene:
+    killer-clues: 2
+    accomplice-clues: 1
+    accomplice-radius: 16
+# The plot log (plugins/RPCharacters/plots/logs/<code>.log) records every plot action for staff.
+# While a plot runs, a conspirator coming within encounter-radius blocks of the target is logged at
+# most once per encounter-minutes per pair, so staff can see whether roleplay happened.
+log:
+  encounter-radius: 16
+  encounter-minutes: 10

@@ -486,6 +486,11 @@ public class PlayerManager implements Listener{
 				p.closeInventory();
 				return;
 			}
+			if (net.tfminecraft.rpcharacters.plots.PlotHunt.locked(p)) {
+				net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(p);
+				p.closeInventory();
+				return;
+			}
 			PlayerData pd = get(p);
 			pd.setActiveCharacter(c);
 			net.tfminecraft.rpcharacters.clues.discovery.ClueDiscoveryVisualManager.get().refreshViewer(p);
@@ -587,6 +592,10 @@ public class PlayerManager implements Listener{
 				}
 				if(i.getType().equals(Material.YELLOW_CONCRETE)) {
 					if(!p.equals(o)) return;
+					if (net.tfminecraft.rpcharacters.plots.PlotHunt.locked(p)) {
+						net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(p);
+						return;
+					}
 					if (!CharacterSlotService.isSlotUnlocked(o, slotIndex)) {
 						RPTexts.send(p, RPTexts.ERROR + "This character slot is locked.");
 						p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
@@ -679,6 +688,10 @@ public class PlayerManager implements Listener{
 				last.put(p, c);
 				InventoryManager inv = new InventoryManager();
 				inv.confirmView(p);
+			} else if (e.getSlot() == InventoryManager.PLOTS_SLOT) {
+				ItemStack clicked = e.getCurrentItem();
+				if (clicked == null || clicked.getType() != Material.IRON_SWORD || !p.equals(o)) return;
+				net.tfminecraft.rpcharacters.plots.PlotMenu.open(p);
 			} else if (e.getSlot() == InventoryManager.CLASS_PICK_SLOT) {
 				ItemStack clicked = e.getCurrentItem();
 				if (clicked == null || clicked.getItemMeta() == null || !p.equals(o) || !clicked.getItemMeta()

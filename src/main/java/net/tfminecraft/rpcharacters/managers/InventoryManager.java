@@ -67,6 +67,7 @@ public class InventoryManager {
 	private static final String SUMMARY_ACTION_KEY = "summary_action";
 	public static final String OPEN_CLASS_PICK_KEY = "open_class_pick";
 	public static final int CLASS_PICK_SLOT = 22;
+	public static final int SWITCH_SLOT = 6, INTRIGUE_SLOT = 20, PLOTS_SLOT = 24;
 
 	private static String t(String raw) {
 		return RPTexts.formatGui(raw);
@@ -98,6 +99,13 @@ public class InventoryManager {
 		}
 		if (c.getStatus().equals(Status.ALIVE) && c.isActive() && c.getOwner().equals(p) && ClassPickService.isEnabled()) {
 			i.setItem(CLASS_PICK_SLOT, getClassPickItem(c));
+		}
+		if (c.getStatus().equals(Status.ALIVE) && c.getOwner().equals(p)) {
+			i.setItem(INTRIGUE_SLOT, net.tfminecraft.rpcharacters.plots.PlotMenu.intrigueFor(p, c));
+			if (c.isActive()) i.setItem(PLOTS_SLOT, net.tfminecraft.rpcharacters.plots.PlotMenu.button());
+			// A character hunted by a plot they know of must face it: no switching away.
+			if (i.getItem(SWITCH_SLOT) != null && net.tfminecraft.rpcharacters.plots.PlotHunt.locked(p))
+				i.setItem(SWITCH_SLOT, net.tfminecraft.rpcharacters.plots.PlotMenu.lockedItem());
 		}
 		int slotn = 0;
 		while(slotn < i.getSize()) {

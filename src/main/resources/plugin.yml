@@ -8,6 +8,9 @@ depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
 softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions, GSit, Codex]
 
 commands:
+  plot:
+    description: Intrigue and character plots
+    aliases: [plots, intrigue]
   class:
     description: Choose your character's base class
     aliases: [c]
@@ -48,6 +51,9 @@ commands:
     usage: /<command>
     description: Open the online player list
 permissions:
+  rpchar.plots.staff:
+    description: Approve, deny, inspect, correct and end character plots, read their logs, and pass a plot's day for testing.
+    default: op
   rpchar.focus.admin:
     description: Restore character focus and reload focus configuration
     default: op

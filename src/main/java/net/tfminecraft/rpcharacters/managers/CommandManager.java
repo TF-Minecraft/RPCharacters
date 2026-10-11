@@ -222,6 +222,10 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.send(p, RPTexts.ERROR + "You don't have a free character slot!");
 					return true;
 				}
+				if (net.tfminecraft.rpcharacters.plots.PlotHunt.locked(p)) {
+					net.tfminecraft.rpcharacters.plots.PlotMenu.sendLocked(p);
+					return true;
+				}
 				CreationManager.initiateCreation(p);
 				return true;
 			} else if(cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("next") && args.length == 1) {

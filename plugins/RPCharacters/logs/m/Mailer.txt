@@ -1,0 +1,4 @@
+[2026-10-11 12:38] Set the status of the character Recipient 7e4aaaef-10cb-44f8-97aa-032add923e6a to DEAD
+[2026-10-11 12:38] Set the status of the character Recipient 7e4aaaef-10cb-44f8-97aa-032add923e6a to ALIVE
+[2026-10-11 12:38] Set the status of the character New name to DEAD
+[2026-10-11 12:38] Set the status of the character New name to ALIVE
