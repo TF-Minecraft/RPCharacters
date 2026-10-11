@@ -77,6 +77,7 @@ public class CharacterCreation {
 	
 
 	private List<Stage> stages = new ArrayList<>();
+	private final java.util.Set<Stage> pendingCompletedStages = new java.util.LinkedHashSet<>();
 
 	
 
@@ -695,8 +696,10 @@ public class CharacterCreation {
 
 		}
 
-		if (!s.shouldRepeat()) {
-			agePd.addCompletedStage(s);
+		// Real-age answers are saved by the setter; other one-time stages commit on finish.
+		if (!s.shouldRepeat() && !(s instanceof SetterStage setter
+				&& "real_age".equalsIgnoreCase(setter.getTarget()))) {
+			pendingCompletedStages.add(s);
 		}
 
 		if(s instanceof InfoStage) {
@@ -858,6 +861,7 @@ public class CharacterCreation {
 		StageRevisions.stampCurrent(character, StageLoader.oList);
 
 		pd.addCharacter(character);
+		pendingCompletedStages.forEach(pd::addCompletedStage);
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(p, pd.getUniqueId(), character);
 

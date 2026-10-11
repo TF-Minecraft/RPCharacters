@@ -111,6 +111,7 @@ public class SetterStage extends Stage{
 			if(n.equalsIgnoreCase("yes")) {
 				if (!cc.isPreview()) {
 					PlayerManager.get(p).setEighteen(true);
+					PlayerManager.get(p).addCompletedStage(this);
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}
@@ -118,6 +119,7 @@ public class SetterStage extends Stage{
 			} else if(n.equalsIgnoreCase("no")) {
 				if (!cc.isPreview()) {
 					PlayerManager.get(p).setEighteen(false);
+					PlayerManager.get(p).addCompletedStage(this);
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}

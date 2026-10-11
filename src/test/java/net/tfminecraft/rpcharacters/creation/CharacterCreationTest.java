@@ -347,7 +347,7 @@ class CharacterCreationTest {
         when(executable.getFirst().shouldRepeat()).thenReturn(false);
         CharacterCreation creation = draft();
         verifyExecuted(executable.getFirst(), creation);
-        verify(playerData).addCompletedStage(executable.getFirst());
+        verify(playerData, never()).addCompletedStage(any());
         for (int i = 1; i < executable.size(); i++) {
             creation.setCanNext(true);
             creation.runStage();
@@ -361,6 +361,25 @@ class CharacterCreationTest {
         verify((InfoStage) web, never()).execute(any(), any());
         creation.runStage();
         verify(lastInventory()).creationSummaryView(player, creation, (SummaryStage) executable.getLast());
+        creation.finish();
+        var order = inOrder(playerData, playerManager);
+        order.verify(playerData).addCompletedStage(executable.getFirst());
+        order.verify(playerManager).savePlayer(player);
+        verify(playerData, times(1)).addCompletedStage(any());
+    }
+
+    @Test
+    void cancelledOneTimePromptsAreAskedAgain() {
+        for (Class<? extends Stage> type : List.of(InfoStage.class, SetterStage.class)) {
+            Stage prompt = stage(type);
+            when(prompt.shouldRepeat()).thenReturn(false);
+            stages = new ArrayList<>(List.of(prompt));
+            CharacterCreation abandoned = draft();
+            abandoned.cancel();
+            verify(playerData, never()).addCompletedStage(any());
+            CharacterCreation retry = draft();
+            verifyExecuted(prompt, retry);
+        }
     }
 
     @Test
