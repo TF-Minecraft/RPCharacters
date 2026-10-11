@@ -22,9 +22,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
-import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
-
-import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -114,8 +111,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		if (previous != null) {
 			finish(previous);
 		}
-		takeOffRecentArmour(targets);
-		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets, armoured(targets));
+		PvpSituation situation = new PvpSituation(player.getUniqueId(), targets);
 		PvpSituations.track(situation);
 		tasksBySituation.put(situation, new ArrayList<>());
 
@@ -228,49 +224,6 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 	private void schedule(PvpSituation situation, BukkitTask task) {
 		List<BukkitTask> tasks = tasksBySituation.get(situation);
 		tasks.add(task);
-	}
-
-	/**
-	 * Everyone caught in an open fight keeps the armour they had when it was called.
-	 * Those in body armour may still put a helmet on.
-	 */
-	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-	public void onArmorEquip(ArmorEquipEvent event) {
-		Player player = event.getPlayer();
-		if (player == null || event.getNewArmorPiece() == null
-				|| !PvpSituations.locksArmour(player.getUniqueId(), event.getType())) {
-			return;
-		}
-		event.setCancelled(true);
-		RPTexts.send(player, PvpLoader.getArmourLocked());
-	}
-
-	/** Armour put on just before the fight was called hadn't been fastened yet. */
-	private void takeOffRecentArmour(List<UUID> targets) {
-		long now = System.currentTimeMillis();
-		for (UUID id : targets) {
-			Player online = Bukkit.getPlayer(id);
-			if (online == null || !ArmourDonning.takeOffRecent(online, now)) {
-				continue;
-			}
-			String notice = PvpLoader.getArmourStrippedOthers()
-					.replace("{name}", DisplayIdentityService.resolveDisplay(online));
-			List<UUID> others = new ArrayList<>(targets);
-			others.remove(id);
-			broadcast(others, notice);
-		}
-	}
-
-	/** Who is still in a chestplate, leggings and boots once recent armour is off. */
-	private static List<UUID> armoured(List<UUID> targets) {
-		List<UUID> armoured = new ArrayList<>();
-		for (UUID id : targets) {
-			Player online = Bukkit.getPlayer(id);
-			if (online != null && ArmourDonning.wearsBodyArmour(online)) {
-				armoured.add(id);
-			}
-		}
-		return armoured;
 	}
 
 	private void broadcast(List<UUID> targets, String raw) {

@@ -24,11 +24,10 @@ public final class PvpLoader implements LoaderInterface {
 	private static boolean strikeDecayEnabled = false;
 	private static int strikeDecayDays = 14;
 	private static int helmetDonSeconds = 1;
-	private static int chestplateDonSeconds = 20;
-	private static int leggingsDonSeconds = 12;
-	private static int bootsDonSeconds = 8;
+	private static int chestplateDonSeconds = 4;
+	private static int leggingsDonSeconds = 3;
+	private static int bootsDonSeconds = 2;
 	private static int donSlownessAmplifier = 1;
-	private static int recentArmourSeconds = 180;
 
 	private static String startWarning = "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes.";
 	private static String countdown = "&c{count}";
@@ -44,14 +43,11 @@ public final class PvpLoader implements LoaderInterface {
 	private static String noCharacter = "&cYou need an active character to set PvP mode.";
 	private static String current = "&7This character's PvP mode: {mode}";
 	private static String playersOnly = "&cPlayers only.";
-	private static String armourLocked = "&cYou can't put armour on during a PvP situation.";
 	private static String donProgress = "&eFastening your {piece} &7[{bar}&7] &f{seconds}s{queued}";
 	private static String donQueued = " &7(+{count} queued)";
 	private static String donDone = "&aYou've put on your {piece}.";
 	private static String donInterrupted = "&cYou stopped fastening your {piece}.";
 	private static String donMissing = "&cYou no longer have the {piece} you were putting on.";
-	private static String armourStripped = "&cYou hadn't finished fastening your {pieces}. It's back in your inventory.";
-	private static String armourStrippedOthers = "&7{name} hadn't finished fastening their armour.";
 
 	@Override
 	public void load(File configFile) {
@@ -74,11 +70,10 @@ public final class PvpLoader implements LoaderInterface {
 		strikeDecayEnabled = config.getBoolean("strikes.decay.enabled", false);
 		strikeDecayDays = Math.max(1, config.getInt("strikes.decay.days", 14));
 		helmetDonSeconds = Math.max(0, config.getInt("armour.don-seconds.helmet", 1));
-		chestplateDonSeconds = Math.max(0, config.getInt("armour.don-seconds.chestplate", 20));
-		leggingsDonSeconds = Math.max(0, config.getInt("armour.don-seconds.leggings", 12));
-		bootsDonSeconds = Math.max(0, config.getInt("armour.don-seconds.boots", 8));
+		chestplateDonSeconds = Math.max(0, config.getInt("armour.don-seconds.chestplate", 4));
+		leggingsDonSeconds = Math.max(0, config.getInt("armour.don-seconds.leggings", 3));
+		bootsDonSeconds = Math.max(0, config.getInt("armour.don-seconds.boots", 2));
 		donSlownessAmplifier = Math.max(-1, config.getInt("armour.slowness-amplifier", 1));
-		recentArmourSeconds = Math.max(0, config.getInt("armour.recent-seconds", 180));
 
 		startWarning = config.getString("messages.start-warning", startWarning);
 		countdown = config.getString("messages.countdown", countdown);
@@ -94,14 +89,11 @@ public final class PvpLoader implements LoaderInterface {
 		noCharacter = config.getString("messages.no-character", noCharacter);
 		current = config.getString("messages.current", current);
 		playersOnly = config.getString("messages.players-only", playersOnly);
-		armourLocked = config.getString("messages.armour-locked", armourLocked);
 		donProgress = config.getString("messages.don-progress", donProgress);
 		donQueued = config.getString("messages.don-queued", donQueued);
 		donDone = config.getString("messages.don-done", donDone);
 		donInterrupted = config.getString("messages.don-interrupted", donInterrupted);
 		donMissing = config.getString("messages.don-missing", donMissing);
-		armourStripped = config.getString("messages.armour-stripped", armourStripped);
-		armourStrippedOthers = config.getString("messages.armour-stripped-others", armourStrippedOthers);
 	}
 
 	public static int getStartRadius() {
@@ -233,15 +225,6 @@ public final class PvpLoader implements LoaderInterface {
 		return donSlownessAmplifier;
 	}
 
-	/** 0 when /pvp start takes nothing off. */
-	public static long getRecentArmourMs() {
-		return recentArmourSeconds * 1000L;
-	}
-
-	public static String getArmourLocked() {
-		return armourLocked;
-	}
-
 	public static String getDonProgress() {
 		return donProgress;
 	}
@@ -260,13 +243,5 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static String getDonMissing() {
 		return donMissing;
-	}
-
-	public static String getArmourStripped() {
-		return armourStripped;
-	}
-
-	public static String getArmourStrippedOthers() {
-		return armourStrippedOthers;
 	}
 }
