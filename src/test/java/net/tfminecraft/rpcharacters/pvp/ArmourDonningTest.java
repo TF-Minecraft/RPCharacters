@@ -73,7 +73,7 @@ class ArmourDonningTest {
         doAnswer(call -> {
             ArmorEquipEvent event = call.getArgument(0);
             listener.onArmorEquip(event); otherPlugins.accept(event);
-            if (!event.isCancelled()) { completions.add(event); listener.onArmorChanged(event); }
+            if (!event.isCancelled()) completions.add(event);
             return null;
         }).when(plugins).callEvent(any(ArmorEquipEvent.class));
         listener = new ArmourDonning();
@@ -101,8 +101,6 @@ class ArmourDonningTest {
 
     boolean said(String text) { return messages().stream().anyMatch(line -> line.contains(text)); }
 
-    void lockInFight() { PvpSituations.track(new PvpSituation(player.getUniqueId(), List.of(player.getUniqueId()))); }
-
     @Test void onlyRealArmourIsFastenedSlowly() {
         assertFalse(ArmourDonning.isArmourPiece(null));
         assertFalse(ArmourDonning.isArmourPiece(new ItemStack(Material.AIR)));
@@ -118,16 +116,14 @@ class ArmourDonningTest {
 
     @Test void configuredTimesSlowAndBarDefaultsApply() throws Exception {
         assertEquals(1_000L, PvpLoader.getDonMs(ArmorType.HELMET));
-        assertEquals(20_000L, PvpLoader.getDonMs(ArmorType.CHESTPLATE));
-        assertEquals(12_000L, PvpLoader.getDonMs(ArmorType.LEGGINGS));
-        assertEquals(8_000L, PvpLoader.getDonMs(ArmorType.BOOTS));
+        assertEquals(4_000L, PvpLoader.getDonMs(ArmorType.CHESTPLATE));
+        assertEquals(3_000L, PvpLoader.getDonMs(ArmorType.LEGGINGS));
+        assertEquals(2_000L, PvpLoader.getDonMs(ArmorType.BOOTS));
         assertEquals(1, PvpLoader.getDonSlownessAmplifier());
-        assertEquals(180_000L, PvpLoader.getRecentArmourMs());
-        loadConfig("armour:\n  don-seconds:\n    helmet: -5\n    boots: 3\n  slowness-amplifier: -4\n  recent-seconds: 60\nmessages:\n  don-done: done {piece}\n");
+        loadConfig("armour:\n  don-seconds:\n    helmet: -5\n    boots: 3\n  slowness-amplifier: -4\nmessages:\n  don-done: done {piece}\n");
         assertEquals(0L, PvpLoader.getDonMs(ArmorType.HELMET));
         assertEquals(3_000L, PvpLoader.getDonMs(ArmorType.BOOTS));
         assertEquals(-1, PvpLoader.getDonSlownessAmplifier());
-        assertEquals(60_000L, PvpLoader.getRecentArmourMs());
         assertEquals("done {piece}", PvpLoader.getDonDone());
     }
 
@@ -144,8 +140,8 @@ class ArmourDonningTest {
         equip(ArmorType.BOOTS, boots, EquipMethod.HOTBAR);
         equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
         timer.run();
-        tickAt(System.currentTimeMillis() + 5_000L);
-        assertNull(player.getInventory().getChestplate(), "Twenty seconds have not passed yet");
+        tickAt(System.currentTimeMillis() + 2_000L);
+        assertNull(player.getInventory().getChestplate(), "Four seconds have not passed yet");
         tickAt(System.currentTimeMillis() + 21_000L);
         assertEquals(Material.IRON_CHESTPLATE, player.getInventory().getChestplate().getType());
         assertNull(player.getInventory().getItem(3));
@@ -171,6 +167,17 @@ class ArmourDonningTest {
         assertEquals(1, player.getItemOnCursor().getAmount());
         assertTrue(player.getInventory().contains(Material.LEATHER_CHESTPLATE));
         assertEquals(Material.LEATHER_CHESTPLATE, completions.getFirst().getOldArmorPiece().getType());
+    }
+
+    @Test void aSwappedHelmetIsDroppedWhenTheInventoryIsFull() {
+        ItemStack worn = new ItemStack(Material.LEATHER_HELMET), helmet = new ItemStack(Material.IRON_HELMET);
+        player.getInventory().setHelmet(worn.clone());
+        for (int slot = 0; slot < 36; slot++) player.getInventory().setItem(slot, new ItemStack(Material.STONE, 64));
+        player.setItemOnCursor(helmet.clone());
+        listener.onArmorEquip(new ArmorEquipEvent(player, EquipMethod.PICK_DROP, ArmorType.HELMET, worn, helmet));
+        tickAt(System.currentTimeMillis() + 2_000L);
+        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType());
+        assertEquals(1, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "The old helmet is dropped at their feet");
     }
 
     @Test void theLastPieceOnTheCursorAndOffHandAreUsedUp() {
@@ -243,10 +250,10 @@ class ArmourDonningTest {
         assertFalse(equip(ArmorType.LEGGINGS, new ItemStack(Material.IRON_LEGGINGS), EquipMethod.SHIFT_CLICK).isCancelled());
         assertFalse(equip(ArmorType.CHESTPLATE, null, EquipMethod.SHIFT_CLICK).isCancelled());
         ArmorEquipEvent nobody = mock(ArmorEquipEvent.class);
-        listener.onArmorEquip(nobody); listener.onArmorChanged(nobody);
+        listener.onArmorEquip(nobody);
         verify(nobody, never()).setCancelled(anyBoolean());
         ArmorEquipEvent untyped = new ArmorEquipEvent(player, EquipMethod.PICK_DROP, null, null, new ItemStack(Material.IRON_HELMET));
-        listener.onArmorEquip(untyped); listener.onArmorChanged(untyped);
+        listener.onArmorEquip(untyped);
         assertFalse(untyped.isCancelled(), "Items tlibs can't place are left to vanilla");
     }
 
@@ -330,7 +337,6 @@ class ArmourDonningTest {
     }
 
     @Test void leggingsGoOnAndShutdownStopsFastening() {
-        assertFalse(PvpSituations.locksArmour(null, ArmorType.HELMET));
         ItemStack leggings = new ItemStack(Material.IRON_LEGGINGS);
         player.getInventory().setItem(0, leggings.clone());
         equip(ArmorType.LEGGINGS, leggings, EquipMethod.SHIFT_CLICK);
@@ -342,109 +348,6 @@ class ArmourDonningTest {
         assertNull(player.getPotionEffect(PotionEffectType.SLOWNESS));
         tickAt(System.currentTimeMillis() + 60_000L);
         assertNull(player.getInventory().getChestplate());
-    }
-
-    @Test void aFightCalledWhileFasteningStopsIt() {
-        player.getInventory().setItem(0, chestplate.clone());
-        equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
-        lockInFight();
-        tickAt(System.currentTimeMillis() + 21_000L);
-        assertTrue(said("can't put armour on"));
-        assertNull(player.getInventory().getChestplate());
-        assertNull(player.getPotionEffect(PotionEffectType.SLOWNESS));
-    }
-
-    @Test void pvpStartTakesOffOnlyArmourPutOnRecently() throws Exception {
-        assertFalse(ArmourDonning.takeOffRecent(player, now));
-        ItemStack helmet = new ItemStack(Material.IRON_HELMET);
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, helmet, null));
-        long put = System.currentTimeMillis();
-        player.getInventory().setHelmet(helmet.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
-        player.getInventory().setChestplate(chestplate.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.CHESTPLATE, null, chestplate));
-        player.getInventory().setBoots(boots.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.BOOTS, null, boots));
-        loadConfig("armour:\n  recent-seconds: 0\n");
-        assertFalse(ArmourDonning.takeOffRecent(player, put));
-        loadConfig("");
-        assertFalse(ArmourDonning.takeOffRecent(player, put + 181_000L), "Armour on for longer than three minutes stays");
-        for (int slot = 0; slot < 36; slot++) player.getInventory().setItem(slot, new ItemStack(Material.STONE, 64));
-        player.getInventory().setItem(0, null);
-        player.getInventory().setItem(8, boots.clone());
-        equip(ArmorType.BOOTS, boots, EquipMethod.SHIFT_CLICK);
-        assertTrue(ArmourDonning.takeOffRecent(player, put + 60_000L));
-        List<String> lines = messages();
-        assertTrue(lines.stream().anyMatch(line -> line.contains("chestplate, boots, helmet")), lines.toString());
-        assertTrue(lines.stream().anyMatch(line -> line.contains("stopped fastening your boots")));
-        assertNull(player.getInventory().getChestplate());
-        assertNull(player.getInventory().getBoots());
-        assertNull(player.getInventory().getHelmet(), "Without body armour a recent helmet comes off too");
-        assertTrue(player.getInventory().contains(Material.IRON_CHESTPLATE));
-        assertEquals(2, player.getWorld().getEntities().stream().filter(org.bukkit.entity.Item.class::isInstance).count(), "What doesn't fit is dropped at their feet");
-        assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L), "Each piece comes off once");
-        ItemStack elytra = new ItemStack(Material.ELYTRA); player.getInventory().setChestplate(elytra.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.CHESTPLATE, null, elytra));
-        assertFalse(ArmourDonning.takeOffRecent(player, put + 60_000L));
-        assertEquals(Material.ELYTRA, player.getInventory().getChestplate().getType(), "Elytras aren't armour");
-    }
-
-    @Test void onlyThoseInBodyArmourMayPutAHelmetOnInAFight() {
-        ItemStack helmet = new ItemStack(Material.IRON_HELMET), leggings = new ItemStack(Material.IRON_LEGGINGS);
-        assertFalse(ArmourDonning.wearsBodyArmour(player));
-        player.getInventory().setChestplate(chestplate.clone()); player.getInventory().setLeggings(leggings.clone());
-        player.getInventory().setBoots(new ItemStack(Material.ELYTRA));
-        assertFalse(ArmourDonning.wearsBodyArmour(player), "Boots are needed too");
-        player.getInventory().setBoots(boots.clone());
-        assertTrue(ArmourDonning.wearsBodyArmour(player));
-
-        PvpSituations.track(new PvpSituation(player.getUniqueId(), List.of(player.getUniqueId()), List.of(player.getUniqueId())));
-        assertFalse(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.HELMET));
-        assertTrue(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.CHESTPLATE));
-        player.getInventory().setItem(0, helmet.clone());
-        equip(ArmorType.HELMET, helmet, EquipMethod.SHIFT_CLICK);
-        tickAt(System.currentTimeMillis() + 2_000L);
-        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Armoured fighters can put their helmet back on");
-
-        ItemStack hood = new ItemStack(Material.LEATHER_HELMET);
-        player.getInventory().setItemInOffHand(hood.clone());
-        player.getInventory().setHelmet(hood.clone()); player.getInventory().setItemInOffHand(helmet.clone());
-        ArmourDonning.undoSwap(player, ArmorType.HELMET, 40, hood, helmet);
-        tickAt(System.currentTimeMillis() + 4_000L);
-        assertEquals(Material.LEATHER_HELMET, player.getInventory().getHelmet().getType(), "A helmet swap is fastened, not refused");
-        assertFalse(said("can't put armour on"));
-
-        lockInFight();
-        assertTrue(PvpSituations.locksArmour(player.getUniqueId(), ArmorType.HELMET), "Another fight they came into unarmoured still locks it");
-    }
-
-    @Test void recentHeadwearComesOffOnlyForThoseOutOfBodyArmour() {
-        ItemStack helmet = new ItemStack(Material.IRON_HELMET), head = new ItemStack(Material.PLAYER_HEAD);
-        player.getInventory().setChestplate(chestplate.clone());
-        player.getInventory().setLeggings(new ItemStack(Material.IRON_LEGGINGS));
-        player.getInventory().setBoots(boots.clone());
-        player.getInventory().setHelmet(helmet.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
-        long put = System.currentTimeMillis();
-        assertFalse(ArmourDonning.takeOffRecent(player, put + 1_000L));
-        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType(), "Fighters in body armour keep a last-minute helmet");
-
-        player.getInventory().setBoots(null);
-        player.getInventory().setHelmet(head.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.HOTBAR, ArmorType.HELMET, helmet, head));
-        messages();
-        assertTrue(ArmourDonning.takeOffRecent(player, put + 1_000L));
-        assertNull(player.getInventory().getHelmet(), "Masks and heads come off like helmets");
-        assertTrue(said("headwear"));
-        assertTrue(player.getInventory().contains(Material.PLAYER_HEAD));
-
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
-        assertFalse(ArmourDonning.takeOffRecent(player, put + 1_000L), "Nothing on the head any more");
-        player.getInventory().setHelmet(helmet.clone());
-        listener.onArmorChanged(new ArmorEquipEvent(player, EquipMethod.SHIFT_CLICK, ArmorType.HELMET, null, helmet));
-        assertFalse(ArmourDonning.takeOffRecent(player, System.currentTimeMillis() + 181_000L), "Headwear on for longer stays");
-        assertEquals(Material.IRON_HELMET, player.getInventory().getHelmet().getType());
     }
 
     static EntityDamageByEntityEvent hit(org.bukkit.entity.Entity damager, org.bukkit.entity.Entity victim) {
@@ -503,16 +406,4 @@ class ArmourDonningTest {
         assertTrue(completions.isEmpty());
     }
 
-    @Test void swapsDuringAFightAreUndoneWithoutFastening() {
-        lockInFight();
-        ItemStack mask = new ItemStack(Material.CARVED_PUMPKIN), head = new ItemStack(Material.PLAYER_HEAD);
-        player.getInventory().setHelmet(mask.clone()); player.getInventory().setItemInOffHand(head.clone());
-        listener.onRightClickArmour(rightClick(Action.RIGHT_CLICK_AIR, head, EquipmentSlot.OFF_HAND));
-        player.getInventory().setHelmet(head.clone()); player.getInventory().setItemInOffHand(mask.clone());
-        nextTick.poll().run();
-        assertEquals(Material.CARVED_PUMPKIN, player.getInventory().getHelmet().getType());
-        assertTrue(said("can't put armour on"));
-        tickAt(System.currentTimeMillis() + 5_000L);
-        assertTrue(completions.isEmpty());
-    }
 }

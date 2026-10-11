@@ -3,10 +3,8 @@ package net.tfminecraft.rpcharacters.pvp;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -52,9 +50,7 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  * looks likely. Pieces are fastened one after another while the player is
  * slowed. Taking or dealing damage, sprinting, dying or logging out stops it.
  * Masks, heads and elytras go on at once, and creative or spectator players
- * are never delayed. {@code /pvp start} takes off any body armour put on
- * recently. Those left in full body armour keep their helmet free for roleplay;
- * anyone else also loses whatever they recently put on their head.
+ * are never delayed.
  */
 public final class ArmourDonning implements Listener {
 
@@ -68,7 +64,6 @@ public final class ArmourDonning implements Listener {
 	private static final long ACTION_BAR_TICKS = 40L;
 
 	private static final Map<UUID, Donning> donning = new HashMap<>();
-	private static final Map<UUID, EnumMap<ArmorType, Long>> equippedAt = new HashMap<>();
 	private static final Set<UUID> completing = new HashSet<>();
 	private static BukkitTask ticker;
 
@@ -113,13 +108,6 @@ public final class ArmourDonning implements Listener {
 		return armour && !MaskService.isMaskItem(item);
 	}
 
-	/** Wearing a real chestplate, leggings and boots. The helmet doesn't count. */
-	public static boolean wearsBodyArmour(Player player) {
-		PlayerInventory inventory = player.getInventory();
-		return isArmourPiece(inventory.getChestplate()) && isArmourPiece(inventory.getLeggings())
-				&& isArmourPiece(inventory.getBoots());
-	}
-
 	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	public void onArmorEquip(ArmorEquipEvent event) {
 		Player player = event.getPlayer();
@@ -133,22 +121,6 @@ public final class ArmourDonning implements Listener {
 			return;
 		}
 		queue(player, event.getType(), piece, event.getMethod(), System.currentTimeMillis());
-	}
-
-	/** Remember when each piece went on, for {@link #takeOffRecent}. */
-	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-	public void onArmorChanged(ArmorEquipEvent event) {
-		Player player = event.getPlayer();
-		if (player == null || event.getType() == null) {
-			return;
-		}
-		EnumMap<ArmorType, Long> times = equippedAt.computeIfAbsent(player.getUniqueId(),
-				id -> new EnumMap<>(ArmorType.class));
-		if (event.getNewArmorPiece() == null) {
-			times.remove(event.getType());
-		} else {
-			times.put(event.getType(), System.currentTimeMillis());
-		}
 	}
 
 	/**
@@ -187,18 +159,13 @@ public final class ArmourDonning implements Listener {
 				|| !previous.isSimilar(inventory.getItem(handSlot))) {
 			return;
 		}
-		boolean locked = PvpSituations.locksArmour(player.getUniqueId(), type);
-		if (!locked && !delays(player, type, wanted)) {
+		if (!delays(player, type, wanted)) {
 			return;
 		}
 		ItemStack swappedOn = armour(inventory, type);
 		setArmour(inventory, type, inventory.getItem(handSlot));
 		inventory.setItem(handSlot, swappedOn);
 		player.updateInventory();
-		if (locked) {
-			RPTexts.send(player, PvpLoader.getArmourLocked());
-			return;
-		}
 		queue(player, type, swappedOn, ArmorEquipEvent.EquipMethod.HOTBAR, System.currentTimeMillis());
 	}
 
@@ -233,57 +200,6 @@ public final class ArmourDonning implements Listener {
 	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
 		stop(event.getPlayer(), false);
-	}
-
-	/**
-	 * For {@code /pvp start}: stop fastening, and take off any body armour put on
-	 * within {@code armour.recent-seconds}. Someone still in full body armour keeps
-	 * their helmet. Anyone else also loses a helmet, mask or head put on in that
-	 * time, since they can't put one on during the fight. Returns whether anything
-	 * came off.
-	 */
-	public static boolean takeOffRecent(Player player, long nowMs) {
-		stop(player, true);
-		EnumMap<ArmorType, Long> times = equippedAt.get(player.getUniqueId());
-		long windowMs = PvpLoader.getRecentArmourMs();
-		if (times == null || windowMs <= 0L) {
-			return false;
-		}
-		List<String> pieces = new ArrayList<>();
-		for (ArmorType type : ArmorType.values()) {
-			if (type != ArmorType.HELMET && takeOffIfRecent(player, times, type, nowMs, windowMs)) {
-				pieces.add(pieceName(type));
-			}
-		}
-		if (!wearsBodyArmour(player)) {
-			String head = isArmourPiece(player.getInventory().getHelmet()) ? pieceName(ArmorType.HELMET) : "headwear";
-			if (takeOffIfRecent(player, times, ArmorType.HELMET, nowMs, windowMs)) {
-				pieces.add(head);
-			}
-		}
-		if (pieces.isEmpty()) {
-			return false;
-		}
-		RPTexts.send(player, PvpLoader.getArmourStripped().replace("{pieces}", String.join(", ", pieces)));
-		return true;
-	}
-
-	/** Body slots only count real armour; anything worn on the head counts. */
-	private static boolean takeOffIfRecent(Player player, EnumMap<ArmorType, Long> times, ArmorType type,
-			long nowMs, long windowMs) {
-		Long at = times.get(type);
-		if (at == null || nowMs - at > windowMs) {
-			return false;
-		}
-		times.remove(type);
-		PlayerInventory inventory = player.getInventory();
-		ItemStack worn = armour(inventory, type);
-		if (type == ArmorType.HELMET ? isEmpty(worn) : !isArmourPiece(worn)) {
-			return false;
-		}
-		setArmour(inventory, type, null);
-		giveBack(player, worn);
-		return true;
 	}
 
 	private static boolean delays(Player player, ArmorType type, ItemStack piece) {
@@ -344,11 +260,6 @@ public final class ArmourDonning implements Listener {
 
 	private static void finish(Player player, Donning state, long nowMs) {
 		Piece piece = state.current;
-		if (PvpSituations.locksArmour(player.getUniqueId(), piece.type())) {
-			RPTexts.send(player, PvpLoader.getArmourLocked());
-			stop(player, false);
-			return;
-		}
 		if (equip(player, piece)) {
 			actionBar(player, PvpLoader.getDonDone().replace("{piece}", pieceName(piece.type())));
 			player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_GENERIC, 1f, 1f);
@@ -510,7 +421,6 @@ public final class ArmourDonning implements Listener {
 
 	static void clear() {
 		donning.clear();
-		equippedAt.clear();
 		completing.clear();
 		ticker = null;
 	}

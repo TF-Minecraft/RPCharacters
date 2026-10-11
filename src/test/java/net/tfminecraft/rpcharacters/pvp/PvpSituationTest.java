@@ -1,6 +1,5 @@
 package net.tfminecraft.rpcharacters.pvp;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -77,15 +76,6 @@ class PvpSituationTest {
 		first.close();
 		assertTrue(PvpSituations.remainsActiveElsewhere(survivor, first));
 		assertFalse(PvpSituations.remainsActiveElsewhere(issuer, first));
-	}
-
-	@Test
-	void onlyTheArmouredGetAFreeHelmet() {
-		PvpSituation situation = new PvpSituation(issuer, List.of(issuer, survivor), Arrays.asList(null, survivor));
-		assertTrue(situation.wasArmoured(survivor));
-		assertFalse(situation.wasArmoured(issuer));
-		assertFalse(situation.wasArmoured(null));
-		assertFalse(situation().wasArmoured(survivor));
 	}
 
 	private PvpSituation situation() {
