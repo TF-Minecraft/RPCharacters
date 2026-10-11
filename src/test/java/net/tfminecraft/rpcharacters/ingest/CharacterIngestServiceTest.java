@@ -11,17 +11,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient;
 import net.tfminecraft.rpcharacters.calendar.AgeCalculator;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
+import net.tfminecraft.rpcharacters.creation.stages.SelectionStage;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.kit.KitService;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
+import net.tfminecraft.rpcharacters.loaders.StageLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.mmocore.AttributePointService;
 import net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady;
 import net.tfminecraft.rpcharacters.objects.*;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
+import net.tfminecraft.rpcharacters.persona.OfflinePermissions;
 import net.tfminecraft.rpcharacters.professions.ProfessionIntegrator;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
+import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -34,15 +39,17 @@ import net.tfminecraft.rpcharacters.utils.Integrator;
 class CharacterIngestServiceTest extends IngestFixture {
     AtomicLong stamp;long savedStamp;BukkitTask savedTask;
     MockedStatic<RosterSyncService> roster;MockedStatic<KitCustomiseIngestService> kitCustomise;MockedStatic<CharacterLifecycle> lifecycle;MockedStatic<WardrobeService> wardrobe;MockedStatic<RPCharacters> root;MockedStatic<MmoCorePlayerReady> mmoReady;MockedStatic<AttributePointService> attributes;MockedStatic<ProfessionIntegrator> professions;
-    PlayerManager manager; MockedConstruction<Integrator> integrators;
+    PlayerManager manager; MockedConstruction<Integrator> integrators;MockedStatic<ClassPickService> classes;MockedStatic<OfflinePermissions> offline;
     @BeforeEach void setupCreation() throws Exception {
         var timestamp=CharacterIngestService.class.getDeclaredField("lastPullAtMs");timestamp.setAccessible(true);stamp=(AtomicLong)timestamp.get(null);savedStamp=stamp.getAndSet(0);
         var periodic=CharacterIngestService.class.getDeclaredField("periodicTask");periodic.setAccessible(true);savedTask=(BukkitTask)periodic.get(null);periodic.set(null,null);
         roster=mockStatic(RosterSyncService.class);kitCustomise=mockStatic(KitCustomiseIngestService.class);lifecycle=mockStatic(CharacterLifecycle.class);wardrobe=mockStatic(WardrobeService.class);root=mockStatic(RPCharacters.class,CALLS_REAL_METHODS);manager=mock(PlayerManager.class);root.when(RPCharacters::getPlayerManager).thenReturn(manager);mmoReady=mockStatic(MmoCorePlayerReady.class);attributes=mockStatic(AttributePointService.class);professions=mockStatic(ProfessionIntegrator.class);integrators=mockConstruction(Integrator.class,(mock,context)->when(mock.getRemoveList(any(),any())).thenReturn(List.of()));
+        classes=mockStatic(ClassPickService.class);var warrior=mock(PlayerClass.class);when(warrior.getId()).thenReturn("WARRIOR");classes.when(ClassPickService::baseClasses).thenReturn(List.of(warrior));
+        offline=mockStatic(OfflinePermissions.class);offline.when(() -> OfflinePermissions.load(any())).thenReturn((java.util.function.Predicate<String>)permission -> true);slots.when(() -> CharacterSlotService.getMaxAliveCharactersOffline(any())).thenReturn(10);when(race.getAgeMax()).thenReturn(100);
     }
     @AfterEach void cleanupCreation() throws Exception {
         CharacterIngestService.stopPeriodicPull();var periodic=CharacterIngestService.class.getDeclaredField("periodicTask");periodic.setAccessible(true);periodic.set(null,savedTask);stamp.set(savedStamp);Thread.interrupted();
-        integrators.close();professions.close();attributes.close();mmoReady.close();root.close();wardrobe.close();lifecycle.close();kitCustomise.close();roster.close();
+        offline.close();classes.close();integrators.close();professions.close();attributes.close();mmoReady.close();root.close();wardrobe.close();lifecycle.close();kitCustomise.close();roster.close();
     }
 
     @Test void nullEntrypointsAndCooldownPreventDuplicateFetchButStillRefreshJoiningRoster() {
@@ -87,15 +94,15 @@ class CharacterIngestServiceTest extends IngestFixture {
     }
 
     @Test void pendingRowsApplyOnMainAndPersistBeforeAcknowledgement() throws Exception {
-        trait("strong","physical");JSONObject payload=payload();payload.putAll(obj("all_traits",array("strong","missing"),"clues",array("Blue coat"),"name_colours",array(null," "," #112233 ","#abcdef"),"birthday","2000-01-02","eighteen",true));pending(row("alpha",payload));
+        trait("strong","physical");stage("physical");JSONObject payload=payload();payload.putAll(obj("all_traits",array("strong"),"clues",array("Blue coat"),"name_colours",array(null," "," #112233 ","#abcdef"),"birthday","2000-01-02","eighteen",true));pending(row("alpha",payload));
         api.when(() -> ProvinceSystemClient.ackCreates(anyString())).thenAnswer(call->{assertTrue(Files.exists(characterFolder.resolve("alpha.json")),"Character must exist before a success acknowledgment");acknowledgments.add(parse(call.getArgument(0)));return ProvinceSystemClient.SimpleResult.success("{}");});
         CharacterIngestService.pullAsync(plugin);assertFalse(Files.exists(playerFile));assertTrue(acknowledgments.isEmpty());runWorkers();
-        assertEquals(obj("id","alpha","ok",true,"character_id","alpha"),result(0));JSONObject saved=parse(Files.readString(characterFolder.resolve("alpha.json")));assertEquals("Aria",saved.get("name"));assertEquals("woman",saved.get("gender"));assertEquals("Traveller",saved.get("description"));assertEquals(array("strong"),saved.get("traits"));assertEquals("2000-01-02",saved.get("birthday"));assertTrue(((Number)saved.get("created-at")).longValue()>0);assertEquals(obj("colours",array("#112233","#abcdef")),saved.get("name-colour"));assertEquals("true",parse(Files.readString(playerFile)).get("eighteen"));
+        assertEquals(obj("id","alpha","ok",true,"character_id","alpha"),result(0));JSONObject saved=parse(Files.readString(characterFolder.resolve("alpha.json")));assertEquals("Aria",saved.get("name"));assertEquals("woman",saved.get("gender"));assertEquals("Traveller from the northern coast who never stays long",saved.get("description"));assertEquals(array("strong"),saved.get("traits"));assertEquals("2000-01-02",saved.get("birthday"));assertTrue(((Number)saved.get("created-at")).longValue()>0);assertEquals(obj("colours",array("#112233","#abcdef")),saved.get("name-colour"));assertEquals("true",parse(Files.readString(playerFile)).get("eighteen"));
         lifecycle.verify(() -> CharacterLifecycle.fireCreated(isNull(),eq(owner),argThat(c -> c.getId().equals("alpha"))));kitService.verify(() -> KitService.onCharacterCreated(isNull(),any(PlayerData.class),argThat(c -> c.getId().equals("alpha"))));roster.verify(() -> RosterSyncService.pushRosterAsync(owner));verify(logger).info(contains("processed 1"));verify(scheduler).runTask(eq(plugin),any(Runnable.class));
     }
 
     @Test void fallbackBirthdayAndLegacyTraitsPersistAcrossOfflineCreates() throws Exception {
-        trait("strong","physical");JSONObject one=payload();one.putAll(obj("traits",array("strong"),"birthday","invalid","client_request_id","seed"));JSONObject two=payload();two.put("name_colours",array(null," "));two.put("eighteen","not boolean");pending(row("alpha",one),row("beta",two));CharacterIngestService.pullAsync(plugin);runWorkers();
+        trait("strong","physical");stage("physical");JSONObject one=payload();one.putAll(obj("traits",array("strong"),"birthday","invalid","client_request_id","seed"));JSONObject two=payload();two.put("name_colours",array(null," "));two.put("eighteen","not boolean");pending(row("alpha",one),row("beta",two));CharacterIngestService.pullAsync(plugin);runWorkers();
         assertEquals(true,result(0).get("ok"));assertEquals(true,result(1).get("ok"));var saved=parse(Files.readString(characterFolder.resolve("alpha.json")));assertEquals(AgeCalculator.birthdayFromAge(24,LocalDate.now(),"seed"),saved.get("birthday"));assertEquals(array("strong"),saved.get("traits"));assertEquals(AgeCalculator.birthdayFromAge(24,LocalDate.now(),"beta"),parse(Files.readString(characterFolder.resolve("beta.json"))).get("birthday"));
     }
 
@@ -121,7 +128,7 @@ class CharacterIngestServiceTest extends IngestFixture {
 
     @Test void failedAccountLoadAndFullSlotsRejectNewCreates() throws Exception {
         Files.writeString(playerFile,"{corrupt");pending(row("alpha",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals("could not load player data",result(0).get("error"));assertEquals("{corrupt",Files.readString(playerFile));Files.delete(playerFile);
-        slots.when(CharacterSlotService::getHardSlotCap).thenReturn(0);CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals("no free character slot",result(0).get("error"));
+        slots.when(() -> CharacterSlotService.getMaxAliveCharactersOffline(any())).thenReturn(0);CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals("no free character slot",result(0).get("error"));
         var pd=mockData();online(pd);slots.when(() -> CharacterSlotService.hasFreeSlot(player,pd)).thenReturn(false);CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals("no free character slot",result(0).get("error"));verify(pd,never()).addCharacter(any());
         players.when(() -> PlayerManager.get(player)).thenReturn(null);CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals("could not load player data",result(0).get("error"));
     }
@@ -131,7 +138,7 @@ class CharacterIngestServiceTest extends IngestFixture {
     }
 
     @Test void duplicateOfflineRequestAtCapacityPreservesSavedCharacterBytes() throws Exception {
-        slots.when(CharacterSlotService::getHardSlotCap).thenReturn(1);pending(row("alpha",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();String original=Files.readString(characterFolder.resolve("alpha.json"));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals(true,result(0).get("ok"),"An acknowledged retry must not fail because its own character occupies the slot");assertEquals(original,Files.readString(characterFolder.resolve("alpha.json")));
+        slots.when(() -> CharacterSlotService.getMaxAliveCharactersOffline(any())).thenReturn(1);pending(row("alpha",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();String original=Files.readString(characterFolder.resolve("alpha.json"));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals(true,result(0).get("ok"),"An acknowledged retry must not fail because its own character occupies the slot");assertEquals(original,Files.readString(characterFolder.resolve("alpha.json")));
     }
 
     @Test void corruptOnlineAccountMustNotBeReplacedBySuccessfulWebCreation() throws Exception {
@@ -240,4 +247,42 @@ class CharacterIngestServiceTest extends IngestFixture {
         assertFalse(Files.exists(playerFile));assertTrue(acknowledgments.isEmpty());
     }
 
+    @Test void webCreatesMustPassTheInGameCreationRules() throws Exception {
+        trait("strong","physical"); stage("physical");
+        JSONObject unknownTrait=payload(); unknownTrait.put("all_traits",array("strong","missing"));
+        JSONObject digits=payload(); digits.put("name","Ar1a");
+        JSONObject tooOld=payload(); tooOld.put("age",101);
+        JSONObject pirate=payload(); pirate.put("class_id","pirate");
+        JSONObject shortDescription=payload(); shortDescription.put("description","Too short");
+        JSONObject repeatedClue=payload(); repeatedClue.put("clues",array("Blue coat","blue coat"));
+        pending(row("a",unknownTrait),row("b",digits),row("c",tooOld),row("d",pirate),row("e",shortDescription),row("f",repeatedClue));
+        CharacterIngestService.pullAsync(plugin); runWorkers();
+        assertEquals("unknown trait: missing",result(0).get("error"));
+        assertEquals("Name may only use letters, spaces, apostrophes, hyphens and full stops.",result(1).get("error"));
+        assertEquals("Age must be between 18 and 100 for your race.",result(2).get("error"));
+        assertEquals("Unknown class: pirate",result(3).get("error"));
+        assertEquals("Description must be at least 32 characters.",result(4).get("error"));
+        assertEquals("Duplicate clue: blue coat",result(5).get("error"));
+        assertFalse(Files.exists(playerFile)); lifecycle.verifyNoInteractions();
+    }
+
+    @Test void offlineOwnersUseTheirRankLimitAndWaitWhenLuckPermsCannotBeRead() {
+        offline.when(() -> OfflinePermissions.load(owner)).thenReturn(null);
+        JSONObject stranger=obj("id","other","player_uuid",UUID.randomUUID().toString(),"payload",obj());
+        pending(row("alpha",payload()),row("beta",payload()),stranger,obj("id","bad","player_uuid","bad","payload",obj()));
+        CharacterIngestService.pullAsync(plugin); runWorkers();
+        JSONArray results=(JSONArray)acknowledgments.getLast().get("results");
+        assertEquals(2,results.size(),"Creates whose owner's rank is unknown stay pending");
+        assertEquals("other",result(0).get("id")); assertEquals("invalid age",result(0).get("error"));
+        assertEquals("bad",result(1).get("id"));
+        offline.verify(() -> OfflinePermissions.load(owner),times(1));
+        verify(logger,times(2)).info(contains("stays pending"));
+        assertFalse(Files.exists(characterFolder.resolve("alpha.json")));
+        online(mockData()); pending(row("gamma",payload()));
+        CharacterIngestService.pullAsync(plugin); runWorkers();
+        assertEquals(true,result(0).get("ok"),"Online owners use their live permissions");
+        offline.verify(() -> OfflinePermissions.load(owner),times(1));
+    }
+
+    void stage(String key){var s=mock(SelectionStage.class);when(s.runsOnWeb()).thenReturn(true);when(s.getTarget()).thenReturn("trait");when(s.getKey()).thenReturn(key);when(s.getMaxSelections()).thenReturn(99);when(s.passesAccountAgeGate(any())).thenReturn(true);StageLoader.oList.add(s);}
 }

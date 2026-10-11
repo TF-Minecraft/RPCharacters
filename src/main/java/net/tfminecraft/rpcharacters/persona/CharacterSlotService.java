@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.persona;
 
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import org.bukkit.entity.Player;
 
@@ -20,6 +21,10 @@ public final class CharacterSlotService {
 		int fromGroups = PermissionGroupService.getMaxAliveCharacters(player);
 		int cap = getHardSlotCap();
 		return Math.min(fromGroups, cap);
+	}
+
+	public static int getMaxAliveCharactersOffline(Predicate<String> hasPermission) {
+		return Math.min(PermissionGroupService.getMaxAliveCharactersOffline(hasPermission), getHardSlotCap());
 	}
 
 	public static int getHardSlotCap() {

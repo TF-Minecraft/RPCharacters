@@ -169,7 +169,7 @@ abstract class IngestFixture {
     void runWorkers(){while(!workers.isEmpty())workers.removeFirst().run();}
     void pending(JSONObject...rows){api.when(ProvinceSystemClient::fetchPendingCreates).thenReturn(ProvinceSystemClient.SimpleResult.success(obj("creates",array((Object[])rows)).toJSONString()));}
     JSONObject row(String id,JSONObject payload){return obj("id",id,"player_uuid",owner.toString(),"payload",payload);}
-    JSONObject payload(){return obj("name"," Aria ","race_id","human","class_id","warrior","age",24,"gender"," woman ","description"," Traveller ");}
+    JSONObject payload(){return obj("name"," Aria ","race_id","human","class_id","warrior","age",24,"gender"," woman ","description"," Traveller from the northern coast who never stays long ");}
     JSONObject result(int index){return (JSONObject)((JSONArray)acknowledgments.getLast().get("results")).get(index);}
     static JSONObject parse(String body) throws Exception{return (JSONObject)new JSONParser().parse(body);}
     @SuppressWarnings("unchecked") static JSONObject obj(Object...pairs){var o=new JSONObject();for(int i=0;i<pairs.length;i+=2)o.put(pairs[i],pairs[i+1]);return o;}

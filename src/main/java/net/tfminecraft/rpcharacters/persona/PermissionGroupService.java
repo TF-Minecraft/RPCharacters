@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import org.bukkit.entity.Player;
 
@@ -32,6 +33,11 @@ public final class PermissionGroupService {
 
 	public static int getMaxAliveCharacters(Player player) {
 		return resolvePerk(player, PermissionGroupDefinition.KEY_MAX_ALIVE_CHARACTERS, Aggregation.MAX);
+	}
+
+	/** Max alive characters for a player known only by their permission checks (offline). */
+	public static int getMaxAliveCharactersOffline(Predicate<String> hasPermission) {
+		return resolvePerk(hasPermission, PermissionGroupDefinition.KEY_MAX_ALIVE_CHARACTERS, Aggregation.MAX);
 	}
 
 	/** Swappable wardrobe skins (base + extras). Masked is separate and always available. */
@@ -135,8 +141,12 @@ public final class PermissionGroupService {
 	}
 
 	private static int resolvePerk(Player player, String perkKey, Aggregation aggregation) {
+		return resolvePerk(player == null ? null : player::hasPermission, perkKey, aggregation);
+	}
+
+	private static int resolvePerk(Predicate<String> hasPermission, String perkKey, Aggregation aggregation) {
 		int value = Cache.permissionGroupDefaults.getOrDefault(perkKey, 0);
-		if (player == null) {
+		if (hasPermission == null) {
 			return value;
 		}
 		for (PermissionGroupDefinition group : Cache.permissionGroups) {
@@ -144,7 +154,7 @@ public final class PermissionGroupService {
 			if (permission == null || permission.isBlank()) {
 				continue;
 			}
-			if (!player.hasPermission(permission)) {
+			if (!hasPermission.test(permission)) {
 				continue;
 			}
 			int groupValue = group.getPerk(perkKey, value);

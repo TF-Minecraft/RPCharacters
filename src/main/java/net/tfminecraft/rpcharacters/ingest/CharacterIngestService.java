@@ -7,13 +7,19 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -26,8 +32,11 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.api.ProvinceSystemClient;
 import net.tfminecraft.rpcharacters.calendar.AgeCalculator;
 import net.tfminecraft.rpcharacters.calendar.FantasyCalendar;
+import net.tfminecraft.rpcharacters.creation.CreationRules;
+import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.database.Database;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
+import net.tfminecraft.rpcharacters.loaders.StageLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.utils.ProstheticTraitRules;
@@ -38,6 +47,7 @@ import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.identity.NameColour;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
+import net.tfminecraft.rpcharacters.persona.OfflinePermissions;
 
 /**
  * Pull pending web creates from ProvinceSystem and persist into RPCharacters data.
@@ -131,7 +141,7 @@ public final class CharacterIngestService {
 			} else {
 				List<JSONObject> creates = ProvinceSystemClient.parsePendingCreates(pending.body);
 				if (!creates.isEmpty()) {
-					List<JSONObject> results = applyAllOnMain(plugin, creates);
+					List<JSONObject> results = applyAllOnMain(plugin, creates, offlineSlotLimits(creates));
 					if (!results.isEmpty()) {
 						ProvinceSystemClient.SimpleResult ack = ProvinceSystemClient.ackCreates(buildAckJson(results));
 						if (!ack.ok) {
@@ -164,7 +174,7 @@ public final class CharacterIngestService {
 					mine.add(row);
 				}
 			}
-			List<JSONObject> results = applyAllOnMain(plugin, mine);
+			List<JSONObject> results = applyAllOnMain(plugin, mine, offlineSlotLimits(mine));
 			if (!results.isEmpty()) {
 				ProvinceSystemClient.ackCreates(buildAckJson(results));
 			}
@@ -173,7 +183,28 @@ public final class CharacterIngestService {
 		});
 	}
 
-	private static List<JSONObject> applyAllOnMain(JavaPlugin plugin, List<JSONObject> creates) {
+	/**
+	 * Rank slot limits for owners who are offline, read from LuckPerms before the main-thread
+	 * apply. Owners whose permissions could not be read are left out and retried later.
+	 */
+	private static Map<UUID, Integer> offlineSlotLimits(List<JSONObject> creates) {
+		Map<UUID, Integer> limits = new HashMap<>();
+		Set<UUID> seen = new HashSet<>();
+		for (JSONObject row : creates) {
+			UUID owner = uuidOf(row.get("player_uuid"));
+			if (owner == null || !seen.add(owner) || Bukkit.getPlayer(owner) != null) {
+				continue;
+			}
+			Predicate<String> permissions = OfflinePermissions.load(owner);
+			if (permissions != null) {
+				limits.put(owner, CharacterSlotService.getMaxAliveCharactersOffline(permissions));
+			}
+		}
+		return limits;
+	}
+
+	private static List<JSONObject> applyAllOnMain(JavaPlugin plugin, List<JSONObject> creates,
+			Map<UUID, Integer> offlineLimits) {
 		if (creates == null || creates.isEmpty()) {
 			return List.of();
 		}
@@ -185,7 +216,10 @@ public final class CharacterIngestService {
 			try {
 				List<JSONObject> results = new ArrayList<>();
 				for (JSONObject row : creates) {
-					results.add(applyOne(row));
+					JSONObject result = applyOne(row, offlineLimits);
+					if (result != null) {
+						results.add(result);
+					}
 				}
 				ref.set(results);
 			} finally {
@@ -203,8 +237,9 @@ public final class CharacterIngestService {
 		return ref.get();
 	}
 
+	/** The ack row for one create, or null to leave it pending for a later pull. */
 	@SuppressWarnings("unchecked")
-	private static JSONObject applyOne(JSONObject row) {
+	private static JSONObject applyOne(JSONObject row, Map<UUID, Integer> offlineLimits) {
 		JSONObject result = new JSONObject();
 		String createId = stringOf(row.get("id"));
 		result.put("id", createId);
@@ -218,7 +253,12 @@ public final class CharacterIngestService {
 				return result;
 			}
 			JSONObject payload = (JSONObject) payloadObj;
-			ApplyOutcome outcome = applyPayload(playerUuid, createId, payload);
+			ApplyOutcome outcome = applyPayload(playerUuid, createId, payload, offlineLimits.get(playerUuid));
+			if (outcome.retry) {
+				RPCharacters.plugin.getLogger().info("[character-ingest] could not read permissions for "
+						+ playerUuid + "; create " + createId + " stays pending");
+				return null;
+			}
 			if (outcome.ok) {
 				result.put("ok", true);
 				result.put("character_id", outcome.characterId);
@@ -234,7 +274,8 @@ public final class CharacterIngestService {
 		return result;
 	}
 
-	private static ApplyOutcome applyPayload(UUID playerUuid, String createId, JSONObject payload) {
+	private static ApplyOutcome applyPayload(UUID playerUuid, String createId, JSONObject payload,
+			Integer offlineSlotLimit) {
 		Player online = Bukkit.getPlayer(playerUuid);
 		PlayerData pd;
 		boolean inManager = false;
@@ -260,12 +301,10 @@ public final class CharacterIngestService {
 			if (!CharacterSlotService.hasFreeSlot(online, pd)) {
 				return ApplyOutcome.fail("no free character slot");
 			}
-		} else {
-			int alive = pd.getCharacters(Status.ALIVE).size();
-			int cap = CharacterSlotService.getHardSlotCap();
-			if (alive >= cap) {
-				return ApplyOutcome.fail("no free character slot");
-			}
+		} else if (offlineSlotLimit == null) {
+			return ApplyOutcome.RETRY;
+		} else if (pd.getCharacters(Status.ALIVE).size() >= offlineSlotLimit) {
+			return ApplyOutcome.fail("no free character slot");
 		}
 
 
@@ -294,9 +333,10 @@ public final class CharacterIngestService {
 		if (allTraits != null) {
 			for (Object o : allTraits) {
 				Trait t = TraitLoader.getByString(String.valueOf(o));
-				if (t != null) {
-					traits.add(t);
+				if (t == null) {
+					return ApplyOutcome.fail("unknown trait: " + o);
 				}
+				traits.add(t);
 			}
 		}
 
@@ -352,6 +392,11 @@ public final class CharacterIngestService {
 		character.ensureTraitStateDefaults();
 		character.update();
 
+		String sheetError = sheetError(character, pd, age, description, clues);
+		if (sheetError != null) {
+			return ApplyOutcome.fail(sheetError);
+		}
+
 		Path ownerDirectory = Path.of("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString())
 				.toAbsolutePath().normalize();
 		Path characterFile = ownerDirectory.resolve(createId + ".json").normalize();
@@ -405,6 +450,37 @@ public final class CharacterIngestService {
 		return ApplyOutcome.ok(createId);
 	}
 
+	/** The in-game creation rules, so a web create cannot hold anything the game would refuse. */
+	private static String sheetError(RPCharacter character, PlayerData pd, int age, String description,
+			List<String> clues) {
+		List<Stage> stages = StageLoader.oList;
+		List<Supplier<String>> checks = List.of(
+			() -> CreationRules.nameError(character.getName()),
+			() -> CreationRules.raceError(character.getRace(), stages),
+			() -> CreationRules.ageError(age, character.getRace()),
+			() -> CreationRules.birthdayError(character, character.getBirthday()),
+			() -> CreationRules.classError(character.getMMOClass()),
+			() -> CreationRules.descriptionError(description),
+			() -> CreationRules.traitsError(character, pd, stages),
+			() -> CreationRules.cluesError(clues, character.getCluesNeeded())
+		);
+		for (Supplier<String> check : checks) {
+			String error = check.get();
+			if (error != null) {
+				return error;
+			}
+		}
+		return null;
+	}
+
+	private static UUID uuidOf(Object value) {
+		try {
+			return UUID.fromString(stringOf(value));
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
+	}
+
 	@SuppressWarnings("unchecked")
 	private static String buildAckJson(List<JSONObject> results) {
 		JSONObject root = new JSONObject();
@@ -419,22 +495,27 @@ public final class CharacterIngestService {
 	}
 
 	private static final class ApplyOutcome {
+		/** Not applied or rejected; left pending for a later pull. */
+		static final ApplyOutcome RETRY = new ApplyOutcome(false, null, null, true);
+
 		final boolean ok;
 		final String characterId;
 		final String error;
+		final boolean retry;
 
-		private ApplyOutcome(boolean ok, String characterId, String error) {
+		private ApplyOutcome(boolean ok, String characterId, String error, boolean retry) {
 			this.ok = ok;
 			this.characterId = characterId;
 			this.error = error;
+			this.retry = retry;
 		}
 
 		static ApplyOutcome ok(String characterId) {
-			return new ApplyOutcome(true, characterId, null);
+			return new ApplyOutcome(true, characterId, null, false);
 		}
 
 		static ApplyOutcome fail(String error) {
-			return new ApplyOutcome(false, null, error);
+			return new ApplyOutcome(false, null, error, false);
 		}
 	}
 }
