@@ -104,7 +104,8 @@ public final class RosterSyncService {
 			return () -> send(roster);
 		}
 		return () -> {
-			PlayerData pd = DB.loadPlayerData(playerUuid);
+			// Database keeps parser state per instance, so concurrent loads each need their own.
+			PlayerData pd = new Database().loadPlayerData(playerUuid);
 			if (pd != null) {
 				send(build(playerUuid, pd, limits));
 			}
