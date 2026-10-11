@@ -62,3 +62,6 @@ Desktop.ini
 
 # Technical documentation is maintained in TF-Minecraft/Docs
 /docs/
+
+# Files the test suite writes
+/plugins/
