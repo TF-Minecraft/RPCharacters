@@ -227,7 +227,7 @@ public final class PermadeathService {
 			PlayerData pd = PlayerManager.get(player);
 			if (pd != null && pd.getCharacters(Status.ALIVE).size() > 0) {
 				RPCharacter replacement = pd.getCharacters(Status.ALIVE).get(0);
-				pd.setActiveCharacter(replacement);
+				pd.setActiveCharacter(replacement, character);
 				replacementName = replacement.getName();
 				net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(player);
 			}

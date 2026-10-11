@@ -447,6 +447,11 @@ public class PlayerData {
 		if(!hasCompletedStage(s)) completedStages.add(s.getId());
 	}
 	public void setActiveCharacter(RPCharacter c) {
+		setActiveCharacter(c, null);
+	}
+
+	/** {@code ended} is a character already deactivated, such as one just permakilled, so listeners can save it. */
+	public void setActiveCharacter(RPCharacter c, RPCharacter ended) {
 		if (c == null) {
 			return;
 		}
@@ -470,7 +475,7 @@ public class PlayerData {
 			}
 		}
 		c.activate();
-		CharacterLifecycle.fireActivated(player, uniqueId, c, current);
+		CharacterLifecycle.fireActivated(player, uniqueId, c, current != null ? current : ended);
 	}
 
 	public void setPendingMmoAttributeRemoves(List<String> pending) {
