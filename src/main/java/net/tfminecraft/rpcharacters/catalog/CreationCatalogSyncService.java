@@ -40,7 +40,6 @@ import net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier;
 import net.tfminecraft.rpcharacters.objects.experience.ExperienceModifier;
 import net.tfminecraft.rpcharacters.objects.ProstheticReplacement;
 import net.tfminecraft.rpcharacters.objects.PermissionGroupDefinition;
-import net.tfminecraft.rpcharacters.objects.WebCreatorRealmAccess;
 import net.tfminecraft.rpcharacters.objects.races.Race;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.objects.trait.TraitEffectResolver;
@@ -73,8 +72,6 @@ public final class CreationCatalogSyncService {
 		appendValidation(sb);
 		sb.append(',');
 		appendSlotLimits(sb);
-		sb.append(',');
-		appendWebCreatorAccess(sb);
 		sb.append(',');
 		appendKits(sb);
 		sb.append(',');
@@ -444,28 +441,6 @@ public final class CreationCatalogSyncService {
 		sb.append(",\"max_clues\":").append(Cache.maxClues);
 		sb.append('}');
 		sb.append('}');
-	}
-
-	private static void appendWebCreatorAccess(StringBuilder sb) {
-		sb.append("\"web_creator_access\":{\"by_realm\":{");
-		boolean firstRealm = true;
-		for (Map.Entry<String, WebCreatorRealmAccess> entry : Cache.webCreatorAccessByRealm.entrySet()) {
-			if (entry.getKey() == null || entry.getValue() == null) {
-				continue;
-			}
-			if (!firstRealm) {
-				sb.append(',');
-			}
-			firstRealm = false;
-			WebCreatorRealmAccess access = entry.getValue();
-			sb.append('"').append(escape(entry.getKey())).append("\":{");
-			sb.append("\"min_tier\":").append(access.getMinTier());
-			if (!access.getMinGroupId().isEmpty()) {
-				appendField(sb, "min_group_id", access.getMinGroupId(), false);
-			}
-			sb.append('}');
-		}
-		sb.append("}}");
 	}
 
 	private static void appendSlotLimits(StringBuilder sb) {

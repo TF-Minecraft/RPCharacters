@@ -68,7 +68,7 @@ class CreationCatalogSyncServiceTest {
         StageLoader.oList = new ArrayList<>(); RaceLoader.oList = new ArrayList<>(); TraitLoader.oList = new ArrayList<>();
         Cache.attributes = new ArrayList<>(List.of("strength", "dexterity")); Cache.professions = new ArrayList<>();
         Cache.permissionGroupDefaults = new HashMap<>(); Cache.permissionGroups = new ArrayList<>();
-        Cache.webCreatorAccessByRealm = new LinkedHashMap<>(); Cache.maxCharacterSlots = 10;
+        Cache.maxCharacterSlots = 10;
         Cache.evilMinAccountAgeHours = 24; Cache.calendarEraSuffix = "AE";
         kits = new LinkedHashMap<>(); kitLoader = mockStatic(KitLoader.class); kitLoader.when(KitLoader::getKits).thenAnswer(call -> kits);
         previews = new ArrayList<>(); previewBuilder = mockStatic(EditableKitPreviewBuilder.class);
@@ -228,7 +228,7 @@ class CreationCatalogSyncServiceTest {
         assertEquals(List.of("good"), rows(preserved, "classes").stream().map(row -> row.get("id")).toList());
     }
 
-    @Test void validationSlotLimitsAndRealmAccessReflectRuntimeConfiguration() throws Exception {
+    @Test void validationAndSlotLimitsReflectRuntimeConfiguration() throws Exception {
         Cache.personaDisplayNameMinLength = 2; Cache.personaDisplayNameMaxLength = 18; Cache.calendarAgeMinimum = 16;
         Cache.calendarYearOffset = 100; Cache.calendarEraSuffix = "Era\n\"X\""; Cache.characterDescriptionMinLength = 20; Cache.characterDescriptionMaxLength = 200;
         Cache.defaultCluesRequired = 2; Cache.evilCluesRequired = 4; Cache.evilMinAccountAgeHours = 48;
@@ -237,8 +237,6 @@ class CreationCatalogSyncServiceTest {
         Cache.permissionGroups.addAll(Arrays.asList(null,
             new PermissionGroupDefinition("gold", "rank.gold", "Gold", 2, true, Map.of("max-alive-characters", 5)),
             new PermissionGroupDefinition("hidden", "rank.hidden", "Hidden", 3, false, Map.of())));
-        Cache.webCreatorAccessByRealm.put(null, new WebCreatorRealmAccess(0, "")); Cache.webCreatorAccessByRealm.put("missing", null);
-        Cache.webCreatorAccessByRealm.put("main", new WebCreatorRealmAccess(0, "")); Cache.webCreatorAccessByRealm.put("dev", new WebCreatorRealmAccess(2, "gold"));
         JSONObject root = payload(); JSONObject validation = object(root, "validation");
         assertEquals(Map.of("min_length", 2L, "max_length", 18L), validation.get("name"));
         assertEquals(Map.of("minimum", 16L), validation.get("age"));
@@ -249,7 +247,6 @@ class CreationCatalogSyncServiceTest {
         assertEquals(Map.of("max_alive_characters", 2L, "name_colour_stops", 1L, "wardrobe_skin_slots", 3L), limits.get("defaults"));
         assertEquals(5L, rows(limits, "groups").getFirst().get("max_alive_characters"));
         assertEquals(false, rows(limits, "groups").get(1).get("visible"));
-        assertEquals(Map.of("main", Map.of("min_tier", 0L), "dev", Map.of("min_tier", 2L, "min_group_id", "gold")), object(root, "web_creator_access").get("by_realm"));
         assertEquals(12L, object(root, "attribute_point_buy").get("pool")); assertEquals(4L, object(root, "attribute_point_buy").get("max_rank"));
     }
 
