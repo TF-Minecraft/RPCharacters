@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -44,7 +45,33 @@ public final class RosterSyncService {
 		if (playerUuid == null || RPCharacters.plugin == null) {
 			return;
 		}
-		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> pushRosterNow(playerUuid));
+		if (!Bukkit.isPrimaryThread()) {
+			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> pushRosterAsync(playerUuid));
+			return;
+		}
+		Player online = Bukkit.getPlayer(playerUuid);
+		BukkitScheduler scheduler = Bukkit.getScheduler();
+		if (online != null && PlayerManager.exists(online)) {
+			Roster roster = liveRoster(online);
+			if (roster != null) {
+				scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> send(roster));
+			}
+			return;
+		}
+		AccountLimits limits = online != null ? AccountLimits.of(online) : null;
+		scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> {
+			Database.SavedAccount saved = Database.readSavedAccount(playerUuid);
+			if (saved == null) {
+				return;
+			}
+			// A reload rebuilds races and traits on the main thread, so resolve saved characters there.
+			scheduler.runTask(RPCharacters.plugin, () -> {
+				Roster roster = savedRoster(saved, limits);
+				if (roster != null) {
+					scheduler.runTaskAsynchronously(RPCharacters.plugin, () -> send(roster));
+				}
+			});
+		});
 	}
 
 	public static void pushRosterForPlayer(Player player) {
@@ -66,28 +93,57 @@ public final class RosterSyncService {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
+	/** Pushes on the calling thread; off the main thread this falls back to {@link #pushRosterAsync}. */
 	public static void pushRosterNow(UUID playerUuid) {
 		if (playerUuid == null) {
 			return;
 		}
-		PlayerData pd = null;
-		Player online = Bukkit.getPlayer(playerUuid);
-		if (online != null && PlayerManager.exists(online)) {
-			pd = PlayerManager.get(online);
-		} else {
-			pd = DB.loadPlayerData(playerUuid);
-		}
-		if (pd == null) {
+		if (!Bukkit.isPrimaryThread()) {
+			pushRosterAsync(playerUuid);
 			return;
 		}
-		java.util.List<String> onDisk = DB.listCharacterFileIds(playerUuid);
-		java.util.Set<String> loaded = new java.util.HashSet<>();
-		for (RPCharacter character : pd.getCharacters()) {
-			if (character != null && character.getId() != null && !character.getId().isBlank()) {
-				loaded.add(character.getId());
-			}
+		Player online = Bukkit.getPlayer(playerUuid);
+		Roster roster;
+		if (online != null && PlayerManager.exists(online)) {
+			roster = liveRoster(online);
+		} else {
+			AccountLimits limits = online != null ? AccountLimits.of(online) : null;
+			roster = savedRoster(Database.readSavedAccount(playerUuid), limits);
 		}
+		if (roster != null) {
+			send(roster);
+		}
+	}
+
+	/** Main thread only. Reads a loaded player's live characters. */
+	private static Roster liveRoster(Player online) {
+		PlayerData pd = PlayerManager.get(online);
+		return pd == null ? null : build(online.getUniqueId(), pd, AccountLimits.of(online));
+	}
+
+	/** Main thread only. Resolves an offline account's saved races and traits against the current registries. */
+	private static Roster savedRoster(Database.SavedAccount saved, AccountLimits limits) {
+		// Database keeps parser state per instance, so each load gets its own.
+		PlayerData pd = new Database().loadSavedAccount(saved);
+		return pd == null ? null : build(pd.getUniqueId(), pd, limits);
+	}
+
+	private record AccountLimits(int maxAliveCharacters, int nameColourStops, int wardrobeSkinSlots) {
+		static AccountLimits of(Player player) {
+			return new AccountLimits(
+					CharacterSlotService.getMaxAliveCharacters(player),
+					PermissionGroupService.getNameColourStops(player),
+					PermissionGroupService.getWardrobeSkinSlots(player));
+		}
+	}
+
+	private record Roster(UUID playerUuid, java.util.Set<String> characterIds, String json) {
+	}
+
+	private static void send(Roster roster) {
+		UUID playerUuid = roster.playerUuid();
+		java.util.List<String> onDisk = DB.listCharacterFileIds(playerUuid);
+		java.util.Set<String> loaded = roster.characterIds();
 		if (RosterPushPolicy.wouldDropSavedCharacters(loaded, onDisk)) {
 			if (RPCharacters.plugin != null) {
 				RPCharacters.plugin.getLogger().warning(
@@ -98,6 +154,22 @@ public final class RosterSyncService {
 								+ ". Website roster left unchanged.");
 			}
 			return;
+		}
+		ProvinceSystemClient.SimpleResult result = ProvinceSystemClient.pushRoster(roster.json());
+		if (!result.ok) {
+			RPCharacters.plugin.getLogger().warning(
+					"[roster] push failed for " + playerUuid + ": " + result.error
+			);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Roster build(UUID playerUuid, PlayerData pd, AccountLimits limits) {
+		java.util.Set<String> loaded = new java.util.HashSet<>();
+		for (RPCharacter character : pd.getCharacters()) {
+			if (character != null && character.getId() != null && !character.getId().isBlank()) {
+				loaded.add(character.getId());
+			}
 		}
 
 		JSONObject root = new JSONObject();
@@ -159,13 +231,10 @@ public final class RosterSyncService {
 			Integer.valueOf(KitLoader.getCooldownHours())
 		);
 
-		if (online != null) {
-			root.put("max_alive_characters", CharacterSlotService.getMaxAliveCharacters(online));
-			root.put("name_colour_stops", Integer.valueOf(PermissionGroupService.getNameColourStops(online)));
-			root.put(
-				"wardrobe_skin_slots",
-				Integer.valueOf(PermissionGroupService.getWardrobeSkinSlots(online))
-			);
+		if (limits != null) {
+			root.put("max_alive_characters", limits.maxAliveCharacters());
+			root.put("name_colour_stops", Integer.valueOf(limits.nameColourStops()));
+			root.put("wardrobe_skin_slots", Integer.valueOf(limits.wardrobeSkinSlots()));
 		}
 
 		boolean realAgeSet = pd.getCompletedStages().contains("creation_age_set_stage")
@@ -179,12 +248,7 @@ public final class RosterSyncService {
 			root.put("account_created_at_epoch", Long.valueOf(pd.getCreatedAtEpochSeconds()));
 		}
 
-		ProvinceSystemClient.SimpleResult result = ProvinceSystemClient.pushRoster(root.toJSONString());
-		if (!result.ok) {
-			RPCharacters.plugin.getLogger().warning(
-					"[roster] push failed for " + playerUuid + ": " + result.error
-			);
-		}
+		return new Roster(playerUuid, loaded, root.toJSONString());
 	}
 
 	@SuppressWarnings("unchecked")

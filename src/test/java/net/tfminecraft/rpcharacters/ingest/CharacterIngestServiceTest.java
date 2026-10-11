@@ -54,9 +54,10 @@ class CharacterIngestServiceTest extends IngestFixture {
 
     @Test void concurrentAdmissionSchedulesOnlyOneFetchPerCooldownWindow() throws Exception {
         // A shared server mock applies to worker threads as well as this test thread.
-        // Scheduled network work is captured, never executed by these contenders.
+        // Scheduled work, async or main thread, is captured, never executed by these contenders.
         var serverField=Bukkit.class.getDeclaredField("server");serverField.setAccessible(true);Object original=serverField.get(null);
         var sharedServer=mock(org.bukkit.Server.class);when(sharedServer.getScheduler()).thenReturn(scheduler);
+        when(scheduler.runTask(any(org.bukkit.plugin.Plugin.class),any(Runnable.class))).thenAnswer(call->{synchronized(workers){workers.add(call.getArgument(1));}return mock(BukkitTask.class);});
         int contenders=16,rounds=400;var barrier=new CyclicBarrier(contenders+1);var executor=Executors.newFixedThreadPool(contenders);List<Future<?>> futures=new ArrayList<>();
         try {
             serverField.set(null,sharedServer);
@@ -82,7 +83,7 @@ class CharacterIngestServiceTest extends IngestFixture {
 
     @Test void fetchFailuresWarnAndPerPlayerFailureStillPushesRoster() {
         api.when(ProvinceSystemClient::fetchPendingCreates).thenReturn(ProvinceSystemClient.SimpleResult.fail("offline"));CharacterIngestService.pullAsync(plugin);runWorkers();verify(logger).warning(contains("pending fetch failed: offline"));kitCustomise.verify(() -> KitCustomiseIngestService.pullNow(plugin));
-        CharacterIngestService.pullForPlayerAsync(plugin,owner);runWorkers();roster.verify(() -> RosterSyncService.pushRosterNow(owner));assertTrue(acknowledgments.isEmpty());
+        CharacterIngestService.pullForPlayerAsync(plugin,owner);runWorkers();roster.verify(() -> RosterSyncService.pushRosterAsync(owner));assertTrue(acknowledgments.isEmpty());
     }
 
     @Test void pendingRowsApplyOnMainAndPersistBeforeAcknowledgement() throws Exception {
@@ -109,8 +110,8 @@ class CharacterIngestServiceTest extends IngestFixture {
     }
 
     @Test void perPlayerPullFiltersOwnersAndAlwaysRefreshesRosterAfterApply() {
-        var mine=row("alpha",obj());mine.put("player_uuid",owner.toString().toUpperCase(Locale.ROOT));var other=row("other",obj());other.put("player_uuid",UUID.randomUUID().toString());pending(other,mine,obj("id","missing-owner"));CharacterIngestService.tryPullForPlayerAsync(plugin,owner);runWorkers();assertEquals(1,((JSONArray)acknowledgments.getFirst().get("results")).size());assertEquals("alpha",result(0).get("id"));assertEquals("invalid age",result(0).get("error"));roster.verify(() -> RosterSyncService.pushRosterNow(owner));kitCustomise.verify(() -> KitCustomiseIngestService.pullNow(plugin));
-        pending(other);CharacterIngestService.pullForPlayerAsync(plugin,owner);runWorkers();assertEquals(1,acknowledgments.size());roster.verify(() -> RosterSyncService.pushRosterNow(owner),times(2));
+        var mine=row("alpha",obj());mine.put("player_uuid",owner.toString().toUpperCase(Locale.ROOT));var other=row("other",obj());other.put("player_uuid",UUID.randomUUID().toString());pending(other,mine,obj("id","missing-owner"));CharacterIngestService.tryPullForPlayerAsync(plugin,owner);runWorkers();assertEquals(1,((JSONArray)acknowledgments.getFirst().get("results")).size());assertEquals("alpha",result(0).get("id"));assertEquals("invalid age",result(0).get("error"));roster.verify(() -> RosterSyncService.pushRosterAsync(owner));kitCustomise.verify(() -> KitCustomiseIngestService.pullNow(plugin));
+        pending(other);CharacterIngestService.pullForPlayerAsync(plugin,owner);runWorkers();assertEquals(1,acknowledgments.size());roster.verify(() -> RosterSyncService.pushRosterAsync(owner),times(2));
     }
 
     @Test void invalidPayloadsAndExceptionsProducePerRowErrorsAndDoNotWriteData() {

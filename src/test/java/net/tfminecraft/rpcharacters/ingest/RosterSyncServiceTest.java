@@ -48,6 +48,22 @@ class RosterSyncServiceTest extends IngestFixture {
         runWorkers(); assertEquals(2,pushes.size()); assertEquals(owner.toString(),pushes.getFirst().get("player_uuid"));
     }
 
+    @Test void asyncPushReadsLiveCharactersOnTheMainThreadBeforeTheWorkerRuns() {
+        var pd=mockData();online(pd);var c=character("alpha");when(c.getName()).thenReturn("Aria");pd.getCharacters().add(c);slots.when(() -> CharacterSlotService.getMaxAliveCharacters(player)).thenReturn(3);
+        RosterSyncService.pushRosterAsync(owner);verify(c).update();verify(c,atLeastOnce()).getName();slots.verify(() -> CharacterSlotService.getMaxAliveCharacters(player));assertEquals(1,workers.size());
+        clearInvocations(pd,c);when(c.getName()).thenReturn("Changed");slots.when(() -> CharacterSlotService.getMaxAliveCharacters(player)).thenReturn(9);
+        runWorkers();verifyNoInteractions(pd,c);assertEquals("Aria",firstCharacter().get("name"));assertEquals(3L,pushes.getFirst().get("max_alive_characters"));
+    }
+
+    @Test void pushesFromOtherThreadsHopToTheMainThreadBeforeReadingCharacters() {
+        var pd=mockData();online(pd);pd.getCharacters().add(character("alpha"));clearInvocations(pd);List<Runnable> mainTasks=new ArrayList<>();
+        when(scheduler.runTask(any(org.bukkit.plugin.Plugin.class),any(Runnable.class))).thenAnswer(call->{mainTasks.add(call.getArgument(1));return mock(BukkitTask.class);});
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);RosterSyncService.pushRosterAsync(owner);RosterSyncService.pushRosterNow(owner);
+        assertEquals(2,mainTasks.size());assertTrue(workers.isEmpty());verify(pd,never()).getCharacters();players.verifyNoInteractions();
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);mainTasks.forEach(Runnable::run);assertEquals(2,workers.size());runWorkers();assertEquals(2,pushes.size());
+        players.when(() -> PlayerManager.get(player)).thenReturn(null);RosterSyncService.pushRosterAsync(owner);RosterSyncService.pushRosterNow(owner);assertTrue(workers.isEmpty());assertEquals(2,pushes.size());
+    }
+
     @Test void richRosterSerializesSheetAndAccountWithoutFormattingOrHiddenTraits() throws Exception {
         Locale.setDefault(Locale.forLanguageTag("tr-TR")); PlayerData pd=mockData(); online(pd); RPCharacter c=character("alpha"); when(pd.getCharacters()).thenReturn(List.of(c));
         when(c.getName()).thenReturn("Aria");when(c.getStatus()).thenReturn(Status.DEAD);when(c.getRace()).thenReturn(race);when(race.getName()).thenReturn("§aHuman");
@@ -94,6 +110,36 @@ class RosterSyncServiceTest extends IngestFixture {
     @Test void offlineAccountLoadsFromDiskAndCorruptAccountIsNeverPushed() throws Exception {
         Files.writeString(playerFile,"{broken");RosterSyncService.pushRosterNow(owner);assertTrue(pushes.isEmpty());Files.writeString(playerFile,obj("completed stages",array(),"eighteen",false).toJSONString());
         api.when(() -> ProvinceSystemClient.pushRoster(anyString())).thenReturn(ProvinceSystemClient.SimpleResult.fail("unavailable"));RosterSyncService.pushRosterNow(owner);verify(logger).warning(contains("push failed"));
+        Files.delete(playerFile);Files.createDirectory(playerFile);pushes.clear();RosterSyncService.pushRosterNow(owner);RosterSyncService.pushRosterAsync(owner);runWorkers();assertTrue(pushes.isEmpty());
+    }
+
+    @Test void concurrentOfflineReadsEachKeepTheirOwnAccount() throws Exception {
+        int accounts=8;Map<String,Long> expected=new HashMap<>();List<Path> files=new ArrayList<>();JSONArray stages=array(java.util.stream.IntStream.range(0,2000).mapToObj(i->"stage_"+i).toArray());List<Runnable> mainTasks=Collections.synchronizedList(new ArrayList<>());
+        when(scheduler.runTask(any(org.bukkit.plugin.Plugin.class),any(Runnable.class))).thenAnswer(call->{mainTasks.add(call.getArgument(1));return mock(BukkitTask.class);});
+        try {
+            for(int i=0;i<accounts;i++){UUID id=UUID.randomUUID();Path file=Path.of("plugins/RPCharacters/data/playerdata",id+".json");files.add(file);expected.put(id.toString(),1700000000L+i);Files.writeString(file,obj("completed stages",stages,"eighteen",false,"created-at",1700000000L+i).toJSONString());RosterSyncService.pushRosterAsync(id);}
+            List<Runnable> tasks=new ArrayList<>(workers);workers.clear();assertEquals(accounts,tasks.size());var pool=java.util.concurrent.Executors.newFixedThreadPool(accounts);
+            try {
+                for(int round=0;round<20;round++){
+                    var start=new java.util.concurrent.CyclicBarrier(accounts);List<java.util.concurrent.Future<?>> runs=new ArrayList<>();
+                    for(Runnable task:tasks)runs.add(pool.submit(()->{start.await();task.run();return null;}));
+                    for(var run:runs)run.get();assertEquals(accounts,mainTasks.size());assertTrue(pushes.isEmpty());
+                    mainTasks.forEach(Runnable::run);mainTasks.clear();runWorkers();Map<String,Long> seen=new HashMap<>();
+                    for(JSONObject root:pushes)seen.put((String)root.get("player_uuid"),(Long)root.get("account_created_at_epoch"));assertEquals(expected,seen,"round "+round);pushes.clear();
+                }
+            } finally {pool.shutdownNow();}
+        } finally {for(Path file:files)Files.deleteIfExists(file);}
+    }
+
+    @Test void savedTraitSurvivesAReloadThatOverlapsTheOfflineRead() throws Exception {
+        Trait strong=trait("strong","physical");Cache.editableTraits=List.of("physical");List<Runnable> mainTasks=new ArrayList<>();
+        when(scheduler.runTask(any(org.bukkit.plugin.Plugin.class),any(Runnable.class))).thenAnswer(call->{mainTasks.add(call.getArgument(1));return mock(BukkitTask.class);});
+        Files.writeString(playerFile,obj("completed stages",array(),"eighteen",false).toJSONString());Files.createDirectories(characterFolder);
+        Files.writeString(characterFolder.resolve("alpha.json"),obj("id","alpha","name","Aria","status","ALIVE","active",false,"race","human","traits",array("strong")).toJSONString());
+        RosterSyncService.pushRosterAsync(owner);assertEquals(1,workers.size());
+        TraitLoader.oList.clear();runWorkers();assertTrue(pushes.isEmpty(),"Saved traits must not be resolved while a reload empties the registry");
+        TraitLoader.oList.add(strong);assertEquals(1,mainTasks.size());mainTasks.forEach(Runnable::run);runWorkers();
+        assertEquals(1,pushes.size());assertEquals("alpha",firstCharacter().get("id"));assertEquals(array(obj("id","strong","name","strong","key","physical")),firstCharacter().get("traits"));
     }
 
     private JSONObject firstCharacter(){return (JSONObject)((JSONArray)pushes.getLast().get("characters")).getFirst();}
