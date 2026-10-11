@@ -2,7 +2,7 @@
 # visible defaults to true; set visible: false for staff/helper groups players cannot acquire.
 defaults:
   name-colour-stops: 0
-  character-switch-cooldown-days: 14
+  character-switch-cooldown-days: 4
   max-alive-characters: 3
   wardrobe-skin-slots: 1
 
@@ -12,7 +12,7 @@ groups:
     permission: rpchar.group.noble
     display-name: "&#2981C4N&#276EC1o&#265CBEb&#2549BBl&#2337B8e&#2224B5"
     name-colour-stops: 1
-    character-switch-cooldown-days: 10
+    character-switch-cooldown-days: 3
     max-alive-characters: 3
     wardrobe-skin-slots: 1
   gilded:
@@ -20,7 +20,7 @@ groups:
     permission: rpchar.group.gilded
     display-name: "&#FDAA17G&#FB9C14i&#F98E12l&#F67F10d&#F4710Ee&#F2630Bd&#F05509"
     name-colour-stops: 2
-    character-switch-cooldown-days: 7
+    character-switch-cooldown-days: 2
     max-alive-characters: 4
     wardrobe-skin-slots: 2
   ascended:
@@ -28,7 +28,7 @@ groups:
     permission: rpchar.group.ascended
     display-name: "&#8939EE&lA&#9033DD&ls&#972DCC&lc&#9E27BB&le&#A620AB&ln&#AD1A9A&ld&#B41489&le&#BB0E78&ld&#C20867"
     name-colour-stops: 20
-    character-switch-cooldown-days: 5
+    character-switch-cooldown-days: 1
     max-alive-characters: 5
     wardrobe-skin-slots: 3
   legacy:
@@ -36,7 +36,7 @@ groups:
     permission: rpchar.group.legacy
     display-name: "&#3AE38C&lL&#33CB7C&le&#2CB36C&lg&#259C5D&la&#1E844D&lc&#176C3D&ly&#10542D&l"
     name-colour-stops: 20
-    character-switch-cooldown-days: 5
+    character-switch-cooldown-days: 1
     max-alive-characters: 5
     wardrobe-skin-slots: 3
   # Example staff-only group (not shown on locked slots):
