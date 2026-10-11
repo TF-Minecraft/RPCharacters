@@ -6,9 +6,9 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.tlibs.shaded.lang3.text.WordUtils;
-import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
+import net.tfminecraft.rpcharacters.creation.CreationRules;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
@@ -73,10 +73,6 @@ public class SetterStage extends Stage{
 		runMessage(p, message);
 	}
 
-	public boolean isAlphabetic(String input) {
-		return input != null && input.matches("^[a-zA-Z ]+$");
-	}
-
 	public String capitalizeWords(String input) {
 		if (input == null || input.isEmpty()) return input;
 		
@@ -134,8 +130,8 @@ public class SetterStage extends Stage{
 			return;
 		}
 
-		if (!isAlphabetic(n)) {
-			RPTexts.send(p, RPTexts.ERROR + "Letters only.");
+		if (!CreationRules.isNameText(n)) {
+			RPTexts.send(p, RPTexts.ERROR + "Letters, spaces, apostrophes, hyphens and full stops only.");
 			return;
 		}
 
@@ -183,11 +179,9 @@ public class SetterStage extends Stage{
 			return;
 		}
 
-		int ageMin = Cache.calendarAgeMinimum;
-		int ageMax = race.getAgeMax();
-		if (age < ageMin || age > ageMax) {
-			RPTexts.send(p, RPTexts.ERROR + "Age must be between " + RPTexts.WARN + ageMin + " " + RPTexts.ERROR + "and "
-					+ RPTexts.WARN + ageMax + " " + RPTexts.ERROR + "for your race.");
+		String ageError = CreationRules.ageError(age, race);
+		if (ageError != null) {
+			RPTexts.send(p, RPTexts.ERROR + ageError);
 			return;
 		}
 
