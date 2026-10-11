@@ -1,4 +1,0 @@
-[2026-10-11 20:51] Set the status of the character Recipient 9538168c-8b8a-40c1-ab57-c7a3aef83543 to DEAD
-[2026-10-11 20:51] Set the status of the character Recipient 9538168c-8b8a-40c1-ab57-c7a3aef83543 to ALIVE
-[2026-10-11 20:51] Set the status of the character New name to DEAD
-[2026-10-11 20:51] Set the status of the character New name to ALIVE

@@ -1,5 +1,0 @@
-[2026-10-11 20:52] Set the status of the character Aria to DEAD
-[2026-10-11 20:52] Set the status of the character Dead to DEAD
-[2026-10-11 20:52] Set the status of the character Aria to DEAD
-[2026-10-11 20:52] Set the status of the character Aria to ALIVE
-[2026-10-11 20:52] Set the status of the character Aria to DEAD
