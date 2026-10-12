@@ -270,6 +270,82 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void navigationAndPortraitUpdatesKeepTheDialogOpenUntilTheServerReplacesIt() {
+		roster("wren", "rowan");
+		character("old", "Old Tom", Status.DEAD);
+		CharacterSelectView.open(player, data, actions);
+		link("rowan");
+		loads.get("rowan").complete(skin(0xFFFF0000));
+		drain();
+		link("‹");
+		click("Memorials (1)");
+		click("Back");
+		assertTrue(ui.opened.size() >= 6);
+		for (CapturedDialog dialog : ui.opened) {
+			assertFalse(dialog.base().pause(), "NONE is only valid for non-pausing dialogs");
+			assertEquals(DialogBase.DialogAfterAction.NONE, dialog.base().afterAction(),
+					"navigation must not close the screen and recenter the cursor");
+		}
+		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void checkpointRenewsIdleCallbacksWithoutClosingOrChangingTheFocusedCharacter() {
+		roster("wren", "rowan");
+		CharacterSelectView.open(player, data, actions);
+		link("rowan");
+		ActionButton expiredPlay = button("▶ Play");
+		int shown = ui.opened.size();
+		CharacterSelectView.refreshAll();
+		assertEquals(shown + 1, ui.opened.size());
+		assertEquals("rowan", CharacterSelectView.session(OWNER).selected);
+		ui.click(expiredPlay, player);
+		verify(actions, never()).play(any());
+		verify(player, never()).closeDialog();
+		click("▶ Play");
+		verify(actions).play(data.getCharacterById("rowan"));
+	}
+
+	@Test
+	void checkpointClosesAnInvalidatedSelectorAndShutdownClosesItsDialogs() {
+		roster("wren");
+		CharacterSelectView.open(player, data, actions);
+		when(actions.isCurrent(player, data)).thenReturn(false);
+		CharacterSelectView.refreshAll();
+		assertNull(CharacterSelectView.session(OWNER));
+		verify(player).closeDialog();
+		assertEquals(1, ui.opened.size());
+		when(actions.isCurrent(player, data)).thenReturn(true);
+		CharacterSelectView.open(player, data, actions);
+		CharacterSelectView.cleanupAll();
+		assertNull(CharacterSelectView.session(OWNER));
+		verify(player, times(2)).closeDialog();
+	}
+
+	@Test
+	void aBrokenSelectorDoesNotPreventOtherPlayersFromRefreshing() {
+		roster("wren");
+		when(wallet.available()).thenReturn(false);
+		CharacterSelectView.portraits = (owner, id, skin) -> CompletableFuture.completedFuture(null);
+		CharacterSelectView.open(player, data, actions);
+		Player other = mock(Player.class);
+		UUID otherOwner = UUID.randomUUID();
+		when(other.getUniqueId()).thenReturn(otherOwner);
+		when(other.getName()).thenReturn("Other");
+		PlayerData otherData = new PlayerData(otherOwner);
+		when(actions.isCurrent(other, otherData)).thenReturn(true);
+		CharacterSelectView.open(other, otherData, actions);
+		int shown = ui.opened.size();
+		when(actions.blockReason(any())).thenThrow(new IllegalStateException("cooldown unavailable"));
+		assertDoesNotThrow(CharacterSelectView::refreshAll);
+		assertNull(CharacterSelectView.session(OWNER));
+		assertNotNull(CharacterSelectView.session(otherOwner));
+		assertEquals(shown + 1, ui.opened.size());
+		verify(player).closeDialog();
+		verify(other, never()).closeDialog();
+	}
+
+	@Test
 	void blockedCharactersShowTheReasonOnTheCardAndAMutedPlayButton() {
 		RPCharacter rowan = character("rowan", "Rowan", Status.ALIVE);
 		when(actions.blockReason(rowan)).thenReturn("Rowan can be played again in 2d 4h.");
@@ -281,6 +357,7 @@ class CharacterSelectViewTest {
 		click("▶ Play");
 		verify(actions, never()).play(any());
 		assertTrue(ui.last().bodyText().startsWith("Rowan can be played again in 2d 4h.\nRowan\n"));
+		verify(player, never()).closeDialog();
 	}
 
 	@Test
@@ -489,8 +566,12 @@ class CharacterSelectViewTest {
 		links.get(oldNext.clickEvent()).accept(player);
 		assertEquals(shown, ui.opened.size());
 		verify(actions, never()).play(any());
+		verify(player, never()).closeDialog();
 		click("▶ Play");
 		verify(actions).play(data.getCharacterById("rowan"));
+		var handover = inOrder(player, actions);
+		handover.verify(player).closeDialog();
+		handover.verify(actions).play(data.getCharacterById("rowan"));
 	}
 
 	@Test
@@ -526,6 +607,9 @@ class CharacterSelectViewTest {
 		}).when(actions).play(wren);
 		click("New character");
 		verify(actions).create();
+		var creation = inOrder(player, actions);
+		creation.verify(player).closeDialog();
+		creation.verify(actions).create();
 		CharacterSelectView.open(player, data, actions);
 		click("▶ Play");
 		verify(actions).play(wren);
@@ -558,6 +642,7 @@ class CharacterSelectViewTest {
 		assertTrue(ui.last().bodyText().startsWith("No free character slot.\n"));
 		verify(actions, never()).create();
 		assertNotNull(CharacterSelectView.session(OWNER));
+		verify(player, never()).closeDialog();
 	}
 
 	@Test
@@ -845,7 +930,11 @@ class CharacterSelectViewTest {
 			bases.when(() -> DialogBase.builder(any(Component.class))).thenAnswer(call -> {
 				var base = mock(DialogBase.class);
 				when(base.title()).thenReturn(call.getArgument(0));
+				when(base.pause()).thenReturn(true);
+				when(base.afterAction()).thenReturn(DialogBase.DialogAfterAction.CLOSE);
 				var builder = mock(DialogBase.Builder.class, RETURNS_SELF);
+				doAnswer(c -> { when(base.pause()).thenReturn(c.getArgument(0)); return builder; }).when(builder).pause(anyBoolean());
+				doAnswer(c -> { when(base.afterAction()).thenReturn(c.getArgument(0)); return builder; }).when(builder).afterAction(any());
 				doAnswer(c -> { when(base.canCloseWithEscape()).thenReturn(c.getArgument(0)); return builder; }).when(builder).canCloseWithEscape(anyBoolean());
 				doAnswer(c -> { when(base.body()).thenReturn(List.copyOf(c.getArgument(0))); return builder; }).when(builder).body(anyList());
 				when(builder.build()).thenReturn(base);

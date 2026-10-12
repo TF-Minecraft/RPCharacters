@@ -493,7 +493,8 @@ class CharacterBodiesTest {
     }
     @Test void switchRequestsRequireARealLogoutAndShutdownStowsThenClosesProgress() throws Exception {
         play();bodies.requestSwitch(account,a);verify(player,never()).kickPlayer(anyString());bodies.requestSwitch(account,b);verify(player).kickPlayer(contains("Reconnect"));
-        bodies.checkpoint();verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
+        view.when(CharacterSelectView::refreshAll).thenAnswer(call->{verify(progress).save(account,a);return null;});
+        bodies.checkpoint();view.verify(CharacterSelectView::refreshAll);verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
     }
     @Test void configurationRejectsMissingWorldUnsafeKeysAndSharedSelectionWorld() {
         config.set("spawn-world","absent");assertThrows(IOException.class,()->new CharacterBodies(plugin,config));

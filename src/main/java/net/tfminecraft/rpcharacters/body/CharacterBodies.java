@@ -601,6 +601,7 @@ public final class CharacterBodies {
             try { progress.save(account, character); }
             catch (IOException | RuntimeException error) { fail(account.getPlayer(), "saving character progression", error); }
         }
+        CharacterSelectView.refreshAll();
     }
 
     private void fail(Player player, String operation, Throwable error) {

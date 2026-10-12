@@ -19,6 +19,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -170,8 +172,31 @@ public final class CharacterSelectView {
 
 	/** Ends every selector, for plugin shutdown. */
 	public static void cleanupAll() {
-		for (Session session : SESSIONS.values()) session.closed = true;
+		for (Session session : SESSIONS.values()) {
+			session.closed = true;
+			session.player.closeDialog();
+		}
 		SESSIONS.clear();
+	}
+
+	/** Renews idle selectors from the five-minute checkpoint before callbacks expire. */
+	static void refreshAll() {
+		for (Session session : List.copyOf(SESSIONS.values())) {
+			try {
+				if (session.live()) {
+					session.revision++;
+					render(session);
+				} else {
+					end(session);
+					session.player.closeDialog();
+				}
+			} catch (RuntimeException error) {
+				Logger.getLogger(CharacterSelectView.class.getName()).log(Level.WARNING,
+						"Could not refresh character selector for " + session.player.getUniqueId(), error);
+				end(session);
+				session.player.closeDialog();
+			}
+		}
 	}
 
 	static Session session(UUID owner) {
@@ -278,7 +303,8 @@ public final class CharacterSelectView {
 	private static void show(Session session, Component title, List<DialogBody> body, List<ActionButton> buttons,
 			ActionButton exit, int columns) {
 		session.player.showDialog(Dialog.create(builder -> builder.empty()
-				.base(DialogBase.builder(title).canCloseWithEscape(false).body(body).build())
+				.base(DialogBase.builder(title).canCloseWithEscape(false).pause(false)
+						.afterAction(DialogBase.DialogAfterAction.NONE).body(body).build())
 				.type(DialogType.multiAction(buttons, exit, columns))));
 	}
 
@@ -554,6 +580,7 @@ public final class CharacterSelectView {
 			return;
 		}
 		end(session);
+		session.player.closeDialog();
 		session.actions.play(character);
 	}
 
@@ -564,6 +591,7 @@ public final class CharacterSelectView {
 			return;
 		}
 		end(session);
+		session.player.closeDialog();
 		session.actions.create();
 	}
 
