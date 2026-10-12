@@ -148,6 +148,9 @@ public final class CharacterBodies {
         UUID owner = player.getUniqueId();
         selecting.add(owner);
         failed.remove(owner);
+        // Paper has not sent the player list yet, so this changes the profile without a refresh that
+        // would interrupt the resource-pack prompt; they arrive as Steve.
+        wearRoomSkin(player);
         Location original = originalSpawns.remove(owner);
         if (original == null) original = player.getLocation();
         try {
@@ -638,7 +641,7 @@ public final class CharacterBodies {
         enterAfterRecovery(account);
     }
 
-    /** Only once the account skin is known, so Play and portraits can still restore it. */
+    /** Only once the account skin is known, so Play and portraits can still restore it; repeats are skipped. */
     private void wearRoomSkin(Player player) {
         WardrobeCache.captureAccountSkinIfNeeded(player);
         if (WardrobeCache.getAccountSkin(player) != null) SkinApplyHelper.apply(player, SelectionSkin.STEVE);

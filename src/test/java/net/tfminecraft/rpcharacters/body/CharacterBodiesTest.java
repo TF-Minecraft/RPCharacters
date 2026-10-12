@@ -644,9 +644,19 @@ class CharacterBodiesTest {
         assertNull(account.getLastCharacterSwitchAtMs());
     }
 
+    @Test void joinDressesThePlayerAsSteveBeforeTheirRoomAndPackWait() throws Exception {
+        var accountSkin=new SkinTextures("account","signed"); when(packs.ready(player)).thenReturn(false);
+        wardrobes.when(()->WardrobeCache.getAccountSkin(player)).thenReturn(accountSkin);
+        bodies.join(player);
+        InOrder order=inOrder(WardrobeCache.class,SkinApplyHelper.class);
+        order.verify(wardrobes,()->WardrobeCache.captureAccountSkinIfNeeded(player));
+        order.verify(skins,()->SkinApplyHelper.apply(player,SelectionSkin.STEVE));
+        verify(player,never()).teleport(any(Location.class)); assertTrue(queued.size()>0);
+    }
+
     @Test void roomSkinNeedsAKnownAccountSkinToRestore() throws Exception {
         ready(); skins.verify(()->SkinApplyHelper.apply(any(Player.class),any(SkinTextures.class)),never());
-        wardrobes.verify(()->WardrobeCache.captureAccountSkinIfNeeded(player));
+        wardrobes.verify(()->WardrobeCache.captureAccountSkinIfNeeded(player),times(2));
     }
 
     @Test void movingOrBeingHurtKeepsTheCharacterAndOnlyOneCountdownRuns() throws Exception {
