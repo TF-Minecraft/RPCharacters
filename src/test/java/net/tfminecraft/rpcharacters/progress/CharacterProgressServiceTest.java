@@ -15,6 +15,160 @@ import org.bukkit.Bukkit;
 import org.junit.jupiter.api.Test;
 
 class CharacterProgressServiceTest extends ProgressFixture {
+    @Test void preflightRejectsRemovedStoredClassWithoutTouchingProgressOrMmo() throws Exception {
+        var character=character(); enable(); service.prepare(account);
+        when(classes.get("warrior")).thenReturn(null);
+        assertPreflightUnchanged(character,()->assertThrows(IOException.class,()->service.preflight(account,character)));
+        assertTrue(store.readBaseline(account.getUniqueId()).isPresent(),"Stored baselines remain readable without configured classes");
+        assertTrue(store.read(account.getUniqueId(),character.getId()).isPresent());
+    }
+
+    @Test void preflightRejectsRemovedSavedSlotWithoutTouchingProgressOrMmo() throws Exception {
+        var mage=mock(net.Indyuce.mmocore.api.player.profess.PlayerClass.class);
+        when(classes.get("mage")).thenReturn(mage);
+        when(mmo.getSavedClasses()).thenReturn(Set.of("mage"));
+        var saved=new net.Indyuce.mmocore.api.player.profess.SavedClassInformation(
+                MMOCore.plugin.playerDataManager.getDefaultData());
+        when(mmo.getClassInfo("mage")).thenReturn(saved);
+        var character=character(); enable(); service.prepare(account);
+        assertPreflightUnchanged(character,()->assertDoesNotThrow(()->service.preflight(account,character)));
+        when(classes.get("mage")).thenReturn(null);
+        assertPreflightUnchanged(character,()->assertThrows(IOException.class,()->service.preflight(account,character)));
+        assertTrue(store.readBaseline(account.getUniqueId()).isPresent());
+    }
+
+    @Test void preflightChecksConfiguredClassButAllowsNullLegacyClassInSelectionRoom() throws Exception {
+        var character=character(); enable(); service.prepare(account);
+        assertNull(account.getActiveCharacter());
+        assertPreflightUnchanged(character,()->assertDoesNotThrow(()->service.preflight(account,character)));
+        when(character.getMMOClass()).thenReturn("warrior");
+        assertPreflightUnchanged(character,()->assertDoesNotThrow(()->service.preflight(account,character)));
+        when(character.getMMOClass()).thenReturn("removed");
+        assertPreflightUnchanged(character,()->assertThrows(IOException.class,()->service.preflight(account,character)));
+        assertFalse(character.isActive()); assertNull(service.token(account));
+    }
+
+    @Test void preflightRequiresOwnedReadableProgressAndReadyOnlinePlayer() throws Exception {
+        var character=character(); enable(); service.prepare(account);
+        var original=character.getProgress();
+        assertPreflightUnchanged(character,()-> {
+            assertThrows(IOException.class,()->service.preflight(null,character));
+            assertThrows(IOException.class,()->service.preflight(account,null));
+            var stranger=mock(net.tfminecraft.rpcharacters.objects.RPCharacter.class);
+            assertThrows(IOException.class,()->service.preflight(account,stranger));
+            when(player.isOnline()).thenReturn(false);
+            assertThrows(IOException.class,()->service.preflight(account,character));
+            when(player.isOnline()).thenReturn(true);
+            var offline=new PlayerData(account.getUniqueId()); offline.getCharacters().add(character);
+            assertThrows(IOException.class,()->service.preflight(offline,character));
+            ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(false);
+            assertThrows(IOException.class,()->service.preflight(account,character));
+            ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(true);
+            character.setProgress(null);
+            assertThrows(IOException.class,()->service.preflight(account,character));
+            character.setProgress(progress(UUID.randomUUID().toString()));
+            assertThrows(IOException.class,()->service.preflight(account,character));
+            character.setProgress(new CharacterProgress(UUID.randomUUID(),character.getId(),CharacterProgress.FRESH,
+                    MmoProgressCodec.fresh()));
+            assertThrows(IOException.class,()->service.preflight(account,character));
+            character.setProgress(original);
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
+            assertThrows(IllegalStateException.class,()->service.preflight(account,character));
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+        });
+    }
+
+    @Test void preflightWrapsClassRegistryFailureWithoutWritingOrApplying() throws Exception {
+        var character=character(); enable(); service.prepare(account);
+        when(classes.get("warrior")).thenThrow(new IllegalStateException("reloading"));
+        assertPreflightUnchanged(character,()-> {
+            var failure=assertThrows(IOException.class,()->service.preflight(account,character));
+            assertInstanceOf(IllegalStateException.class,failure.getCause());
+        });
+    }
+
+    private void assertPreflightUnchanged(net.tfminecraft.rpcharacters.objects.RPCharacter character,
+            org.junit.jupiter.api.function.Executable action) throws Exception {
+        var before=new org.bukkit.configuration.file.YamlConfiguration();
+        character.getProgress().writeTo(before);
+        long revision=character.getProgress().getRevision();
+        Map<Path,byte[]> files=new HashMap<>();
+        try (var paths=Files.walk(root.resolve("progress"))) {
+            for (Path file:paths.filter(Files::isRegularFile).toList()) files.put(file,Files.readAllBytes(file));
+        }
+        clearInvocations(mmo,items); mmoPlayers.clearInvocations();
+        assertDoesNotThrow(action);
+        verifyNoInteractions(mmo,items); mmoPlayers.verifyNoInteractions();
+        var after=new org.bukkit.configuration.file.YamlConfiguration();
+        character.getProgress().writeTo(after);
+        assertEquals(before.saveToString(),after.saveToString());
+        assertEquals(revision,character.getProgress().getRevision());
+        try (var paths=Files.walk(root.resolve("progress"))) {
+            assertEquals(files.keySet(),new HashSet<>(paths.filter(Files::isRegularFile).toList()));
+        }
+        for (var file:files.entrySet()) assertArrayEquals(file.getValue(),Files.readAllBytes(file.getKey()));
+    }
+
+    @Test void characterCreatedBeforeMmoReadyCannotPublishProgressWithoutItsBaseline() throws Exception {
+        var original=character(); enable(); service.recordLegacyActive(account,null);
+        ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(false);
+        var added=character();
+        assertThrows(IOException.class,()->service.ensureFresh(account,added));
+        assertFalse(Files.exists(store.baselinePath(account.getUniqueId())));
+        assertFalse(Files.exists(store.characterPath(account.getUniqueId(),added.getId()).getParent()));
+        assertNull(added.getProgress());
+        ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(true);
+        service.prepare(account);
+        assertEquals(CharacterProgress.BASELINE,original.getProgress().getSource());
+        assertEquals(CharacterProgress.FRESH,added.getProgress().getSource());
+        assertEquals(0,added.getProgress().getSkillPointsTotal());
+    }
+    @Test void firstBaselineUsesFrozenJoinRosterAndNewArrivalStaysFreshAcrossRestart() throws Exception {
+        var original=character(); enable(); service.recordLegacyActive(account,null);
+        ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(false);
+        var added=character(); service.recordLegacyActive(account,null);
+        ready.when(()->MmoCorePlayerReady.isReady(player)).thenReturn(true);
+        service.prepare(account);
+        assertEquals(List.of(original.getId()),store.readBaseline(account.getUniqueId()).orElseThrow().characterIds());
+        assertEquals(12,original.getProgress().getSkillPointsTotal());
+        assertEquals(CharacterProgress.FRESH,added.getProgress().getSource());
+        assertEquals(1,added.getProgress().getClassLevel());
+        assertEquals(0,added.getProgress().getSkillPointsTotal());
+        assertEquals(0,added.getProgress().getProfessionPoints("mining"));
+        String baseline=Files.readString(store.baselinePath(account.getUniqueId()));
+        service.close(); original.setProgress(null); added.setProgress(null);
+        service=new CharacterProgressService(root.resolve("progress"));
+        account.setAccountSkillPointsTotal(99); when(mmo.getLevel()).thenReturn(99);
+        service.prepare(account);
+        assertEquals(12,original.getProgress().getSkillPointsTotal());
+        assertEquals(1,added.getProgress().getClassLevel());
+        assertEquals(0,added.getProgress().getSkillPointsTotal());
+        assertEquals(baseline,Files.readString(store.baselinePath(account.getUniqueId())));
+    }
+    @Test void emptyJoinRosterCannotCloneLegacyProgressIntoAnArrivalAndMissingSnapshotFailsClosed() throws Exception {
+        enable(); service.recordLegacyActive(account,null); var added=character(); service.prepare(account);
+        assertTrue(store.readBaseline(account.getUniqueId()).orElseThrow().characterIds().isEmpty());
+        assertEquals(CharacterProgress.FRESH,added.getProgress().getSource());
+        service.close();service=new CharacterProgressService(root.resolve("unrecorded"));added.setProgress(null);
+        assertThrows(IOException.class,()->service.prepare(account));
+        assertFalse(Files.exists(root.resolve("unrecorded").resolve(account.getUniqueId().toString())));
+    }
+    @Test void bodyAdmittedFreshAccountStartsItsExistingWebRosterFreshWithoutChangingLegacyPools() throws Exception {
+        var fromWeb=character();enable();service.recordFreshAccount(account);service.prepare(account);
+        assertTrue(store.readBaseline(account.getUniqueId()).orElseThrow().characterIds().isEmpty());
+        assertEquals(CharacterProgress.FRESH,fromWeb.getProgress().getSource());
+        assertEquals(1,fromWeb.getProgress().getClassLevel());assertEquals(0,fromWeb.getProgress().getSkillPointsTotal());
+        assertEquals(0,fromWeb.getProgress().getAttributePointsTotal());assertEquals(0,fromWeb.getProgress().getProfessionPoints("mining"));
+        assertEquals(12,account.getAccountSkillPointsTotal());assertEquals(7,account.getAccountAttributePointsTotal());assertEquals(8,account.getAccountProfessionPoints("mining"));
+    }
+    @Test void freshAdmissionCannotReplaceAnAlreadyPersistedLegacyBaseline() throws Exception {
+        var original=character();enable();service.prepare(account);
+        String baseline=Files.readString(store.baselinePath(account.getUniqueId()));
+        original.setProgress(null);service.recordFreshAccount(account);service.prepare(account);
+        assertEquals(CharacterProgress.BASELINE,original.getProgress().getSource());
+        assertEquals(12,original.getProgress().getSkillPointsTotal());
+        assertEquals(baseline,Files.readString(store.baselinePath(account.getUniqueId())));
+    }
     @Test void resourceRestoreUsesPreActivationValuesAfterProgressCheckpointsAndRejectsNonLiveCharacters() throws Exception {
         var a=character(); var b=character(); enable();
         assertThrows(IOException.class,()->service.resources(account,a));
@@ -115,7 +269,7 @@ class CharacterProgressServiceTest extends ProgressFixture {
         var missing=mock(ProfessionDefinition.class);when(missing.getId()).thenReturn("removed");ProfessionRegistry.setProfessions(List.of(missing));ProfessionPointService.resetLifetimePoints(player);assertTrue(a.getProgress().getProfessionPointsMap().isEmpty());
     }
     @Test void legacyAttributeBootstrapUsesOriginalCharacterRatherThanAnItemHeirAndRequiresItsIdentity() throws Exception {
-        var original=character();var heir=character();account=new PlayerData(player);account.getCharacters().addAll(List.of(original,heir));enable();
+        var original=character();var heir=character();account=new PlayerData(player);account.getCharacters().addAll(List.of(original,heir));service=new CharacterProgressService(root.resolve("progress"));
         assertThrows(IOException.class,()->service.prepare(account));assertFalse(Files.exists(store.baselinePath(account.getUniqueId())));
         var attribute=mock(net.Indyuce.mmocore.api.player.attribute.PlayerAttributes.AttributeInstance.class);when(attribute.getId()).thenReturn("strength");when(attribute.getBase()).thenReturn(9);when(mmo.getAttributes().getInstances()).thenReturn(List.of(attribute));when(original.getCreationBaseAmount("strength")).thenReturn(4);when(heir.getCreationBaseAmount("strength")).thenReturn(8);when(mmo.getAttributePoints()).thenReturn(2);
         service.recordLegacyActive(account,original);service.prepare(account);assertEquals(7,original.getProgress().getAttributePointsTotal());assertEquals(7,heir.getProgress().getAttributePointsTotal());verify(original).setExtraAttributeAllocation(Map.of("strength",5));verify(heir,never()).setExtraAttributeAllocation(anyMap());assertTrue(account.needsAttributePointsMigration());

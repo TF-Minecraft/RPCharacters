@@ -18,6 +18,17 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class MmoProgressCodecTest extends ProgressFixture {
+    @Test void classPreflightIsPureAndApplyRechecksClassesAfterPreflight() {
+        var saved=MmoProgressCodec.fresh(); String before=saved.saveToString();
+        clearInvocations(mmo,items);
+        MmoProgressCodec.validateClasses(saved);
+        when(classes.get("warrior")).thenReturn(null);
+        assertThrows(IllegalArgumentException.class,()->MmoProgressCodec.apply(mmo,saved));
+        assertThrows(IllegalArgumentException.class,()->MmoProgressCodec.validateClasses(saved));
+        assertDoesNotThrow(()->MmoProgressCodec.validate(saved),"Persistence validation must remain independent of live classes");
+        verifyNoInteractions(mmo,items); assertEquals(before,saved.saveToString());
+    }
+
     @Test void restoredAccessoryModifiersAreResolvedBeforeResourceCapsAndValues() {
         var saved=MmoProgressCodec.fresh(); saved.set("mana",150d);
         var resources=MmoProgressCodec.resources(saved);

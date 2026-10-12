@@ -8,14 +8,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
@@ -26,6 +35,16 @@ final class CharacterBodyMigration {
     private final YamlConfiguration heirs;
     private final BodyStore store;
     private final Location newCharacterSpawn;
+    // Only manifest-backed, completed heirs are cached, bounding entries to the reviewed manifest.
+    private final Map<UUID, CachedHeir> completedHeirs = new HashMap<>();
+
+    private record PlanStamp(Object key, long size, FileTime modified) {
+        static PlanStamp read(Path file) throws IOException {
+            BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
+            return new PlanStamp(attributes.fileKey(), attributes.size(), attributes.lastModifiedTime());
+        }
+    }
+    private record CachedHeir(PlanStamp stamp, UUID heir) { }
 
     CharacterBodyMigration(Path root, Path heirFile, String expectedHash, BodyStore store,
             Location newCharacterSpawn) throws IOException {
@@ -60,7 +79,7 @@ final class CharacterBodyMigration {
             }
         } else {
             String heir = heirs.getString("heirs." + owner);
-            if (heir == null && !account.getCharacters().isEmpty()
+            if (heir == null && !account.getCharacters().isEmpty() && !newEmptyAccount(account, legacy)
                     || heir != null && account.getCharacterById(heir) == null) {
                 throw new IOException("No reviewed body heir for " + owner);
             }
@@ -72,10 +91,12 @@ final class CharacterBodyMigration {
             plan.set("fresh-body", BodySnapshot.fresh(account.getPlayer(), newCharacterSpawn).serialize());
             plan.set("complete", false);
             plan.createSection("characters");
+            var seen = new HashSet<UUID>();
             for (RPCharacter character : account.getCharacters()) {
                 UUID id = uuid(character.getId());
-                if (plan.contains("characters." + id)) throw new IOException("Duplicate body migration character: " + id);
+                if (!seen.add(id)) throw new IOException("Duplicate body migration character: " + id);
                 if (store.read(owner, id).isPresent()) throw new IOException("Character body exists without its migration plan: " + id);
+                if (heir == null) continue; // First-join web characters have no legacy body or progress to inherit.
                 Location at = character.getLastLocation();
                 plan.set("characters." + id,
                         at != null && at.getWorld() != null ? at : newCharacterSpawn);
@@ -117,11 +138,53 @@ final class CharacterBodyMigration {
 
     UUID heir(UUID owner) {
         try {
-            String value = Files.exists(root.resolve(owner + ".yml")) ? readPlan(owner).getString("heir")
-                    : heirs.getString("heirs." + owner);
-            return value == null ? null : uuid(value);
+            Path file = root.resolve(owner + ".yml");
+            if (!Files.exists(file)) {
+                completedHeirs.remove(owner);
+                String value = heirs.getString("heirs." + owner);
+                return value == null ? null : uuid(value);
+            }
+            PlanStamp stamp = PlanStamp.read(file);
+            CachedHeir cached = completedHeirs.get(owner);
+            if (cached != null && cached.stamp().equals(stamp)) return cached.heir();
+            completedHeirs.remove(owner);
+            YamlConfiguration plan = readPlan(owner);
+            UUID heir = plan.getString("heir") == null ? null : uuid(plan.getString("heir"));
+            if (heir != null && plan.getBoolean("complete")) completedHeirs.put(owner, new CachedHeir(stamp, heir));
+            return heir;
         } catch (IOException invalid) {
+            completedHeirs.remove(owner);
             return null;
+        }
+    }
+
+    private static boolean newEmptyAccount(PlayerData account, BodySnapshot legacy) throws IOException {
+        Player player = account.getPlayer();
+        if (player == null || player.hasPlayedBefore()) return false;
+        var data = legacy.toJson();
+        for (ItemStack item : ItemStack.deserializeItemsFromBytes(BodyJson.bytes(data, "enderChest"))) {
+            if (item != null && !item.getType().isAir()) return false;
+        }
+        ItemStack[] inventory = ItemStack.deserializeItemsFromBytes(BodyJson.bytes(data, "inventory"));
+        for (int index = 0; index < inventory.length; index++) {
+            ItemStack item = inventory[index];
+            if (item != null && !item.getType().isAir() && !placeholder(player, index, item)) return false;
+        }
+        return true;
+    }
+
+    private static boolean placeholder(Player player, int index, ItemStack item) throws IOException {
+        if (index < 9 || index > 12 || item.getType() != Material.DIAMOND_HOE || item.getAmount() != 1) return false;
+        var plugin = Bukkit.getPluginManager().getPlugin("MMOInventory");
+        if (plugin == null || !plugin.isEnabled()) return false;
+        try {
+            Object manager = plugin.getClass().getMethod("getInventoryManager").invoke(plugin);
+            Object inventory = manager.getClass().getMethod("getVanilla").invoke(manager);
+            if (inventory == null) return false;
+            Object slot = inventory.getClass().getMethod("getSlot", int.class).invoke(inventory, index);
+            return slot != null && item.equals(slot.getClass().getMethod("displayItem", Player.class).invoke(slot, player));
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            throw new IOException("Cannot verify MMOInventory placeholders for a new account", error);
         }
     }
 

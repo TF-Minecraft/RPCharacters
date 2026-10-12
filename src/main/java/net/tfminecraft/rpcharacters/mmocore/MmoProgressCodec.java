@@ -83,6 +83,24 @@ public final class MmoProgressCodec {
 		decode(section);
 	}
 
+	/** Check stored class definitions without applying progress or claiming rewards. */
+	public static void validateClasses(ConfigurationSection section) {
+		validateClasses(decode(section));
+	}
+
+	private static PlayerClass validateClasses(State state) {
+		PlayerClass target = MMOCore.plugin.classManager.get(state.classId);
+		if (target == null) {
+			throw new IllegalArgumentException("Unknown stored MMOCore class " + state.classId);
+		}
+		for (String classId : state.slots.keySet()) {
+			if (MMOCore.plugin.classManager.get(classId) == null) {
+				throw new IllegalArgumentException("Unknown stored MMOCore class " + classId);
+			}
+		}
+		return target;
+	}
+
 	/** Freeze current resource values before class changes or checkpoints can replace the saved copy. */
 	public static Resources resources(ConfigurationSection section) {
 		return new Resources(decode(section).current);
@@ -115,15 +133,7 @@ public final class MmoProgressCodec {
 	 */
 	public static void apply(PlayerData mmo, ConfigurationSection section) {
 		State state = decode(section);
-		PlayerClass target = MMOCore.plugin.classManager.get(state.classId);
-		if (target == null) {
-			throw new IllegalArgumentException("Unknown stored MMOCore class " + state.classId);
-		}
-		for (String classId : state.slots.keySet()) {
-			if (MMOCore.plugin.classManager.get(classId) == null) {
-				throw new IllegalArgumentException("Unknown stored MMOCore class " + classId);
-			}
-		}
+		PlayerClass target = validateClasses(state);
 		mmo.getProfess().resetAdvancement(mmo, false);
 		for (Profession profession : MMOCore.plugin.professionManager.getAll()) {
 			profession.resetAdvancement(mmo, false);

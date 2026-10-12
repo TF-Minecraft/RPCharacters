@@ -45,7 +45,6 @@ final class CharacterSelectionGuard implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void spawn(AsyncPlayerSpawnLocationEvent event) {
         bodies.rememberSpawn(event.getConnection().getProfile().getId(), event.getSpawnLocation());
-        event.setSpawnLocation(bodies.room());
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

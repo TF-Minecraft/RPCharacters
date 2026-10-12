@@ -103,6 +103,6 @@ abstract class ProgressFixture {
         account.getCharacters().add(character); return character;
     }
     CharacterProgress progress(String id) { return new CharacterProgress(account.getUniqueId(), id, CharacterProgress.FRESH, MmoProgressCodec.fresh()); }
-    void enable() { service = new CharacterProgressService(root.resolve("progress")); }
+    void enable() throws java.io.IOException { service = new CharacterProgressService(root.resolve("progress")); service.recordLegacyActive(account,account.getActiveCharacter()); }
     void play(RPCharacter character) throws Exception { account.getCharacters().forEach(c -> c.setActiveState(false)); character.setActiveState(true); service.activate(account, character); }
 }

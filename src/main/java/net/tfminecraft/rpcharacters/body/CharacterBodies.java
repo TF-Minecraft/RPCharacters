@@ -40,6 +40,8 @@ public final class CharacterBodies {
     private final Set<NamespacedKey> bodyKeys;
     private final Map<UUID, Location> originalSpawns = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerData> pendingAccounts = new HashMap<>();
+    private final Map<UUID, RoomEntry> enteringRoom = new HashMap<>();
+    private final Set<UUID> deferredPrepare = new HashSet<>();
     private final Map<UUID, BodyTag.Live> live = new HashMap<>();
     private final Map<UUID, Location> deathLocations = new HashMap<>();
     private final Set<UUID> selecting = ConcurrentHashMap.newKeySet();
@@ -48,6 +50,15 @@ public final class CharacterBodies {
     private final Set<UUID> applying = new HashSet<>();
     private final Map<UUID, Object> requests = new HashMap<>();
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
+
+    private static final class RoomEntry {
+        final Player player;
+        final PlayerData account;
+        BodyTag recoveredFrom;
+        boolean detached;
+        boolean notified;
+        RoomEntry(Player player, PlayerData account) { this.player = player; this.account = account; }
+    }
 
     private static final class PendingRespawn {
         final BodyTag body;
@@ -110,6 +121,8 @@ public final class CharacterBodies {
         try {
             PlayerData account = database.loadPlayerData(owner);
             if (account == null) throw new IOException("Character account could not be loaded");
+            RoomEntry entry = new RoomEntry(player, account);
+            enteringRoom.put(owner, entry);
             progress.recordLegacyActive(account, account.getActiveCharacter());
             BodyTag tag = BodyTag.read(player);
             leases.validate(owner, tag);
@@ -122,6 +135,7 @@ public final class CharacterBodies {
                 // vanilla entity respawns. Only an authoritative living character owns that respawn.
                 if (!ownsRespawn(account, tag)) {
                     recover(account, tag, original);
+                    entry.recoveredFrom = tag;
                     tag = BodyTag.read(player);
                 } else if (tag instanceof BodyTag.Live active) {
                     leases.markRespawn(owner, active);
@@ -129,6 +143,7 @@ public final class CharacterBodies {
                 pendingRespawns.put(owner, new PendingRespawn(tag));
             } else {
                 recover(account, tag, original);
+                entry.recoveredFrom = tag;
             }
             for (RPCharacter character : account.getCharacters()) {
                 ProfessionIntegrator.remove(player, character);
@@ -136,12 +151,61 @@ public final class CharacterBodies {
             }
             pendingAccounts.put(owner, account);
             hide(player);
+            Bukkit.getScheduler().runTask(plugin, () -> enterRoom(entry));
         } catch (IOException | RuntimeException error) {
             // A failed first migration must retain the original location along with the vanilla body.
             applying.add(owner);
             try { player.teleport(original); } finally { applying.remove(owner); }
             fail(player, "recovering the character body", error);
         }
+    }
+
+    private void enterRoom(RoomEntry entry) {
+        Player player = entry.player;
+        PlayerData account = entry.account;
+        UUID owner = player.getUniqueId();
+        if (enteringRoom.get(owner) != entry || !current(player, account)) return;
+        try {
+            // Paper restores RootVehicle after PlayerJoinEvent. Keep that tree in its saved world.
+            if (!entry.detached) {
+                SavedMount.detach(player);
+                entry.detached = true;
+            }
+            if (entry.recoveredFrom != null) {
+                saveRecoveredRoom(player, entry.recoveredFrom);
+                entry.recoveredFrom = null;
+            }
+            if (!pendingRespawns.containsKey(owner)) {
+                applying.add(owner);
+                try {
+                    if (!player.teleport(room)) {
+                        if (current(player, account)) {
+                            if (!entry.notified) {
+                                player.sendMessage("Loading character selection. Please wait for your resource pack to finish.");
+                                entry.notified = true;
+                            }
+                            Bukkit.getScheduler().runTaskLater(plugin, () -> enterRoom(entry), 20L);
+                        }
+                        return;
+                    }
+                } finally {
+                    applying.remove(owner);
+                }
+                if (!current(player, account)) return;
+                player.saveData();
+            }
+            enteringRoom.remove(owner, entry);
+            if (deferredPrepare.remove(owner)) prepare(account);
+        } catch (IOException | RuntimeException error) {
+            fail(player, "entering character selection", error);
+        }
+    }
+
+    private void enterAfterRecovery(PlayerData account) {
+        RoomEntry entry = new RoomEntry(account.getPlayer(), account);
+        enteringRoom.put(account.getUniqueId(), entry);
+        deferredPrepare.add(account.getUniqueId());
+        enterRoom(entry);
     }
 
     private boolean ownsRespawn(PlayerData account, BodyTag tag) throws IOException {
@@ -182,11 +246,15 @@ public final class CharacterBodies {
             previous = waiting.lastCharacterId();
         } else {
             previous = migration.initialize(account, current);
+            if (previous == null) progress.recordFreshAccount(account);
         }
         clear(player);
         BodyTag.room(player, previous);
+    }
+
+    private void saveRecoveredRoom(Player player, BodyTag tag) throws IOException {
         player.saveData();
-        if (tag instanceof BodyTag.Live active) leases.complete(owner, active);
+        if (tag instanceof BodyTag.Live active) leases.complete(player.getUniqueId(), active);
     }
 
     public PlayerData takeAccount(Player player) {
@@ -196,6 +264,10 @@ public final class CharacterBodies {
     public void prepare(PlayerData account) {
         Player player = account.getPlayer();
         if (!current(player, account) || failed.contains(account.getUniqueId())) return;
+        if (enteringRoom.containsKey(account.getUniqueId())) {
+            deferredPrepare.add(account.getUniqueId());
+            return;
+        }
         try {
             PendingRespawn pending = pendingRespawns.get(account.getUniqueId());
             if (pending != null) {
@@ -246,14 +318,9 @@ public final class CharacterBodies {
             if (!pending.body.equals(BodyTag.read(player))) throw new IOException("Respawning body's tag changed");
             leases.validate(owner, pending.body);
             recover(account, pending.body, player.getLocation());
+            saveRecoveredRoom(player, pending.body);
             pendingRespawns.remove(owner);
-            applying.add(owner);
-            try {
-                if (!player.teleport(room)) throw new IOException("Selection room teleport was refused");
-            } finally {
-                applying.remove(owner);
-            }
-            prepare(account);
+            enterAfterRecovery(account);
         } catch (IOException | RuntimeException error) {
             fail(player, "saving the respawned character body", error);
         }
@@ -340,6 +407,14 @@ public final class CharacterBodies {
             player.closeInventory();
             BodyRecord latest = store.read(owner, body.characterId()).orElseThrow();
             if (latest.rev() != body.rev()) throw new IOException("Selected body changed while its location loaded");
+            try {
+                progress.preflight(account, character);
+            } catch (IOException error) {
+                plugin.getLogger().warning("Character " + character.getId() + " cannot activate for " + owner + ": " + error.getMessage());
+                player.sendMessage("This character needs attention. Choose another character or contact staff.");
+                show(player);
+                return;
+            }
             var resources = progress.resources(account, character);
             if (!player.teleport(destination)) {
                 if (current(player, account)) {
@@ -407,7 +482,7 @@ public final class CharacterBodies {
 
     public void rosterChanged(PlayerData account) {
         Player player = account.getPlayer();
-        if (!current(player, account)) return;
+        if (!current(player, account) || !ready.contains(account.getUniqueId())) return;
         try {
             for (RPCharacter character : account.getCharacters()) {
                 progress.ensureFresh(account, character);
@@ -443,11 +518,8 @@ public final class CharacterBodies {
             if (!player.isOnline() || PlayerManager.get(player) != account || !awaitingDeadBody(player)) return;
             stow(account, "permadeath");
             if (!failed.contains(account.getUniqueId())) {
-                applying.add(account.getUniqueId());
-                try { player.teleport(room); } finally { applying.remove(account.getUniqueId()); }
                 hide(player);
-                ready.add(account.getUniqueId());
-                show(player);
+                enterAfterRecovery(account);
             }
         }, 2L);
     }
@@ -490,6 +562,8 @@ public final class CharacterBodies {
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
         pendingAccounts.remove(owner);
+        enteringRoom.remove(owner);
+        deferredPrepare.remove(owner);
         originalSpawns.remove(owner);
         requests.remove(owner);
         selecting.remove(owner);

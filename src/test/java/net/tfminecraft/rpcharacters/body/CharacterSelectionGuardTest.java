@@ -55,7 +55,7 @@ class CharacterSelectionGuardTest {
         AsyncPlayerSpawnLocationEvent spawn = mock(AsyncPlayerSpawnLocationEvent.class, RETURNS_DEEP_STUBS);
         Location original = new Location(player.getWorld(), 50, 75, 50);
         when(spawn.getConnection().getProfile().getId()).thenReturn(player.getUniqueId()); when(spawn.getSpawnLocation()).thenReturn(original);
-        guard.spawn(spawn); verify(bodies).rememberSpawn(player.getUniqueId(), original); verify(spawn).setSpawnLocation(room);
+        guard.spawn(spawn); verify(bodies).rememberSpawn(player.getUniqueId(), original); verify(spawn, never()).setSpawnLocation(any());
         PlayerJoinEvent join = mock(PlayerJoinEvent.class); when(join.getPlayer()).thenReturn(player);
         guard.join(join); verify(bodies).join(player);
         var post = mock(com.destroystokyo.paper.event.player.PlayerPostRespawnEvent.class); when(post.getPlayer()).thenReturn(player);

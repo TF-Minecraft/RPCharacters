@@ -136,7 +136,7 @@ class CharacterBodiesTest {
     }
     BodyRecord record(UUID id,long rev){return new BodyRecord(owner,id,rev,1,Instant.now(),"test",snapshot);}
     void drain(){for(int i=0;!queued.isEmpty()&&i<20;i++)queued.removeFirst().run();}
-    void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);}
+    void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);drain();}
     void play(){ready();bodies.select(account,a);drain();assertTrue(bodies.hasLiveBody(player));}
     void useRealLeases() throws Exception {
         doAnswer(c->{diskLeases.validate(c.getArgument(0),c.getArgument(1));return null;}).when(leases).validate(any(),any());
@@ -149,14 +149,104 @@ class CharacterBodiesTest {
     }
     @AfterEach void cleanup() throws Exception {CreationManager.activeCreators.remove(player);for(int i=mocks.size()-1;i>=0;i--)mocks.get(i).close();}
 
+    @Test void selectionWaitsForVanillaMountLoadingAndLeavesTheVehicleTreeInItsWorld() throws Exception {
+        bodies.join(player); bodies.prepare(account);
+        assertTrue(bodies.isSelecting(player)); assertNull(actions); verify(progress,never()).prepare(account);
+        verify(player,never()).teleport(room); verify(player,never()).saveData();
+        // Paper restores the vehicle only after PlayerJoinEvent has finished.
+        var mount=mock(org.bukkit.entity.Donkey.class);
+        when(player.getVehicle()).thenReturn(mount);
+        when(player.leaveVehicle()).thenAnswer(call->{when(player.getVehicle()).thenReturn(null);return true;});
+        drain();
+        InOrder order=inOrder(player,progress);
+        order.verify(player).leaveVehicle(); order.verify(player).saveData(); order.verify(player).teleport(room);
+        order.verify(player).saveData(); order.verify(progress).prepare(account);
+        verifyNoInteractions(mount); assertNotNull(actions); assertEquals(new BodyTag.Room(first),tag);
+        verify(transitions,never()).selected(any());
+    }
+
+    @Test void roomEntryBeforeMmoReadyWaitsForItsExplicitPrepareAndOldEntryCallbacksDoNothing() throws Exception {
+        bodies.join(player); drain(); verify(player).teleport(room);
+        assertNull(actions); verify(progress,never()).prepare(any());
+        bodies.prepare(account); assertNotNull(actions);
+        bodies.quit(player); bodies.join(player); bodies.prepare(account);
+        clearInvocations(player,progress); bodies.quit(player); drain();
+        verify(player,never()).teleport(any(Location.class)); verify(progress,never()).prepare(any());
+    }
+
+    @Test void refusedDismountNeverOpensSelectionOrMovesTheVehicle() throws Exception {
+        var mount=mock(org.bukkit.entity.Donkey.class); when(player.getVehicle()).thenReturn(mount);
+        ready(); verify(player).kickPlayer(contains("needs attention")); assertNull(actions);
+        verifyNoInteractions(mount); verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        assertFalse(bodies.isApplying(player));
+    }
+
+    @Test void resourcePackCanDelayRoomEntryWithoutRepeatingDismountOrOpeningSelectionEarly() throws Exception {
+        bodies.join(player); bodies.prepare(account);
+        var mount=mock(org.bukkit.entity.Donkey.class); when(player.getVehicle()).thenReturn(mount);
+        when(player.leaveVehicle()).thenAnswer(call->{when(player.getVehicle()).thenReturn(null);return true;});
+        when(player.teleport(room)).thenReturn(false,false,true);
+        queued.removeFirst().run(); queued.removeFirst().run();
+        verify(player,times(1)).leaveVehicle(); verifyNoInteractions(mount);
+        verify(player,times(1)).sendMessage(contains("Loading character selection"));
+        verify(player,never()).kickPlayer(anyString()); assertNull(actions); verify(progress,never()).prepare(account);
+        verify(leases,never()).begin(any(),any()); assertEquals(new BodyTag.Room(first),tag);
+        assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isApplying(player));
+        queued.removeFirst().run(); verify(progress).prepare(account); assertNotNull(actions);
+        verify(player,times(1)).leaveVehicle(); assertTrue(queued.isEmpty());
+    }
+
+    @Test void cancelledRoomTeleportCannotScheduleRetryAfterTheConnectionCloses() throws Exception {
+        bodies.join(player); bodies.prepare(account); clearInvocations(player);
+        when(player.teleport(room)).thenAnswer(call->{when(player.isOnline()).thenReturn(false);return false;});
+        drain(); assertTrue(queued.isEmpty()); assertNull(actions); verify(player,times(1)).saveData();
+        verify(player,never()).sendMessage(anyString()); verify(progress,never()).prepare(account);
+    }
+
+    @Test void disconnectDuringRoomEntryCannotSaveOrPrepareTheOldConnection() throws Exception {
+        bodies.join(player); bodies.prepare(account); clearInvocations(player,progress);
+        when(player.teleport(room)).thenAnswer(call->{when(player.isOnline()).thenReturn(false);return true;});
+        drain(); verify(player,times(1)).saveData(); verify(progress,never()).prepare(account); assertNull(actions);
+        assertFalse(bodies.isApplying(player));
+    }
+
+    @Test void offlineRoomEntryNeverDetachesOrTeleportsTheOldPlayer() throws Exception {
+        bodies.join(player); when(player.isOnline()).thenReturn(false); drain();
+        verify(player,never()).leaveVehicle(); verify(player,never()).teleport(room);
+    }
+
+    @Test void liveRecoveryRetainsTheDurableLeaseAndRawMountUntilThePostJoinPhase() throws Exception {
+        useRealLeases(); diskLeases.begin(owner,new BodyTag.Live(first,1)); tag=new BodyTag.Live(first,1);
+        bodies.join(player);
+        verify(store).write(owner,first,1,"join-recovery",snapshot);
+        verify(player,never()).saveData(); verify(leases,never()).complete(any(),any());
+        diskLeases.validate(owner,new BodyTag.Live(first,1));
+        var mount=mock(org.bukkit.entity.Donkey.class); when(player.getVehicle()).thenReturn(mount);
+        when(player.leaveVehicle()).thenAnswer(call->{when(player.getVehicle()).thenReturn(null);return true;});
+        drain();
+        InOrder order=inOrder(player,leases);
+        order.verify(player).leaveVehicle(); order.verify(player).saveData();
+        order.verify(leases).complete(owner,new BodyTag.Live(first,1)); order.verify(player).teleport(room);
+        diskLeases.validate(owner,new BodyTag.Room(first)); verifyNoInteractions(mount);
+    }
+
+    @Test void oldRoomRetryCannotMoveAReconnectedPlayerOrPrepareTheNewSessionEarly() throws Exception {
+        bodies.join(player); bodies.prepare(account); when(player.teleport(room)).thenReturn(false);
+        queued.removeFirst().run(); assertEquals(1,queued.size());
+        bodies.quit(player); when(player.teleport(room)).thenReturn(true);
+        bodies.join(player); bodies.prepare(account); clearInvocations(player,progress);
+        queued.removeFirst().run(); verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        drain(); verify(player).teleport(room); verify(progress).prepare(account); assertNotNull(actions);
+    }
+
     @Test void joinRetainsOriginalLocationBeforeClearingAndNeverActivatesAutomatically() throws Exception {
         Location original=new Location(world,30,80,40);bodies.rememberSpawn(owner,original);bodies.join(player);
         verify(snapshot).withLocation(original);verify(migration).initialize(account,snapshot);
-        verify(player).closeInventory();verify(player).saveData();verify(player.getInventory()).clear();verify(player.getEnderChest()).clear();
+        verify(player).closeInventory();verify(player,never()).saveData();verify(player.getInventory()).clear();verify(player.getEnderChest()).clear();
         assertTrue(bodies.isSelecting(player));assertFalse(bodies.hasLiveBody(player));assertEquals(new BodyTag.Room(first),tag);
         assertSame(account,bodies.takeAccount(player));assertNull(bodies.takeAccount(player));
         verify(other).hidePlayer(plugin,player);verify(player).hidePlayer(plugin,other);verify(transitions,never()).selected(any());
-        bodies.prepare(account);verify(progress).prepare(account);verify(migration).ensureBody(account,a);assertNotNull(actions);
+        bodies.prepare(account);drain();verify(progress).prepare(account);verify(migration).ensureBody(account,a);assertNotNull(actions);
         assertTrue(actions.isCurrent(player,account));assertFalse(actions.isCurrent(other,account));assertNull(actions.blockReason(a));
         actions.leave();verify(player).kickPlayer("See you next time.");
     }
@@ -199,7 +289,7 @@ class CharacterBodiesTest {
         when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(false);when(a.getStatus()).thenReturn(Status.DEAD);assertNull(bodies.blockReason(account,b));
     }
     @Test void selectionRequiresReadyLivingOwnedCharacterAndLinkUnlessBypassed() throws Exception {
-        bodies.join(player);assertTrue(bodies.blockReason(account,a).contains("loading"));bodies.prepare(account);
+        bodies.join(player);assertTrue(bodies.blockReason(account,a).contains("loading"));bodies.prepare(account);drain();
         assertTrue(bodies.blockReason(account,character(UUID.randomUUID())).contains("cannot be played"));
         when(a.getStatus()).thenReturn(Status.DEAD);assertTrue(bodies.blockReason(account,a).contains("cannot be played"));when(a.getStatus()).thenReturn(Status.ALIVE);
         when(manager.isDiscordGate(owner)).thenReturn(true);assertTrue(bodies.blockReason(account,a).contains("Discord"));
@@ -229,6 +319,16 @@ class CharacterBodiesTest {
         ready();when(a.tryActivate()).thenReturn(false);bodies.select(account,a);drain();verify(transitions,never()).selected(any());
         assertFalse(bodies.hasLiveBody(player));
     }
+    @Test void rosterChangesDuringInitialLoadWaitForTheProgressionBaseline() throws Exception {
+        bodies.join(player);bodies.takeAccount(player);
+        RPCharacter created=character(UUID.randomUUID());account.addCharacter(created);
+        bodies.rosterChanged(account);
+        verify(progress,never()).ensureFresh(any(),any());verify(migration,never()).ensureBody(any(),any());
+        verify(progress,never()).prepare(any());assertNull(actions);
+        bodies.prepare(account);drain();
+        verify(progress).prepare(account);verify(migration).ensureBody(account,created);assertNotNull(actions);
+        bodies.rosterChanged(account);verify(progress).ensureFresh(account,created);
+    }
     @Test void cancelledTeleportKeepsRoomAndStoredBodiesUntouchedAndCanRetryWithoutReconnecting() throws Exception {
         useRealLeases(); ready(); account.setTempAlias("Room alias");
         CharacterSelectView.Actions originalActions=actions;
@@ -256,6 +356,22 @@ class CharacterBodiesTest {
         assertTrue(bodies.hasLiveBody(player)); assertFalse(bodies.isSelecting(player));
         verify(leases).begin(owner,new BodyTag.Live(second,1)); verify(progress).activate(account,b);
         verify(snapshot).apply(eq(player),anySet()); verify(transitions).selected(account);
+    }
+    @Test void classPreflightRefusalLeavesNoLeaseOrBodyChangesAndAnotherCharacterCanBeChosen() throws Exception {
+        useRealLeases(); ready(); clearInvocations(player,progress,store,leases,snapshot,a,b);
+        CharacterSelectView.Actions originalActions=actions;
+        doThrow(new IOException("Missing stored class")).when(progress).preflight(account,a);
+        bodies.select(account,a); drain();
+        assertEquals(new BodyTag.Room(first),tag); diskLeases.validate(owner,tag);
+        assertNull(account.getActiveCharacter()); assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isApplying(player));
+        assertNotSame(originalActions,actions); verify(player).sendMessage(contains("Choose another"));
+        verify(player,never()).kickPlayer(anyString()); verify(player,never()).teleport(any(Location.class));
+        verify(leases,never()).begin(any(),any()); verify(progress,never()).activate(any(),any());
+        verify(snapshot,never()).apply(any(),anySet()); verify(a,never()).tryActivate();
+        verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
+        actions.play(b); drain(); assertEquals(new BodyTag.Live(second,1),tag); assertTrue(bodies.hasLiveBody(player));
+        verify(progress).preflight(account,b); verify(leases).begin(owner,new BodyTag.Live(second,1));
+        verify(progress).activate(account,b); verify(transitions).selected(account);
     }
     @Test void disconnectInsideTeleportCannotBeginActivationOrPoisonNextJoin() throws Exception {
         useRealLeases(); ready(); clearInvocations(progress,store,leases,snapshot,transitions);
@@ -292,11 +408,21 @@ class CharacterBodiesTest {
         clearInvocations(player.getInventory());bodies.stow(account,"quit");verify(player.getInventory(),never()).clear();assertInstanceOf(BodyTag.Live.class,tag);
     }
     @Test void deathSavesProgressBeforeDeathAndStoresTheDeadBodyAtItsDeathLocation() throws Exception {
-        play();assertTrue(bodies.prepareDeath(account,a));verify(progress).save(account,a);
+        play();clearInvocations(player);assertTrue(bodies.prepareDeath(account,a));verify(progress).save(account,a);
         bodies.markDead(account,a);when(a.getStatus()).thenReturn(Status.DEAD);a.setActiveState(false);assertTrue(bodies.awaitingDeadBody(player));
         bodies.checkpoint();verify(progress,times(1)).save(account,a);
         bodies.finishDeath(player);drain();verify(store).write(owner,first,1,"permadeath",snapshot);verify(progress,times(1)).save(account,a);
         assertTrue(bodies.isSelecting(player));assertFalse(bodies.awaitingDeadBody(player));assertNotNull(actions);verify(player).teleport(room);
+    }
+    @Test void permanentDeathCannotPublishSelectionBeforeItsRoomTeleportSucceeds() throws Exception {
+        play(); bodies.markDead(account,a); when(a.getStatus()).thenReturn(Status.DEAD); a.setActiveState(false);
+        actions=null; when(player.teleport(room)).thenReturn(false);
+        bodies.finishDeath(player); queued.removeFirst().run();
+        assertNull(actions); assertTrue(bodies.isSelecting(player)); assertFalse(bodies.hasLiveBody(player));
+        assertEquals(new BodyTag.Room(first),tag); assertTrue(bodies.blockReason(account,b).contains("loading"));
+        verify(store).write(owner,first,1,"permadeath",snapshot); verify(player,never()).kickPlayer(anyString());
+        when(player.teleport(room)).thenReturn(true); drain(); assertNotNull(actions); assertNull(bodies.blockReason(account,b));
+        verify(b,never()).tryActivate();
     }
     @Test void failedDeathProgressSaveRefusesPermanentDeath() throws Exception {
         play();doThrow(new IOException("progress")).when(progress).save(account,a);assertFalse(bodies.prepareDeath(account,a));verify(player).kickPlayer(contains("needs attention"));
@@ -383,7 +509,7 @@ class CharacterBodiesTest {
         useRealLeases(); tag=new BodyTag.Live(first,1); bodies.join(player);
         verify(player.getInventory(),never()).clear(); verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
         bodies.quit(player); diskLeases.begin(owner,new BodyTag.Live(first,1)); clearInvocations(leases,player,store);
-        bodies.join(player);
+        bodies.join(player); drain();
         InOrder order=inOrder(leases,store,player);
         order.verify(leases).validate(owner,new BodyTag.Live(first,1));
         order.verify(store).write(owner,first,1,"join-recovery",snapshot); order.verify(player).saveData();
@@ -436,7 +562,7 @@ class CharacterBodiesTest {
         bodies.join(player); assertSame(account,bodies.takeAccount(player));
         respawns.verifyNoInteractions(); verify(snapshot,never()).withLocation(any()); verify(player.getInventory(),never()).clear();
         assertTrue(bodies.isRespawning(player)); assertNull(actions);
-        bodies.prepare(account); bodies.prepare(account); respawns.verify(()->BodyRespawn.respawn(player),times(1));
+        bodies.prepare(account); queued.removeFirst().run(); bodies.prepare(account); respawns.verify(()->BodyRespawn.respawn(player),times(1));
         verify(progress,never()).prepare(account); assertFalse(bodies.isApplying(player)); assertNull(actions);
         drain(); verify(snapshot).withLocation(bed); verify(snapshot).withFullHealth(); verify(snapshot,never()).withLocation(spawn);
         InOrder order=inOrder(store,player,leases,progress);
@@ -462,20 +588,21 @@ class CharacterBodiesTest {
         verify(player).kickPlayer(contains("needs attention")); assertInstanceOf(BodyTag.Live.class,tag); assertFalse(bodies.isApplying(player));
     }
 
-    @Test void deathDuringRespawnRecoveryAndRefusedRoomTeleportStayFailClosed() throws Exception {
+    @Test void deathDuringRespawnRecoveryFailsButResourcePackCanDelayTheRoomAfterSuccessfulRecovery() throws Exception {
         tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
         when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); when(player.isDead()).thenReturn(true); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(player).kickPlayer(contains("needs attention"));
         bodies.quit(player); bodies.join(player); when(player.isDead()).thenReturn(false); bodies.respawned(player); when(player.teleport(room)).thenReturn(false);
-        bodies.prepare(account); drain(); verify(player,times(2)).kickPlayer(contains("needs attention")); verify(progress,never()).prepare(account);
-        assertFalse(bodies.isApplying(player));
+        bodies.prepare(account); drain(); verify(player,times(1)).kickPlayer(contains("needs attention")); verify(progress,never()).prepare(account);
+        assertFalse(bodies.isApplying(player)); assertNull(actions); assertEquals(new BodyTag.Room(first),tag);
+        when(player.teleport(room)).thenReturn(true); drain(); verify(progress).prepare(account); assertNotNull(actions);
     }
 
     @Test void permanentDeathPreservesTheDeadBodyThenRespawnsOnlyTheRoomEntity() throws Exception {
         useRealLeases(); diskLeases.begin(owner,new BodyTag.Live(first,1)); tag=new BodyTag.Live(first,1);
         when(player.isDead()).thenReturn(true); when(a.getStatus()).thenReturn(Status.DEAD);
         bodies.join(player); verify(store).write(owner,first,1,"join-recovery",snapshot);
-        assertEquals(new BodyTag.Room(first),tag); diskLeases.validate(owner,tag); verify(player,never()).spigot();
+        assertEquals(new BodyTag.Room(first),tag); queued.removeFirst().run(); diskLeases.validate(owner,tag); verify(player,never()).spigot();
         respawns.when(()->BodyRespawn.respawn(player)).thenAnswer(c->{when(player.isDead()).thenReturn(false);when(player.getInventory().isEmpty()).thenReturn(false);bodies.respawned(player);return null;});
         bodies.prepare(account); drain();
         respawns.verify(()->BodyRespawn.respawn(player)); verify(store).quarantine(owner,"items-returned-after-stow",snapshot);
@@ -513,7 +640,7 @@ class CharacterBodiesTest {
         assertTrue(diskLeases.pendingRespawn(owner,new BodyTag.Live(first,1)));
         when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); bodies.quit(player); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(snapshot,never()).withFullHealth();
-        bodies.join(player); verify(snapshot).withFullHealth(); verify(store).write(owner,first,1,"join-recovery",snapshot);
+        bodies.join(player); drain(); verify(snapshot).withFullHealth(); verify(store).write(owner,first,1,"join-recovery",snapshot);
         diskLeases.validate(owner,new BodyTag.Room(first));
         // A normal wounded live body has no respawn intent and keeps its exact health.
         bodies.quit(player); tag=new BodyTag.Live(first,1); diskLeases.begin(owner,new BodyTag.Live(first,1));

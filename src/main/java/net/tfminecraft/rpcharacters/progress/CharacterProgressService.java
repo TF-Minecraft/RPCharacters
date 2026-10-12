@@ -41,7 +41,8 @@ public final class CharacterProgressService {
 	/** The character whose MMOCore copy is applied for each loaded account; reloaded accounts start empty. */
 	private final Map<PlayerData, Applied> applied = Collections.synchronizedMap(new WeakHashMap<>());
 	private final Set<Player> pendingCheckpoints = new HashSet<>();
-	private final Map<PlayerData, RPCharacter> legacyActive = new WeakHashMap<>();
+	private final Map<PlayerData, LegacyJoin> legacyAtJoin = new WeakHashMap<>();
+	private record LegacyJoin(RPCharacter activeCharacter, List<String> characterIds) {}
 	private record Applied(RPCharacter character) {}
 
 	/** Registers this service, so progression pools are per character from now on. */
@@ -57,26 +58,33 @@ public final class CharacterProgressService {
 	public void close() {
 		applied.clear();
 		pendingCheckpoints.clear();
-		legacyActive.clear();
+		legacyAtJoin.clear();
 		if (active == this) {
 			active = null;
 		}
 	}
 
-	/** Remember the original legacy character before the selector clears active flags. Null means none. */
+	/** Freeze the legacy roster and active character before join-time updates or cleared active flags. */
 	public void recordLegacyActive(PlayerData account, RPCharacter character) throws IOException {
 		requireMainThread();
 		if (character != null) {
 			requireOwned(account, character);
 		}
-		legacyActive.put(account, character);
+		legacyAtJoin.putIfAbsent(account, new LegacyJoin(character,
+				account.getCharacters().stream().map(RPCharacter::getId).toList()));
+	}
+
+	/** Body migration admitted a genuinely fresh account; its initial characters inherit no legacy progress. */
+	public void recordFreshAccount(PlayerData account) {
+		requireMainThread();
+		legacyAtJoin.put(account, new LegacyJoin(null, List.of()));
 	}
 
 	/**
 	 * Run once per join, after MMOCore has loaded the player and before any character plays. Writes the
 	 * baseline the first time, gives each cutover character missing a file a copy of it, and loads every
 	 * readable file. Never rewrites an existing file. A character whose file is unreadable stays unloaded,
-	 * so {@link #activate} refuses it; characters created after cutover wait for {@link #ensureFresh}.
+	 * so {@link #activate} refuses it. Characters added after the join snapshot receive fresh defaults.
 	 */
 	public void prepare(PlayerData account) throws IOException {
 		requireMainThread();
@@ -86,7 +94,7 @@ public final class CharacterProgressService {
 			baseline = captureBaseline(account);
 			store.createBaseline(baseline);
 		}
-		legacyActive.remove(account);
+		legacyAtJoin.remove(account);
 		for (RPCharacter character : new ArrayList<>(account.getCharacters())) {
 			if (character.getProgress() != null) {
 				continue;
@@ -101,17 +109,18 @@ public final class CharacterProgressService {
 			}
 			if (saved.isPresent()) {
 				character.setProgress(saved.get());
-			} else if (baseline.includes(character.getId())) {
-				CharacterProgress copy = baseline.cloneFor(character.getId());
-				store.create(copy);
-				character.setProgress(copy);
+			} else {
+				CharacterProgress created = baseline.includes(character.getId())
+						? baseline.cloneFor(character.getId()) : fresh(owner, character.getId());
+				store.create(created);
+				character.setProgress(created);
 			}
 		}
 	}
 
 	/**
 	 * Gives a new character its progress: MMOCore defaults and empty pools, so nothing carries over from
-	 * other characters. Loads an existing file instead, and gives a cutover character its baseline copy.
+	 * other characters. Requires a prepared baseline; loads existing files and clones cutover progress.
 	 */
 	public void ensureFresh(PlayerData account, RPCharacter character) throws IOException {
 		requireMainThread();
@@ -120,22 +129,46 @@ public final class CharacterProgressService {
 			return;
 		}
 		UUID owner = account.getUniqueId();
+		ProgressBaseline baseline = store.readBaseline(owner)
+				.orElseThrow(() -> new IOException("Character progress must be prepared before adding a character"));
 		Optional<CharacterProgress> saved = store.read(owner, character.getId());
 		if (saved.isPresent()) {
 			character.setProgress(saved.get());
 			return;
 		}
-		Optional<ProgressBaseline> baseline = store.readBaseline(owner);
-		CharacterProgress created = baseline.isPresent() && baseline.get().includes(character.getId())
-				? baseline.get().cloneFor(character.getId())
+		CharacterProgress created = baseline.includes(character.getId())
+				? baseline.cloneFor(character.getId())
 				: fresh(owner, character.getId());
 		store.create(created);
 		character.setProgress(created);
 	}
 
+	/** Validate selection before acquiring a body lease; never applies or checkpoints MMO progress. */
+	public void preflight(PlayerData account, RPCharacter character) throws IOException {
+		requireMainThread();
+		requireOwned(account, character);
+		Player player = account.getPlayer();
+		if (player == null || !player.isOnline()) {
+			throw new IOException("Account " + account.getUniqueId() + " is not online");
+		}
+		CharacterProgress progress = requireProgress(account, character);
+		try {
+			if (!MmoCorePlayerReady.isReady(player)) {
+				throw new IOException("MMOCore has not finished loading " + player.getName());
+			}
+			MmoProgressCodec.validateClasses(progress.mmo());
+			String classId = character.getMMOClass();
+			if (classId != null && MMOCore.plugin.classManager.get(classId) == null) {
+				throw new IOException("Unknown configured MMOCore class " + classId);
+			}
+		} catch (RuntimeException failure) {
+			throw new IOException("Could not validate the progress of character " + character.getId(), failure);
+		}
+	}
+
 	/**
 	 * Replaces the player's MMOCore progress with the character's. Call after making the character active
-	 * and before {@link RPCharacter#tryActivate()}. Nothing is changed when a check fails.
+	 * and before {@link RPCharacter#tryActivate()}. The caller must retain its lease after a partial apply.
 	 */
 	public void activate(PlayerData account, RPCharacter character) throws IOException {
 		requireMainThread();
@@ -261,8 +294,12 @@ public final class CharacterProgressService {
 		return progress;
 	}
 
-	/** The shared progress as the legacy code would have used it, for every character the account has now. */
+	/** Shared progress as legacy code would have used it, only for characters present at join. */
 	private ProgressBaseline captureBaseline(PlayerData account) throws IOException {
+		LegacyJoin joined = legacyAtJoin.get(account);
+		if (joined == null) {
+			throw new IOException("Legacy roster was not recorded before progression migration");
+		}
 		Player player = account.getPlayer();
 		if (player == null || !player.isOnline() || !MmoCorePlayerReady.isReady(player)) {
 			throw new IOException("The progress baseline for " + account.getUniqueId() + " needs MMOCore loaded");
@@ -275,10 +312,7 @@ public final class CharacterProgressService {
 				: account.getAccountSkillPointsTotal());
 		template.setRewardSkillPoints(account.getAccountRewardSkillPoints());
 		if (account.needsAttributePointsMigration()) {
-			if (!legacyActive.containsKey(account)) {
-				throw new IOException("Legacy active character was not recorded before attribute migration");
-			}
-			RPCharacter original = legacyActive.get(account);
+			RPCharacter original = joined.activeCharacter();
 			int spent = original == null ? 0 : AttributePointService.captureAllocationFromMmo(player, original);
 			template.setAttributePointsTotal((int) Math.min(Integer.MAX_VALUE, (long) mmo.getAttributePoints() + spent));
 		} else {
@@ -286,11 +320,7 @@ public final class CharacterProgressService {
 		}
 		ClassService.captureLegacyClassProgress(player, account, template);
 		ProfessionPointService.captureLegacyLifetimePoints(mmo, account, template);
-		List<String> ids = new ArrayList<>();
-		for (RPCharacter character : account.getCharacters()) {
-			ids.add(character.getId());
-		}
-		return new ProgressBaseline(account.getUniqueId(), ids, template);
+		return new ProgressBaseline(account.getUniqueId(), joined.characterIds(), template);
 	}
 
 	private static Player requireLive(PlayerData account, RPCharacter character) throws IOException {

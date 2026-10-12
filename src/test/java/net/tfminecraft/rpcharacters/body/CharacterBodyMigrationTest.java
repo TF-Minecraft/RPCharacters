@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
@@ -22,10 +24,16 @@ import java.util.function.Consumer;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import org.bukkit.Location;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +43,10 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 class CharacterBodyMigrationTest {
+    public interface InventoryPlugin { Object getInventoryManager(); }
+    public interface InventoryManager { Object getVanilla(); }
+    public interface VanillaInventory { Object getSlot(int index); }
+    public interface CustomSlot { ItemStack displayItem(Player player); }
     @TempDir Path directory;
     ServerMock server;
     PlayerMock player;
@@ -145,6 +157,149 @@ class CharacterBodyMigrationTest {
         try (var files = Files.list(bodyRoot.resolve(owner.toString()).resolve("quarantine"))) { quarantine = files.findFirst().orElseThrow(); }
         assertEquals(original, store.readQuarantine(quarantine).body());
         assertTrue(store.read(owner, alice).isEmpty());
+    }
+
+    void firstJoin() throws Exception {
+        player = spy(player); doReturn(false).when(player).hasPlayedBefore();
+        when(account.getPlayer()).thenReturn(player);
+        player.getInventory().clear(); player.getEnderChest().clear(); manifest(null);
+    }
+
+    BodySnapshot snapshot() throws IOException { return BodySnapshot.capture(player, Set.of(), BodySnapshotTest.MOCK_PDC); }
+
+    ItemStack guiItem(int index) {
+        ItemStack item = new ItemStack(Material.DIAMOND_HOE);
+        var meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey("mmoinventory", "guiitemid"), PersistentDataType.STRING, "slot-" + index);
+        item.setItemMeta(meta); return item;
+    }
+
+    @Test void firstEverWebCharactersStartFreshAndTheUnassignedRawBodyIsRetained() throws Exception {
+        firstJoin(); BodySnapshot raw = snapshot(); CharacterBodyMigration migration = migration();
+        assertNull(migration.initialize(account, raw));
+        assertTrue(plan().getConfigurationSection("characters").getKeys(false).isEmpty());
+        assertNull(plan().getString("heir")); assertNull(migration.heir(owner));
+        assertTrue(store.read(owner, alice).isEmpty()); assertTrue(store.read(owner, bob).isEmpty());
+        for (RPCharacter character : roster) {
+            migration.ensureBody(account, character);
+            BodySnapshot body = store.read(owner, UUID.fromString(character.getId())).orElseThrow().body();
+            assertEquals(BodySnapshot.fresh(player, character.getLastLocation()), body);
+            assertNotEquals(raw, body, "The unassigned account level and body must not be inherited");
+        }
+        try (var files = Files.list(bodyRoot.resolve(owner.toString()).resolve("quarantine"))) {
+            assertEquals(raw, store.readQuarantine(files.findFirst().orElseThrow()).body());
+        }
+        assertNull(migration.initialize(account, raw), "Retry retains the no-heir decision");
+    }
+
+    @Test void playedAccountsAndUnverifiedItemsStillRequireAReviewedHeir() throws Exception {
+        firstJoin(); CharacterBodyMigration migration = migration(); BodySnapshot empty = snapshot();
+        doReturn(true).when(player).hasPlayedBefore();
+        assertThrows(IOException.class, () -> migration.initialize(account, empty));
+        when(account.getPlayer()).thenReturn(null);
+        assertThrows(IOException.class, () -> migration.initialize(account, empty));
+        when(account.getPlayer()).thenReturn(player); doReturn(false).when(player).hasPlayedBefore();
+        player.getEnderChest().setItem(0, guiItem(9));
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        player.getEnderChest().clear();
+        for (int index : new int[]{0, 9, 13, 40}) {
+            player.getInventory().clear(); player.getInventory().setItem(index, guiItem(9));
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        }
+        player.getInventory().clear(); player.getInventory().setItem(9, new ItemStack(Material.DIAMOND));
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        player.getInventory().setItem(9, new ItemStack(Material.DIAMOND_HOE, 2));
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        assertFalse(Files.exists(planFile())); assertFalse(Files.exists(bodyRoot));
+    }
+
+    @Test void onlyExactConfiguredAccessoryPlaceholdersCanCountAsEmpty() throws Exception {
+        firstJoin();
+        Plugin plugin = mock(Plugin.class, withSettings().extraInterfaces(InventoryPlugin.class));
+        PluginManager plugins = mock(PluginManager.class); when(plugins.getPlugin("MMOInventory")).thenReturn(plugin);
+        InventoryManager manager = mock(InventoryManager.class); VanillaInventory inventory = mock(VanillaInventory.class);
+        when(((InventoryPlugin) plugin).getInventoryManager()).thenReturn(manager);
+        CharacterBodyMigration migration = migration(); player.getInventory().setItem(9, guiItem(9));
+        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
+            bukkit.when(Bukkit::getPluginManager).thenReturn(plugins);
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot())); // Disabled plugin.
+            when(plugin.isEnabled()).thenReturn(true);
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot())); // No configured vanilla slots.
+            when(manager.getVanilla()).thenReturn(inventory);
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot())); // Unknown slot.
+            for (int index = 9; index <= 12; index++) {
+                ItemStack expected = guiItem(index);
+                CustomSlot slot = mock(CustomSlot.class); when(slot.displayItem(player)).thenReturn(expected);
+                when(inventory.getSlot(index)).thenReturn(slot); player.getInventory().setItem(index, expected.clone());
+            }
+            ItemStack realAccessory = guiItem(9);
+            var meta = realAccessory.getItemMeta();
+            meta.getPersistentDataContainer().set(new NamespacedKey("mmoitems", "item_type"), PersistentDataType.STRING, "RING");
+            realAccessory.setItemMeta(meta); player.getInventory().setItem(9, realAccessory);
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+            player.getInventory().setItem(9, new ItemStack(Material.DIAMOND_HOE));
+            assertThrows(IOException.class, () -> migration.initialize(account, snapshot())); // Material alone is insufficient.
+            player.getInventory().setItem(9, guiItem(9)); BodySnapshot raw = snapshot();
+            assertNull(migration.initialize(account, raw));
+            assertEquals(raw.serialize(), plan().getString("legacy-body"));
+            assertTrue(plan().getConfigurationSection("characters").getKeys(false).isEmpty());
+        }
+    }
+
+    @Test void incompatiblePlaceholderApiAndInvalidNewRostersCannotAdmitAnAccount() throws Exception {
+        firstJoin(); player.getInventory().setItem(9, guiItem(9));
+        Plugin plugin = mock(Plugin.class); when(plugin.isEnabled()).thenReturn(true);
+        PluginManager plugins = mock(PluginManager.class); when(plugins.getPlugin("MMOInventory")).thenReturn(plugin);
+        CharacterBodyMigration migration = migration();
+        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
+            bukkit.when(Bukkit::getPluginManager).thenReturn(plugins);
+            assertInstanceOf(NoSuchMethodException.class,
+                    assertThrows(IOException.class, () -> migration.initialize(account, snapshot())).getCause());
+        }
+        player.getInventory().clear();
+        when(roster.get(1).getId()).thenReturn(alice.toString());
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        when(roster.get(1).getId()).thenReturn("bad");
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        when(roster.get(1).getId()).thenReturn(bob.toString());
+        store.write(owner, alice, 0, "unexpected", original);
+        assertThrows(IOException.class, () -> migration.initialize(account, snapshot()));
+        assertFalse(Files.exists(planFile()));
+    }
+
+    @Test void reviewedHeirsKeepTheirOriginalBodiesEvenOnTheFirstJoin() throws Exception {
+        firstJoin(); manifest(alice); CharacterBodyMigration migration = migration();
+        assertEquals(alice, migration.initialize(account, original));
+        assertEquals(original, store.read(owner, alice).orElseThrow().body());
+        assertEquals(2, plan().getConfigurationSection("characters").getKeys(false).size());
+    }
+
+    @Test void completedHeirCacheIsInvalidatedByEditsReplacementAndRemoval() throws Exception {
+        CharacterBodyMigration migration = migration(); migration.initialize(account, original);
+        String valid = Files.readString(planFile()); AtomicInteger reads = new AtomicInteger();
+        try (var files = mockStatic(Files.class, call -> {
+            if (call.getMethod().getName().equals("readString") && call.getMethod().getParameterCount() == 1
+                    && planFile().equals(call.getArgument(0))) reads.incrementAndGet();
+            return call.callRealMethod();
+        })) {
+            assertEquals(alice, migration.heir(owner)); assertEquals(alice, migration.heir(owner)); assertEquals(1, reads.get());
+            FileTime stamp = Files.getLastModifiedTime(planFile());
+            Files.writeString(planFile(), valid.replace("complete: true", "complete: junk"));
+            Files.setLastModifiedTime(planFile(), FileTime.fromMillis(stamp.toMillis() + 1000));
+            assertNull(migration.heir(owner)); assertEquals(2, reads.get());
+            Files.writeString(planFile(), valid); assertEquals(alice, migration.heir(owner)); assertEquals(3, reads.get());
+            Path replacement = root.resolve("replacement.yml");
+            Files.writeString(replacement, valid.replace("complete: true", "complete: junk"));
+            Files.setLastModifiedTime(replacement, Files.getLastModifiedTime(planFile()));
+            Files.move(replacement, planFile(), StandardCopyOption.REPLACE_EXISTING);
+            assertNull(migration.heir(owner), "Same length and mtime cannot hide atomic replacement"); assertEquals(4, reads.get());
+            Files.writeString(planFile(), valid); assertEquals(alice, migration.heir(owner)); assertEquals(5, reads.get());
+            Files.delete(planFile()); assertEquals(alice, migration.heir(owner)); assertEquals(5, reads.get());
+            Files.writeString(planFile(), "corrupt: ["); assertNull(migration.heir(owner)); assertEquals(6, reads.get());
+            Files.writeString(planFile(), valid.replace("complete: true", "complete: false"));
+            assertEquals(alice, migration.heir(owner)); assertEquals(alice, migration.heir(owner));
+            assertEquals(8, reads.get(), "Incomplete plans must always be revalidated");
+        }
     }
 
     @Test void interruptionBetweenBodyWritesKeepsTheInitialRosterLocationsAndLegacyBodyForRetry() throws Exception {
