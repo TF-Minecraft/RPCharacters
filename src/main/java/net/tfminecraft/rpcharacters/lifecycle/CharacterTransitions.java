@@ -88,6 +88,11 @@ public final class CharacterTransitions {
     }
 
     public void leave(PlayerData data, Reason reason) {
+        leave(data, reason, () -> {});
+    }
+
+    /** Ends the session, then runs the caller's outgoing save under the same transition guard. */
+    public void leave(PlayerData data, Reason reason, Runnable outgoing) {
         requireMainThread();
         // A failed save can kick during a transition; quit still has to save and unload the account.
         boolean ownsGuard = changing.add(data.getUniqueId());
@@ -95,6 +100,7 @@ public final class CharacterTransitions {
         try {
             joining.remove(data);
             end(data, reason);
+            outgoing.run();
         } finally {
             if (ownsGuard) changing.remove(data.getUniqueId());
         }

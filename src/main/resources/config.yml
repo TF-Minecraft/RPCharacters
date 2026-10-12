@@ -120,4 +120,6 @@ character-bodies:
   # Requires TFMCCore resource-pack.require-on-join. Missing or failed pack delivery blocks selection.
   require-resource-pack: false
   selection-world: character_selection
+  # /rpcharacter select from a playing character waits this long, standing still and unhurt.
+  return-seconds: 5
   persistent-keys: []

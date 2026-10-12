@@ -267,9 +267,14 @@ public final class Duels {
 		}
 	}
 
-	static void handleQuit(Player player) {
+	/** Leaving for character selection withdraws open challenges, as a logout does. */
+	public static void forget(Player player) {
 		challengesByChallenger.values().removeIf(c -> c.challenger().equals(player.getUniqueId())
 				|| c.target().equals(player.getUniqueId()));
+	}
+
+	static void handleQuit(Player player) {
+		forget(player);
 		Duel duel = duelsByPlayer.get(player.getUniqueId());
 		if (duel != null) {
 			end(duel, Ending.LEFT, player);

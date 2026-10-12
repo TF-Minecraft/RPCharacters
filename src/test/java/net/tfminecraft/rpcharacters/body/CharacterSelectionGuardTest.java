@@ -70,6 +70,13 @@ class CharacterSelectionGuardTest {
         guard.respawn(respawn); verify(respawn,never()).setRespawnLocation(any());
     }
 
+    @Test void anyDamageToAPlayerStopsTheirReturnToSelection() {
+        EntityDamageEvent hurt = mock(EntityDamageEvent.class); when(hurt.getEntity()).thenReturn(player);
+        guard.hurt(hurt); verify(bodies).interruptReturn(eq(player), contains("hurt"));
+        when(hurt.getEntity()).thenReturn(mock(Zombie.class)); clearInvocations(bodies);
+        guard.hurt(hurt); verify(bodies, never()).interruptReturn(any(), any());
+    }
+
     @Test void selectionLocksPositionAndTeleportButAllowsLookingAroundAndTheAuthoritativeRestoreTeleport() {
         Location destination = room.clone().add(.2, 0, 0);
         PlayerMoveEvent move = new PlayerMoveEvent(player, room, destination);

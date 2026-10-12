@@ -111,7 +111,7 @@ public final class CharacterSelectView {
 	/** Guild name, "" for none, or null when guilds can't be read. */
 	static Function<Player, String> guilds = CharacterSelectView::simpleFactionsGuild;
 	static PortraitLoader portraits = SelectPortraits::load;
-	static Function<Player, SkinTexture> accountTextures = SkinPortrait::texture;
+	static Function<Player, SkinTexture> accountTextures = CharacterSelectView::accountSkin;
 	static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
 	static Executor mainThread = task -> Bukkit.getScheduler().runTask(RPCharacters.plugin, task);
 
@@ -206,6 +206,12 @@ public final class CharacterSelectView {
 	private static void end(Session session) {
 		session.closed = true;
 		SESSIONS.remove(session.player.getUniqueId(), session);
+	}
+
+	/** The room dresses everyone as Steve; portraits fall back to the skin worn before it. */
+	static SkinTexture accountSkin(Player player) {
+		var saved = net.tfminecraft.rpcharacters.wardrobe.WardrobeCache.getAccountSkin(player);
+		return saved == null ? SkinPortrait.texture(player) : SkinPortrait.parseTextures(saved.getValue());
 	}
 
 	private static SkinTexture accountTexture(Player player) {

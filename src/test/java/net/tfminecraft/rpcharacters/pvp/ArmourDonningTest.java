@@ -273,7 +273,7 @@ class ArmourDonningTest {
         equip(ArmorType.CHESTPLATE, chestplate, EquipMethod.SHIFT_CLICK);
         player.removePotionEffect(PotionEffectType.SLOWNESS);
         player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 400, 1, false, true));
-        ArmourDonning.stop(player, false);
+        ArmourDonning.cancel(player);
         assertNotNull(player.getPotionEffect(PotionEffectType.SLOWNESS), "Visible slowness came from something else");
     }
 

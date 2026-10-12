@@ -82,6 +82,11 @@ final class CharacterSelectionGuard implements Listener {
                 && bodies.isSelecting(player)) event.setCancelled(true);
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void hurt(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player) bodies.interruptReturn(player, "You were hurt, so you stay with your character.");
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void food(FoodLevelChangeEvent event) {
         if (event.getEntity() instanceof Player player && bodies.isSelecting(player)) event.setCancelled(true);

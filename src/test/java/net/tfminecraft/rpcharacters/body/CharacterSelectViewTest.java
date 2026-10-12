@@ -453,6 +453,19 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void portraitsFallBackToTheSkinWornBeforeTheRoomSteve() {
+		var saved = new net.tfminecraft.rpcharacters.wardrobe.SkinTextures(SelectionSkin.STEVE.getValue(), "signed");
+		try (var cache = mockStatic(net.tfminecraft.rpcharacters.wardrobe.WardrobeCache.class);
+				var profiles = mockStatic(SkinPortrait.class, CALLS_REAL_METHODS)) {
+			profiles.when(() -> SkinPortrait.texture(player)).thenReturn(ACCOUNT_SKIN);
+			assertSame(ACCOUNT_SKIN, CharacterSelectView.accountSkin(player));
+			cache.when(() -> net.tfminecraft.rpcharacters.wardrobe.WardrobeCache.getAccountSkin(player)).thenReturn(saved);
+			assertEquals("https://textures.minecraft.net/texture/1d40ce1f42f8bb0e5493822e3812894fa516fc2dc5dda8758128f13299ccb9d7",
+					CharacterSelectView.accountSkin(player).url());
+		}
+	}
+
+	@Test
 	void unreadableAccountSkinsAreNotPassedOn() {
 		roster("wren");
 		CharacterSelectView.accountTextures = p -> { throw new IllegalStateException("no profile"); };

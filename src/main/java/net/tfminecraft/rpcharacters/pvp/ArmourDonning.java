@@ -326,6 +326,11 @@ public final class ArmourDonning implements Listener {
 		return item.isSimilar(inventory.getItem(OFF_HAND_SLOT)) ? OFF_HAND_SLOT : NOT_FOUND;
 	}
 
+	/** A body leaving for character selection stops fastening without a message. */
+	public static void cancel(Player player) {
+		stop(player, false);
+	}
+
 	/** Stop fastening. The piece stays where it is. */
 	static void stop(Player player, boolean tell) {
 		Donning state = donning.remove(player.getUniqueId());

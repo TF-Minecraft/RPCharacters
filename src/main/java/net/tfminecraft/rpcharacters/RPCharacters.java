@@ -140,6 +140,10 @@ public class RPCharacters extends JavaPlugin{
 		return plugin == null ? null : plugin.characterIdentity;
 	}
 
+	public static PvpKnockoutManager getPvpKnockoutManager() {
+		return plugin == null ? null : plugin.pvpKnockoutManager;
+	}
+
 	public static net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions getCharacterTransitions() {
 		return plugin == null ? null : plugin.characterTransitions;
 	}
