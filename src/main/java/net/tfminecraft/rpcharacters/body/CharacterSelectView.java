@@ -515,7 +515,7 @@ public final class CharacterSelectView {
 		return card.build();
 	}
 
-	/** Birthday, playtime, money and last location, one per line. */
+	/** Birthday, playtime and money, one per line. */
 	static String details(UUID owner, RPCharacter character) {
 		List<String> lines = new ArrayList<>();
 		String born = birthday(character);
@@ -523,11 +523,6 @@ public final class CharacterSelectView {
 		lines.add("Played " + formatPlaytime(character.getOnlinePlaytimeSeconds()));
 		String money = balances(owner, character);
 		if (!money.isEmpty()) lines.add(money);
-		if (character.hasLastLocation()) {
-			lines.add(String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
-					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),
-					(long) Math.floor(character.getLastLocationZ())));
-		}
 		return String.join("\n", lines);
 	}
 
