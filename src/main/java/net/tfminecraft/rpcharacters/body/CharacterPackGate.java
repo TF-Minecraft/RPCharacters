@@ -39,6 +39,7 @@ final class CharacterPackGate {
         final Runnable resume;
         long deadline;
         int revision;
+        int visibleRevision;
 
         Waiting(Player player, BooleanSupplier current, Runnable resume) {
             this.player = player;
@@ -100,20 +101,25 @@ final class CharacterPackGate {
     private void retry(Waiting request) {
         String status = state(request.player);
         if (status.equals("failed")) {
+            // Minecraft must receive our screen before its pack confirmation prompt.
+            show(request, false, false);
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tfmccore:tcore packretry " + request.player.getName());
             status = state(request.player);
+        } else {
+            // An external retry may already have opened that prompt. Never cover it.
+            ++request.revision;
         }
         if (!status.equals("loading") && !status.equals("ready")) {
             show(request, true, status.equals("failed"));
             return;
         }
         request.deadline = clock.getAsLong() + TIMEOUT;
-        show(request, false, false);
         poll(request);
     }
 
     private void show(Waiting request, boolean failed, boolean retry) {
         int revision = ++request.revision;
+        request.visibleRevision = revision;
         Component title = Component.text(failed ? "Could not load TFMC" : "Loading TFMC",
                 failed ? CharacterSelectView.WARN : CharacterSelectView.TEAL);
         List<DialogBody> body = List.of(
@@ -123,9 +129,10 @@ final class CharacterPackGate {
                         ? "Enable server resource packs in your server settings, then try again."
                         : "Accept the resource pack when Minecraft asks.\nCharacter selection will open automatically.",
                         CharacterSelectView.MUTED), 300));
-        ActionButton leave = button(request, revision, "Leave", () -> request.player.kickPlayer("See you next time."));
+        ActionButton leave = button(request, () -> revision == request.visibleRevision,
+                "Leave", () -> request.player.kickPlayer("See you next time."));
         List<ActionButton> buttons = retry
-                ? List.of(button(request, revision, "Retry", () -> retry(request)), leave) : List.of(leave);
+                ? List.of(button(request, () -> revision == request.revision, "Retry", () -> retry(request)), leave) : List.of(leave);
         request.player.showDialog(Dialog.create(builder -> builder.empty()
                 .base(DialogBase.builder(title).canCloseWithEscape(false).pause(false)
                         .afterAction(DialogBase.DialogAfterAction.NONE).body(body).build())
@@ -150,10 +157,10 @@ final class CharacterPackGate {
         }, 20L);
     }
 
-    private ActionButton button(Waiting request, int revision, String label, Runnable action) {
+    private ActionButton button(Waiting request, BooleanSupplier valid, String label, Runnable action) {
         return ActionButton.builder(Component.text(label, CharacterSelectView.PALE)).width(110)
                 .action(DialogAction.customClick((response, audience) -> {
-                    if (audience == request.player && revision == request.revision && current(request)) action.run();
+                    if (audience == request.player && valid.getAsBoolean() && current(request)) action.run();
                 }, CALLBACKS)).build();
     }
 

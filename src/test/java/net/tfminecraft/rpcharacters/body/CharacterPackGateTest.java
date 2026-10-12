@@ -108,6 +108,7 @@ class CharacterPackGateTest {
         assertEquals(List.of("Retry", "Leave"), buttons());
         var retry = ui.last().buttons().getFirst(); var leave = ui.last().buttons().getLast();
         bukkit.when(() -> Bukkit.dispatchCommand(console, "tfmccore:tcore packretry PackTest")).thenAnswer(call -> {
+            assertEquals("Loading TFMC", title(), "Loading must arrive before the pack prompt");
             when(metadata.value()).thenReturn("loading"); return true;
         });
         ui.click(retry, mock(Player.class));
@@ -132,9 +133,10 @@ class CharacterPackGateTest {
 
     @Test void retryFollowsAnExternalAttemptAndPreservesRetryAfterSynchronousFailure() {
         when(metadata.value()).thenReturn("failed"); await(); var retry = ui.last().buttons().getFirst();
+        int opened = ui.opened.size();
         when(metadata.value()).thenReturn("loading"); ui.click(retry, player);
         bukkit.verify(() -> Bukkit.dispatchCommand(any(), anyString()), never());
-        assertEquals("Loading TFMC", title());
+        assertEquals(opened, ui.opened.size(), "An external pack prompt must not be covered");
         when(metadata.value()).thenReturn("failed"); tasks.remove().run();
         ui.click(ui.last().buttons().getFirst(), player);
         assertEquals(List.of("Retry", "Leave"), buttons()); verifyNoInteractions(resume);
@@ -186,13 +188,26 @@ class CharacterPackGateTest {
 
     @Test void staffRetryAndAlreadyCompletedAttemptAutomaticallyLeaveTheFailureScreen() {
         when(metadata.value()).thenReturn("failed"); await();
+        int opened = ui.opened.size();
         when(metadata.value()).thenReturn("loading"); refreshes.remove().run();
-        assertEquals("Loading TFMC", title()); when(metadata.value()).thenReturn("ready"); tasks.remove().run();
+        assertEquals(opened, ui.opened.size(), "Staff retry must not repaint over the pack prompt");
+        when(metadata.value()).thenReturn("ready"); tasks.remove().run();
         verify(resume).run();
         when(metadata.value()).thenReturn("failed"); await();
         when(metadata.value()).thenReturn("ready"); refreshes.remove().run(); verify(resume,times(2)).run();
         when(metadata.value()).thenReturn("unavailable"); await();
         when(metadata.value()).thenReturn("failed"); refreshes.remove().run();
         assertEquals(List.of("Retry", "Leave"), buttons());
+    }
+
+    @Test void staffRetryKeepsVisibleLeaveUsableButInvalidatesRetryWithoutCoveringPrompt() {
+        when(metadata.value()).thenReturn("failed"); await();
+        var retry = ui.last().buttons().getFirst(); var leave = ui.last().buttons().getLast();
+        int opened = ui.opened.size();
+        when(metadata.value()).thenReturn("loading"); refreshes.remove().run();
+        ui.click(retry, player);
+        assertEquals(1, tasks.size()); assertEquals(opened, ui.opened.size());
+        ui.click(leave, player); verify(player).kickPlayer("See you next time.");
+        bukkit.verify(() -> Bukkit.dispatchCommand(any(), anyString()), never());
     }
 }
