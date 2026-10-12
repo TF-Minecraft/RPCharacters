@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -30,6 +31,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.RuntimeTestState;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
 import net.tfminecraft.rpcharacters.database.Database;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions;
@@ -40,6 +42,7 @@ import net.tfminecraft.rpcharacters.objects.races.Race;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
 import net.tfminecraft.tlibs.character.CharacterInfo;
+import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.tlibs.character.CharacterSession;
 import net.tfminecraft.tlibs.character.CharacterStatus;
 
@@ -194,6 +197,21 @@ class CharacterIdentityServiceTest {
         CharacterIdentityService.saved(offline, character);
         CharacterIdentityService.removed(offline, character.getId());
         assertTrue(service.info(id).isEmpty());
+    }
+
+    @Test
+    void legacyHeirsComeFromLoadedBodiesOnly() {
+        UUID owner = player.getUniqueId();
+        UUID heir = UUID.randomUUID();
+        assertFalse(service.legacyHeirsReady());
+        assertTrue(service.legacyHeir(owner).isEmpty());
+
+        CharacterBodies bodies = mock(CharacterBodies.class);
+        when(bodies.migrationHeir(owner)).thenReturn(heir);
+        plugin.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        assertTrue(service.legacyHeirsReady());
+        assertEquals(Optional.of(new CharacterRef(owner, heir)), service.legacyHeir(owner));
+        assertTrue(service.legacyHeir(UUID.randomUUID()).isEmpty());
     }
 
     @Test
