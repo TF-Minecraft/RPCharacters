@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -33,6 +34,7 @@ import net.tfminecraft.tlibs.character.CharacterSessionStartEvent;
 /** Owns session boundaries; end listeners always run before outgoing state is saved or removed. */
 public final class CharacterTransitions {
     private static final AtomicLong NEXT_SESSION = new AtomicLong();
+    private static final String SUSPENDED = "Your character could not be saved. Please contact staff.";
     private final Map<UUID, CharacterSession> sessions = new HashMap<>();
     private final Set<UUID> changing = new HashSet<>();
     private final Set<PlayerData> joining = new HashSet<>();
@@ -132,7 +134,25 @@ public final class CharacterTransitions {
 
     private static void suspend(Player player, String message) {
         RPCharacters.plugin.getLogger().severe(message);
-        if (player != null && player.isOnline()) player.kickPlayer("Your character could not be saved. Please contact staff.");
+        if (player != null && player.isOnline()) player.kickPlayer(SUSPENDED);
+    }
+
+    /**
+     * For callers that already committed their own change: a failed switch disconnects the player,
+     * whose quit saves the account, instead of throwing, so the caller can finish its bookkeeping.
+     */
+    public static void switchAfterCommit(PlayerData data, RPCharacter next) {
+        try {
+            data.setActiveCharacter(next);
+        } catch (RuntimeException error) {
+            abandon(data.getPlayer() != null ? data.getPlayer() : Bukkit.getPlayer(data.getUniqueId()),
+                    "Could not activate character " + next.getId() + " for " + data.getUniqueId(), error);
+        }
+    }
+
+    private static void abandon(Player player, String message, RuntimeException error) {
+        RPCharacters.plugin.getLogger().log(Level.SEVERE, message, error);
+        if (player != null && player.isOnline()) player.kickPlayer(SUSPENDED);
     }
 
     public static void switchCharacter(PlayerData data, RPCharacter next, RPCharacter ended) {
@@ -230,16 +250,21 @@ public final class CharacterTransitions {
             }
             if (runtime != null && !player.isOnline()) return new DeathResult(true, wasActive, null);
             String replacementName = null;
+            // The death is saved; a failed replacement must not stop its post-processing.
             if (wasActive) {
-                if (runtime == null || !runtime.joining.contains(data)) character.deactivate();
-                if (data != null) {
-                    data.clearTempAlias();
-                    if (!data.getCharacters(Status.ALIVE).isEmpty()) {
-                        RPCharacter next = data.getCharacters(Status.ALIVE).getFirst();
-                        applySwitch(data, next, character, runtime);
-                        replacementName = next.getName();
-                        net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(player);
+                try {
+                    if (runtime == null || !runtime.joining.contains(data)) character.deactivate();
+                    if (data != null) {
+                        data.clearTempAlias();
+                        if (!data.getCharacters(Status.ALIVE).isEmpty()) {
+                            RPCharacter next = data.getCharacters(Status.ALIVE).getFirst();
+                            applySwitch(data, next, character, runtime);
+                            replacementName = next.getName();
+                            net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(player);
+                        }
                     }
+                } catch (RuntimeException error) {
+                    abandon(player, "Could not activate a replacement after the death of " + character.getId(), error);
                 }
             }
             return new DeathResult(true, wasActive, replacementName);

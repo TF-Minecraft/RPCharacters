@@ -12,9 +12,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.IllegalPluginAccessException;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -208,7 +211,7 @@ class CharacterIdentityServiceTest {
     }
 
     @Test
-    void allProviderMethodsAndActiveHooksRequireMainThread() {
+    void allProviderMethodsRequireMainThread() {
         CharacterSession session = join();
         UUID owner = player.getUniqueId();
         UUID id = UUID.fromString(alice.getId());
@@ -220,10 +223,67 @@ class CharacterIdentityServiceTest {
             assertThrows(IllegalStateException.class, () -> service.characters(owner));
             assertThrows(IllegalStateException.class, () -> service.lastPlayed(owner));
             assertThrows(IllegalStateException.class, () -> service.displayName(player));
-            assertThrows(IllegalStateException.class, () -> CharacterIdentityService.saved(owner, alice));
-            assertThrows(IllegalStateException.class, () -> CharacterIdentityService.removed(owner, alice.getId()));
         }
         assertTrue(service.isCurrent(session));
+    }
+
+    @Test
+    void hooksOffTheMainThreadQueueTheirUpdateSoACompletedSaveStillSucceeds() {
+        RPCharacters.plugin = mock(RPCharacters.class);
+        Logger logger = mock(Logger.class);
+        when(RPCharacters.plugin.getLogger()).thenReturn(logger);
+        BukkitScheduler scheduler = mock(BukkitScheduler.class);
+        List<Runnable> queued = new ArrayList<>();
+        when(scheduler.runTask(eq(RPCharacters.plugin), any(Runnable.class))).thenAnswer(call -> {
+            queued.add(call.getArgument(1));
+            return null;
+        });
+        UUID offline = UUID.randomUUID();
+        RPCharacter character = character("Saved off thread", false);
+        UUID id = UUID.fromString(character.getId());
+        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            CharacterIdentityService.saved(offline, character);
+            CharacterIdentityService.removed(offline, character.getId());
+            doThrow(new IllegalPluginAccessException("Plugin attempted to register task while disabled"))
+                    .when(scheduler).runTask(eq(RPCharacters.plugin), any(Runnable.class));
+            CharacterIdentityService.saved(offline, character);
+        }
+        verify(logger).warning(contains("while disabled"));
+        assertEquals(2, queued.size());
+        assertTrue(service.info(id).isEmpty());
+        queued.getFirst().run();
+        assertEquals("Saved off thread", service.info(id).orElseThrow().name());
+        queued.getLast().run();
+        assertTrue(service.info(id).isEmpty());
+    }
+
+    @Test
+    void lookupsOnlyRebuildTheAccountsTheyNeed() {
+        PlayerMock other = server.addPlayer("Bystander");
+        PlayerData otherData = new PlayerData(other);
+        loaded.put(other, otherData);
+        RPCharacter bystander = mock(RPCharacter.class);
+        UUID bystanderId = UUID.randomUUID();
+        when(bystander.getId()).thenReturn(bystanderId.toString());
+        when(bystander.getName()).thenReturn("Bystander");
+        when(bystander.getStatus()).thenReturn(Status.ALIVE);
+        when(bystander.getTraits()).thenReturn(List.of());
+        when(bystander.isActive()).thenReturn(true);
+        otherData.addCharacter(bystander);
+        clearInvocations(bystander);
+        alice.setLastPlayedAt(Instant.ofEpochMilli(1000));
+        assertEquals("Alice", service.info(UUID.fromString(alice.getId())).orElseThrow().name());
+        assertEquals(1, service.characters(player.getUniqueId()).orElseThrow().size());
+        assertEquals("Alice", service.lastPlayed(player.getUniqueId()).orElseThrow().name());
+        verify(bystander, never()).getName();
+        assertTrue(service.info(UUID.randomUUID()).isEmpty());
+        verify(bystander, never()).getName();
+        assertEquals("Bystander", service.lastPlayed(other.getUniqueId()).orElseThrow().name());
+        when(bystander.getName()).thenReturn("Renamed");
+        assertEquals("Renamed", service.info(bystanderId).orElseThrow().name());
+        assertEquals("Renamed", service.characters(other.getUniqueId()).orElseThrow().getFirst().name());
     }
 
     private void install() throws Exception {

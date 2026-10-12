@@ -3,7 +3,9 @@ package net.tfminecraft.rpcharacters.identity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
@@ -25,11 +27,25 @@ public final class CharacterIdentityService implements CharacterIdentity {
         this.transitions = transitions;
     }
 
-    private void refresh() {
+    /** Overlays live edits for one owner's loaded account. */
+    private void refreshOwner(UUID ownerId) {
         CharacterTransitions.requireMainThread();
         for (PlayerData data : PlayerManager.getOnlineData()) {
-            for (RPCharacter character : data.getCharacters()) directory.upsert(data.getUniqueId(), character);
+            if (ownerId.equals(data.getUniqueId())) refresh(data);
         }
+    }
+
+    /** Overlays every loaded account holding this character, so live duplicates still quarantine. */
+    private void refreshCharacter(UUID characterId) {
+        CharacterTransitions.requireMainThread();
+        String id = characterId.toString();
+        for (PlayerData data : PlayerManager.getOnlineData()) {
+            if (data.getCharacters().stream().anyMatch(character -> id.equalsIgnoreCase(character.getId()))) refresh(data);
+        }
+    }
+
+    private void refresh(PlayerData data) {
+        for (RPCharacter character : data.getCharacters()) directory.upsert(data.getUniqueId(), character);
     }
 
     @Override
@@ -46,19 +62,19 @@ public final class CharacterIdentityService implements CharacterIdentity {
 
     @Override
     public Optional<CharacterInfo> info(UUID characterId) {
-        refresh();
+        refreshCharacter(characterId);
         return directory.info(characterId);
     }
 
     @Override
     public Optional<List<CharacterInfo>> characters(UUID ownerId) {
-        refresh();
+        refreshOwner(ownerId);
         return directory.characters(ownerId);
     }
 
     @Override
     public Optional<CharacterInfo> lastPlayed(UUID ownerId) {
-        refresh();
+        refreshOwner(ownerId);
         return directory.lastPlayed(ownerId);
     }
 
@@ -69,18 +85,26 @@ public final class CharacterIdentityService implements CharacterIdentity {
     }
 
     public static void saved(UUID owner, RPCharacter character) {
-        CharacterIdentityService service = RPCharacters.getCharacterIdentity();
-        if (service != null) {
-            CharacterTransitions.requireMainThread();
-            service.directory.upsert(owner, character);
-        }
+        onMainThread(directory -> directory.upsert(owner, character));
     }
 
     public static void removed(UUID owner, String characterId) {
+        onMainThread(directory -> directory.remove(owner, characterId));
+    }
+
+    /** A save off the main thread has already succeeded, so its directory update is queued, never thrown. */
+    private static void onMainThread(Consumer<CharacterDirectory> update) {
         CharacterIdentityService service = RPCharacters.getCharacterIdentity();
-        if (service != null) {
-            CharacterTransitions.requireMainThread();
-            service.directory.remove(owner, characterId);
+        if (service == null) return;
+        if (Bukkit.isPrimaryThread()) {
+            update.accept(service.directory);
+            return;
+        }
+        try {
+            Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> onMainThread(update));
+        } catch (RuntimeException error) {
+            // Disabled plugin: shutdown is ending and the next startup reloads the directory from disk.
+            RPCharacters.plugin.getLogger().warning("Character directory update skipped: " + error.getMessage());
         }
     }
 }

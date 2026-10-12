@@ -865,9 +865,10 @@ public class CharacterCreation {
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(p, pd.getUniqueId(), character);
 
-		pd.setActiveCharacter(character);
-
+		// Before the switch saves, so the quit save after a failed switch keeps kit eligibility.
 		net.tfminecraft.rpcharacters.kit.KitService.onCharacterCreated(p, pd, character);
+
+		net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.switchAfterCommit(pd, character);
 
 		RPCharacters.getPlayerManager().reevaluateFreeze(p);
 
@@ -876,6 +877,12 @@ public class CharacterCreation {
 		CreationManager.activeCreators.remove(p);
 
 		net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
+
+		if (!p.isOnline()) {
+
+			return;
+
+		}
 
 		net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(p);
 
