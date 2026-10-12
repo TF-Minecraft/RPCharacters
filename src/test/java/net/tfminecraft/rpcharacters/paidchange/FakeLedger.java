@@ -31,6 +31,7 @@ public final class FakeLedger implements DenarWallet {
     public boolean statusDown;
     /** Debits from the pouch are refused regardless of balance. */
     public boolean rejectPouch;
+    public Runnable beforePosting = () -> {};
     public Runnable afterPosting = () -> {};
 
     public long get(Account account) {
@@ -62,6 +63,7 @@ public final class FakeLedger implements DenarWallet {
     }
 
     private Posting post(Call call) {
+        beforePosting.run();
         attempts.add(call);
         if (postingsDown || (depositsDown && !call.debit())) {
             return Posting.UNAVAILABLE;

@@ -127,9 +127,9 @@ public final class PaidChangeService {
 
 	/**
 	 * Settles the payment held on the character. A payment whose debit never applied is dropped
-	 * without a refund. Otherwise a changed character keeps it and counts the change, and an
-	 * unchanged one is refunded with the stored refund ID. The hold is cleared only once one of
-	 * those happened.
+	 * without a refund. A legacy payment is always refunded, to the account's legacy heir once
+	 * known. Otherwise a changed character keeps it and counts the change, and an unchanged one is
+	 * refunded with the stored refund ID. The hold is cleared only once one of those happened.
 	 */
 	public static Outcome resolve(RPCharacter character) {
 		PendingPaidChange pending = character.getPendingPaidChange();
@@ -146,12 +146,20 @@ public final class PaidChangeService {
 			character.setPendingPaidChange(null);
 			return Outcome.DISCARDED;
 		}
+		// The old wallet's payments are refunded to the legacy heir whatever the character became.
+		if (payment != null && payment.isLegacy()) {
+			return refund(character, pending, payment);
+		}
 		if (!snapshot(character).equals(pending.before())) {
 			character.setPaidChangeCount(pending.stageId(),
 					(int) Math.min(Integer.MAX_VALUE, (long) character.getPaidChangeCount(pending.stageId()) + 1));
 			character.setPendingPaidChange(null);
 			return Outcome.KEPT;
 		}
+		return refund(character, pending, payment);
+	}
+
+	private static Outcome refund(RPCharacter character, PendingPaidChange pending, Payment payment) {
 		if (payment != null && Payments.refund(wallet, payment) != Posting.APPLIED) {
 			LOG.log(Level.WARNING, "[RPCharacters] Could not post " + payment.refundOpId() + " for a "
 					+ pending.label() + " change; keeping it held to retry.");
@@ -237,6 +245,10 @@ public final class PaidChangeService {
 			case REFUNDED -> {
 				if (pending.cents() <= 0) {
 					return null;
+				}
+				if (pending.payment().isLegacy()) {
+					return RPTexts.SUCCESS + "Your earlier " + formatCents(pending.cents()) + " payment for a "
+							+ pending.label() + " change went back to your " + pending.account().displayName() + ".";
 				}
 				return RPTexts.SUCCESS + "Your " + pending.label() + " is unchanged, so "
 						+ formatCents(pending.cents()) + " went back to your " + pending.account().displayName() + ".";

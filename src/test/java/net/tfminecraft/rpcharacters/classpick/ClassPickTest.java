@@ -60,6 +60,7 @@ import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
 import net.tfminecraft.rpcharacters.paidchange.FakeLedger;
 import net.tfminecraft.rpcharacters.paidchange.Payment;
 import net.tfminecraft.rpcharacters.paidchange.Payments;
+import net.tfminecraft.rpcharacters.paidchange.PendingPaidChange;
 import net.tfminecraft.rpcharacters.paidchange.PaymentsFixture;
 import net.tfminecraft.rpcharacters.database.CharacterClassPickFields;
 import net.tfminecraft.tlibs.character.CharacterRef;
@@ -462,12 +463,48 @@ class ClassPickTest {
 
     @Test void pendingPicksSurviveASaveAndUnreadableOnesAreDropped() {
         Payment payment = Payment.open(new CharacterRef(player.getUniqueId(), UUID.fromString(character.getId())), Account.BANK, 500, "class-pick");
-        character.setPendingClassPick(new PendingClassPick("MAGE", payment));
+        character.setPendingClassPick(new PendingClassPick("MAGE", payment, true));
         RPCharacter loaded = new RPCharacter(player); CharacterClassPickFields.load(loaded, picksJson(character));
         assertEquals(character.getPendingClassPick(), loaded.getPendingClassPick());
         RPCharacter broken = new RPCharacter(player);
         JSONObject json = new JSONObject(); json.put("class-picks", Map.of("pending", Map.of("target", "MAGE")));
         CharacterClassPickFields.load(broken, json); assertNull(broken.getPendingClassPick());
+    }
+
+    @Test void aFailedPaidPickIsRefundedBeforeAnyEditEvenIfTheClassLaterMatches() {
+        wallet.set(Account.POUCH, 25_000); List<JSONObject> onDisk = new ArrayList<>();
+        PaymentsFixture.saves((owner, saved) -> onDisk.add(picksJson(saved)));
+        classService.when(() -> ClassService.applyClass(player, "mage")).thenReturn(false); wallet.depositsDown = true;
+        var failed = ClassPickService.choose(player, "mage");
+        assertEquals(Status.NOT_APPLIED, failed.status()); assertEquals(5_000, wallet.get(Account.POUCH));
+        assertTrue(character.getPendingClassPick().refundRequired());
+        assertEquals(true, ((Map<?, ?>) ((Map<?, ?>) onDisk.getLast().get("class-picks")).get("pending")).get("refund-required"));
+
+        Stage classStage = new Stage(); classStage.setId("class_selection_stage"); StageLoader.oList.add(classStage);
+        CharacterCreation edit = CharacterCreation.forEdit(player, character); messages();
+        edit.jumpToStageForEdit("class_selection_stage");
+        assertTrue(messages().contains("last refund hasn't gone through yet")); assertNotNull(character.getPendingClassPick());
+        level.set(2); assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "berserker").status());
+
+        // The ledger is back and the character reached the same class some other way: still a refund.
+        wallet.depositsDown = false; character.setMMOClass("mage");
+        edit.jumpToStageForEdit("class_selection_stage");
+        assertTrue(messages().contains("200 denars went back to your pouch"));
+        assertNull(character.getPendingClassPick()); assertEquals(25_000, wallet.get(Account.POUCH)); assertEquals(0, character.getPaidClassPicks());
+        assertEquals(1, wallet.count(false));
+    }
+
+    @Test void aHeldPaidStageChangeBlocksClassPicksUntilItSettles() {
+        wallet.set(Account.POUCH, 50_000); boolean[] ready = {false}; PaymentsFixture.paidChangeWallet(wallet);
+        CharacterRef heir = new CharacterRef(player.getUniqueId(), UUID.fromString(character.getId()));
+        PaymentsFixture.heirs(() -> ready[0], owner -> Optional.of(heir));
+        character.setPendingPaidChange(new PendingPaidChange("class_selection_stage", "class",
+                Payment.legacy(player.getUniqueId(), Account.POUCH, 1_000, "refund-legacy:x:class_selection_stage"), "before"));
+        assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "mage").status());
+        assertTrue(messages().contains("refund couldn't go through yet")); assertEquals("WARRIOR", character.getMMOClass());
+        ready[0] = true;
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "mage").status());
+        assertNull(character.getPendingPaidChange()); assertEquals(31_000, wallet.get(Account.POUCH));
     }
 
     @SuppressWarnings("unchecked")

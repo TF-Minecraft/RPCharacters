@@ -488,7 +488,7 @@ class PaidChangeServiceTest {
 		assertEquals(PaidChangeService.Outcome.REFUND_FAILED, PaidChangeService.resolve(character), "no heir yet");
 		heirs.put(account, heir);
 		RPCharacter stale = reload(character, "WARRIOR");
-		assertTrue(PaidChangeService.recover(character).contains("100 denars went back to your bank"));
+		assertTrue(PaidChangeService.recover(character).contains("100 denars payment for a class change went back to your bank"));
 		assertNull(character.getPendingPaidChange());
 		assertEquals(new FakeLedger.Call(legacy.refundOpId(), DenarWallet.REFUND, heir, Account.BANK, 10_000, false),
 				wallet.applied.get(0));
@@ -496,11 +496,33 @@ class PaidChangeServiceTest {
 		assertEquals(1, wallet.count(false));
 		assertEquals(10_000, wallet.get(Account.BANK));
 
-		RPCharacter changed = characterWithClass("WARRIOR");
-		CharacterStageChangeFields.load(changed, json(Map.of("paid-change-pending", old)));
-		changed.setMMOClass("MAGE");
-		assertEquals(PaidChangeService.Outcome.KEPT, PaidChangeService.resolve(changed));
-		assertEquals(1, changed.getPaidChangeCount(CLASS_STAGE));
+	}
+
+	@Test
+	void aLegacyHoldWhoseCharacterChangedStillWaitsForTheHeirAndRefundsOnce() {
+		UUID account = UUID.randomUUID();
+		CharacterRef heir = new CharacterRef(account, UUID.randomUUID());
+		boolean[] ready = {false};
+		PaymentsFixture.heirs(() -> ready[0], owner -> Optional.of(heir));
+		RPCharacter character = characterWithClass("WARRIOR");
+		JSONObject old = new JSONObject();
+		old.putAll(Map.of("stage", CLASS_STAGE, "label", "class", "payer", account.toString(), "account", "POUCH",
+				"amount", "100", "before", PaidChangeService.snapshot(character)));
+		CharacterStageChangeFields.load(character, json(Map.of("paid-change-pending", old)));
+		character.setMMOClass("MAGE");
+
+		assertEquals(PaidChangeService.Outcome.REFUND_FAILED, PaidChangeService.resolve(character));
+		assertTrue(character.getPendingPaidChange() != null, "a legacy hold is never cleared as kept");
+		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
+		assertTrue(wallet.attempts.isEmpty());
+
+		ready[0] = true;
+		String message = PaidChangeService.recover(character);
+		assertTrue(message.contains("earlier 100 denars payment for a class change went back to your pouch"), message);
+		assertNull(character.getPendingPaidChange());
+		assertEquals(0, character.getPaidChangeCount(CLASS_STAGE));
+		assertEquals(List.of(new FakeLedger.Call("refund-legacy:" + character.getId() + ":" + CLASS_STAGE,
+				DenarWallet.REFUND, heir, Account.POUCH, 10_000, false)), wallet.applied);
 	}
 
 	@Test

@@ -379,10 +379,10 @@ public class PlayerManager implements Listener{
 		}
 	}
 
-	/** Writes one loaded character's file now; false when it could not be written. */
+	/** Writes one loaded character's file and forces it to disk; false when that failed. */
 	public boolean saveCharacterNow(UUID owner, RPCharacter character) {
 		PlayerData pd = get(owner);
-		return pd != null && db.trySaveCharacter(pd, character);
+		return pd != null && db.trySaveCharacterDurably(pd, character);
 	}
 
 	public static void stampActiveCharacterLocation(Player p) {

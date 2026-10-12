@@ -17,6 +17,10 @@ public final class PaymentsFixture {
         Payments.persist = persist;
     }
 
+    public static void paidChangeWallet(DenarWallet wallet) {
+        PaidChangeService.setWallet(wallet);
+    }
+
     public static void heirs(BooleanSupplier ready, Function<UUID, Optional<CharacterRef>> heirs) {
         Payments.heirsReady = ready;
         Payments.heirs = heirs;

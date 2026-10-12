@@ -29,7 +29,8 @@ public final class CharacterClassPickFields {
 		if (picks.get("pending") instanceof Map<?, ?> pending) {
 			try {
 				character.setPendingClassPick(new PendingClassPick((String) pending.get("target"),
-						Payment.fromJson((Map<?, ?>) pending.get("payment"))));
+						Payment.fromJson((Map<?, ?>) pending.get("payment")),
+						Boolean.TRUE.equals(pending.get("refund-required"))));
 			} catch (RuntimeException e) {
 				Logger.getLogger("RPCharacters").warning("[RPCharacters] Unreadable pending class pick " + pending
 						+ "; refund it by hand if denars were taken.");
@@ -50,6 +51,7 @@ public final class CharacterClassPickFields {
 			JSONObject held = new JSONObject();
 			held.put("target", pending.targetClass());
 			held.put("payment", pending.payment().toJson());
+			held.put("refund-required", pending.refundRequired());
 			picks.put("pending", held);
 		}
 		defaults.put("class-picks", picks);

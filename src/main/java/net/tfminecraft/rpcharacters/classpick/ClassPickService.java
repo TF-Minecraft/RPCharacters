@@ -234,7 +234,11 @@ public final class ClassPickService {
 		}
 		UUID owner = player.getUniqueId();
 		tell(player, recover(owner, character));
-		if (character.getPendingClassPick() != null) {
+		if (character.getPendingPaidChange() != null) {
+			tell(player, PaidChangeService.recover(character));
+		}
+		// A held payment is settled by comparing the class, so no other change may run meanwhile.
+		if (character.getPendingClassPick() != null || character.getPendingPaidChange() != null) {
 			return new Result(Status.UNAVAILABLE, target, BigDecimal.ZERO, null);
 		}
 		BigDecimal cost = price(character, option);
@@ -256,6 +260,11 @@ public final class ClassPickService {
 		character.setMMOClass(target.getId());
 		if (!applied(player, target.getId())) {
 			character.setMMOClass(oldClassId);
+			if (payment != null) {
+				// Saved first, so a later move to the same class can't pass for this payment.
+				character.setPendingClassPick(new PendingClassPick(target.getId(), payment, true));
+				Payments.save(owner, character);
+			}
 			if (payment != null && !refund(owner, character)) {
 				tell(player, refundLater(payment));
 				return new Result(Status.NOT_APPLIED, target, cost, payment.account());
@@ -275,7 +284,7 @@ public final class ClassPickService {
 
 	/** Holds the payment on the character and saves it; null drops a payment that was never taken. */
 	private static boolean hold(UUID owner, RPCharacter character, String targetClass, Payment payment) {
-		character.setPendingClassPick(payment == null ? null : new PendingClassPick(targetClass, payment));
+		character.setPendingClassPick(payment == null ? null : new PendingClassPick(targetClass, payment, false));
 		if (Payments.save(owner, character) || payment == null) {
 			return true;
 		}
@@ -296,8 +305,9 @@ public final class ClassPickService {
 
 	/**
 	 * Settles a paid pick left held by a crash or a failed refund. A debit that never applied is
-	 * dropped; a pick whose class stuck is kept and counted; anything else is refunded with the
-	 * stored refund ID. Returns the player message, or null when there is nothing to say.
+	 * dropped; a pick whose class stuck (and was not marked for refund) is kept and counted;
+	 * anything else is refunded with the stored refund ID. Returns the player message, or null when
+	 * there is nothing to say.
 	 */
 	public static String recover(UUID owner, RPCharacter character) {
 		PendingClassPick pending = character == null ? null : character.getPendingClassPick();
@@ -307,7 +317,8 @@ public final class ClassPickService {
 		Payments.Debit debit = Payments.debited(wallet, pending.payment());
 		if (debit == Payments.Debit.NOT_APPLIED) {
 			character.setPendingClassPick(null);
-		} else if (debit == Payments.Debit.APPLIED && pending.targetClass().equalsIgnoreCase(character.getMMOClass())) {
+		} else if (debit == Payments.Debit.APPLIED && !pending.refundRequired()
+				&& pending.targetClass().equalsIgnoreCase(character.getMMOClass())) {
 			countPaid(character);
 		} else if (debit == Payments.Debit.APPLIED) {
 			Payment payment = pending.payment();
