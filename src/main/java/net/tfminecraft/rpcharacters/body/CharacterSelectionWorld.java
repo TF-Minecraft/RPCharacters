@@ -18,6 +18,10 @@ import org.bukkit.persistence.PersistentDataType;
 final class CharacterSelectionWorld {
     private static final String OWNER_FILE = ".rpcharacters-selection-room";
     private static final String OWNER_MARKER = "RPCharacters character selection room v1\n";
+    /** Half-width of the box; the walls stand just outside the 9x9 floor players share. */
+    static final int ROOM = 5;
+    /** Ceiling height above the floor. */
+    static final int ROOM_HEIGHT = 4;
     private CharacterSelectionWorld() {}
 
     static Location create(String name) throws IOException {
@@ -42,10 +46,16 @@ final class CharacterSelectionWorld {
         world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
         // Every waiting player shares one platform; Paper's collision limit is set per world in server config.
         world.setGameRule(GameRule.MAX_ENTITY_CRAMMING, 0);
-        // Midnight keeps the sky behind the selection dialog dark enough for its light text.
-        world.setTime(18000);
-        for (int x = -4; x <= 4; x++) {
-            for (int z = -4; z <= 4; z++) world.getBlockAt(x, 63, z).setType(Material.SMOOTH_QUARTZ, false);
+        world.setTime(6000);
+        // A closed black box gives the selection dialog the same dark backdrop whatever the
+        // client's sky, shaders or brightness; black concrete stays dark even at full light.
+        for (int x = -ROOM; x <= ROOM; x++) {
+            for (int y = 63; y <= 63 + ROOM_HEIGHT; y++) {
+                for (int z = -ROOM; z <= ROOM; z++) {
+                    boolean shell = Math.abs(x) == ROOM || Math.abs(z) == ROOM || y == 63 || y == 63 + ROOM_HEIGHT;
+                    world.getBlockAt(x, y, z).setType(shell ? Material.BLACK_CONCRETE : Material.AIR, false);
+                }
+            }
         }
         world.setSpawnLocation(0, 64, 0);
         world.save();

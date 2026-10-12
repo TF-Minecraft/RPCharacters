@@ -56,7 +56,7 @@ class CharacterSelectionWorldTest {
         });
     }
 
-    @Test void createsAnOwnedVoidRoomWithAStableSafePlatform() throws Exception {
+    @Test void createsAnOwnedVoidRoomInsideADarkBox() throws Exception {
         try (var creators = creators(world)) {
             Location spawn = CharacterSelectionWorld.create("character_selection");
             assertEquals(new Location(world, .5, 64, .5), spawn);
@@ -65,9 +65,11 @@ class CharacterSelectionWorldTest {
             verify(world).setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
             verify(world).setGameRule(GameRule.DO_WEATHER_CYCLE, false);
             verify(world).setGameRule(GameRule.MAX_ENTITY_CRAMMING, 0);
-            verify(world).setTime(18000); verify(world).setSpawnLocation(0, 64, 0); verify(world).save();
-            verify(block, times(81)).setType(Material.SMOOTH_QUARTZ, false);
-            for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) verify(world).getBlockAt(x, 63, z);
+            verify(world).setTime(6000); verify(world).setSpawnLocation(0, 64, 0); verify(world).save();
+            verify(block, times(11 * 11 * 5 - 9 * 9 * 3)).setType(Material.BLACK_CONCRETE, false);
+            verify(block, times(9 * 9 * 3)).setType(Material.AIR, false);
+            for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) { verify(world).getBlockAt(x, 63, z); verify(world).getBlockAt(x, 67, z); }
+            for (int y = 63; y <= 67; y++) { verify(world).getBlockAt(5, y, 0); verify(world).getBlockAt(-5, y, 0); verify(world).getBlockAt(0, y, 5); verify(world).getBlockAt(0, y, -5); }
             assertTrue(Files.isRegularFile(directory.resolve("character_selection/.rpcharacters-selection-room")));
             ChunkGenerator.ChunkData empty = generator.get().generateChunkData(world, new Random(1), 5, -10, null);
             for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) assertEquals(Material.AIR, empty.getType(x, 64, z));
