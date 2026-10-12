@@ -99,11 +99,11 @@ public final class CharacterSelectView {
 	static final String NO_COOLDOWN_PERMISSION = "rpcharacters.no_cooldown";
 	static final String LOADING = "Loading portrait…";
 	static final String NO_PORTRAIT = "No portrait";
-	static final TextColor TEAL = TextColor.color(0x4FD1C5);
-	static final TextColor PALE = TextColor.color(0xD7E9E7);
-	static final TextColor MUTED = TextColor.color(0x8A9A9C);
-	static final TextColor DIM = TextColor.color(0x5C6869);
-	static final TextColor WARN = TextColor.color(0xE8806E);
+	static final TextColor TEAL = TextColor.color(0x66F0E2);
+	static final TextColor PALE = TextColor.color(0xFFFFFF);
+	static final TextColor MUTED = TextColor.color(0xD0DCDD);
+	static final TextColor DIM = TextColor.color(0xA4B0B1);
+	static final TextColor WARN = TextColor.color(0xFF8F7D);
 	private static final int WIDTH = 300;
 	private static final ClickCallback.Options CALLBACKS = ClickCallback.Options.builder()
 			.uses(1).lifetime(Duration.ofMinutes(10)).build();
