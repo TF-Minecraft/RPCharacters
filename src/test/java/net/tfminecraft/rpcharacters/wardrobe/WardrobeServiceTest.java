@@ -134,6 +134,12 @@ class WardrobeServiceTest extends WardrobeFixture {
     @Test void selectionRejectsCachedSlotsFromThePreviousCharacterBeforeAnyWebWrite() {
         cache(snapshot());active.set(otherCharacter("beta"));var errors=new ArrayList<String>();WardrobeService.setActiveAndApply(player,"extra_1",errors::add);assertTrue(async.isEmpty(),"A stale cache must never choose a slot for the new character");assertFalse(errors.isEmpty());assertNotNull(errors.getFirst());client.verifyNoInteractions();
     }
+    @Test void selectionKeepsTheRoomSkinWhenLateHelmetOrMaskCallbacksApply() throws Exception {
+        var bodies=mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);when(bodies.isSelecting(player)).thenReturn(true);
+        var field=RPCharacters.class.getDeclaredField("characterBodies");field.setAccessible(true);field.set(plugin,bodies);
+        cache(snapshot());WardrobeService.applyFor(player);assertNull(WardrobeCache.getAccountSkin(player));
+        when(bodies.isSelecting(player)).thenReturn(false);WardrobeService.applyFor(player);assertEquals("account-value",WardrobeCache.getAccountSkin(player).getValue());
+    }
     @Test void directApplyCannotUseThePreviousCharactersCachedSkin() {
         cache(snapshot());active.set(otherCharacter("beta"));WardrobeService.applyFor(player);assertEquals("account-value",SkinApplyHelper.readTextures(player).getValue());
     }

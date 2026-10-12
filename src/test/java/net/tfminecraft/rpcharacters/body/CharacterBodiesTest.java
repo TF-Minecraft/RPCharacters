@@ -623,6 +623,7 @@ class CharacterBodiesTest {
         wardrobes.when(()->WardrobeCache.getAccountSkin(player)).thenReturn(accountSkin);
         play(); leaveRunsOutgoing(); clearInvocations(player,other,progress); skins.clearInvocations(); actions=null;
         bodies.requestSelection(player); verify(player).sendMessage(contains("5 seconds"));
+        net.tfminecraft.rpcharacters.pvp.PvpStartSessions.begin(List.of(owner),System.currentTimeMillis()-120_000L,60_000L);
         countdown(4); verify(transitions,never()).leave(any(),any(),any()); verify(player,times(4)).sendActionBar(any(net.kyori.adventure.text.Component.class));
         verify(player).sendActionBar(net.kyori.adventure.text.Component.text("Character selection in 1..."));
         timer.run(); verify(timerTask).cancel();
@@ -685,6 +686,11 @@ class CharacterBodiesTest {
         duels.when(()->Duels.isDuelling(owner)).thenReturn(false); var knockouts=mock(PvpKnockoutManager.class); rpc.when(RPCharacters::getPvpKnockoutManager).thenReturn(knockouts);
         when(knockouts.isDown(player)).thenReturn(true); bodies.requestSelection(player); verify(player).sendMessage(contains("knocked out"));
         when(knockouts.isDown(player)).thenReturn(false);
+        net.tfminecraft.rpcharacters.pvp.PvpStartSessions.begin(List.of(owner),System.currentTimeMillis(),60_000L);
+        bodies.requestSelection(player); verify(player).sendMessage(contains("fight")); net.tfminecraft.rpcharacters.pvp.PvpStartSessions.end(owner);
+        net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption.set(p->p==player);
+        try { bodies.requestSelection(player); verify(player).sendMessage(contains("battle")); }
+        finally { net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption.set(null); }
         evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenReturn(true);
         bodies.requestSelection(player); verify(player).sendMessage(contains("roleplay"));
         evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenReturn(false);

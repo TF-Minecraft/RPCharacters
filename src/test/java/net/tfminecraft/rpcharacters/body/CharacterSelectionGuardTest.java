@@ -77,6 +77,18 @@ class CharacterSelectionGuardTest {
         guard.hurt(hurt); verify(bodies, never()).interruptReturn(any(), any());
     }
 
+    @Test void movingTeleportingOrMountingStopsAReturnBetweenCountdownChecks() {
+        Location here = player.getLocation();
+        guard.moved(new PlayerMoveEvent(player, here, here.clone().add(0, 0, 0).setDirection(new org.bukkit.util.Vector(1, 0, 0))));
+        verify(bodies, never()).interruptReturn(any(), any());
+        guard.moved(new PlayerMoveEvent(player, here, here.clone().add(.1, 0, 0)));
+        guard.teleported(new PlayerTeleportEvent(player, here, here.clone().add(5, 0, 0)));
+        var mount = mock(org.bukkit.event.entity.EntityMountEvent.class); when(mount.getEntity()).thenReturn(player); guard.mounted(mount);
+        verify(bodies, times(3)).interruptReturn(player, CharacterSelectionGuard.MOVED);
+        when(mount.getEntity()).thenReturn(mock(Zombie.class)); guard.mounted(mount);
+        verify(bodies, times(3)).interruptReturn(any(), any());
+    }
+
     @Test void selectionLocksPositionAndTeleportButAllowsLookingAroundAndTheAuthoritativeRestoreTeleport() {
         Location destination = room.clone().add(.2, 0, 0);
         PlayerMoveEvent move = new PlayerMoveEvent(player, room, destination);

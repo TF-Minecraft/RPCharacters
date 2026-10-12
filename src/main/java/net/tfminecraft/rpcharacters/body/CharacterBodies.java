@@ -32,6 +32,9 @@ import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
 import net.tfminecraft.rpcharacters.professions.ProfessionIntegrator;
 import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
 import net.tfminecraft.rpcharacters.pvp.Duels;
+import net.tfminecraft.rpcharacters.pvp.PvpSituations;
+import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
+import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
 import net.tfminecraft.rpcharacters.wardrobe.SkinApplyHelper;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCache;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
@@ -573,7 +576,7 @@ public final class CharacterBodies {
         }
         Location now = player.getLocation();
         if (!now.getWorld().equals(countdown.start.getWorld()) || now.distanceSquared(countdown.start) > 0.04) {
-            interruptReturn(player, "You moved, so you stay with your character.");
+            interruptReturn(player, CharacterSelectionGuard.MOVED);
             return;
         }
         String blocked = returnBlockReason(player, account);
@@ -596,6 +599,11 @@ public final class CharacterBodies {
         if (player.getFallDistance() > 0) return "Land before returning to character selection.";
         if (CreationManager.activeCreators.containsKey(player)) return "Finish or cancel character editing first.";
         if (Duels.isDuelling(account.getUniqueId())) return "Finish your duel first.";
+        if (PvpSituations.involves(account.getUniqueId()) || PvpStartSessions.isActive(account.getUniqueId(), System.currentTimeMillis())) {
+            return "Finish your fight first.";
+        }
+        // Logging out of a started battle counts against the player's side; selection must not skip that.
+        if (PermadeathBattleExemption.isInStartedBattle(player)) return "You cannot leave a battle for character selection.";
         var knockouts = RPCharacters.getPvpKnockoutManager();
         if (knockouts != null && knockouts.isDown(player)) return "You cannot change character while knocked out.";
         if (net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)) return "Your current roleplay situation must finish first.";
@@ -611,6 +619,7 @@ public final class CharacterBodies {
         try {
             RPCharacters.getCharacterTransitions().leave(account, Reason.SWITCH, () -> {
                 Duels.forget(player);
+                PvpStartSessions.end(owner);
                 ArmourDonning.cancel(player);
                 account.clearTempAlias();
                 selecting.add(owner);
