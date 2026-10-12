@@ -232,11 +232,6 @@ class CharacterSelectViewTest {
 		when(wren.getBirthday()).thenReturn(birthday);
 		when(wren.getOnlinePlaytimeSeconds()).thenReturn(2 * 86400 + 3 * 3600 + 4 * 60);
 		when(wren.getLastPlayedAt()).thenReturn(Instant.now().minus(Duration.ofHours(50)));
-		when(wren.hasLastLocation()).thenReturn(true);
-		when(wren.getLastLocationWorld()).thenReturn("world");
-		when(wren.getLastLocationX()).thenReturn(120.7);
-		when(wren.getLastLocationY()).thenReturn(64.0);
-		when(wren.getLastLocationZ()).thenReturn(-30.2);
 		character("rowan", "Rowan", Status.ALIVE);
 		RPCharacter old = character("old", "Old Tom", Status.DEAD);
 		when(old.getDiedAt()).thenReturn(Instant.parse("2026-09-01T12:00:00Z"));
@@ -263,7 +258,7 @@ class CharacterSelectViewTest {
 		assertEquals(List.of("▶ Play", "New character", "Memorials (2)"), labels());
 		assertEquals(3, columns());
 		assertEquals("Play as Lady Wren\nBorn " + FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m\n"
-				+ "Pouch: 12.50 denars • Bank: 300 denars\nLast location: world 120, 64, -31",
+				+ "Pouch: 12.50 denars • Bank: 300 denars",
 				text(button("▶ Play").tooltip()));
 		assertEquals("Start a new character\n2 of 4 character slots used", text(button("New character").tooltip()));
 		assertEquals(List.of(110, 100, 90), ui.last().buttons().stream().map(ActionButton::width).toList());
