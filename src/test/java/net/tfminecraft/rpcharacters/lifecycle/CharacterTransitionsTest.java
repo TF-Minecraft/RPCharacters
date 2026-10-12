@@ -149,6 +149,72 @@ class CharacterTransitionsTest {
     }
 
     @Test
+    void selectionPublishesOnlyAfterBothBodyAndProgressAreReady() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        plugin.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        runtime.beginJoin(data);
+        runtime.selected(data);
+        assertTrue(runtime.currentSession(player).isEmpty());
+        assertTrue(events.isEmpty());
+        when(bodies.hasLiveBody(player)).thenReturn(true);
+        runtime.selected(data);
+        assertEquals(UUID.fromString(alice.getId()), runtime.currentSession(player).orElseThrow().ref().characterId());
+        runtime.selected(data);
+        assertEquals(1, events(CharacterSessionStartEvent.class).size());
+    }
+
+    @Test
+    void switchingWithBodiesDefersToReconnectWithoutMutatingEitherCharacter() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        plugin.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        CharacterTransitions.switchCharacter(data, bob, null);
+        verify(bodies).requestSwitch(data, bob);
+        assertSame(alice, data.getActiveCharacter());
+        verify(alice, never()).deactivate();
+        verify(bob, never()).tryActivate();
+        assertTrue(events.isEmpty());
+    }
+
+    @Test
+    void failedProgressCaptureDoesNotCommitPermanentDeath() {
+        join(data);
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        plugin.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        assertFalse(CharacterTransitions.kill(player, alice, PermakillCause.COMMAND, null).killed());
+        assertEquals(Status.ALIVE, alice.getStatus());
+        assertTrue(alice.isActive());
+        verify(database, never()).trySaveCharacter(any(), any());
+        verify(bodies, never()).markDead(any(), any());
+        assertTrue(events(CharacterDeathEvent.class).isEmpty());
+    }
+
+    @Test
+    void bodyDeathKeepsReplacementInactiveAndClearsTheDeadCharactersTemporaryAlias() {
+        join(data);
+        data.setTempAlias("Stranger");
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        plugin.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.prepareDeath(data, alice)).thenReturn(true);
+        var result = CharacterTransitions.kill(player, alice, PermakillCause.COMMAND, null);
+        assertTrue(result.killed());
+        assertTrue(result.wasActive());
+        assertNull(result.replacementName());
+        assertEquals(Status.DEAD, alice.getStatus());
+        assertFalse(alice.isActive());
+        assertFalse(bob.isActive());
+        assertNull(data.getTempAlias());
+        verify(bob, never()).tryActivate();
+        verify(alice, never()).deactivate();
+        verify(bodies).markDead(data, alice);
+        var order = inOrder(bodies, database);
+        order.verify(bodies).prepareDeath(data, alice);
+        order.verify(database).trySaveCharacter(data, alice);
+        order.verify(bodies).markDead(data, alice);
+        assertTrue(runtime.currentSession(player).isEmpty());
+        assertEquals(1, events(CharacterDeathEvent.class).size());
+    }
+
+    @Test
     void joiningWaitsForReadyAndAnnouncesExactlyOneActivation() {
         runtime.ready(data);
         assertTrue(runtime.currentSession(player).isEmpty());

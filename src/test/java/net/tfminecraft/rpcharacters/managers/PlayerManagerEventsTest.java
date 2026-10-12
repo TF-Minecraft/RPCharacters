@@ -52,6 +52,39 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
 class PlayerManagerEventsTest extends PlayerManagerFixture {
     @Test
+    void roomLevelChangesCannotCreditOrSaveCharacterProgress() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(net.tfminecraft.rpcharacters.RPCharacters::getCharacterBodies).thenReturn(bodies);
+        var event = mock(PlayerLevelChangeEvent.class);
+        when(event.getPlayer()).thenReturn(player);
+        when(event.getReason()).thenReturn(PlayerLevelChangeEvent.Reason.LEVEL_UP);
+        manager.levelUp(event);
+        classes.verifyNoInteractions();
+        verify(database, never()).savePlayer(any());
+        when(bodies.hasLiveBody(player)).thenReturn(true);
+        manager.levelUp(event);
+        classes.verify(() -> ClassService.trackFromPlayer(player));
+        classes.verify(() -> ClassService.scheduleCreditLevelRewardSkillPoints(player));
+        verify(database).savePlayer(data);
+    }
+
+    @Test
+    void delayedAttributesRejectAnEndedSessionEvenIfTheSameCharacterIsSelectedAgain() {
+        var identities = boundary(net.tfminecraft.tlibs.character.Characters.class);
+        var session = mock(net.tfminecraft.tlibs.character.CharacterSession.class);
+        identities.when(() -> net.tfminecraft.tlibs.character.Characters.currentSession(player))
+                .thenReturn(java.util.Optional.of(session));
+        identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(false);
+        manager.classChange(classChange("mage"));
+        server.getScheduler().performOneTick();
+        attributes.verify(() -> AttributePointService.applyCharacterAttributes(player, character), never());
+        identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(true);
+        manager.classChange(classChange("ranger"));
+        server.getScheduler().performOneTick();
+        attributes.verify(() -> AttributePointService.applyCharacterAttributes(player, character));
+    }
+
+    @Test
     void confirmationKillsOrSwitchesAndBlocksEvilRoleplayUnlessAdmin() {
         manager.confirmClick(player, character, ConfirmType.KILL);
         deaths.verify(() -> PermadeathService.killCharacter(player, character, PermakillCause.CHARACTER_MENU));
@@ -410,8 +443,9 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
         classes.verify(() -> ClassService.trackFromPlayer(player), times(1));
         verify(database, times(1)).savePlayer(data);
         classes.verify(() -> ClassService.creditLevelRewardSkillPoints(player), never());
+        classes.verify(() -> ClassService.scheduleCreditLevelRewardSkillPoints(player));
         server.getScheduler().performOneTick();
-        classes.verify(() -> ClassService.creditLevelRewardSkillPoints(player), times(1));
+        classes.verify(() -> ClassService.scheduleCreditLevelRewardSkillPoints(player), times(1));
     }
 
     @Test

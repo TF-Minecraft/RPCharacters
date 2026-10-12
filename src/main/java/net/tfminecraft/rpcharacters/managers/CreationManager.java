@@ -52,7 +52,7 @@ import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.enums.Status;
 
 public class CreationManager implements Listener{
-	public static HashMap<Player, CharacterCreation> activeCreators = new HashMap<>();
+	public static java.util.Map<Player, CharacterCreation> activeCreators = java.util.Collections.synchronizedMap(new HashMap<>());
 	private static final String SUMMARY_ACTION_KEY = "summary_action";
 	
 	public static void initiateCreation(Player p) {
@@ -61,6 +61,11 @@ public class CreationManager implements Listener{
 			return;
 		}
 		PlayerData pd = PlayerManager.get(p);
+		var bodies = RPCharacters.getCharacterBodies();
+		if (bodies != null && bodies.hasLiveBody(p)) {
+			bodies.requestSwitch(pd, null);
+			return;
+		}
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
 			RPTexts.send(p, RPTexts.ERROR + "You don't have a free character slot!");
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);

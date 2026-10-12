@@ -92,6 +92,7 @@ public final class WardrobeService {
 		UUID playerId = player.getUniqueId();
 		String uuid = playerId.toString();
 		String cid = characterId.trim();
+		var session = net.tfminecraft.tlibs.character.Characters.currentSession(player).orElse(null);
 		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
 			ProvinceSystemClient.SimpleResult result =
 				ProvinceSystemClient.fetchWardrobe(uuid, cid);
@@ -112,7 +113,8 @@ public final class WardrobeService {
 			List<String> pendingSlots = pendingSlotIds(snapshot);
 			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 				Player online = Bukkit.getPlayer(playerId);
-				if (online != player || !online.isOnline()) {
+				if (online != player || !online.isOnline()
+						|| session != null && !net.tfminecraft.tlibs.character.Characters.isCurrent(session)) {
 					return;
 				}
 				PlayerData pd = PlayerManager.get(online);
@@ -274,6 +276,7 @@ public final class WardrobeService {
 		}
 		UUID playerId = player.getUniqueId();
 		String uuid = playerId.toString();
+		var session = net.tfminecraft.tlibs.character.Characters.currentSession(player).orElse(null);
 
 		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
 			ProvinceSystemClient.SimpleResult result =
@@ -287,7 +290,8 @@ public final class WardrobeService {
 					return;
 				}
 				PlayerData current = PlayerManager.get(online);
-				if (current == null || current.getActiveCharacter() != character) {
+				if (current == null || current.getActiveCharacter() != character
+						|| session != null && !net.tfminecraft.tlibs.character.Characters.isCurrent(session)) {
 					if (callback != null) {
 						callback.done("Your active character changed. Open the wardrobe again.");
 					}

@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -144,8 +145,13 @@ public final class GraveDeathListener implements Listener {
 		}
 		ItemStack ticket = splitTicket.remove(player.getUniqueId());
 		if (ticket != null) {
-			// Wait a tick: later respawn listeners (permadeath) can still move the player.
-			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> giveTicket(player, ticket));
+			if (RPCharacters.getCharacterBodies() != null && RPCharacters.getCharacterBodies().isRespawning(player)) {
+				// Recovery must retain the ticket even if the player quits before the next tick.
+				giveTicket(player, ticket, event.getRespawnLocation());
+			} else {
+				// Wait a tick: later respawn listeners (permadeath) can still move the player.
+				Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> giveTicket(player, ticket, player.getLocation()));
+			}
 		}
 		List<String> notices = placedNotice.remove(player.getUniqueId());
 		if (notices != null) {
@@ -174,12 +180,12 @@ public final class GraveDeathListener implements Listener {
 		}
 	}
 
-	private static void giveTicket(Player player, ItemStack ticket) {
+	private static void giveTicket(Player player, ItemStack ticket, Location overflowLocation) {
 		if (!player.isOnline()) {
 			return;
 		}
 		for (ItemStack overflow : player.getInventory().addItem(ticket).values()) {
-			player.getWorld().dropItem(player.getLocation(), overflow);
+			overflowLocation.getWorld().dropItem(overflowLocation, overflow);
 		}
 	}
 

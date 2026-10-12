@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -25,6 +26,10 @@ import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.progress.CharacterProgress;
+import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
+import net.tfminecraft.rpcharacters.progress.ProgressPools;
+import net.tfminecraft.rpcharacters.progress.ProgressRouting;
 import net.tfminecraft.rpcharacters.RPCharacters;
 
 public final class ClassService {
@@ -39,6 +44,13 @@ public final class ClassService {
 			return;
 		}
 		PlayerData pd = PlayerData.get(player);
+		if (ProgressRouting.enabled()) {
+			CharacterProgress progress = ProgressRouting.activeProgress(player);
+			if (progress != null) {
+				trackCharacterProgress(pd, progress);
+			}
+			return;
+		}
 		Progression known = knownProgress(player);
 		// MMOCore holds a player at the cap of the class being played, also when it loads them.
 		// That cap is not the account's level: keep the higher one for classes that allow it.
@@ -48,11 +60,40 @@ public final class ClassService {
 		remember(player, new Progression(pd.getLevel(), pd.getExperience()));
 	}
 
+	/** Records MMOCore's level on the character, keeping a higher level that MMOCore caps at the class's maximum. */
+	public static void trackCharacterProgress(PlayerData mmoPd, CharacterProgress progress) {
+		if (progress.getClassLevel() > mmoPd.getLevel() && mmoPd.hasReachedMaxLevel()) {
+			return;
+		}
+		progress.setClassProgress(mmoPd.getLevel(), mmoPd.getExperience());
+	}
+
+	/**
+	 * The shared level the legacy code knew for the account: the player file's, else MMOCore's save from
+	 * before it capped the level, kept over MMOCore's live level only while the class holds that at its cap.
+	 */
+	public static void captureLegacyClassProgress(Player player, net.tfminecraft.rpcharacters.objects.PlayerData account,
+			CharacterProgress target) {
+		PlayerData mmoPd = PlayerData.get(player);
+		Progression known = account.hasAccountClassLevel()
+				? new Progression(account.getAccountClassLevel(), account.getAccountClassExperience())
+				: savedMmoProgress(player.getUniqueId());
+		if (known == null || known.level <= mmoPd.getLevel() || !mmoPd.hasReachedMaxLevel()) {
+			known = new Progression(mmoPd.getLevel(), mmoPd.getExperience());
+		}
+		target.setClassProgress(known.level, known.exp);
+	}
+
 	/**
 	 * The account's level: this session's, else the one saved in the player file, else the level in
 	 * MMOCore's own save from before MMOCore capped it (for accounts saved before the player file kept it).
 	 */
 	private static Progression knownProgress(Player player) {
+		if (ProgressRouting.enabled()) {
+			// Per character, the level is the live character's; MMOCore's file may belong to another one.
+			CharacterProgress progress = ProgressRouting.activeProgress(player);
+			return progress == null ? null : new Progression(progress.getClassLevel(), progress.getClassExperience());
+		}
 		Progression known = ACCOUNT_PROGRESS.get(player.getUniqueId());
 		if (known != null) {
 			return known;
@@ -77,6 +118,13 @@ public final class ClassService {
 	}
 
 	private static void remember(Player player, Progression progress) {
+		if (ProgressRouting.enabled()) {
+			CharacterProgress character = ProgressRouting.activeProgress(player);
+			if (character != null) {
+				character.setClassProgress(progress.level, progress.exp);
+			}
+			return;
+		}
 		ACCOUNT_PROGRESS.put(player.getUniqueId(), progress);
 		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
 		if (pd != null) {
@@ -85,7 +133,8 @@ public final class ClassService {
 	}
 
 	public static void migrateSkillPointsIfNeeded(Player player) {
-		if (player == null) {
+		// Per-character totals start from the progress baseline instead.
+		if (player == null || ProgressRouting.enabled()) {
 			return;
 		}
 		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
@@ -99,16 +148,23 @@ public final class ClassService {
 	}
 
 	public static void grantSkillPoints(Player player, int amount) {
+		tryGrantSkillPoints(player, amount);
+	}
+
+	/** @return false when there were no pools to credit, such as in the character room */
+	public static boolean tryGrantSkillPoints(Player player, int amount) {
 		if (player == null || amount <= 0) {
-			return;
+			return false;
 		}
-		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
-			return;
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		if (pools == null) {
+			return false;
 		}
-		pd.addAccountSkillPoints(amount);
+		pools.addSkillPoints(amount);
 		applyFreeSkillPoints(player);
 		RPCharacters.getPlayerManager().savePlayer(player);
+		CharacterProgressService.checkpoint(player);
+		return true;
 	}
 
 	/**
@@ -119,30 +175,44 @@ public final class ClassService {
 		if (player == null || !player.isOnline()) {
 			return;
 		}
-		if (!creditRewardSkillPoints(player, PlayerData.get(player))) {
+		if (creditRewardSkillPoints(player, PlayerData.get(player))) {
+			applyFreeSkillPoints(player);
+			RPCharacters.getPlayerManager().savePlayer(player);
+		}
+		// The level-up itself is per-character progress worth keeping.
+		CharacterProgressService.checkpoint(player);
+	}
+
+	/** Credits a level-up's reward skill points next tick, only if the character that levelled is still live. */
+	public static void scheduleCreditLevelRewardSkillPoints(Player player) {
+		if (player == null || RPCharacters.plugin == null) {
 			return;
 		}
-		applyFreeSkillPoints(player);
-		RPCharacters.getPlayerManager().savePlayer(player);
+		BooleanSupplier current = ProgressRouting.sessionGuard(player);
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			if (current.getAsBoolean()) {
+				creditLevelRewardSkillPoints(player);
+			}
+		});
 	}
 
 	/**
-	 * Adds the skill points the current class's claimed exp-table rewards gave and the account has not
-	 * counted yet. Each reward counts once per account: the same level's reward claimed again under
-	 * another class adds nothing.
+	 * Adds the skill points the current class's claimed exp-table rewards gave and the pools have not
+	 * counted yet. Each reward counts once per account, or once per character when progress is per
+	 * character: the same level's reward claimed again under another class adds nothing.
 	 */
 	private static boolean creditRewardSkillPoints(Player player, PlayerData mmoPd) {
-		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		if (pools == null) {
 			return false;
 		}
 		int claimed = ExpTableSkillPoints.claimed(mmoPd);
-		int credited = pd.getAccountRewardSkillPoints();
+		int credited = pools.getRewardSkillPoints();
 		if (claimed <= credited) {
 			return false;
 		}
-		pd.addAccountSkillPoints(claimed - credited);
-		pd.setAccountRewardSkillPoints(claimed);
+		pools.addSkillPoints(claimed - credited);
+		pools.setRewardSkillPoints(claimed);
 		return true;
 	}
 
@@ -150,12 +220,12 @@ public final class ClassService {
 		if (player == null) {
 			return;
 		}
-		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		if (pools == null) {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
-		int total = pd.getAccountSkillPointsTotal();
+		int total = pools.getSkillPointsTotal();
 		int spent = mmoPd.countSkillPointsSpent();
 		mmoPd.setSkillPoints(Math.max(0, total - spent));
 	}
@@ -168,26 +238,27 @@ public final class ClassService {
 		if (player == null) {
 			return;
 		}
-		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		if (pools == null) {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
 		List<String> stripped = sanitizeForeignSkillLevels(mmoPd);
 		int spent = mmoPd.countSkillPointsSpent();
 		int mmoPool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getSkillPoints() + spent);
-		int beforeTotal = pd.getAccountSkillPointsTotal();
+		int beforeTotal = pools.getSkillPointsTotal();
 		if (mmoPool != beforeTotal) {
-			pd.setAccountSkillPointsTotal(mmoPool);
+			pools.setSkillPointsTotal(mmoPool);
 			RPCharacters.getPlayerManager().savePlayer(player);
+			CharacterProgressService.checkpoint(player);
 		}
 		applyFreeSkillPoints(player);
 		if (sender != null && Cache.skillPointsAdminDebugMessages) {
-			int afterTotal = pd.getAccountSkillPointsTotal();
+			int afterTotal = pools.getSkillPointsTotal();
 			int unspent = mmoPd.getSkillPoints();
 			spent = mmoPd.countSkillPointsSpent();
 			RPTexts.sendPrefixed(sender, RPTexts.WARN + player.getName()
-					+ " skill points: account total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
+					+ " skill points: " + pools.holder() + " total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
 					+ RPTexts.WARN + ", unspent now " + RPTexts.SUCCESS + unspent
 					+ RPTexts.WARN + " (spent on class: " + RPTexts.SUCCESS + spent
 					+ RPTexts.WARN + ", mmo pool: " + RPTexts.SUCCESS + mmoPool + RPTexts.WARN + ")");
@@ -208,8 +279,9 @@ public final class ClassService {
 		if (player == null) {
 			return;
 		}
+		BooleanSupplier current = ProgressRouting.sessionGuard(player);
 		Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
-			if (player.isOnline()) {
+			if (current.getAsBoolean()) {
 				syncSkillPoints(player, sender);
 			}
 		}, 1L);
@@ -294,6 +366,7 @@ public final class ClassService {
 		} finally {
 			APPLYING.remove(uuid);
 		}
+		CharacterProgressService.checkpoint(player);
 	}
 
 	/**
@@ -315,8 +388,8 @@ public final class ClassService {
 	 * Claims the class's exp-table rewards for every level up to the current one that it has not
 	 * claimed yet. The level is shared across classes, so a class picked at level 12 never levelled
 	 * through 7 or 12 and would otherwise miss the skill slots unlocked there. MMOCore counts claims,
-	 * so a reward is never given twice. Their skill points reach the account pool through
-	 * {@link #creditRewardSkillPoints}, once per account.
+	 * so a reward is never given twice. Their skill points reach the pools through
+	 * {@link #creditRewardSkillPoints}, once per pool.
 	 */
 	private static void claimMissedLevelRewards(PlayerData mmoPd, PlayerClass profess) {
 		if (!profess.hasExperienceTable()) {
@@ -345,6 +418,19 @@ public final class ClassService {
 
 	public static boolean isApplying(UUID uuid) {
 		return APPLYING.contains(uuid);
+	}
+
+	/** Runs {@code action} as part of applying a class, so the class and level changes it makes are not player changes. */
+	public static void runApplying(Player player, Runnable action) {
+		UUID uuid = player.getUniqueId();
+		boolean added = APPLYING.add(uuid);
+		try {
+			action.run();
+		} finally {
+			if (added) {
+				APPLYING.remove(uuid);
+			}
+		}
 	}
 
 	public static boolean isOnClass(Player player, String classId) {
@@ -421,12 +507,12 @@ public final class ClassService {
 	}
 
 	private static void clampExcessSkillPool(Player player) {
-		net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		if (pools == null) {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
-		int lifetime = pd.getAccountSkillPointsTotal();
+		int lifetime = pools.getSkillPointsTotal();
 		while ((long) mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent() > lifetime) {
 			int unspent = mmoPd.getSkillPoints();
 			if (unspent > 0) {

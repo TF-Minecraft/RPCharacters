@@ -73,6 +73,60 @@ import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
 class PlayerManagerLifecycleTest extends PlayerManagerFixture {
     @Test
+    void failedBodyStorageDeniesJoinBeforeReadingOrLoadingTheAccount() {
+        tracked.clear();
+        rpc.when(RPCharacters::characterBodiesFailed).thenReturn(true);
+        manager.initiatePlayer(player);
+        assertFalse(player.isOnline());
+        assertNull(PlayerManager.get(player));
+        verify(database, never()).loadPlayerData(any());
+        assertTrue(mmoReady.isEmpty());
+    }
+
+    @Test
+    void bodyJoinUsesThePreparedAccountAndWaitsForMmoWithoutAutoActivation() {
+        tracked.clear();
+        active.set(null);
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.takeAccount(player)).thenReturn(data);
+        manager.initiatePlayer(player);
+        assertSame(data, PlayerManager.get(player));
+        verify(database, never()).loadPlayerData(any());
+        verify(data, never()).setActiveCharacter(any());
+        verify(bodies, never()).prepare(any());
+        mmoReady.getFirst().run();
+        verify(bodies).prepare(data);
+        classes.verify(() -> ClassService.restoreAccountProgression(player), never());
+        attributes.verify(() -> AttributePointService.applyCharacterAttributes(any(), any()), never());
+    }
+
+    @Test
+    void selectionRoomOwnsFreezingAndQuitStowsBeforeMmoCleanupOrEviction() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.isSelecting(player)).thenReturn(true);
+        manager.setDiscordGate(player, true);
+        manager.reevaluateFreeze(player);
+        assertTrue(frozen().isEmpty());
+        doAnswer(call -> {
+            assertSame(data, PlayerManager.get(player));
+            attributes.verify(() -> AttributePointService.clearMmoAttributeBases(player), never());
+            active.set(null);
+            return null;
+        }).when(bodies).stow(data, "quit");
+        doAnswer(call -> {
+            assertNull(PlayerManager.get(player));
+            verify(database).savePlayer(data);
+            return null;
+        }).when(bodies).quit(player);
+        manager.onLeave(new PlayerQuitEvent(player, "quit"));
+        verify(bodies).stow(data, "quit");
+        verify(bodies).quit(player);
+        attributes.verify(() -> AttributePointService.clearMmoAttributeBases(player));
+    }
+
+    @Test
     void registryFindsOnlineAndOfflineDataWithoutExposingItsBackingList() {
         PlayerData offline = new PlayerData(UUID.randomUUID());
         tracked.addFirst(offline);
@@ -525,6 +579,24 @@ class PlayerManagerLifecycleTest extends PlayerManagerFixture {
         verify(database, times(1)).savePlayer(data);
         manager.onLeave(new PlayerQuitEvent(player, "again"));
         PlayerManager.stampActiveCharacterLocation(null);
+    }
+
+    @Test
+    void bodyQuitCancelsConnectionBoundDraftBeforeStowSoReconnectCanSelect() {
+        active.set(null);
+        CharacterCreation draft = mock(CharacterCreation.class);
+        CreationManager.activeCreators.put(player, draft);
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        doAnswer(call -> {
+            verify(draft).cancel();
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+            return null;
+        }).when(bodies).stow(data, "quit");
+        manager.onLeave(new PlayerQuitEvent(player, "quit"));
+        verify(bodies).stow(data, "quit");
+        verify(database).savePlayer(data);
+        verify(data, never()).addCharacter(any());
     }
 
     @Test

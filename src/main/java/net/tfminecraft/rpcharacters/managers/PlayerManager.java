@@ -192,6 +192,8 @@ public class PlayerManager implements Listener{
 	}
 
 	private FreezeReason getFreezeReason(Player player, PlayerData pd) {
+		if (RPCharacters.getCharacterBodies() != null && player != null
+				&& RPCharacters.getCharacterBodies().isSelecting(player)) return null;
 		if (player != null && DiscordGatePolicy.freezes(
 				isDiscordGate(player.getUniqueId()),
 				player.hasPermission(DiscordGatePolicy.BYPASS_PERMISSION))) {
@@ -333,7 +335,7 @@ public class PlayerManager implements Listener{
 			RPCharacters.plugin, p.getUniqueId()
 		);
 	}
-	@EventHandler
+	@EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
 	public void onLeave(PlayerQuitEvent e) {
 		Player p = e.getPlayer();
 		PlayerData outgoing = get(p);
@@ -348,18 +350,28 @@ public class PlayerManager implements Listener{
 		MmoCorePlayerReady.cancel(p.getUniqueId());
 		CharacterCreation session = CreationManager.activeCreators.get(p);
 		net.tfminecraft.rpcharacters.paidchange.PaidChangeService.settle(session);
+		if (session != null && !session.isEditing() && RPCharacters.getCharacterBodies() != null) {
+			// Drafts retain this connection's Player; do not let them block selection after reconnect.
+			session.cancel();
+			CreationManager.activeCreators.remove(p, session);
+		}
 		if (session != null && session.isEditing()) {
 			// Edits apply as they are made, so nothing is lost; a kept session would block the next /rpcharacter edit.
 			CreationManager.activeCreators.remove(p, session);
 		}
 		PlayerData pd = get(p);
-		if (pd != null && pd.hasActiveCharacter()) {
+		boolean hadActive = pd != null && pd.hasActiveCharacter();
+		if (pd != null && RPCharacters.getCharacterBodies() != null) {
+			RPCharacters.getCharacterBodies().stow(pd, "quit");
+		}
+		if (hadActive) {
 			// Prevent MMOCore from persisting stacked attribute bases for the next login.
 			AttributePointService.clearMmoAttributeBases(p);
 		}
 		stampActiveCharacterLocation(p);
 		savePlayer(p);
 		data.remove(pd);
+		if (RPCharacters.getCharacterBodies() != null) RPCharacters.getCharacterBodies().quit(p);
 	}
 	public void savePlayer(Player p) {
 		if(exists(p)) {
@@ -381,8 +393,13 @@ public class PlayerManager implements Listener{
 	}
 	
 	public void initiatePlayer(Player p) {
+		if (RPCharacters.characterBodiesFailed()) {
+			p.kickPlayer("Character storage is unavailable. Please contact staff.");
+			return;
+		}
 		if(!exists(p)) {
-			PlayerData pd = db.loadPlayerData(p.getUniqueId());
+			var bodies = RPCharacters.getCharacterBodies();
+			PlayerData pd = bodies != null ? bodies.takeAccount(p) : db.loadPlayerData(p.getUniqueId());
 			if(pd == null) {
 				p.kickPlayer("Your character data could not be loaded. Please contact staff.");
 				return;
@@ -420,7 +437,7 @@ public class PlayerManager implements Listener{
 			if (dirty) {
 				savePlayer(p);
 			}
-			if(!loaded.hasActiveCharacter() && loaded.getCharacters(Status.ALIVE).size() > 0) {
+			if(bodies == null && !loaded.hasActiveCharacter() && loaded.getCharacters(Status.ALIVE).size() > 0) {
 				loaded.setActiveCharacter(loaded.getCharacters(Status.ALIVE).get(0));
 			}
 			PermissionGroupService.enforceNameColourOnLogin(p, loaded);
@@ -429,7 +446,10 @@ public class PlayerManager implements Listener{
 			if (loaded.hasActiveCharacter()) {
 				net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(p);
 			}
-			MmoCorePlayerReady.runWhenLoaded(p, () -> applyMmoOnJoin(p, loaded));
+			MmoCorePlayerReady.runWhenLoaded(p, () -> {
+				if (bodies != null) bodies.prepare(loaded);
+				else applyMmoOnJoin(p, loaded);
+			});
 		}
 	}
 
@@ -911,6 +931,7 @@ public class PlayerManager implements Listener{
 		Player p = e.getPlayer();
 		PlayerData pd = get(p);
 		if(pd == null || !pd.hasActiveCharacter()) return;
+		net.tfminecraft.rpcharacters.progress.CharacterProgressService.scheduleCheckpoint(p);
 		if(e.getProfession() == null) {
 			ClassService.trackFromPlayer(p);
 			return;
@@ -930,6 +951,7 @@ public class PlayerManager implements Listener{
 
 	@EventHandler
 	public void levelUp(PlayerLevelChangeEvent e) {
+		if (RPCharacters.getCharacterBodies() != null && !RPCharacters.getCharacterBodies().hasLiveBody(e.getPlayer())) return;
 		if (e.getReason() != PlayerLevelChangeEvent.Reason.LEVEL_UP) {
 			return;
 		}
@@ -937,10 +959,7 @@ public class PlayerManager implements Listener{
 		ClassService.trackFromPlayer(player);
 		// The account level now lives in the player file; don't wait for quit to keep it.
 		savePlayer(player);
-		if (RPCharacters.plugin != null) {
-			Bukkit.getScheduler().runTask(RPCharacters.plugin,
-					() -> ClassService.creditLevelRewardSkillPoints(player));
-		}
+		ClassService.scheduleCreditLevelRewardSkillPoints(player);
 	}
 
 	@EventHandler
@@ -994,9 +1013,11 @@ public class PlayerManager implements Listener{
 	}
 
 	private static void scheduleAttributeReapply(Player player, RPCharacter character) {
+		var session = net.tfminecraft.tlibs.character.Characters.currentSession(player).orElse(null);
 		new BukkitRunnable() {
 			@Override
 			public void run() {
+				if (session != null && !net.tfminecraft.tlibs.character.Characters.isCurrent(session)) return;
 				PlayerData current = get(player);
 				if (!player.isOnline() || current == null || current.getActiveCharacter() != character) {
 					return;

@@ -112,3 +112,10 @@ paid-changes:
       stage: class_selection_stage
       label: class
       costs: [100, 1000, 3000]
+character-bodies:
+  # Enable only with a reviewed, checksum-pinned character-body-heirs.yml and a rollback backup.
+  # Changing this setting requires a server restart.
+  enabled: false
+  heirs-sha256: ''
+  selection-world: character_selection
+  persistent-keys: []

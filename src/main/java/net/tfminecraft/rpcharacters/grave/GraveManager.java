@@ -34,6 +34,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
 
 public final class GraveManager {
 
@@ -244,6 +245,12 @@ public final class GraveManager {
 		}
 
 		Grave grave = new Grave(UUID.randomUUID(), victim.getUniqueId(), chestBlock.getLocation());
+		CharacterBodies bodies = RPCharacters.getCharacterBodies();
+		if (bodies != null) {
+			// Permadeath can end the ready session before the dying body leaves the world.
+			UUID character = bodies.liveCharacter(victim);
+			grave.setCharacterOwner(character != null ? character : Grave.UNKNOWN_CHARACTER);
+		}
 		grave.setKiller(killer);
 		grave.setKillerDisplay(killerDisplay);
 		grave.setProtected(protect);
@@ -577,6 +584,7 @@ public final class GraveManager {
 		GraveRecord record = new GraveRecord();
 		record.id = grave.getId().toString();
 		record.owner = grave.getOwner() != null ? grave.getOwner().toString() : null;
+		record.characterOwner = grave.getCharacterOwner() != null ? grave.getCharacterOwner().toString() : null;
 		record.killer = grave.getKiller() != null ? grave.getKiller().toString() : null;
 		record.killerDisplay = grave.getKillerDisplay();
 		record.protect = grave.isProtected();
@@ -610,6 +618,7 @@ public final class GraveManager {
 		return new Grave(
 				UUID.fromString(record.id),
 				UUID.fromString(record.owner),
+				record.characterOwner != null ? UUID.fromString(record.characterOwner) : null,
 				parseUuid(record.killer),
 				record.killerDisplay,
 				record.protect,
@@ -703,6 +712,7 @@ public final class GraveManager {
 	private static final class GraveRecord {
 		String id;
 		String owner;
+		String characterOwner;
 		String killer;
 		String killerDisplay;
 		boolean protect;

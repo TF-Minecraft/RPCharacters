@@ -52,6 +52,21 @@ class CharacterIngestServiceTest extends IngestFixture {
         offline.close();classes.close();integrators.close();professions.close();attributes.close();mmoReady.close();root.close();wardrobe.close();lifecycle.close();kitCustomise.close();roster.close();
     }
 
+    @Test void onlineCreatesRefreshTheSelectorWithoutLoadingANewBody() {
+        PlayerData pd = mockData();
+        online(pd);
+        when(pd.hasActiveCharacter()).thenReturn(false);
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        pending(row("alpha", payload()));
+        CharacterIngestService.pullAsync(plugin);
+        runWorkers();
+        assertEquals(true, result(0).get("ok"));
+        verify(bodies).rosterChanged(pd);
+        verify(pd, never()).setActiveCharacter(any());
+        wardrobe.verifyNoInteractions();
+    }
+
     @Test void nullEntrypointsAndCooldownPreventDuplicateFetchButStillRefreshJoiningRoster() {
         CharacterIngestService.tryPullAsync(null);CharacterIngestService.forcePullAsync(null);CharacterIngestService.tryPullForPlayerAsync(null,owner);CharacterIngestService.tryPullForPlayerAsync(plugin,null);CharacterIngestService.startPeriodicPull(null);CharacterIngestService.pullAsync(null);CharacterIngestService.pullForPlayerAsync(null,owner);CharacterIngestService.pullForPlayerAsync(plugin,null);assertTrue(workers.isEmpty());
         CharacterIngestService.tryPullAsync(plugin);assertEquals(1,workers.size());assertTrue(stamp.get()>0);CharacterIngestService.tryPullAsync(plugin);CharacterIngestService.tryPullForPlayerAsync(plugin,owner);assertEquals(1,workers.size());roster.verify(() -> RosterSyncService.pushRosterAsync(owner));

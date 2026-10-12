@@ -5,17 +5,27 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+
+import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
+import net.tfminecraft.tlibs.character.CharacterSession;
+import net.tfminecraft.tlibs.character.Characters;
 
 public final class Grave {
 
 	public static final int STORAGE_SLOTS = 36;
 	public static final int ARMOR_SLOTS = 4;
 	public static final int TOTAL_LOGICAL_SLOTS = STORAGE_SLOTS + ARMOR_SLOTS + 1;
+	/** Bound when the dying body's character could not be read; no character ever matches it. */
+	public static final UUID UNKNOWN_CHARACTER = new UUID(0L, 0L);
 
 	private final UUID id;
 	private final UUID owner;
+	private UUID characterOwner;
 	private UUID killer;
 	private String killerDisplay;
 	private boolean protect;
@@ -43,8 +53,16 @@ public final class Grave {
 	Grave(UUID id, UUID owner, UUID killer, String killerDisplay, boolean protect, boolean locked, long created,
 			int experience, ItemStack[] storage, ItemStack[] armor, ItemStack offhand, List<ItemStack> extras,
 			UUID hologramId, Location block) {
+		this(id, owner, null, killer, killerDisplay, protect, locked, created, experience, storage, armor,
+				offhand, extras, hologramId, block);
+	}
+
+	Grave(UUID id, UUID owner, UUID characterOwner, UUID killer, String killerDisplay, boolean protect, boolean locked, long created,
+			int experience, ItemStack[] storage, ItemStack[] armor, ItemStack offhand, List<ItemStack> extras,
+			UUID hologramId, Location block) {
 		this.id = id;
 		this.owner = owner;
+		this.characterOwner = characterOwner;
 		this.killer = killer;
 		this.killerDisplay = killerDisplay;
 		this.protect = protect;
@@ -67,8 +85,40 @@ public final class Grave {
 		return owner;
 	}
 
+	/** The character whose body made this grave; {@code null} for graves made before character bodies. */
+	public UUID getCharacterOwner() {
+		return characterOwner;
+	}
+
+	public void setCharacterOwner(UUID characterOwner) {
+		this.characterOwner = characterOwner;
+	}
+
+	/**
+	 * The account must match, and with a character bound (or character bodies on) so must the
+	 * character the online player is playing now. A dead body has no session, so it never matches.
+	 */
 	public boolean isOwner(UUID playerId) {
-		return owner != null && owner.equals(playerId);
+		if (owner == null || !owner.equals(playerId)) {
+			return false;
+		}
+		CharacterBodies bodies = RPCharacters.getCharacterBodies();
+		if (characterOwner == null && bodies == null) {
+			return true;
+		}
+		// Unbound graves predate bodies; the migration heir received that account's old body.
+		UUID expected = characterOwner != null ? characterOwner : bodies.migrationHeir(owner);
+		if (expected == null || UNKNOWN_CHARACTER.equals(expected)) {
+			return false;
+		}
+		Player player = Bukkit.getPlayer(playerId);
+		if (player == null || bodies != null && (bodies.isSelecting(player) || bodies.isApplying(player))) {
+			return false;
+		}
+		return Characters.currentSession(player)
+				.map(CharacterSession::ref)
+				.map(ref -> owner.equals(ref.ownerId()) && expected.equals(ref.characterId()))
+				.orElse(false);
 	}
 
 	public UUID getKiller() {

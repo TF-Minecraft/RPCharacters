@@ -76,6 +76,17 @@ public final class CharacterTransitions {
         }
     }
 
+    /** Body and progression have both been restored; publish the new ready session. */
+    public void selected(PlayerData data) {
+        enter(data.getUniqueId());
+        try {
+            joining.remove(data);
+            start(data, null);
+        } finally {
+            changing.remove(data.getUniqueId());
+        }
+    }
+
     public void leave(PlayerData data, Reason reason) {
         requireMainThread();
         // A failed save can kick during a transition; quit still has to save and unload the account.
@@ -115,6 +126,7 @@ public final class CharacterTransitions {
         RPCharacter character = data.getActiveCharacter();
         if (joining.contains(data) || player == null || !player.isOnline() || character == null
                 || character.getStatus() != Status.ALIVE || sessions.containsKey(data.getUniqueId())) return;
+        if (RPCharacters.getCharacterBodies() != null && !RPCharacters.getCharacterBodies().hasLiveBody(player)) return;
         directory.upsert(data.getUniqueId(), character);
         if (directory.characters(data.getUniqueId()).isEmpty()) {
             suspend(player, "Character records are incomplete for " + data.getUniqueId());
@@ -157,6 +169,10 @@ public final class CharacterTransitions {
 
     public static void switchCharacter(PlayerData data, RPCharacter next, RPCharacter ended) {
         if (next == null) return;
+        if (RPCharacters.getCharacterBodies() != null) {
+            RPCharacters.getCharacterBodies().requestSwitch(data, next);
+            return;
+        }
         CharacterTransitions runtime = RPCharacters.getCharacterTransitions();
         if (runtime != null) runtime.enter(data.getUniqueId());
         try {
@@ -233,6 +249,10 @@ public final class CharacterTransitions {
             }
             UUID oldDeathId = character.getDeathId();
             Instant oldDiedAt = character.getDiedAt();
+            if (wasActive && RPCharacters.getCharacterBodies() != null
+                    && !RPCharacters.getCharacterBodies().prepareDeath(data, character)) {
+                return new DeathResult(false, false, null);
+            }
             character.setStatus(Status.DEAD);
             character.setDeathRecord(UUID.randomUUID(), Instant.now());
             if (runtime != null) {
@@ -250,12 +270,17 @@ public final class CharacterTransitions {
             }
             if (runtime != null && !player.isOnline()) return new DeathResult(true, wasActive, null);
             String replacementName = null;
+            if (wasActive && data != null) data.clearTempAlias();
+            if (wasActive && RPCharacters.getCharacterBodies() != null) {
+                RPCharacters.getCharacterBodies().markDead(data, character);
+                net.tfminecraft.rpcharacters.professions.ProfessionIntegrator.remove(player, character);
+                return new DeathResult(true, true, null);
+            }
             // The death is saved; a failed replacement must not stop its post-processing.
             if (wasActive) {
                 try {
                     if (runtime == null || !runtime.joining.contains(data)) character.deactivate();
                     if (data != null) {
-                        data.clearTempAlias();
                         if (!data.getCharacters(Status.ALIVE).isEmpty()) {
                             RPCharacter next = data.getCharacters(Status.ALIVE).getFirst();
                             applySwitch(data, next, character, runtime);

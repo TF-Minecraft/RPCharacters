@@ -51,6 +51,10 @@ public final class GraveInsuranceListener implements Listener {
 			send(player, GraveLoader.getMessageInsuranceGone());
 			return;
 		}
+		if (!GraveLootRules.canRecover(player, grave)) {
+			send(player, GraveLoader.getMessageLocked());
+			return;
+		}
 
 		// The grave may be anywhere, so hold its chunk loaded while it is emptied and removed.
 		boolean[] recovered = new boolean[1];

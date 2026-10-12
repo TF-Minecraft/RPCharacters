@@ -58,6 +58,7 @@ class CommandManagerTest {
     RPCharacter character;
     PlayerManager playerManager;
     PlaceClueManager placeClues;
+    MockedStatic<RPCharacters> globals;
     MockedStatic<PlayerManager> players;
     MockedStatic<CreationManager> creators;
     final List<MockedStatic<?>> mocks = new ArrayList<>();
@@ -80,7 +81,7 @@ class CommandManagerTest {
         players = boundary(PlayerManager.class); players.when(() -> PlayerManager.get(any(Player.class))).thenReturn(data);
         creators = boundary(CreationManager.class); CreationManager.activeCreators = new HashMap<>();
         playerManager = mock(PlayerManager.class); placeClues = mock(PlaceClueManager.class);
-        var globals = boundary(RPCharacters.class); globals.when(RPCharacters::getPlayerManager).thenReturn(playerManager);
+        globals = boundary(RPCharacters.class); globals.when(RPCharacters::getPlayerManager).thenReturn(playerManager);
         globals.when(RPCharacters::getPlaceClueManager).thenReturn(placeClues);
     }
     @AfterEach void restore() {
@@ -107,6 +108,18 @@ class CommandManagerTest {
     }
     PlayerClass knownClass(ClassManager manager, String id) {
         PlayerClass value = mock(PlayerClass.class); when(value.getName()).thenReturn("Warrior"); when(manager.get(id)).thenReturn(value); return value;
+    }
+
+    @Test void selectReopensTheRoomAndRequiresReconnectFromALiveBody() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        globals.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        assertTrue(run("select"));
+        verify(bodies).show(player);
+        assertTrue(player.isOnline());
+        when(bodies.hasLiveBody(player)).thenReturn(true);
+        assertTrue(run("SELECT"));
+        assertFalse(player.isOnline());
+        verify(bodies, times(1)).show(player);
     }
 
     @Test void unknownCommandsEmptyInputConsoleAndBadArityAreHandled() {
