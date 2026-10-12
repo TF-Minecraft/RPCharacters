@@ -39,6 +39,7 @@ public final class CharacterDirectory {
 
 	private final Map<UUID, Map<UUID, CharacterInfo>> accounts = new HashMap<>();
 	private final Map<UUID, UUID> owners = new HashMap<>();
+	private final Map<UUID, UUID> deaths = new HashMap<>();
 	private final Set<UUID> unavailable = new HashSet<>();
 	/** Characters saved with the legacy {@code active} flag, which predates session timestamps. */
 	private final Set<CharacterRef> flaggedActive = new HashSet<>();
@@ -71,6 +72,18 @@ public final class CharacterDirectory {
 		return Optional.ofNullable(accounts.getOrDefault(ownerId, Map.of()).get(characterId));
 	}
 
+	/** Most recent saved death, with a stable migration key for deaths predating death records. */
+	public Optional<UUID> deathId(UUID characterId) {
+		return info(characterId).flatMap(info -> Optional.ofNullable(deaths.get(characterId)));
+	}
+
+	private void rememberDeath(CharacterInfo info, UUID recorded) {
+		if (recorded != null) deaths.put(info.ref().characterId(), recorded);
+		else if (info.status() == CharacterStatus.DEAD) deaths.putIfAbsent(info.ref().characterId(),
+				UUID.nameUUIDFromBytes(("rpcharacters:legacy-death:" + info.ref().characterId())
+						.getBytes(StandardCharsets.UTF_8)));
+	}
+
 	/**
 	 * The latest session start wins. Records saved before session timestamps fall back to the
 	 * character still flagged active; any timestamp beats a flag alone.
@@ -92,16 +105,21 @@ public final class CharacterDirectory {
 			quarantine(ownerId, "Invalid live character: " + error.getMessage());
 			return;
 		}
-		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()));
+		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()), character.getDeathId());
 	}
 
 	/** Updates from a snapshot taken earlier, such as when a save finished off the main thread. */
 	public void upsert(UUID ownerId, CharacterInfo info, boolean active) {
+        upsert(ownerId, info, active, null);
+    }
+
+    public void upsert(UUID ownerId, CharacterInfo info, boolean active, UUID deathId) {
 		Objects.requireNonNull(ownerId, "ownerId");
 		UUID id = info.ref().characterId();
 		claim(ownerId, id);
 		accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
 		flag(info.ref(), active);
+        rememberDeath(info, deathId);
 	}
 
 	public void remove(UUID ownerId, String characterId) {
@@ -111,6 +129,7 @@ public final class CharacterDirectory {
 			Map<UUID, CharacterInfo> characters = accounts.get(ownerId);
 			if (characters != null) characters.remove(id);
 			flaggedActive.remove(new CharacterRef(ownerId, id));
+			if (ownerId.equals(owners.get(id))) deaths.remove(id);
 			if (!unavailable.contains(ownerId)) owners.remove(id, ownerId);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid removed character ID: " + error.getMessage());
@@ -185,6 +204,7 @@ public final class CharacterDirectory {
 			CharacterInfo info = new CharacterInfo(new CharacterRef(ownerId, id), plainName(string(json.get("name"))),
 					CharacterStatus.valueOf(string(json.get("status")).toUpperCase(Locale.ROOT)), race, traits, seconds, lastPlayed);
 			characters.put(id, info);
+			rememberDeath(info, json.get("death-id") == null ? null : uuid(string(json.get("death-id"))));
 			flag(info.ref(), Boolean.parseBoolean(String.valueOf(json.get("active"))));
 		} catch (IOException | RuntimeException error) {
 			quarantine(ownerId, "Cannot read character " + file + ": " + error.getMessage());

@@ -58,6 +58,7 @@ import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
 import net.tfminecraft.rpcharacters.playerlist.SkinPortrait.SkinTexture;
 import net.tfminecraft.rpcharacters.utils.AgeFormatter;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
+import net.tfminecraft.tlibs.character.CharacterRef;
 
 /**
  * Join-time character picker, shown while the player has no active body. It
@@ -109,7 +110,7 @@ public final class CharacterSelectView {
 
 	static DenarWallet wallet = new DenarEconomyWallet();
 	/** Guild name, "" for none, or null when guilds can't be read. */
-	static Function<Player, String> guilds = CharacterSelectView::simpleFactionsGuild;
+	static Function<UUID, String> guilds = CharacterSelectView::simpleFactionsGuild;
 	static PortraitLoader portraits = SelectPortraits::load;
 	static Function<Player, SkinTexture> accountTextures = CharacterSelectView::accountSkin;
 	static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
@@ -247,7 +248,7 @@ public final class CharacterSelectView {
 		} else {
 			reason = session.actions.blockReason(selected);
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
-			body.add(text(characterCard(selected, reason)));
+			body.add(text(characterCard(player.getUniqueId(), selected, reason)));
 		}
 		body.add(text(footer(player, data, alive.size())));
 
@@ -438,7 +439,8 @@ public final class CharacterSelectView {
 
 	private static Component footer(Player player, PlayerData data, int alive) {
 		int slots = CharacterSlotService.getMaxAliveCharacters(player);
-		return Component.text(alive + " of " + slots + " character slots used • ", DIM).append(accountSummary(player));
+		Component used = Component.text(alive + " of " + slots + " character slots used", DIM);
+		return used;
 	}
 
 	/** Living characters, most recently played first, then memorials. */
@@ -482,22 +484,30 @@ public final class CharacterSelectView {
 		return null;
 	}
 
-	static Component accountSummary(Player player) {
-		List<String> parts = new ArrayList<>();
-		String guild = guilds.apply(player);
-		if (guild != null) parts.add("Guild: " + (guild.isBlank() ? "none" : guild));
-		if (wallet.available()) {
-			parts.add("Pouch: " + PaidChangeService.formatDenars(wallet.balance(player.getUniqueId(), Account.POUCH)));
-			parts.add("Bank: " + PaidChangeService.formatDenars(wallet.balance(player.getUniqueId(), Account.BANK)));
-		} else {
-			parts.add("Pouch and bank: unavailable");
-		}
-		return Component.text("Shared by all your characters", DIM)
-				.append(Component.newline())
-				.append(Component.text(String.join(" • ", parts), MUTED));
+	/** The guild line, or null when guilds can't be read. */
+	static Component guildSummary(RPCharacter character) {
+		UUID id;
+		try { id = UUID.fromString(character.getId()); }
+		catch (IllegalArgumentException | NullPointerException invalid) { return null; }
+		String guild = guilds.apply(id);
+		if (guild == null) return null;
+		return Component.text("Guild: " + (guild.isBlank() ? "none" : guild), MUTED);
 	}
 
-	static Component characterCard(RPCharacter character, String blockReason) {
+	/** This character's own pouch and bank; empty for a record without a character ID. */
+	static String balances(UUID owner, RPCharacter character) {
+		CharacterRef ref;
+		try {
+			ref = new CharacterRef(owner, UUID.fromString(character.getId()));
+		} catch (IllegalArgumentException | NullPointerException notACharacterId) {
+			return "";
+		}
+		if (!wallet.available()) return "Pouch and bank: unavailable";
+		return "Pouch: " + PaidChangeService.formatCents(wallet.balance(ref, Account.POUCH))
+				+ " • Bank: " + PaidChangeService.formatCents(wallet.balance(ref, Account.BANK));
+	}
+
+	static Component characterCard(UUID owner, RPCharacter character, String blockReason) {
 		TextComponent.Builder card = Component.text()
 				.append(Component.text(name(character), PALE, TextDecoration.BOLD));
 		line(card, joined(race(character), className(character), age(character)), TEAL);
@@ -508,6 +518,9 @@ public final class CharacterSelectView {
 			history.add("Last played " + AgeFormatter.formatAge(seconds) + " ago");
 		}
 		line(card, String.join(" • ", history), MUTED);
+		line(card, balances(owner, character), MUTED);
+		Component guild = guildSummary(character);
+		if (guild != null) card.append(Component.newline()).append(guild);
 		if (character.hasLastLocation()) {
 			line(card, String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
 					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),
@@ -621,11 +634,11 @@ public final class CharacterSelectView {
 		return builder.build();
 	}
 
-	/** Account-wide until characters own their guild membership. */
-	static String simpleFactionsGuild(Player player) {
+	/** The guild belonging to the character shown on this card. */
+	static String simpleFactionsGuild(UUID characterId) {
 		if (!Bukkit.getPluginManager().isPluginEnabled("SimpleFactions")) return null;
 		try {
-			return SimpleFactionsGuild.name(player.getName());
+			return SimpleFactionsGuild.name(characterId);
 		} catch (NoClassDefFoundError | RuntimeException failure) {
 			return null;
 		}
@@ -635,9 +648,10 @@ public final class CharacterSelectView {
 	static final class SimpleFactionsGuild {
 		private SimpleFactionsGuild() {}
 
-		static String name(String playerName) {
+		static String name(UUID characterId) {
+			if (!net.tfminecraft.simplefactions.api.SimpleFactionsApi.ready()) return null;
 			net.tfminecraft.simplefactions.guild.Guild guild =
-					net.tfminecraft.simplefactions.managers.FactionManager.getGuildByMember(playerName);
+					net.tfminecraft.simplefactions.managers.FactionManager.getGuildByMember(characterId);
 			return guild == null || guild.getName() == null ? "" : ClueFormatter.stripColor(guild.getName());
 		}
 	}

@@ -11,7 +11,7 @@ import net.tfminecraft.rpcharacters.managers.CreationManager;
 
 /**
  * DenarEconomy disables before RPCharacters on shutdown, so held payments are settled here,
- * while its accounts can still take a refund.
+ * while its ledger can still take a refund.
  */
 public final class PaidChangeListener implements Listener {
 

@@ -379,6 +379,12 @@ public class PlayerManager implements Listener{
 		}
 	}
 
+	/** Writes one loaded character's file and forces it to disk; false when that failed. */
+	public boolean saveCharacterNow(UUID owner, RPCharacter character) {
+		PlayerData pd = get(owner);
+		return pd != null && db.trySaveCharacterDurably(pd, character);
+	}
+
 	public static void stampActiveCharacterLocation(Player p) {
 		PlayerData pd = get(p);
 		if (pd == null || p == null) {
@@ -424,12 +430,12 @@ public class PlayerManager implements Listener{
 				}
 			}
 			// On join only, not on offline loads, which may never be saved. A settled hold is saved on
-			// the normal schedule, the same way DenarEconomy saves the online balance it changed.
+			// the normal schedule; settling it again after a crash replays the same ledger operation.
 			for (RPCharacter c : loaded.getCharacters()) {
 				// Settle an old hold first, so it counts toward the old revision, not the fresh window.
-				String recovered = net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c);
-				if (recovered != null) {
-					RPTexts.send(p, recovered);
+				for (String recovered : new String[] {net.tfminecraft.rpcharacters.paidchange.PaidChangeService.recover(c),
+						net.tfminecraft.rpcharacters.classpick.ClassPickService.recover(p.getUniqueId(), c)}) {
+					if (recovered != null) RPTexts.send(p, recovered);
 				}
 				dirty |= net.tfminecraft.rpcharacters.creation.StageRevisions.refresh(
 						c, net.tfminecraft.rpcharacters.loaders.StageLoader.oList);

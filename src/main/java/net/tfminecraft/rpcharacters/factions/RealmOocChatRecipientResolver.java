@@ -14,6 +14,8 @@ import net.tfminecraft.rpcharacters.chat.ChatChannel;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientFilters;
 import net.tfminecraft.rpcharacters.chat.ChatRecipientResolver;
 import net.tfminecraft.simplefactions.managers.FactionManager;
+import net.tfminecraft.simplefactions.identity.Members;
+import net.tfminecraft.simplefactions.api.SimpleFactionsApi;
 import net.tfminecraft.simplefactions.objects.Faction;
 
 /** Resolves ROOC recipients to online members of the sender's top-overlord realm. */
@@ -21,11 +23,11 @@ public final class RealmOocChatRecipientResolver implements ChatRecipientResolve
 
 	@Override
 	public Set<Player> resolve(Player sender, ChatChannel channel) {
-		if (sender == null || channel == null) {
+		if (sender == null || channel == null || !SimpleFactionsApi.ready()) {
 			return Collections.emptySet();
 		}
 
-		Faction faction = FactionManager.getByMember(sender.getName());
+		Faction faction = FactionManager.getByMember(sender);
 		if (faction == null) {
 			return Collections.emptySet();
 		}
@@ -34,13 +36,13 @@ public final class RealmOocChatRecipientResolver implements ChatRecipientResolve
 		Set<String> realmMembers = new HashSet<>();
 		for (String member : overlord.getCompleteMemberList()) {
 			if (member != null) {
-				realmMembers.add(member.toLowerCase(Locale.ROOT));
+				realmMembers.add(member);
 			}
 		}
 
 		List<Player> candidates = new ArrayList<>();
 		for (Player online : Bukkit.getOnlinePlayers()) {
-			if (realmMembers.contains(online.getName().toLowerCase(Locale.ROOT))) {
+			if (realmMembers.contains(Members.key(online))) {
 				candidates.add(online);
 			}
 		}

@@ -85,6 +85,12 @@ public final class CharacterIdentityService implements CharacterIdentity {
     }
 
     @Override
+    public Optional<UUID> deathId(UUID characterId) {
+        refreshCharacter(characterId);
+        return directory.deathId(characterId);
+    }
+
+    @Override
     public Optional<List<CharacterInfo>> characters(UUID ownerId) {
         refreshOwner(ownerId);
         return directory.characters(ownerId);
@@ -133,7 +139,8 @@ public final class CharacterIdentityService implements CharacterIdentity {
             return;
         }
         boolean active = Boolean.TRUE.equals(character.isActive());
-        onMainThread(directory -> directory.upsert(owner, info, active));
+        UUID deathId = character.getDeathId();
+        onMainThread(directory -> directory.upsert(owner, info, active, deathId));
     }
 
     public static void removed(UUID owner, String characterId) {

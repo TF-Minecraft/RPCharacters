@@ -30,8 +30,11 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.paidchange.DenarEconomyWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Posting;
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeRule;
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
+import net.tfminecraft.rpcharacters.paidchange.Payment;
+import net.tfminecraft.rpcharacters.paidchange.Payments;
 import net.tfminecraft.rpcharacters.utils.AgeFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
@@ -62,7 +65,7 @@ public final class ClassPickService {
 		NOT_APPLIED
 	}
 
-	/** {@code paidFrom} is null when the pick was free. */
+	/** {@code paidFrom} is null when the pick was free, or when a pick that was not applied was refunded. */
 	public record Result(Status status, PlayerClass target, BigDecimal cost, Account paidFrom) {}
 
 	/** A displayed base class and the level its subclasses unlock at. */
@@ -229,38 +232,125 @@ public final class ClassPickService {
 		if (net.Indyuce.mmocore.api.player.PlayerData.get(player).getLevel() < option.requiredLevel()) {
 			return new Result(Status.LEVEL_TOO_LOW, target, BigDecimal.ZERO, null);
 		}
+		UUID owner = player.getUniqueId();
+		tell(player, recover(owner, character));
+		if (character.getPendingPaidChange() != null) {
+			tell(player, PaidChangeService.recover(character));
+		}
+		// A held payment is settled by comparing the class, so no other change may run meanwhile.
+		if (character.getPendingClassPick() != null || character.getPendingPaidChange() != null) {
+			return new Result(Status.UNAVAILABLE, target, BigDecimal.ZERO, null);
+		}
 		BigDecimal cost = price(character, option);
-		Account paidFrom = null;
+		Payment payment = null;
 		if (cost.signum() > 0) {
 			if (!wallet.available()) {
 				return new Result(Status.UNAVAILABLE, target, cost, null);
 			}
-			paidFrom = withdraw(player.getUniqueId(), cost);
-			if (paidFrom == null) {
-				return new Result(Status.INSUFFICIENT_FUNDS, target, cost, null);
+			Payments.Charge taken = Payments.take(wallet, DenarWallet.CLASS_PICK, "class-pick",
+					Payments.payer(owner, character), settings.accounts(), Payments.cents(cost),
+					held -> hold(owner, character, target.getId(), held));
+			if (taken.status() != Payments.Taken.PAID) {
+				Status status = taken.status() == Payments.Taken.UNAVAILABLE ? Status.UNAVAILABLE : Status.INSUFFICIENT_FUNDS;
+				return new Result(status, target, cost, null);
 			}
+			payment = taken.payment();
 		}
 		String oldClassId = character.getMMOClass();
 		character.setMMOClass(target.getId());
 		if (!applied(player, target.getId())) {
 			character.setMMOClass(oldClassId);
-			refund(player.getUniqueId(), paidFrom, cost);
+			if (payment != null) {
+				// Saved first, so a later move to the same class can't pass for this payment.
+				character.setPendingClassPick(new PendingClassPick(target.getId(), payment, true));
+				Payments.save(owner, character);
+			}
+			if (payment != null && !refund(owner, character)) {
+				tell(player, refundLater(payment));
+				return new Result(Status.NOT_APPLIED, target, cost, payment.account());
+			}
 			return new Result(Status.NOT_APPLIED, target, cost, null);
 		}
 		if (option.isSubclass()) {
 			character.setSubclassPicked(true);
 		}
-		if (paidFrom != null) {
-			character.setPaidClassPicks(character.getPaidClassPicks() + 1);
-			PaidChangeRule rule = PaidChangeService.ruleFor(classStage());
-			if (rule != null) {
-				// Shared with paid class-stage edits, so the next change costs the next price.
-				character.setPaidChangeCount(rule.getStageId(), character.getPaidChangeCount(rule.getStageId()) + 1);
-			}
+		if (payment != null) {
+			countPaid(character);
 		}
 		CharacterLifecycle.notifyClassChange(player, pd.getUniqueId(), character, oldClassId, target.getId());
 		RPCharacters.getPlayerManager().savePlayer(player);
-		return new Result(Status.CHOSEN, target, cost, paidFrom);
+		return new Result(Status.CHOSEN, target, cost, payment == null ? null : payment.account());
+	}
+
+	/** Holds the payment on the character and saves it; null drops a payment that was never taken. */
+	private static boolean hold(UUID owner, RPCharacter character, String targetClass, Payment payment) {
+		character.setPendingClassPick(payment == null ? null : new PendingClassPick(targetClass, payment, false));
+		if (Payments.save(owner, character) || payment == null) {
+			return true;
+		}
+		character.setPendingClassPick(null);
+		return false;
+	}
+
+	/** Counts a kept paid pick and clears its hold. */
+	private static void countPaid(RPCharacter character) {
+		character.setPendingClassPick(null);
+		character.setPaidClassPicks(character.getPaidClassPicks() + 1);
+		PaidChangeRule rule = PaidChangeService.ruleFor(classStage());
+		if (rule != null) {
+			// Shared with paid class-stage edits, so the next change costs the next price.
+			character.setPaidChangeCount(rule.getStageId(), character.getPaidChangeCount(rule.getStageId()) + 1);
+		}
+	}
+
+	/**
+	 * Settles a paid pick left held by a crash or a failed refund. A debit that never applied is
+	 * dropped; a pick whose class stuck (and was not marked for refund) is kept and counted;
+	 * anything else is refunded with the stored refund ID. Returns the player message, or null when
+	 * there is nothing to say.
+	 */
+	public static String recover(UUID owner, RPCharacter character) {
+		PendingClassPick pending = character == null ? null : character.getPendingClassPick();
+		if (pending == null) {
+			return null;
+		}
+		Payments.Debit debit = Payments.debited(wallet, pending.payment());
+		if (debit == Payments.Debit.NOT_APPLIED) {
+			character.setPendingClassPick(null);
+		} else if (debit == Payments.Debit.APPLIED && !pending.refundRequired()
+				&& pending.targetClass().equalsIgnoreCase(character.getMMOClass())) {
+			countPaid(character);
+		} else if (debit == Payments.Debit.APPLIED) {
+			Payment payment = pending.payment();
+			return refund(owner, character) ? RPTexts.SUCCESS + "Your class didn't change, so "
+					+ PaidChangeService.formatCents(payment.cents()) + " went back to your "
+					+ payment.account().displayName() + "." : refundLater(payment);
+		}
+		return null;
+	}
+
+	/** Refunds the held pick with its stored ID. False keeps the hold for the next join. */
+	private static boolean refund(UUID owner, RPCharacter character) {
+		Payment payment = character.getPendingClassPick().payment();
+		if (Payments.refund(wallet, payment) != Posting.APPLIED) {
+			LOG.warning("[RPCharacters] Could not post " + payment.refundOpId() + " for a class pick that was not applied;"
+					+ " it is retried when the owner next joins.");
+			return false;
+		}
+		character.setPendingClassPick(null);
+		Payments.save(owner, character);
+		return true;
+	}
+
+	private static String refundLater(Payment payment) {
+		return RPTexts.ERROR + "Your " + PaidChangeService.formatCents(payment.cents())
+				+ " class change refund couldn't go through yet. It will be retried when you next join.";
+	}
+
+	private static void tell(Player player, String message) {
+		if (message != null) {
+			RPTexts.send(player, message);
+		}
 	}
 
 	private static boolean applied(Player player, String classId) {
@@ -269,22 +359,6 @@ public final class ClassPickService {
 		} catch (RuntimeException e) {
 			LOG.log(Level.WARNING, "[RPCharacters] Class " + classId + " could not be applied for " + player.getName(), e);
 			return false;
-		}
-	}
-
-	private static Account withdraw(UUID playerId, BigDecimal cost) {
-		for (Account account : settings.accounts()) {
-			if (wallet.balance(playerId, account).compareTo(cost) >= 0 && wallet.withdraw(playerId, account, cost)) {
-				return account;
-			}
-		}
-		return null;
-	}
-
-	private static void refund(UUID playerId, Account account, BigDecimal cost) {
-		if (account != null && !wallet.deposit(playerId, account, cost)) {
-			LOG.log(Level.WARNING, "[RPCharacters] Could not refund " + cost + " denars to " + playerId + " ("
-					+ account.displayName() + ") for a class pick that was not applied. Refund it by hand.");
 		}
 	}
 
@@ -308,7 +382,7 @@ public final class ClassPickService {
 			case INSUFFICIENT_FUNDS -> RPTexts.ERROR + "Changing your class costs " + PaidChangeService.formatDenars(result.cost())
 					+ ". You don't have that much in your pouch or the bank.";
 			case NOT_APPLIED -> RPTexts.ERROR + "Your class couldn't be changed right now. Try again in a moment."
-					+ (result.cost().signum() > 0 ? " You were not charged." : "");
+					+ (result.cost().signum() > 0 && result.paidFrom() == null ? " You were not charged." : "");
 		};
 	}
 

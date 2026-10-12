@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.TreeMap;
 import com.google.gson.Gson;
@@ -515,9 +517,28 @@ public class Database {
 		trySaveCharacter(pd, c);
 	}
 
+	/** Forces a file or directory channel to disk. Replaced in tests to observe the order. */
+	interface ChannelSync {
+		void force(FileChannel channel) throws IOException;
+	}
+
+	static ChannelSync sync = channel -> channel.force(true);
+
 	/** Returns whether this character was persisted before directory publication. */
-	@SuppressWarnings("unchecked")
 	public boolean trySaveCharacter(PlayerData pd, RPCharacter c) {
+		return trySaveCharacter(pd, c, false);
+	}
+
+	/**
+	 * Like {@link #trySaveCharacter}, but returns true only once the file and its directory entry
+	 * are forced to disk, so a power loss can't undo it. Used before posting a payment.
+	 */
+	public boolean trySaveCharacterDurably(PlayerData pd, RPCharacter c) {
+		return trySaveCharacter(pd, c, true);
+	}
+
+	@SuppressWarnings("unchecked")
+	private boolean trySaveCharacter(PlayerData pd, RPCharacter c, boolean durable) {
 		try {
 			File dir = new File("plugins/RPCharacters/data/characterdata", pd.getUniqueId().toString());
 			if (!dir.exists()) {
@@ -577,7 +598,7 @@ public class Database {
 			CharacterStageChangeFields.save(defaults, c);
 			CharacterClassPickFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
-			if (!save(file, defaults)) return false;
+			if (!(durable ? save(file, defaults, true) : save(file, defaults))) return false;
 			net.tfminecraft.rpcharacters.identity.CharacterIdentityService.saved(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.playtime.CharacterPlaytimeDirectory.upsert(pd.getUniqueId(), c);
 			net.tfminecraft.rpcharacters.mail.MailRecipientDirectory.upsert(pd.getUniqueId(), c);
@@ -587,8 +608,13 @@ public class Database {
 			return false;
         }
 	}
-	@SuppressWarnings("unchecked")
 	public boolean save(File file, HashMap<String, Object> defaults) {
+		return save(file, defaults, false);
+	}
+
+	/** {@code durable} forces the staged file before the rename and the directory after it. */
+	@SuppressWarnings("unchecked")
+	boolean save(File file, HashMap<String, Object> defaults, boolean durable) {
 	  Path staged = null;
 	  try {
 		  JSONObject toSave = new JSONObject();
@@ -621,7 +647,20 @@ public class Database {
 	    Path target = file.toPath().toAbsolutePath();
 	    staged = Files.createTempFile(target.getParent(), ".rpcharacters-", ".tmp");
 	    Files.writeString(staged, prettyJsonString, StandardCharsets.UTF_8);
+	    if (durable) {
+	      try (FileChannel channel = FileChannel.open(staged, StandardOpenOption.WRITE)) {
+	        sync.force(channel);
+	      }
+	    }
 	    Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+	    if (durable) {
+	      // Fails closed: the caller must not act on a save whose rename may not survive a power loss.
+	      for (Path parent = target.getParent(); parent != null; parent = parent.getParent()) {
+	        try (FileChannel directory = FileChannel.open(parent, StandardOpenOption.READ)) {
+	          sync.force(directory);
+	        }
+	      }
+	    }
 
 	    return true;
 	  } catch (Exception ex) {

@@ -924,8 +924,8 @@ public class InventoryManager {
 		if (pending != null) {
 			meta.setDisplayName(t(RPTexts.ERROR + "Cancel"));
 			lore.add(t(RPTexts.MUTED + "Keep your " + pending.label()));
-			if (pending.amount().signum() > 0) {
-				lore.add(t(RPTexts.MUTED + "and get " + RPTexts.GUI_WARN + PaidChangeService.formatDenars(pending.amount())
+			if (pending.cents() > 0) {
+				lore.add(t(RPTexts.MUTED + "and get " + RPTexts.GUI_WARN + PaidChangeService.formatCents(pending.cents())
 						+ RPTexts.MUTED + " back"));
 			}
 		} else if(cc != null) {

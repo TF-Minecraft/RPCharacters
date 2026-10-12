@@ -57,10 +57,19 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.paidchange.FakeLedger;
+import net.tfminecraft.rpcharacters.paidchange.Payment;
+import net.tfminecraft.rpcharacters.paidchange.Payments;
+import net.tfminecraft.rpcharacters.paidchange.PendingPaidChange;
+import net.tfminecraft.rpcharacters.paidchange.PaymentsFixture;
+import net.tfminecraft.rpcharacters.database.CharacterClassPickFields;
+import net.tfminecraft.tlibs.character.CharacterRef;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 
 class ClassPickTest {
     ServerMock server; PlayerMock player; RuntimeTestState state; MMOCore previousMmo; ClassManager classes;
-    PlayerData account; RPCharacter character; PlayerManager playerManager; FakeWallet wallet;
+    PlayerData account; RPCharacter character; PlayerManager playerManager; FakeLedger wallet; final List<String> saves = new ArrayList<>();
     PlayerClass warrior, mage, berserker, spellblade, hidden;
     final AtomicInteger level = new AtomicInteger(1);
     final Map<String, PlayerClass> classMap = new LinkedHashMap<>();
@@ -77,7 +86,7 @@ class ClassPickTest {
     <T> MockedStatic<T> boundary(Class<T> type) { var result = mockStatic(type); boundaries.add(result); return result; }
 
     @BeforeEach void setup() throws Exception {
-        server = MockBukkit.mock(); state = new RuntimeTestState(RPCharacters.class, StageLoader.class, PaidChangeService.class); previousMmo = MMOCore.plugin;
+        server = MockBukkit.mock(); state = new RuntimeTestState(RPCharacters.class, StageLoader.class, PaidChangeService.class, Payments.class); previousMmo = MMOCore.plugin;
         Cache.attributes = new ArrayList<>(); Cache.professions = new ArrayList<>();
         player = server.addPlayer("Picker");
         MMOCore.plugin = mock(MMOCore.class); classes = mock(ClassManager.class);
@@ -97,7 +106,8 @@ class ClassPickTest {
         classService = boundary(ClassService.class); classService.when(() -> ClassService.applyClass(eq(player), anyString())).thenReturn(true);
         var mmo = mock(net.Indyuce.mmocore.api.player.PlayerData.class); when(mmo.getLevel()).thenAnswer(call -> level.get());
         boundary(net.Indyuce.mmocore.api.player.PlayerData.class).when(() -> net.Indyuce.mmocore.api.player.PlayerData.get(player)).thenReturn(mmo);
-        wallet = new FakeWallet(); ClassPickService.setWallet(wallet); ClassPickService.configure(Settings.DEFAULTS);
+        wallet = new FakeLedger(); ClassPickService.setWallet(wallet); ClassPickService.configure(Settings.DEFAULTS);
+        PaymentsFixture.saves((owner, saved) -> saves.add(owner + "/" + saved.getId()));
         Logger.getLogger("RPCharacters").addHandler(handler);
     }
 
@@ -182,7 +192,7 @@ class ClassPickTest {
         locks.when(() -> StageEditLock.lockRemainingMs(stage, character)).thenReturn(0L); assertEquals("Head / First subclass: Free / Class changes: Free", lore.get());
         locks.when(() -> StageEditLock.canEdit(player, stage, character)).thenReturn(false);
         assertEquals(new BigDecimal("100.00"), ClassPickService.price(character, magePick)); assertEquals("Head / First subclass: Free / Class changes: 100 denars / Then: 1,000 denars", lore.get());
-        wallet.balances.put(Account.POUCH, new BigDecimal("150")); var paid = ClassPickService.choose(player, "mage");
+        wallet.set(Account.POUCH, 15_000); var paid = ClassPickService.choose(player, "mage");
         assertEquals(Status.CHOSEN, paid.status()); assertEquals(new BigDecimal("100.00"), paid.cost()); assertEquals(1, character.getPaidChangeCount("class_selection_stage"));
         assertEquals(new BigDecimal("1000.00"), ClassPickService.price(character, ClassPickService.option("warrior")), "Each paid change raises the next price");
     }
@@ -196,11 +206,12 @@ class ClassPickTest {
     }
 
     @Test void paidPicksTakeTheWholeCostFromTheFirstAccountThatCoversIt() {
-        level.set(2); character.setSubclassPicked(true); wallet.balances.put(Account.POUCH, new BigDecimal("100")); wallet.balances.put(Account.BANK, new BigDecimal("500"));
+        level.set(2); character.setSubclassPicked(true); wallet.set(Account.POUCH, 10_000); wallet.set(Account.BANK, 50_000);
         var result = ClassPickService.choose(player, "mage");
-        assertEquals(Status.CHOSEN, result.status()); assertEquals(Account.BANK, result.paidFrom()); assertEquals(new BigDecimal("300.00"), wallet.balances.get(Account.BANK).setScale(2));
+        assertEquals(Status.CHOSEN, result.status()); assertEquals(Account.BANK, result.paidFrom()); assertEquals(30_000, wallet.get(Account.BANK)); assertNull(character.getPendingClassPick());
         assertEquals(1, character.getPaidClassPicks()); assertTrue(ChatColor.stripColor(ClassPickService.message(result)).contains("Paid 200 denars from your bank."));
-        wallet.balances.put(Account.POUCH, new BigDecimal("1000")); wallet.failWithdraw = true; assertEquals(Status.INSUFFICIENT_FUNDS, ClassPickService.choose(player, "warrior").status());
+        wallet.set(Account.POUCH, 100_000); wallet.set(Account.BANK, 0); wallet.rejectPouch = true; assertEquals(Status.INSUFFICIENT_FUNDS, ClassPickService.choose(player, "warrior").status());
+        assertNull(character.getPendingClassPick());
     }
 
     @Test void picksAreRefusedWithoutChargingWhenTheyCannotGoAhead() {
@@ -218,12 +229,15 @@ class ClassPickTest {
     }
 
     @Test void aPickMmoCoreRejectsKeepsTheOldClassAndRefundsThePayment() {
-        classService.when(() -> ClassService.applyClass(player, "mage")).thenReturn(false); wallet.balances.put(Account.POUCH, new BigDecimal("250"));
+        classService.when(() -> ClassService.applyClass(player, "mage")).thenReturn(false); wallet.set(Account.POUCH, 25_000);
         var result = ClassPickService.choose(player, "mage");
-        assertEquals(Status.NOT_APPLIED, result.status()); assertEquals("WARRIOR", character.getMMOClass()); assertEquals(0, new BigDecimal("250").compareTo(wallet.balances.get(Account.POUCH)));
+        assertEquals(Status.NOT_APPLIED, result.status()); assertEquals("WARRIOR", character.getMMOClass()); assertEquals(25_000, wallet.get(Account.POUCH)); assertNull(character.getPendingClassPick());
         assertTrue(ChatColor.stripColor(ClassPickService.message(result)).contains("You were not charged."));
-        wallet.failDeposit = true; ClassPickService.choose(player, "mage");
-        assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("Refund it by hand")));
+        wallet.depositsDown = true; var held = ClassPickService.choose(player, "mage");
+        assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("retried when the owner next joins")));
+        assertEquals(Account.POUCH, held.paidFrom()); assertFalse(ChatColor.stripColor(ClassPickService.message(held)).contains("charged"));
+        assertTrue(messages().contains("refund couldn't go through yet")); wallet.depositsDown = false;
+        assertTrue(ClassPickService.recover(player.getUniqueId(), character).contains("went back to your pouch")); assertEquals(25_000, wallet.get(Account.POUCH));
         ClassPickService.configure(settings(true, true)); var free = ClassPickService.choose(player, "mage");
         assertEquals(Status.NOT_APPLIED, free.status()); assertFalse(ChatColor.stripColor(ClassPickService.message(free)).contains("charged"));
         var classless = new RPCharacter(player); when(account.getActiveCharacter()).thenReturn(classless);
@@ -302,7 +316,7 @@ class ClassPickTest {
         ClassPickGui.click(player, holder, 10); assertEquals("MAGE", character.getMMOClass());
         assertTrue(messages().contains("can't be picked"));
         assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "spellblade").status());
-        classService.verifyNoInteractions(); assertTrue(wallet.balances.isEmpty());
+        classService.verifyNoInteractions(); assertTrue(wallet.attempts.isEmpty());
     }
 
     @Test void hiddenCurrentBaseStillAllowsItsOwnSubclasses() {
@@ -385,18 +399,118 @@ class ClassPickTest {
         listener.onCommand(disabled); assertFalse(disabled.isCancelled());
     }
 
-    static final class FakeWallet implements DenarWallet {
-        final Map<Account, BigDecimal> balances = new EnumMap<>(Account.class);
-        boolean available = true, failWithdraw, failDeposit;
-        @Override public boolean available() { return available; }
-        @Override public BigDecimal balance(UUID playerId, Account account) { return balances.getOrDefault(account, BigDecimal.ZERO); }
-        @Override public boolean withdraw(UUID playerId, Account account, BigDecimal amount) {
-            if (failWithdraw) return false;
-            balances.put(account, balance(playerId, account).subtract(amount)); return true;
-        }
-        @Override public boolean deposit(UUID playerId, Account account, BigDecimal amount) {
-            if (failDeposit) return false;
-            balances.put(account, balance(playerId, account).add(amount)); return true;
-        }
+    @Test void aPaidPickIsSavedBeforeItsDebitAndClearedOnceApplied() {
+        wallet.set(Account.POUCH, 50_000); List<String> seen = new ArrayList<>();
+        PaymentsFixture.saves((owner, saved) -> {
+            PendingClassPick held = saved.getPendingClassPick();
+            seen.add(held.targetClass() + " " + held.payment().debitOpId().startsWith("paid:" + saved.getId() + ":class-pick:")
+                    + " posted=" + wallet.stored.containsKey(held.payment().debitOpId()));
+            return true;
+        });
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "mage").status());
+        assertEquals(List.of("mage true posted=false"), seen); assertNull(character.getPendingClassPick());
+        assertEquals(DenarWallet.CLASS_PICK, wallet.applied.get(0).reason());
+        assertEquals(new CharacterRef(player.getUniqueId(), UUID.fromString(character.getId())), wallet.applied.get(0).character());
+    }
+
+    @Test void anUnsavablePickTakesNothing() {
+        wallet.set(Account.POUCH, 50_000); PaymentsFixture.saves((owner, saved) -> false);
+        assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "mage").status());
+        assertTrue(wallet.attempts.isEmpty()); assertNull(character.getPendingClassPick()); assertEquals("WARRIOR", character.getMMOClass());
+    }
+
+    @Test void aCrashBetweenDebitAndClassRefundsOnceOrKeepsAnAppliedPick() {
+        wallet.set(Account.POUCH, 50_000); List<JSONObject> onDisk = new ArrayList<>();
+        PaymentsFixture.saves((owner, saved) -> onDisk.add(picksJson(saved)));
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "mage").status());
+        RPCharacter crashed = new RPCharacter(player); crashed.setId(character.getId()); crashed.setMMOClass("warrior");
+        CharacterClassPickFields.load(crashed, onDisk.get(0));
+        RPCharacter again = new RPCharacter(player); again.setId(character.getId()); again.setMMOClass("warrior");
+        CharacterClassPickFields.load(again, onDisk.get(0));
+        assertEquals("mage", crashed.getPendingClassPick().targetClass());
+
+        assertTrue(ClassPickService.recover(player.getUniqueId(), crashed).contains("200 denars went back to your pouch"));
+        assertNull(crashed.getPendingClassPick()); assertEquals(50_000, wallet.get(Account.POUCH));
+        ClassPickService.recover(player.getUniqueId(), again);
+        assertEquals(50_000, wallet.get(Account.POUCH)); assertEquals(1, wallet.count(false));
+
+        RPCharacter stuck = new RPCharacter(player); stuck.setMMOClass("mage");
+        CharacterClassPickFields.load(stuck, onDisk.get(0));
+        assertNull(ClassPickService.recover(player.getUniqueId(), stuck));
+        assertNull(stuck.getPendingClassPick()); assertEquals(1, stuck.getPaidClassPicks()); assertEquals(1, wallet.count(false));
+        assertNull(ClassPickService.recover(player.getUniqueId(), null)); assertNull(ClassPickService.recover(player.getUniqueId(), stuck));
+    }
+
+    @Test void aRefusedOrUncertainDebitNeverRefundsAndBlocksPicksUntilKnown() {
+        wallet.set(Account.POUCH, 50_000); List<JSONObject> onDisk = new ArrayList<>();
+        PaymentsFixture.saves((owner, saved) -> onDisk.add(picksJson(saved)));
+        wallet.loseReplies = true; wallet.statusDown = true;
+        assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "mage").status());
+        assertEquals("WARRIOR", character.getMMOClass()); assertEquals(30_000, wallet.get(Account.POUCH));
+        assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "mage").status(), "an unconfirmed pick blocks the next");
+        assertEquals(1, wallet.attempts.size());
+        wallet.loseReplies = false; wallet.statusDown = false;
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "mage").status());
+        assertTrue(messages().contains("200 denars went back to your pouch")); assertEquals(30_000, wallet.get(Account.POUCH));
+
+        RPCharacter refused = new RPCharacter(player); refused.setMMOClass("warrior");
+        CharacterClassPickFields.load(refused, onDisk.get(0));
+        wallet.stored.put(refused.getPendingClassPick().payment().debitOpId(), DenarWallet.Posting.REFUSED);
+        long deposits = wallet.count(false);
+        assertNull(ClassPickService.recover(player.getUniqueId(), refused)); assertNull(refused.getPendingClassPick());
+        assertEquals(deposits, wallet.count(false));
+    }
+
+    @Test void pendingPicksSurviveASaveAndUnreadableOnesAreDropped() {
+        Payment payment = Payment.open(new CharacterRef(player.getUniqueId(), UUID.fromString(character.getId())), Account.BANK, 500, "class-pick");
+        character.setPendingClassPick(new PendingClassPick("MAGE", payment, true));
+        RPCharacter loaded = new RPCharacter(player); CharacterClassPickFields.load(loaded, picksJson(character));
+        assertEquals(character.getPendingClassPick(), loaded.getPendingClassPick());
+        RPCharacter broken = new RPCharacter(player);
+        JSONObject json = new JSONObject(); json.put("class-picks", Map.of("pending", Map.of("target", "MAGE")));
+        CharacterClassPickFields.load(broken, json); assertNull(broken.getPendingClassPick());
+    }
+
+    @Test void aFailedPaidPickIsRefundedBeforeAnyEditEvenIfTheClassLaterMatches() {
+        wallet.set(Account.POUCH, 25_000); List<JSONObject> onDisk = new ArrayList<>();
+        PaymentsFixture.saves((owner, saved) -> onDisk.add(picksJson(saved)));
+        classService.when(() -> ClassService.applyClass(player, "mage")).thenReturn(false); wallet.depositsDown = true;
+        var failed = ClassPickService.choose(player, "mage");
+        assertEquals(Status.NOT_APPLIED, failed.status()); assertEquals(5_000, wallet.get(Account.POUCH));
+        assertTrue(character.getPendingClassPick().refundRequired());
+        assertEquals(true, ((Map<?, ?>) ((Map<?, ?>) onDisk.getLast().get("class-picks")).get("pending")).get("refund-required"));
+
+        Stage classStage = new Stage(); classStage.setId("class_selection_stage"); StageLoader.oList.add(classStage);
+        CharacterCreation edit = CharacterCreation.forEdit(player, character); messages();
+        edit.jumpToStageForEdit("class_selection_stage");
+        assertTrue(messages().contains("last refund hasn't gone through yet")); assertNotNull(character.getPendingClassPick());
+        level.set(2); assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "berserker").status());
+
+        // The ledger is back and the character reached the same class some other way: still a refund.
+        wallet.depositsDown = false; character.setMMOClass("mage");
+        edit.jumpToStageForEdit("class_selection_stage");
+        assertTrue(messages().contains("200 denars went back to your pouch"));
+        assertNull(character.getPendingClassPick()); assertEquals(25_000, wallet.get(Account.POUCH)); assertEquals(0, character.getPaidClassPicks());
+        assertEquals(1, wallet.count(false));
+    }
+
+    @Test void aHeldPaidStageChangeBlocksClassPicksUntilItSettles() {
+        wallet.set(Account.POUCH, 50_000); boolean[] ready = {false}; PaymentsFixture.paidChangeWallet(wallet);
+        CharacterRef heir = new CharacterRef(player.getUniqueId(), UUID.fromString(character.getId()));
+        PaymentsFixture.heirs(() -> ready[0], owner -> Optional.of(heir));
+        character.setPendingPaidChange(new PendingPaidChange("class_selection_stage", "class",
+                Payment.legacy(player.getUniqueId(), Account.POUCH, 1_000, "refund-legacy:x:class_selection_stage"), "before"));
+        assertEquals(Status.UNAVAILABLE, ClassPickService.choose(player, "mage").status());
+        assertTrue(messages().contains("refund couldn't go through yet")); assertEquals("WARRIOR", character.getMMOClass());
+        ready[0] = true;
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "mage").status());
+        assertNull(character.getPendingPaidChange()); assertEquals(31_000, wallet.get(Account.POUCH));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static JSONObject picksJson(RPCharacter character) {
+        HashMap<String, Object> saved = new HashMap<>(); CharacterClassPickFields.save(saved, character);
+        try { return (JSONObject) new JSONParser().parse(new JSONObject(saved).toJSONString()); }
+        catch (Exception e) { throw new IllegalStateException(e); }
     }
 }

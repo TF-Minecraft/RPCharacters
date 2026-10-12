@@ -9,7 +9,9 @@ import net.tfminecraft.rpcharacters.ingest.RosterPushPolicy;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.paidchange.Payment;
 import net.tfminecraft.rpcharacters.paidchange.PendingPaidChange;
+import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -67,10 +69,11 @@ class CharacterFieldsRuntimeTest {
     }
 
     @Test void paymentAndRevisionStateRoundTripsThroughJsonWithoutLosingDecimalAmounts() throws Exception {
-        var character = new RPCharacter(null); var payer = UUID.randomUUID();
+        var character = new RPCharacter(null); var payer = new CharacterRef(UUID.randomUUID(), UUID.randomUUID());
         character.setPaidChangeCount("class", 2); character.setStageRevision("class", 3, 1234);
-        for (Account account : Arrays.asList(Account.BANK, null)) {
-            var pending = new PendingPaidChange("class", "Class", payer, account, new BigDecimal("12.34"), "snapshot");
+        for (Payment payment : Arrays.asList(Payment.open(payer, Account.BANK, 1_234, "Class"),
+                Payment.legacy(payer.ownerId(), Account.POUCH, 1_234, "refund-legacy:x:class"), null)) {
+            var pending = new PendingPaidChange("class", "Class", payment, "snapshot");
             character.setPendingPaidChange(pending); var saved = new LinkedHashMap<String, Object>(); CharacterStageChangeFields.save(saved, character);
             var loaded = new RPCharacter(null); CharacterStageChangeFields.load(loaded, (JSONObject) new JSONParser().parse(json(saved).toJSONString()));
             assertEquals(pending, loaded.getPendingPaidChange()); assertEquals(2, loaded.getPaidChangeCount("class"));

@@ -505,9 +505,17 @@ public class CharacterCreation {
 
 		PaidChangeService.settle(this);
 
-		if (character.getPendingPaidChange() != null) {
+		if (p != null) {
 
-			// A refund that failed stays held. Any edit now would look like the paid change was used.
+			String classRefund = net.tfminecraft.rpcharacters.classpick.ClassPickService.recover(p.getUniqueId(), character);
+
+			if (classRefund != null) RPTexts.send(p, classRefund);
+
+		}
+
+		if (character.getPendingPaidChange() != null || character.getPendingClassPick() != null) {
+
+			// A held payment is settled by comparing the character. Any edit now could pass for it.
 
 			RPTexts.send(p, RPTexts.ERROR + "Your last refund hasn't gone through yet. Try again after you rejoin.");
 

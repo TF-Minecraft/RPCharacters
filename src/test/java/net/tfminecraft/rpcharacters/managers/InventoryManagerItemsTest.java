@@ -54,9 +54,9 @@ class InventoryManagerItemsTest extends InventoryFixture {
         assertTrue(lore(manager.createCancelItem(null)).contains("Cancel the edit"));
         assertEquals("Cancel Creation", name(manager.createCancelItem(creation)));
         assertTrue(lore(manager.createCancelItem(creation)).contains("not reversible"));
-        when(creation.getPendingPaidChange()).thenReturn(new PendingPaidChange("class", "old class", player.getUniqueId(), DenarWallet.Account.POUCH, new BigDecimal("125"), "{}"));
+        when(creation.getPendingPaidChange()).thenReturn(new PendingPaidChange("class", "old class", net.tfminecraft.rpcharacters.paidchange.Payment.legacy(player.getUniqueId(), DenarWallet.Account.POUCH, 12_500, "refund-legacy:x:class"), "{}"));
         String refund = lore(manager.createCancelItem(creation)); assertTrue(refund.contains("Keep your old class")); assertTrue(refund.contains("125"));
-        when(creation.getPendingPaidChange()).thenReturn(new PendingPaidChange("class", "old class", player.getUniqueId(), null, BigDecimal.ZERO, "{}"));
+        when(creation.getPendingPaidChange()).thenReturn(new PendingPaidChange("class", "old class", null, "{}"));
         assertFalse(lore(manager.createCancelItem(creation)).contains("back"));
     }
 
@@ -251,7 +251,7 @@ abstract class InventoryFixture {
         rpc = boundary(RPCharacters.class); rpc.when(() -> RPCharacters.getSkull(any())).thenAnswer(call -> new ItemStack(Material.PLAYER_HEAD));
         slots = boundary(CharacterSlotService.class); slots.when(() -> CharacterSlotService.hasFreeSlot(any(), any())).thenReturn(true); slots.when(() -> CharacterSlotService.getMaxAliveCharacters(any())).thenReturn(2); slots.when(CharacterSlotService::getDisplaySlotCount).thenAnswer(call -> Cache.characterSlots.size()); slots.when(() -> CharacterSlotService.shouldShowLockedSlot(anyInt(), anyInt())).thenReturn(true); slots.when(() -> CharacterSlotService.getUnlockRequirementLore(anyInt())).thenAnswer(call -> "Unlock slot " + call.getArgument(0));
         cooldowns = boundary(PermissionGroupService.class); permissions = boundary(Permissions.class); locks = boundary(StageEditLock.class); locks.when(() -> StageEditLock.canEdit(any(), any(), any())).thenReturn(true);
-        paid = boundary(PaidChangeService.class); paid.when(() -> PaidChangeService.summaryLore(any(),any(),anyBoolean())).thenReturn(null); paid.when(() -> PaidChangeService.formatDenars(any())).thenAnswer(call -> ((BigDecimal)call.getArgument(0)).stripTrailingZeros().toPlainString());
+        paid = boundary(PaidChangeService.class); paid.when(() -> PaidChangeService.summaryLore(any(),any(),anyBoolean())).thenReturn(null); paid.when(() -> PaidChangeService.formatDenars(any())).thenAnswer(call -> ((BigDecimal)call.getArgument(0)).stripTrailingZeros().toPlainString()); paid.when(() -> PaidChangeService.formatCents(anyLong())).thenAnswer(call -> String.valueOf(call.<Long>getArgument(0) / 100));
         var identity = boundary(DisplayIdentityService.class); identity.when(() -> DisplayIdentityService.resolveDisplayTab(any(RPCharacter.class))).thenReturn("Alias");
         var persona = boundary(PersonaService.class); persona.when(() -> PersonaService.resolveGender(any(RPCharacter.class))).thenReturn("Woman"); persona.when(() -> PersonaService.resolveAge(any(RPCharacter.class))).thenReturn("25"); persona.when(() -> PersonaService.resolveBirthday(any(RPCharacter.class))).thenReturn("1/1/1700"); persona.when(() -> PersonaService.resolveDescription(any(RPCharacter.class))).thenReturn("A thoughtful traveller.");
         var death = boundary(PermadeathService.class); var risk = mock(PermadeathRisk.class); when(risk.toLoreLines()).thenReturn(List.of("Risk boundary")); death.when(() -> PermadeathService.computeRisk(any())).thenReturn(risk);

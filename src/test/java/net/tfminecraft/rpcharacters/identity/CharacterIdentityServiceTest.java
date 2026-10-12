@@ -102,6 +102,8 @@ class CharacterIdentityServiceTest {
     void allLookupMethodsSeeImmutableLiveEditsIncludingHiddenInactiveAndDeadCharacters() {
         RPCharacter deceased = character("Deceased", false);
         deceased.setStatus(Status.DEAD);
+        UUID death = UUID.randomUUID();
+        deceased.setDeathRecord(death, Instant.ofEpochMilli(3000));
         deceased.setLastPlayedAt(Instant.ofEpochMilli(4000));
         data.addCharacter(deceased);
         RPCharacter missing = character("Missing", false);
@@ -113,6 +115,7 @@ class CharacterIdentityServiceTest {
         List<CharacterInfo> first = service.characters(player.getUniqueId()).orElseThrow();
         CharacterInfo snapshot = service.info(UUID.fromString(alice.getId())).orElseThrow();
         assertEquals(3, first.size());
+        assertEquals(Optional.of(death), service.deathId(UUID.fromString(deceased.getId())));
         assertEquals("Alice", snapshot.name());
         assertEquals(CharacterStatus.DEAD, service.lastPlayed(player.getUniqueId()).orElseThrow().status());
         assertTrue(first.stream().anyMatch(character -> character.status() == CharacterStatus.MISSING));
@@ -238,6 +241,7 @@ class CharacterIdentityServiceTest {
             assertThrows(IllegalStateException.class, () -> service.currentSession(player));
             assertThrows(IllegalStateException.class, () -> service.isCurrent(session));
             assertThrows(IllegalStateException.class, () -> service.info(id));
+            assertThrows(IllegalStateException.class, () -> service.deathId(id));
             assertThrows(IllegalStateException.class, () -> service.characters(owner));
             assertThrows(IllegalStateException.class, () -> service.lastPlayed(owner));
             assertThrows(IllegalStateException.class, () -> service.displayName(player));
@@ -258,6 +262,8 @@ class CharacterIdentityServiceTest {
         });
         UUID offline = UUID.randomUUID();
         RPCharacter character = character("Saved off thread", false);
+        UUID capturedDeath = UUID.randomUUID();
+        character.setDeathRecord(capturedDeath, null);
         UUID id = UUID.fromString(character.getId());
         try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
@@ -273,8 +279,10 @@ class CharacterIdentityServiceTest {
         assertTrue(service.info(id).isEmpty());
         // The queued update keeps what was saved, not later edits to the live character.
         character.setName("Renamed after the save");
+        character.setDeathRecord(UUID.randomUUID(), null);
         queued.getFirst().run();
         assertEquals("Saved off thread", service.info(id).orElseThrow().name());
+        assertEquals(capturedDeath, service.deathId(id).orElseThrow());
         queued.getLast().run();
         assertTrue(service.info(id).isEmpty());
     }
