@@ -254,19 +254,18 @@ class CharacterSelectViewTest {
 		assertEquals(SkinPortrait.ROW_WIDTH, ui.last().portraitPart().width());
 		assertEquals(CharacterSelectView.placeholder(CharacterSelectView.LOADING), ui.last().portrait());
 		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
-		assertEquals("‹   Lady Wren   Rowan   ›\nLady Wren\nHuman • Sword master • Age 27, born "
-				+ FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m • Last played 2d 2h ago\n"
-				+ "Pouch: 12.50 denars • Bank: 300 denars\nGuild: Ironhand\n"
-				+ "Last location: world 120, 64, -31\n"
-				+ "2 of 4 character slots used", ui.last().bodyText());
+		assertEquals("‹   Lady Wren   Rowan   ›\nLady Wren\nHuman • Sword master • Age 27\n"
+				+ "Ironhand • Last played 2d 2h ago", ui.last().bodyText());
 		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
 			if (part != ui.last().portraitPart()) assertEquals(300, part.width());
 		}
 		assertEquals(List.of("▶ Play", "New character", "Memorials (2)"), labels());
 		assertEquals(3, columns());
-		assertEquals("Play as Lady Wren", text(button("▶ Play").tooltip()));
-		assertEquals("Start a new character", text(button("New character").tooltip()));
+		assertEquals("Play as Lady Wren\nBorn " + FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m\n"
+				+ "Pouch: 12.50 denars • Bank: 300 denars\nLast location: world 120, 64, -31",
+				text(button("▶ Play").tooltip()));
+		assertEquals("Start a new character\n2 of 4 character slots used", text(button("New character").tooltip()));
 		assertEquals(List.of(110, 100, 90), ui.last().buttons().stream().map(ActionButton::width).toList());
 		assertEquals("Leave", text(exit().label()));
 		assertEquals("Disconnect from the server", text(exit().tooltip()));
@@ -353,8 +352,8 @@ class CharacterSelectViewTest {
 		RPCharacter rowan = character("rowan", "Rowan", Status.ALIVE);
 		when(actions.blockReason(rowan)).thenReturn("Rowan can be played again in 2d 4h.");
 		CharacterSelectView.open(player, data, actions);
-		assertTrue(ui.last().bodyText().startsWith("Rowan\nPlayed 0d 0h 0m\nRowan can be played again in 2d 4h.\n"));
-		assertEquals("Rowan can be played again in 2d 4h.", text(button("▶ Play").tooltip()));
+		assertTrue(ui.last().bodyText().equals("Rowan\nRowan can be played again in 2d 4h."));
+		assertEquals("Rowan can be played again in 2d 4h.", text(button("▶ Play").tooltip()).lines().findFirst().orElseThrow());
 		assertEquals(CharacterSelectView.DIM, button("▶ Play").label().color());
 		assertNull(ui.last().strip());
 		click("▶ Play");
@@ -608,7 +607,7 @@ class CharacterSelectViewTest {
 		ActionButton play = button("▶ Play");
 		data.getCharacters().clear();
 		ui.click(play, player);
-		assertTrue(ui.last().bodyText().startsWith("That character can no longer be played.\nYou have no characters yet.\n"));
+		assertTrue(ui.last().bodyText().equals("That character can no longer be played.\nYou have no characters yet."));
 		assertNull(ui.last().portrait());
 		assertEquals(List.of("New character"), labels());
 		assertEquals(1, columns());
@@ -644,16 +643,16 @@ class CharacterSelectViewTest {
 		ui.click(create, player);
 		verify(actions, never()).create();
 		assertTrue(ui.last().bodyText().startsWith("New character available in 1d 1h 1m.\n"));
-		assertEquals("New character available in 1d 1h 1m", text(button("New character").tooltip()));
+		assertEquals("New character available in 1d 1h 1m", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
 		assertEquals(CharacterSelectView.DIM, button("New character").label().color());
 
 		when(player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)).thenReturn(true);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals("Start a new character", text(button("New character").tooltip()));
+		assertEquals("Start a new character", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
 
 		for (int i = 0; i < 3; i++) character("x" + i, "Extra " + i, Status.ALIVE);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals("No free character slot", text(button("New character").tooltip()));
+		assertEquals("No free character slot", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
 		click("New character");
 		assertTrue(ui.last().bodyText().startsWith("No free character slot.\n"));
 		verify(actions, never()).create();
@@ -717,7 +716,7 @@ class CharacterSelectViewTest {
 		data.getCharacters().forEach(c -> when(c.getStatus()).thenReturn(Status.DEAD));
 		links.get(next.clickEvent()).accept(player);
 		assertNull(CharacterSelectView.session(OWNER).selected);
-		assertTrue(ui.last().bodyText().startsWith("You have no characters yet.\n"));
+		assertTrue(ui.last().bodyText().equals("You have no characters yet."));
 		assertEquals(List.of("New character", "Memorials (3)"), labels());
 	}
 
@@ -730,7 +729,7 @@ class CharacterSelectViewTest {
 		assertEquals("Bartholomew the Unyielding of Greywater",
 				text((Component) strip().get("Bartholome…").hoverEvent().value()));
 		link("Bartholome…");
-		assertTrue(ui.last().bodyText().contains("\nBartholomew the Unyielding of Greywater\nPlayed"));
+		assertTrue(ui.last().bodyText().endsWith("\nBartholomew the Unyielding of Greywater"));
 	}
 
 	@Test
@@ -805,34 +804,48 @@ class CharacterSelectViewTest {
 		when(newer.getDiedAt()).thenReturn(Instant.parse("2026-06-01T00:00:00Z"));
 		RPCharacter missing = character("m", "Missing", Status.MISSING);
 		assertEquals(List.of(recent, unnamed, alpha, beta, newer, older, missing), CharacterSelectView.cards(data));
-		assertEquals("Unnamed\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, unnamed, null)));
+		assertEquals("Unnamed", text(CharacterSelectView.characterCard(unnamed, null)));
 		when(unnamed.getName()).thenReturn(" ");
-		assertTrue(text(CharacterSelectView.characterCard(OWNER, unnamed, null)).startsWith("Unnamed"));
+		assertTrue(text(CharacterSelectView.characterCard(unnamed, null)).startsWith("Unnamed"));
 		assertEquals(List.of(), CharacterSelectView.page(List.of(), 3));
 	}
 
 	@Test
-	void balancesSayUnavailableInsteadOfZeroAndTheFooterOmitsAnUnreadableGuild() {
+	void balancesSayUnavailableInsteadOfZeroAndTheCardOmitsAMissingGuild() {
 		when(wallet.available()).thenReturn(false);
 		RPCharacter cora = character(UUID.randomUUID().toString(), "Cora", Status.ALIVE);
 		assertEquals("Pouch and bank: unavailable", CharacterSelectView.balances(OWNER, cora));
 		assertEquals("", CharacterSelectView.balances(OWNER, character("not-an-id", "Odd", Status.ALIVE)));
 		verify(wallet, never()).balance(any(), any());
 		CharacterSelectView.guilds = p -> null;
-		assertNull(CharacterSelectView.guildSummary(cora));
+		assertNull(CharacterSelectView.guild(cora));
 		CharacterSelectView.open(player, data, actions);
-		assertTrue(ui.last().bodyText().endsWith("Pouch and bank: unavailable\n2 of 4 character slots used"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().endsWith("\nCora"), ui.last().bodyText());
+		assertTrue(text(button("▶ Play").tooltip()).endsWith("\nPouch and bank: unavailable"));
 		CharacterSelectView.guilds = p -> "";
-		assertEquals("Guild: none", text(CharacterSelectView.guildSummary(cora)));
+		assertNull(CharacterSelectView.guild(cora));
+	}
+
+	@Test
+	void lastPlayedRoundsUnderAnHourAndTheCardOmitsAnEmptyThirdLine() {
+		RPCharacter c = character("c", "Cora", Status.ALIVE);
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
+		when(c.getLastPlayedAt()).thenReturn(Instant.now().minusSeconds(3590));
+		assertEquals("Cora\nLast played <1h ago", text(CharacterSelectView.characterCard(c, null)));
+		when(c.getLastPlayedAt()).thenReturn(Instant.now().minusSeconds(3600));
+		String hour = text(CharacterSelectView.characterCard(c, null));
+		assertTrue(hour.startsWith("Cora\nLast played ") && hour.endsWith(" ago") && !hour.contains("<1h"), hour);
 	}
 
 	@Test
 	void cardsSkipBirthdaysThatCannotBeRead() {
 		RPCharacter c = character("c", "Cora", Status.ALIVE);
 		when(c.getBirthday()).thenReturn(" ");
-		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, c, null)));
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
+		assertEquals("Played 0d 0h 0m", CharacterSelectView.details(OWNER, c));
 		when(c.getBirthday()).thenReturn("not a date");
-		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, c, null)));
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
+		assertEquals("Played 0d 0h 0m", CharacterSelectView.details(OWNER, c));
 	}
 
 	@Test
@@ -935,9 +948,9 @@ class CharacterSelectViewTest {
         RPCharacter a=character(first.toString(),"First",Status.ALIVE);
         RPCharacter b=character(second.toString(),"Second",Status.ALIVE);
         CharacterSelectView.guilds=id -> id.equals(first) ? "Ironhand" : "Rivals";
-        assertEquals("Guild: Ironhand",text(CharacterSelectView.guildSummary(a)));
-        assertEquals("Guild: Rivals",text(CharacterSelectView.guildSummary(b)));
-        assertFalse(text(CharacterSelectView.characterCard(OWNER,b,null)).contains("Ironhand"));
+        assertEquals("Ironhand",CharacterSelectView.guild(a));
+        assertEquals("Rivals",CharacterSelectView.guild(b));
+        assertFalse(text(CharacterSelectView.characterCard(b,null)).contains("Ironhand"));
     }
 
 	/** Captures dialogs built through Paper's static builders. */
