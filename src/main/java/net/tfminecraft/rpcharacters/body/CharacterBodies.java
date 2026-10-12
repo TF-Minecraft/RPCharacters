@@ -16,10 +16,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.scheduler.BukkitTask;
-
-import com.destroystokyo.paper.profile.ProfileProperty;
 
 import net.kyori.adventure.text.Component;
 import net.tfminecraft.rpcharacters.RPCharacters;
@@ -39,7 +36,6 @@ import net.tfminecraft.rpcharacters.pvp.PvpSituations;
 import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
 import net.tfminecraft.rpcharacters.wardrobe.SkinApplyHelper;
-import net.tfminecraft.rpcharacters.wardrobe.SkinTextures;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCache;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 import net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason;
@@ -68,7 +64,6 @@ public final class CharacterBodies {
     private final Map<UUID, Object> requests = new HashMap<>();
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
     private final Map<UUID, Countdown> returning = new HashMap<>();
-    private final Map<UUID, SkinTextures> loginSkins = new ConcurrentHashMap<>();
     private final int returnSeconds;
 
     private static final class RoomEntry {
@@ -148,30 +143,14 @@ public final class CharacterBodies {
         originalSpawns.put(owner, original.clone());
     }
 
-    /**
-     * Every login enters selection, so the player is created already wearing Steve. Changing an online
-     * player's skin respawns them on their own screen, which would interrupt the resource-pack prompt.
-     */
-    public void dressAtLogin(AsyncPlayerPreLoginEvent event) {
-        var profile = event.getPlayerProfile();
-        SkinTextures account = null;
-        for (ProfileProperty property : profile.getProperties()) {
-            if ("textures".equals(property.getName())) account = new SkinTextures(property.getValue(), property.getSignature());
-        }
-        if (account == null || !account.isValid() || account.sameTextures(SelectionSkin.STEVE)) return;
-        loginSkins.put(event.getUniqueId(), account);
-        profile.setProperty(new ProfileProperty("textures", SelectionSkin.STEVE.getValue(), SelectionSkin.STEVE.getSignature()));
-        event.setPlayerProfile(profile);
-    }
-
     /** Runs at join LOWEST, before ordinary character activation and before any room inventory can be used. */
     public void join(Player player) {
         UUID owner = player.getUniqueId();
-        // After any earlier connection's quit has cleared the wardrobe cache.
-        SkinTextures loginSkin = loginSkins.remove(owner);
-        if (loginSkin != null) WardrobeCache.rememberLoginSkin(player, loginSkin, SelectionSkin.STEVE);
         selecting.add(owner);
         failed.remove(owner);
+        // Paper has not sent the player list yet, so this changes the profile without a refresh that
+        // would interrupt the resource-pack prompt; they arrive as Steve.
+        wearRoomSkin(player);
         Location original = originalSpawns.remove(owner);
         if (original == null) original = player.getLocation();
         try {
@@ -662,7 +641,7 @@ public final class CharacterBodies {
         enterAfterRecovery(account);
     }
 
-    /** Only once the account skin is known, so Play and portraits can still restore it. */
+    /** Only once the account skin is known, so Play and portraits can still restore it; repeats are skipped. */
     private void wearRoomSkin(Player player) {
         WardrobeCache.captureAccountSkinIfNeeded(player);
         if (WardrobeCache.getAccountSkin(player) != null) SkinApplyHelper.apply(player, SelectionSkin.STEVE);
@@ -755,7 +734,6 @@ public final class CharacterBodies {
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
         stopReturn(owner);
-        loginSkins.remove(owner);
         packs.quit(player);
         CharacterSelectView.close(player);
         RoomEntry entry = enteringRoom.get(owner);

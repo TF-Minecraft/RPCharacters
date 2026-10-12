@@ -67,12 +67,6 @@ public final class WardrobeCache {
 		}
 	}
 
-	/** The login profile was swapped to {@code worn} before the player existed; keep the skin it replaced. */
-	public static void rememberLoginSkin(Player player, SkinTextures account, SkinTextures worn) {
-		ACCOUNT_SKINS.put(player.getUniqueId(), account);
-		LAST_APPLIED.put(player.getUniqueId(), worn);
-	}
-
 	public static SkinTextures getAccountSkin(UUID playerId) {
 		if (playerId == null) {
 			return null;

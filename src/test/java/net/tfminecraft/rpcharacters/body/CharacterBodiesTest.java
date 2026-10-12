@@ -14,8 +14,6 @@ import java.util.logging.Logger;
 import org.bukkit.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
-import com.destroystokyo.paper.profile.ProfileProperty;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -646,35 +644,19 @@ class CharacterBodiesTest {
         assertNull(account.getLastCharacterSwitchAtMs());
     }
 
-    AsyncPlayerPreLoginEvent login(ProfileProperty... properties) {
-        var event=mock(AsyncPlayerPreLoginEvent.class); var profile=mock(com.destroystokyo.paper.profile.PlayerProfile.class);
-        when(event.getPlayerProfile()).thenReturn(profile); when(event.getUniqueId()).thenReturn(owner);
-        when(profile.getProperties()).thenReturn(new LinkedHashSet<>(List.of(properties))); return event;
-    }
-
-    @Test void loginCreatesThePlayerAsSteveAndJoinRemembersTheSkinItReplaced() throws Exception {
-        var event=login(new ProfileProperty("other","x"),new ProfileProperty("textures","account","signed"));
-        var profile=event.getPlayerProfile(); bodies.dressAtLogin(event);
-        verify(profile).setProperty(new ProfileProperty("textures",SelectionSkin.STEVE.getValue(),SelectionSkin.STEVE.getSignature()));
-        verify(event).setPlayerProfile(profile);
+    @Test void joinDressesThePlayerAsSteveBeforeTheirRoomAndPackWait() throws Exception {
+        var accountSkin=new SkinTextures("account","signed"); when(packs.ready(player)).thenReturn(false);
+        wardrobes.when(()->WardrobeCache.getAccountSkin(player)).thenReturn(accountSkin);
         bodies.join(player);
-        wardrobes.verify(()->WardrobeCache.rememberLoginSkin(eq(player),argThat(t->t.getValue().equals("account")&&t.getSignature().equals("signed")),eq(SelectionSkin.STEVE)));
-        bodies.quit(player); wardrobes.clearInvocations(); bodies.join(player);
-        wardrobes.verify(()->WardrobeCache.rememberLoginSkin(any(),any(),any()),never());
-    }
-
-    @Test void loginLeavesMissingUnsignedOrSteveSkinsAndAbandonedLoginsAlone() throws Exception {
-        for(var event:List.of(login(),login(new ProfileProperty("textures","unsigned")),
-                login(new ProfileProperty("textures",SelectionSkin.STEVE.getValue(),SelectionSkin.STEVE.getSignature())))) {
-            bodies.dressAtLogin(event); verify(event,never()).setPlayerProfile(any());
-        }
-        bodies.dressAtLogin(login(new ProfileProperty("textures","account","signed"))); bodies.quit(player); bodies.join(player);
-        wardrobes.verify(()->WardrobeCache.rememberLoginSkin(any(),any(),any()),never());
+        InOrder order=inOrder(WardrobeCache.class,SkinApplyHelper.class);
+        order.verify(wardrobes,()->WardrobeCache.captureAccountSkinIfNeeded(player));
+        order.verify(skins,()->SkinApplyHelper.apply(player,SelectionSkin.STEVE));
+        verify(player,never()).teleport(any(Location.class)); assertTrue(queued.size()>0);
     }
 
     @Test void roomSkinNeedsAKnownAccountSkinToRestore() throws Exception {
         ready(); skins.verify(()->SkinApplyHelper.apply(any(Player.class),any(SkinTextures.class)),never());
-        wardrobes.verify(()->WardrobeCache.captureAccountSkinIfNeeded(player));
+        wardrobes.verify(()->WardrobeCache.captureAccountSkinIfNeeded(player),times(2));
     }
 
     @Test void movingOrBeingHurtKeepsTheCharacterAndOnlyOneCountdownRuns() throws Exception {
