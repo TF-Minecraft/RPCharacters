@@ -58,6 +58,8 @@ class CharacterSelectionGuardTest {
         guard.spawn(spawn); verify(bodies).rememberSpawn(player.getUniqueId(), original); verify(spawn).setSpawnLocation(room);
         PlayerJoinEvent join = mock(PlayerJoinEvent.class); when(join.getPlayer()).thenReturn(player);
         guard.join(join); verify(bodies).join(player);
+        var post = mock(com.destroystokyo.paper.event.player.PlayerPostRespawnEvent.class); when(post.getPlayer()).thenReturn(player);
+        guard.respawned(post); verify(bodies).respawned(player);
         PlayerRespawnEvent respawn = mock(PlayerRespawnEvent.class); when(respawn.getPlayer()).thenReturn(player);
         guard.respawn(respawn); verify(respawn, never()).setRespawnLocation(any()); verify(bodies, never()).finishDeath(any());
         when(bodies.awaitingDeadBody(player)).thenReturn(true);

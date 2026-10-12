@@ -29,6 +29,7 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.Plugin;
 
 import io.papermc.paper.event.player.AsyncPlayerSpawnLocationEvent;
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
 
 /** Selection has no playable body, even when a player dismisses a dialog or sends packets directly. */
@@ -59,6 +60,9 @@ final class CharacterSelectionGuard implements Listener {
             event.setRespawnLocation(bodies.room());
         }
     }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void respawned(PlayerPostRespawnEvent event) { bodies.respawned(event.getPlayer()); }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void move(PlayerMoveEvent event) {

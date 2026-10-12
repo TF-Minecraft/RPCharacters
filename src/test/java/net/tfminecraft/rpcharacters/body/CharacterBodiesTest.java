@@ -64,6 +64,7 @@ class CharacterBodiesTest {
     MockedStatic<Characters> sessions;
     MockedStatic<Bukkit> bukkit;
     MockedStatic<RPCharacters> rpc;
+    MockedStatic<BodyRespawn> respawns;
     MockedConstruction<BodyStore> stores;
     MockedConstruction<BodyLeaseStore> leaseStores;
     MockedConstruction<CharacterBodyMigration> migrations;
@@ -120,6 +121,7 @@ class CharacterBodiesTest {
         tags.when(()->BodyTag.live(eq(player),any(),anyLong())).thenAnswer(c->{tag=new BodyTag.Live(c.getArgument(1),c.getArgument(2));return null;});
         view=mockStatic(CharacterSelectView.class);mocks.add(view);view.when(()->CharacterSelectView.open(eq(player),eq(account),any())).thenAnswer(c->{actions=c.getArgument(2);return null;});
         config=new YamlConfiguration(); config.set("persistent-keys",List.of("accessory:test"));
+        respawns=mockStatic(BodyRespawn.class); mocks.add(respawns);
         bodies=new CharacterBodies(plugin,config);rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
         database=dbs.constructed().getFirst();store=stores.constructed().getFirst();migration=migrations.constructed().getFirst();progress=progresses.constructed().getFirst();
         leases=leaseStores.constructed().getFirst();
@@ -142,6 +144,8 @@ class CharacterBodiesTest {
         doAnswer(c->{diskLeases.complete(c.getArgument(0),c.getArgument(1));return null;}).when(leases).complete(any(),any());
         doAnswer(c->{diskLeases.markRespawn(c.getArgument(0),c.getArgument(1));return null;}).when(leases).markRespawn(any(),any());
         doAnswer(c->diskLeases.pendingRespawn(c.getArgument(0),c.getArgument(1))).when(leases).pendingRespawn(any(),any());
+        doAnswer(c->{diskLeases.completeRespawn(c.getArgument(0),c.getArgument(1));return null;}).when(leases).completeRespawn(any(),any());
+        doAnswer(c->diskLeases.respawnCompleted(c.getArgument(0),c.getArgument(1))).when(leases).respawnCompleted(any(),any());
     }
     @AfterEach void cleanup() throws Exception {CreationManager.activeCreators.remove(player);for(int i=mocks.size()-1;i>=0;i--)mocks.get(i).close();}
 
@@ -374,13 +378,13 @@ class CharacterBodiesTest {
 
     @Test void reconnectRespawnsOnlyAfterMmoReadyAndStoresTheActualVanillaRespawnLocation() throws Exception {
         useRealLeases(); diskLeases.begin(owner,new BodyTag.Live(first,1)); tag=new BodyTag.Live(first,1);
-        when(player.isDead()).thenReturn(true); var spigot=mock(Player.Spigot.class); when(player.spigot()).thenReturn(spigot);
+        when(player.isDead()).thenReturn(true);
         Location bed=new Location(world,70.5,64,-20.5); bodies.rememberSpawn(owner,spawn);
-        doAnswer(c->{assertTrue(bodies.isRespawning(player));when(player.isDead()).thenReturn(false);when(player.getLocation()).thenReturn(bed);return null;}).when(spigot).respawn();
+        respawns.when(()->BodyRespawn.respawn(player)).thenAnswer(c->{assertTrue(bodies.isRespawning(player));when(player.isDead()).thenReturn(false);when(player.getLocation()).thenReturn(bed);bodies.respawned(player);return null;});
         bodies.join(player); assertSame(account,bodies.takeAccount(player));
-        verifyNoInteractions(spigot); verify(snapshot,never()).withLocation(any()); verify(player.getInventory(),never()).clear();
+        respawns.verifyNoInteractions(); verify(snapshot,never()).withLocation(any()); verify(player.getInventory(),never()).clear();
         assertTrue(bodies.isRespawning(player)); assertNull(actions);
-        bodies.prepare(account); bodies.prepare(account); verify(spigot,times(1)).respawn();
+        bodies.prepare(account); bodies.prepare(account); respawns.verify(()->BodyRespawn.respawn(player),times(1));
         verify(progress,never()).prepare(account); assertFalse(bodies.isApplying(player)); assertNull(actions);
         drain(); verify(snapshot).withLocation(bed); verify(snapshot).withFullHealth(); verify(snapshot,never()).withLocation(spawn);
         InOrder order=inOrder(store,player,leases,progress);
@@ -392,7 +396,7 @@ class CharacterBodiesTest {
 
     @Test void clientRespawnBeforeMmoReadyIsCapturedWithoutRespawningTwiceAndOldCallbacksCannotWrite() throws Exception {
         tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
-        when(player.isDead()).thenReturn(false); Location bed=new Location(world,50,80,40); when(player.getLocation()).thenReturn(bed);
+        when(player.isDead()).thenReturn(false); Location bed=new Location(world,50,80,40); when(player.getLocation()).thenReturn(bed); bodies.respawned(player);
         bodies.prepare(account); verify(player,never()).spigot(); bodies.quit(player); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
         // The next connection's now-alive vanilla body is recovered through the usual LIVE path.
@@ -400,7 +404,7 @@ class CharacterBodiesTest {
     }
 
     @Test void failedVanillaRespawnNeverCapturesAPlayableZeroHealthBody() throws Exception {
-        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); when(player.spigot()).thenReturn(mock(Player.Spigot.class));
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true);
         bodies.join(player); bodies.prepare(account); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(player.getInventory(),never()).clear();
         verify(player).kickPlayer(contains("needs attention")); assertInstanceOf(BodyTag.Live.class,tag); assertFalse(bodies.isApplying(player));
@@ -408,9 +412,9 @@ class CharacterBodiesTest {
 
     @Test void deathDuringRespawnRecoveryAndRefusedRoomTeleportStayFailClosed() throws Exception {
         tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
-        when(player.isDead()).thenReturn(false); bodies.prepare(account); when(player.isDead()).thenReturn(true); drain();
+        when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); when(player.isDead()).thenReturn(true); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(player).kickPlayer(contains("needs attention"));
-        bodies.quit(player); bodies.join(player); when(player.isDead()).thenReturn(false); when(player.teleport(room)).thenReturn(false);
+        bodies.quit(player); bodies.join(player); when(player.isDead()).thenReturn(false); bodies.respawned(player); when(player.teleport(room)).thenReturn(false);
         bodies.prepare(account); drain(); verify(player,times(2)).kickPlayer(contains("needs attention")); verify(progress,never()).prepare(account);
         assertFalse(bodies.isApplying(player));
     }
@@ -420,10 +424,9 @@ class CharacterBodiesTest {
         when(player.isDead()).thenReturn(true); when(a.getStatus()).thenReturn(Status.DEAD);
         bodies.join(player); verify(store).write(owner,first,1,"join-recovery",snapshot);
         assertEquals(new BodyTag.Room(first),tag); diskLeases.validate(owner,tag); verify(player,never()).spigot();
-        var spigot=mock(Player.Spigot.class); when(player.spigot()).thenReturn(spigot);
-        doAnswer(c->{when(player.isDead()).thenReturn(false);when(player.getInventory().isEmpty()).thenReturn(false);return null;}).when(spigot).respawn();
+        respawns.when(()->BodyRespawn.respawn(player)).thenAnswer(c->{when(player.isDead()).thenReturn(false);when(player.getInventory().isEmpty()).thenReturn(false);bodies.respawned(player);return null;});
         bodies.prepare(account); drain();
-        verify(spigot).respawn(); verify(store).quarantine(owner,"items-returned-after-stow",snapshot);
+        respawns.verify(()->BodyRespawn.respawn(player)); verify(store).quarantine(owner,"items-returned-after-stow",snapshot);
         verify(store,times(1)).write(any(),any(),anyLong(),anyString(),any()); verify(progress).prepare(account);
         assertEquals(Status.DEAD,a.getStatus()); assertEquals("This character cannot be played.",bodies.blockReason(account,a));
         verify(a,never()).setActiveState(true); verify(snapshot,never()).withFullHealth(); assertFalse(bodies.isRespawning(player));
@@ -433,7 +436,7 @@ class CharacterBodiesTest {
         tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true);
         when(store.read(owner,first)).thenReturn(Optional.of(record(first,2)));
         bodies.join(player); verify(store).quarantine(owner,"stale-live-copy",snapshot); assertEquals(new BodyTag.Room(first),tag);
-        when(player.isDead()).thenReturn(false); bodies.prepare(account); drain(); verify(progress).prepare(account);
+        when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); drain(); verify(progress).prepare(account);
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
         bodies.quit(player); when(player.isDead()).thenReturn(true); tag=new BodyTag.Live(first,1);
         when(store.read(owner,first)).thenReturn(Optional.empty()); bodies.join(player);
@@ -443,7 +446,7 @@ class CharacterBodiesTest {
     @Test void deadRoomWaitsForRespawnAndDeadLegacyMigrationPreservesRawDataForStaff() throws Exception {
         tag=new BodyTag.Room(first); when(player.isDead()).thenReturn(true); bodies.join(player);
         assertNull(actions); verify(progress,never()).prepare(any());
-        when(player.isDead()).thenReturn(false); bodies.prepare(account); drain();
+        when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); drain();
         verify(progress).prepare(account); assertNotNull(actions); verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
         bodies.quit(player); actions=null; tag=new BodyTag.Untagged(); when(player.isDead()).thenReturn(true);
         clearInvocations(migration,snapshot); bodies.join(player); verify(migration,never()).initialize(any(),any());
@@ -456,7 +459,7 @@ class CharacterBodiesTest {
         useRealLeases(); diskLeases.begin(owner,new BodyTag.Live(first,1)); tag=new BodyTag.Live(first,1);
         when(player.isDead()).thenReturn(true); bodies.join(player);
         assertTrue(diskLeases.pendingRespawn(owner,new BodyTag.Live(first,1)));
-        when(player.isDead()).thenReturn(false); bodies.prepare(account); bodies.quit(player); drain();
+        when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); bodies.quit(player); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(snapshot,never()).withFullHealth();
         bodies.join(player); verify(snapshot).withFullHealth(); verify(store).write(owner,first,1,"join-recovery",snapshot);
         diskLeases.validate(owner,new BodyTag.Room(first));
@@ -473,9 +476,50 @@ class CharacterBodiesTest {
         verify(player).kickPlayer(contains("needs attention"));
     }
 
+    @Test void mmoHealingWithoutPostRespawnStillRunsVanillaRespawnAndCannotStoreTheRoom() throws Exception {
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
+        when(player.isDead()).thenReturn(false); when(player.getLocation()).thenReturn(room);
+        Location actual=new Location(world,50,80,40);
+        respawns.when(()->BodyRespawn.respawn(player)).thenAnswer(c->{when(player.getLocation()).thenReturn(actual);bodies.respawned(player);return null;});
+        bodies.prepare(account); drain(); respawns.verify(()->BodyRespawn.respawn(player));
+        verify(snapshot).withLocation(actual); verify(snapshot,never()).withLocation(room);
+        verify(player,never()).setHealth(anyDouble()); verify(store).write(owner,first,1,"join-recovery",snapshot);
+    }
+
+    @Test void livingHealthWithoutCompletedRespawnEventFailsBeforeAnyBodyCapture() throws Exception {
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
+        when(player.isDead()).thenReturn(false); when(player.getLocation()).thenReturn(room);
+        bodies.prepare(account); drain(); respawns.verify(()->BodyRespawn.respawn(player));
+        verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(snapshot,never()).withLocation(any());
+        verify(player).kickPlayer(contains("needs attention"));
+    }
+
+    @Test void postRespawnFailureOrChangedTagNeverApprovesTheBodyAndLateEventsDoNothing() throws Exception {
+        bodies.respawned(player); verify(leases,never()).completeRespawn(any(),any());
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
+        tag=new BodyTag.Live(second,1); bodies.respawned(player); verify(leases,never()).completeRespawn(any(),any());
+        verify(player).kickPlayer(contains("needs attention")); bodies.quit(player);
+        tag=new BodyTag.Live(first,1); bodies.join(player);
+        doThrow(new IOException("completion sync")).when(leases).completeRespawn(any(),any());
+        bodies.respawned(player); bodies.prepare(account); drain(); verify(player,times(2)).kickPlayer(contains("needs attention"));
+        verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
+    }
+
+    @Test void interruptedRespawnCannotRecoverHealedRawOrOverwriteAGoodBodyWithARoomLocation() throws Exception {
+        useRealLeases(); diskLeases.begin(owner,new BodyTag.Live(first,1)); diskLeases.markRespawn(owner,new BodyTag.Live(first,1));
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(false);
+        bodies.join(player); verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
+        verify(player).kickPlayer(contains("needs attention")); bodies.quit(player);
+        diskLeases.completeRespawn(owner,new BodyTag.Live(first,1)); when(player.getLocation()).thenReturn(room);
+        bodies.join(player); verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
+        verify(player,times(2)).kickPlayer(contains("needs attention")); diskLeases.validate(owner,new BodyTag.Live(first,1));
+        bodies.quit(player); when(player.isDead()).thenReturn(true); bodies.join(player);
+        verify(player,times(3)).kickPlayer(contains("needs attention"));
+    }
+
     @Test void pendingRespawnCannotRecoverAChangedTag() throws Exception {
         tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true); bodies.join(player);
-        when(player.isDead()).thenReturn(false); bodies.prepare(account); tag=new BodyTag.Live(second,1); drain();
+        when(player.isDead()).thenReturn(false); bodies.respawned(player); bodies.prepare(account); tag=new BodyTag.Live(second,1); drain();
         verify(store,never()).write(any(),any(),anyLong(),anyString(),any()); verify(player.getInventory(),never()).clear();
         verify(player).kickPlayer(contains("needs attention"));
     }

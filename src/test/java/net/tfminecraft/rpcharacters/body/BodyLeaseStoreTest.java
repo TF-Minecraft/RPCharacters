@@ -77,10 +77,14 @@ class BodyLeaseStoreTest {
         BodyFiles files = spy(BodyFiles.DISK); BodyLeaseStore store = new BodyLeaseStore(root, files);
         assertThrows(IOException.class, () -> store.markRespawn(owner, live));
         store.begin(owner, live); assertFalse(store.pendingRespawn(owner, live));
+        assertFalse(store.respawnCompleted(owner, live));
+        assertThrows(IOException.class, () -> store.completeRespawn(owner, live));
         store.markRespawn(owner, live); store.markRespawn(owner, live);
         verify(files,times(2)).write(any(),any()); verify(files).move(any(),eq(root.resolve(owner+".json")));
         verify(files,times(2)).syncDirectory(root);
         assertTrue(new BodyLeaseStore(root).pendingRespawn(owner, live));
+        store.completeRespawn(owner,live);
+        assertTrue(new BodyLeaseStore(root).respawnCompleted(owner,live));
         assertThrows(IOException.class, () -> store.markRespawn(owner,new BodyTag.Live(character,8)));
         assertThrows(IOException.class, () -> store.pendingRespawn(owner,new BodyTag.Live(character,8)));
         store.complete(owner,live); store.validate(owner,new BodyTag.Room(character));
@@ -108,6 +112,7 @@ class BodyLeaseStoreTest {
         for (String invalid : List.of("{", valid.replace(owner.toString(), UUID.randomUUID().toString()),
                 valid.replace(character.toString(), "broken"), valid.replace("\"rev\":7", "\"rev\":0"),
                 valid.replace("\"rev\":7", "\"rev\":7.5"), valid.replace("\"pendingRespawn\":false", "\"pendingRespawn\":\"false\""), valid.replace("\"format\":1", "\"format\":2"),
+                valid.replace("\"respawnCompleted\":false", "\"respawnCompleted\":true"),
                 valid.replace("\"format\":1,", ""), valid.replace("}", ",\"extra\":true}"))) {
             Files.writeString(file, invalid);
             assertThrows(IOException.class, () -> store.validate(owner, live), invalid);

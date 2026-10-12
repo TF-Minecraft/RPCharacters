@@ -13,7 +13,7 @@ import com.google.gson.JsonObject;
 
 /** Durable activation evidence: Paper's player-data save does not report failed writes. */
 final class BodyLeaseStore {
-    private record Lease(BodyTag.Live body, boolean pendingRespawn) {}
+    private record Lease(BodyTag.Live body, boolean pendingRespawn, boolean respawnCompleted) {}
     private final Path root;
     private final BodyFiles files;
 
@@ -47,6 +47,7 @@ final class BodyLeaseStore {
         json.addProperty("character", live.characterId().toString());
         json.addProperty("rev", live.rev());
         json.addProperty("pendingRespawn", false);
+        json.addProperty("respawnCompleted", false);
         directory(root);
         Path temporary = root.resolve(".lease-" + UUID.randomUUID() + ".tmp");
         try {
@@ -65,6 +66,17 @@ final class BodyLeaseStore {
         if (read(owner).orElseThrow().pendingRespawn()) return;
         JsonObject json = BodyJson.parse(Files.readString(file(owner), StandardCharsets.UTF_8));
         json.addProperty("pendingRespawn", true);
+        replace(owner, json);
+    }
+
+    synchronized void completeRespawn(UUID owner, BodyTag.Live live) throws IOException {
+        if (!pendingRespawn(owner, live)) throw new IOException("Body has no pending respawn");
+        JsonObject json = BodyJson.parse(Files.readString(file(owner), StandardCharsets.UTF_8));
+        json.addProperty("respawnCompleted", true);
+        replace(owner, json);
+    }
+
+    private void replace(UUID owner, JsonObject json) throws IOException {
         Path temporary = root.resolve(".respawn-" + UUID.randomUUID() + ".tmp");
         try {
             files.write(temporary, BodyJson.GSON.toJson(json).getBytes(StandardCharsets.UTF_8));
@@ -78,6 +90,11 @@ final class BodyLeaseStore {
     synchronized boolean pendingRespawn(UUID owner, BodyTag.Live live) throws IOException {
         validate(owner, live);
         return read(owner).orElseThrow().pendingRespawn();
+    }
+
+    synchronized boolean respawnCompleted(UUID owner, BodyTag.Live live) throws IOException {
+        validate(owner, live);
+        return read(owner).orElseThrow().respawnCompleted();
     }
 
     /** Only after the stowed body committed and the cleared player was saved with a room tag. */
@@ -94,11 +111,13 @@ final class BodyLeaseStore {
             throw new IOException("Body activation lease is not a regular file of a sane size");
         }
         JsonObject json = BodyJson.parse(Files.readString(file, StandardCharsets.UTF_8));
-        BodyJson.keys(json, "body activation lease", Set.of("format", "owner", "character", "rev", "pendingRespawn"));
+        BodyJson.keys(json, "body activation lease", Set.of("format", "owner", "character", "rev", "pendingRespawn", "respawnCompleted"));
         BodyJson.integer(json, "format", 1, 1);
         if (!owner.equals(BodyJson.uuid(json, "owner"))) throw new IOException("Body activation lease belongs to another account");
+        boolean pending = BodyJson.bool(json, "pendingRespawn"), completed = BodyJson.bool(json, "respawnCompleted");
+        if (completed && !pending) throw new IOException("Body respawn completion has no pending intent");
         return Optional.of(new Lease(new BodyTag.Live(BodyJson.uuid(json, "character"),
-                BodyJson.integer(json, "rev", 1, Long.MAX_VALUE - 1)), BodyJson.bool(json, "pendingRespawn")));
+                BodyJson.integer(json, "rev", 1, Long.MAX_VALUE - 1)), pending, completed));
     }
 
     private Path file(UUID owner) {

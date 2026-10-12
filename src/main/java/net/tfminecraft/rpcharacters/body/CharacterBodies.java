@@ -52,6 +52,7 @@ public final class CharacterBodies {
     private static final class PendingRespawn {
         final BodyTag body;
         boolean started;
+        boolean completed;
         PendingRespawn(BodyTag body) { this.body = body; }
     }
 
@@ -112,6 +113,10 @@ public final class CharacterBodies {
             progress.recordLegacyActive(account, account.getActiveCharacter());
             BodyTag tag = BodyTag.read(player);
             leases.validate(owner, tag);
+            if (tag instanceof BodyTag.Live active && leases.pendingRespawn(owner, active)
+                    && leases.respawnCompleted(owner, active) == player.isDead()) {
+                throw new IOException("Interrupted respawn does not match the saved vanilla player");
+            }
             if (player.isDead()) {
                 // Dead characters and stale copies retain their original body before the room's
                 // vanilla entity respawns. Only an authoritative living character owns that respawn.
@@ -161,6 +166,9 @@ public final class CharacterBodies {
             if (saved.rev() < active.rev()) throw new IOException("Live character body revision is ahead of storage");
             if (saved.rev() == active.rev()) {
                 RPCharacter character = account.getCharacterById(active.characterId().toString());
+                if (character != null && character.getStatus() == Status.ALIVE && original.getWorld().equals(room.getWorld())) {
+                    throw new IOException("Live character body cannot be recovered from the selection room");
+                }
                 if (character != null && character.getStatus() == Status.ALIVE && !player.isDead()
                         && leases.pendingRespawn(owner, active)) current = current.withFullHealth();
                 store.write(owner, active.characterId(), active.rev(), "join-recovery", current);
@@ -195,8 +203,10 @@ public final class CharacterBodies {
                 pending.started = true;
                 applying.add(account.getUniqueId());
                 try {
-                    if (player.isDead()) player.spigot().respawn();
-                    if (player.isDead()) throw new IOException("Vanilla respawn did not complete");
+                    if (!pending.completed) BodyRespawn.respawn(player);
+                    if (!pending.completed || player.isDead() || failed.contains(account.getUniqueId())) {
+                        throw new IOException("Vanilla respawn did not complete");
+                    }
                 } finally {
                     applying.remove(account.getUniqueId());
                 }
@@ -210,6 +220,20 @@ public final class CharacterBodies {
             show(player);
         } catch (IOException | RuntimeException error) {
             fail(player, "preparing character progression", error);
+        }
+    }
+
+    /** Paper fires this only after the actual vanilla reset and teleport, unlike a health change. */
+    public void respawned(Player player) {
+        UUID owner = player.getUniqueId();
+        PendingRespawn pending = pendingRespawns.get(owner);
+        if (pending == null) return;
+        try {
+            if (!pending.body.equals(BodyTag.read(player))) throw new IOException("Respawned body's tag changed");
+            if (pending.body instanceof BodyTag.Live active) leases.completeRespawn(owner, active);
+            pending.completed = true;
+        } catch (IOException | RuntimeException error) {
+            fail(player, "recording the completed vanilla respawn", error);
         }
     }
 
