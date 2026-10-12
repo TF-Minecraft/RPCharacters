@@ -16,6 +16,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.kyori.adventure.text.Component;
@@ -65,6 +67,8 @@ public final class CharacterBodies {
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
     private final Map<UUID, Countdown> returning = new HashMap<>();
     private final int returnSeconds;
+    private static final long CHECKPOINT_TICKS = 6000L;
+    static final int ROOM_INVISIBILITY_TICKS = (int) CHECKPOINT_TICKS * 2;
 
     private static final class RoomEntry {
         final Player player;
@@ -120,7 +124,7 @@ public final class CharacterBodies {
         packs = new CharacterPackGate(plugin, config.getBoolean("require-resource-pack", false));
         returnSeconds = Math.max(1, config.getInt("return-seconds", 5));
         Bukkit.getPluginManager().registerEvents(new CharacterSelectionGuard(this, plugin), plugin);
-        Bukkit.getScheduler().runTaskTimer(plugin, this::checkpoint, 6000L, 6000L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::checkpoint, CHECKPOINT_TICKS, CHECKPOINT_TICKS);
     }
 
     public Location room() { return room.clone(); }
@@ -480,6 +484,7 @@ public final class CharacterBodies {
             character.setActiveState(true);
             progress.activate(account, character);
             if (!character.tryActivate()) throw new IOException("Character class is not ready");
+            player.removePotionEffect(PotionEffectType.INVISIBILITY);
             body.body().apply(player, bodyKeys);
             MmoInventorySlots.refresh(player);
             progress.restoreResources(account, character, resources);
@@ -641,6 +646,16 @@ public final class CharacterBodies {
         enterAfterRecovery(account);
     }
 
+    /**
+     * Hides the room body in third person. Not spectator mode: it ignores inventory clicks,
+     * which creation menus in the room need. The body's own effects replace this on Play.
+     * The checkpoint renews it, so saved player data cannot keep it once this plugin is gone.
+     */
+    static void hideFromSelf(Player player) {
+        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, ROOM_INVISIBILITY_TICKS, 0,
+                false, false, false));
+    }
+
     /** Only once the account skin is known, so Play and portraits can still restore it; repeats are skipped. */
     private void wearRoomSkin(Player player) {
         WardrobeCache.captureAccountSkinIfNeeded(player);
@@ -768,6 +783,10 @@ public final class CharacterBodies {
     }
 
     public void checkpoint() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID owner = player.getUniqueId();
+            if (selecting.contains(owner) && !live.containsKey(owner) && !failed.contains(owner)) hideFromSelf(player);
+        }
         for (PlayerData account : PlayerManager.getOnlineData()) {
             BodyTag.Live body = live.get(account.getUniqueId());
             if (body == null || failed.contains(account.getUniqueId())) continue;
@@ -811,6 +830,7 @@ public final class CharacterBodies {
         player.getEnderChest().clear();
         player.setItemOnCursor(null);
         for (var effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
+        hideFromSelf(player);
         for (NamespacedKey key : bodyKeys) player.getPersistentDataContainer().remove(key);
         player.setFireTicks(0);
         player.setFreezeTicks(0);

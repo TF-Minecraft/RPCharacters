@@ -14,6 +14,8 @@ import java.util.logging.Logger;
 import org.bukkit.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -652,6 +654,37 @@ class CharacterBodiesTest {
         order.verify(wardrobes,()->WardrobeCache.captureAccountSkinIfNeeded(player));
         order.verify(skins,()->SkinApplyHelper.apply(player,SelectionSkin.STEVE));
         verify(player,never()).teleport(any(Location.class)); assertTrue(queued.size()>0);
+    }
+
+    @Test void roomBodyIsInvisibleUntilTheCharacterBodyReplacesIt() throws Exception {
+        tag=new BodyTag.Room(first);
+        var saved=new PotionEffect(PotionEffectType.INVISIBILITY,100,0);
+        when(player.getActivePotionEffects()).thenReturn(List.of(saved));
+        ready();
+        // A rejoin strips the saved room effect with the rest of the body, then hides before the teleport.
+        InOrder entered=inOrder(player);
+        entered.verify(player).removePotionEffect(PotionEffectType.INVISIBILITY);
+        entered.verify(player).addPotionEffect(argThat(CharacterBodiesTest::roomInvisibility));
+        entered.verify(player).teleport(room);
+        when(player.getActivePotionEffects()).thenReturn(List.of());
+        clearInvocations(player); bodies.checkpoint();
+        verify(player).addPotionEffect(argThat(CharacterBodiesTest::roomInvisibility));
+        bodies.select(account,a); drain(); assertTrue(bodies.hasLiveBody(player));
+        InOrder played=inOrder(player,snapshot);
+        played.verify(player).removePotionEffect(PotionEffectType.INVISIBILITY);
+        played.verify(snapshot).apply(eq(player),any());
+        clearInvocations(player); bodies.checkpoint();
+        verify(player,never()).addPotionEffect(any());
+        // Returning to the room captures the playing body before hiding it.
+        leaveRunsOutgoing(); bodies.requestSelection(player); countdown(5);
+        InOrder returned=inOrder(snapshot,store,player);
+        returned.verify(store).write(owner,first,1,"selection",snapshot);
+        returned.verify(player).addPotionEffect(argThat(CharacterBodiesTest::roomInvisibility));
+        returned.verify(player).teleport(room);
+    }
+    static boolean roomInvisibility(PotionEffect effect) {
+        return effect.getType().equals(PotionEffectType.INVISIBILITY) && effect.getDuration()==CharacterBodies.ROOM_INVISIBILITY_TICKS
+                && !effect.isInfinite() && !effect.hasParticles() && !effect.hasIcon() && !effect.isAmbient();
     }
 
     @Test void roomSkinNeedsAKnownAccountSkinToRestore() throws Exception {
