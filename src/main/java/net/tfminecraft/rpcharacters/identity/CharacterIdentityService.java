@@ -12,12 +12,14 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.tlibs.character.CharacterIdentity;
 import net.tfminecraft.tlibs.character.CharacterInfo;
+import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.tlibs.character.CharacterSession;
 
 /** Complete saved identities with live, unsaved edits overlaid on the main thread. */
@@ -92,6 +94,22 @@ public final class CharacterIdentityService implements CharacterIdentity {
     public Optional<CharacterInfo> lastPlayed(UUID ownerId) {
         refreshOwner(ownerId);
         return directory.lastPlayed(ownerId);
+    }
+
+    /** The reviewed body heir, which also inherits account-wide money and memberships. */
+    @Override
+    public Optional<CharacterRef> legacyHeir(UUID ownerId) {
+        CharacterTransitions.requireMainThread();
+        CharacterBodies bodies = RPCharacters.getCharacterBodies();
+        UUID heir = bodies == null ? null : bodies.migrationHeir(ownerId);
+        return heir == null ? Optional.empty() : Optional.of(new CharacterRef(ownerId, heir));
+    }
+
+    /** Heirs come from the hash-checked manifest, so they are known only once bodies have loaded. */
+    @Override
+    public boolean legacyHeirsReady() {
+        CharacterTransitions.requireMainThread();
+        return RPCharacters.getCharacterBodies() != null;
     }
 
     @Override
