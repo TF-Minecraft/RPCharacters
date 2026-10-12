@@ -239,6 +239,62 @@ class CharacterBodiesTest {
         drain(); verify(player).teleport(room); verify(progress).prepare(account); assertNotNull(actions);
     }
 
+    @Test void quitBeforePostJoinFinishesTheCommittedRecoveryWithoutReplayingItsBody() throws Exception {
+        useRealLeases(); BodyTag.Live original = new BodyTag.Live(first,1);
+        diskLeases.begin(owner,original); tag=original;
+        bodies.join(player); bodies.prepare(account);
+        assertEquals(new BodyTag.Room(first),tag); verify(player,never()).saveData();
+        bodies.quit(player); drain();
+        InOrder order=inOrder(store,player,leases);
+        order.verify(store).write(owner,first,1,"join-recovery",snapshot);
+        order.verify(player).saveData(); order.verify(leases).complete(owner,original);
+        diskLeases.validate(owner,tag); assertNull(actions);
+        verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        bodies.join(player); bodies.prepare(account); drain();
+        assertNotNull(actions); verify(store,times(1)).write(owner,first,1,"join-recovery",snapshot);
+        verify(snapshot,never()).apply(any(),anySet());
+    }
+
+    @Test void refusedDismountThenQuitCompletesTheCommittedRecoveryAndKeepsTheMountUntouched() throws Exception {
+        useRealLeases(); BodyTag.Live original = new BodyTag.Live(first,1);
+        diskLeases.begin(owner,original); tag=original;
+        var mount=mock(org.bukkit.entity.Donkey.class); when(player.getVehicle()).thenReturn(mount);
+        ready(); verify(player).kickPlayer(contains("needs attention"));
+        verify(player,never()).saveData(); diskLeases.validate(owner,original);
+        bodies.quit(player); diskLeases.validate(owner,new BodyTag.Room(first));
+        verifyNoInteractions(mount); verify(player,never()).teleport(room);
+        when(player.getVehicle()).thenReturn(null); ready(); assertNotNull(actions);
+        verify(store,times(1)).write(owner,first,1,"join-recovery",snapshot);
+    }
+
+    @Test void failedDeferredQuitSaveKeepsTheLeaseAndPreventsAnotherBodyReplay() throws Exception {
+        useRealLeases(); BodyTag.Live original = new BodyTag.Live(first,1);
+        diskLeases.begin(owner,original); tag=original; bodies.join(player);
+        doThrow(new IllegalStateException("disk unavailable")).when(player).saveData();
+        assertDoesNotThrow(()->bodies.quit(player)); diskLeases.validate(owner,original);
+        verify(leases,never()).complete(any(),any());
+        assertThrows(IOException.class,()->diskLeases.validate(owner,tag));
+        doNothing().when(player).saveData(); bodies.join(player); drain();
+        verify(player).kickPlayer(contains("needs attention"));
+        verify(store,times(1)).write(owner,first,1,"join-recovery",snapshot);
+        verify(snapshot,never()).apply(any(),anySet());
+    }
+
+    @Test void deferredQuitLeaseFailureRemainsFailClosedAndDifferentPlayerCannotCompleteIt() throws Exception {
+        useRealLeases(); BodyTag.Live original = new BodyTag.Live(first,1);
+        diskLeases.begin(owner,original); tag=original; bodies.join(player);
+        Player stale=mock(Player.class); when(stale.getUniqueId()).thenReturn(owner);
+        bodies.quit(stale); verify(player,never()).saveData(); verify(leases,never()).complete(any(),any());
+        diskLeases.validate(owner,original);
+        // Restore the interrupted connection's pending recovery, then exercise an I/O failure.
+        tag=original; when(store.read(owner,first)).thenReturn(Optional.of(record(first,2)));
+        bodies.join(player); doThrow(new IOException("lease removal failed")).when(leases).complete(owner,original);
+        assertDoesNotThrow(()->bodies.quit(player)); verify(player).saveData();
+        diskLeases.validate(owner,original); assertThrows(IOException.class,()->diskLeases.validate(owner,tag));
+        verify(store).quarantine(owner,"stale-live-copy",snapshot);
+        verify(store,times(1)).write(owner,first,1,"join-recovery",snapshot);
+    }
+
     @Test void joinRetainsOriginalLocationBeforeClearingAndNeverActivatesAutomatically() throws Exception {
         Location original=new Location(world,30,80,40);bodies.rememberSpawn(owner,original);bodies.join(player);
         verify(snapshot).withLocation(original);verify(migration).initialize(account,snapshot);

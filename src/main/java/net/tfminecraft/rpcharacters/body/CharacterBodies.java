@@ -561,6 +561,16 @@ public final class CharacterBodies {
 
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
+        RoomEntry entry = enteringRoom.get(owner);
+        if (entry != null && entry.player == player && entry.recoveredFrom != null) {
+            try {
+                // Recovery already committed the body; finish its deferred ROOM save even if
+                // the connection closes before mount detachment or room entry can finish.
+                saveRecoveredRoom(player, entry.recoveredFrom);
+            } catch (IOException | RuntimeException error) {
+                plugin.getLogger().log(Level.SEVERE, "Failed completing recovered character body on quit for " + owner, error);
+            }
+        }
         pendingAccounts.remove(owner);
         enteringRoom.remove(owner);
         deferredPrepare.remove(owner);
