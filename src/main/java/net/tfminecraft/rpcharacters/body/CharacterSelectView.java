@@ -110,7 +110,7 @@ public final class CharacterSelectView {
 
 	static DenarWallet wallet = new DenarEconomyWallet();
 	/** Guild name, "" for none, or null when guilds can't be read. */
-	static Function<Player, String> guilds = CharacterSelectView::simpleFactionsGuild;
+	static Function<UUID, String> guilds = CharacterSelectView::simpleFactionsGuild;
 	static PortraitLoader portraits = SelectPortraits::load;
 	static Function<Player, SkinTexture> accountTextures = CharacterSelectView::accountSkin;
 	static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
@@ -440,8 +440,7 @@ public final class CharacterSelectView {
 	private static Component footer(Player player, PlayerData data, int alive) {
 		int slots = CharacterSlotService.getMaxAliveCharacters(player);
 		Component used = Component.text(alive + " of " + slots + " character slots used", DIM);
-		Component account = accountSummary(player);
-		return account == null ? used : used.append(Component.text(" • ", DIM)).append(account);
+		return used;
 	}
 
 	/** Living characters, most recently played first, then memorials. */
@@ -486,12 +485,13 @@ public final class CharacterSelectView {
 	}
 
 	/** The guild line, or null when guilds can't be read. */
-	static Component accountSummary(Player player) {
-		String guild = guilds.apply(player);
+	static Component guildSummary(RPCharacter character) {
+		UUID id;
+		try { id = UUID.fromString(character.getId()); }
+		catch (IllegalArgumentException | NullPointerException invalid) { return null; }
+		String guild = guilds.apply(id);
 		if (guild == null) return null;
-		return Component.text("Shared by all your characters", DIM)
-				.append(Component.newline())
-				.append(Component.text("Guild: " + (guild.isBlank() ? "none" : guild), MUTED));
+		return Component.text("Guild: " + (guild.isBlank() ? "none" : guild), MUTED);
 	}
 
 	/** This character's own pouch and bank; empty for a record without a character ID. */
@@ -519,6 +519,8 @@ public final class CharacterSelectView {
 		}
 		line(card, String.join(" • ", history), MUTED);
 		line(card, balances(owner, character), MUTED);
+		Component guild = guildSummary(character);
+		if (guild != null) card.append(Component.newline()).append(guild);
 		if (character.hasLastLocation()) {
 			line(card, String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
 					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),
@@ -632,11 +634,11 @@ public final class CharacterSelectView {
 		return builder.build();
 	}
 
-	/** Account-wide until characters own their guild membership. */
-	static String simpleFactionsGuild(Player player) {
+	/** The guild belonging to the character shown on this card. */
+	static String simpleFactionsGuild(UUID characterId) {
 		if (!Bukkit.getPluginManager().isPluginEnabled("SimpleFactions")) return null;
 		try {
-			return SimpleFactionsGuild.name(player.getName());
+			return SimpleFactionsGuild.name(characterId);
 		} catch (NoClassDefFoundError | RuntimeException failure) {
 			return null;
 		}
@@ -646,9 +648,10 @@ public final class CharacterSelectView {
 	static final class SimpleFactionsGuild {
 		private SimpleFactionsGuild() {}
 
-		static String name(String playerName) {
+		static String name(UUID characterId) {
+			if (!net.tfminecraft.simplefactions.api.SimpleFactionsApi.ready()) return null;
 			net.tfminecraft.simplefactions.guild.Guild guild =
-					net.tfminecraft.simplefactions.managers.FactionManager.getGuildByMember(playerName);
+					net.tfminecraft.simplefactions.managers.FactionManager.getGuildByMember(characterId);
 			return guild == null || guild.getName() == null ? "" : ClueFormatter.stripColor(guild.getName());
 		}
 	}

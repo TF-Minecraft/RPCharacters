@@ -85,6 +85,12 @@ public final class CharacterIdentityService implements CharacterIdentity {
     }
 
     @Override
+    public Optional<UUID> deathId(UUID characterId) {
+        refreshCharacter(characterId);
+        return directory.deathId(characterId);
+    }
+
+    @Override
     public Optional<List<CharacterInfo>> characters(UUID ownerId) {
         refreshOwner(ownerId);
         return directory.characters(ownerId);

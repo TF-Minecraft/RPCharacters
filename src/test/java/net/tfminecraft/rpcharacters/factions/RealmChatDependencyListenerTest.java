@@ -17,7 +17,7 @@ import net.tfminecraft.simplefactions.objects.Faction;
 
 class RealmChatDependencyListenerTest {
     ServerMock server; PlayerMock sender, member; RuntimeTestState state;
-    MockedStatic<FactionManager> factions; ChatChannel channel;
+    MockedStatic<net.tfminecraft.simplefactions.identity.Members> members; MockedStatic<net.tfminecraft.simplefactions.api.SimpleFactionsApi> api; MockedStatic<FactionManager> factions; ChatChannel channel;
     RealmChatDependencyListener listener = new RealmChatDependencyListener();
     @BeforeEach void setup() {
         server = MockBukkit.mock(); state = new RuntimeTestState(ChatRecipientResolverRegistry.class);
@@ -26,10 +26,14 @@ class RealmChatDependencyListenerTest {
         var config = new YamlConfiguration(); config.set("require-character", false); config.set("read-perm", "realm.read");
         channel = new ChatChannel("rooc", config);
         Faction realm = mock(Faction.class); when(realm.getId()).thenReturn("realm"); when(realm.getCompleteMemberList()).thenReturn(List.of("Sender", "Member"));
-        factions = mockStatic(FactionManager.class); factions.when(() -> FactionManager.getByMember("Sender")).thenReturn(realm);
+        factions = mockStatic(FactionManager.class); factions.when(() -> FactionManager.getByMember(sender)).thenReturn(realm);
+        members=mockStatic(net.tfminecraft.simplefactions.identity.Members.class);
+        members.when(() -> net.tfminecraft.simplefactions.identity.Members.key(any(Player.class))).thenAnswer(i -> i.getArgument(0,Player.class).getName());
+        api=mockStatic(net.tfminecraft.simplefactions.api.SimpleFactionsApi.class);
+        api.when(net.tfminecraft.simplefactions.api.SimpleFactionsApi::ready).thenReturn(true);
         server.getPluginManager().registerEvents(listener, MockBukkit.createMockPlugin());
     }
-    @AfterEach void cleanup() { factions.close(); state.close(); MockBukkit.unmock(); }
+    @AfterEach void cleanup() { members.close(); api.close(); factions.close(); state.close(); MockBukkit.unmock(); }
     Set<Player> realmRecipients() { return ChatRecipientResolverRegistry.resolve(RealmChatDependencyListener.RESOLVER_ID, sender, channel); }
 
     @Test void startupCheckWithoutSimpleFactionsLeavesRealmChatUnresolved() {

@@ -256,10 +256,9 @@ class CharacterSelectViewTest {
 		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
 		assertEquals("‹   Lady Wren   Rowan   ›\nLady Wren\nHuman • Sword master • Age 27, born "
 				+ FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m • Last played 2d 2h ago\n"
-				+ "Pouch: 12.50 denars • Bank: 300 denars\n"
+				+ "Pouch: 12.50 denars • Bank: 300 denars\nGuild: Ironhand\n"
 				+ "Last location: world 120, 64, -31\n"
-				+ "2 of 4 character slots used • Shared by all your characters\n"
-				+ "Guild: Ironhand", ui.last().bodyText());
+				+ "2 of 4 character slots used", ui.last().bodyText());
 		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
 			if (part != ui.last().portraitPart()) assertEquals(300, part.width());
@@ -820,11 +819,11 @@ class CharacterSelectViewTest {
 		assertEquals("", CharacterSelectView.balances(OWNER, character("not-an-id", "Odd", Status.ALIVE)));
 		verify(wallet, never()).balance(any(), any());
 		CharacterSelectView.guilds = p -> null;
-		assertNull(CharacterSelectView.accountSummary(player));
+		assertNull(CharacterSelectView.guildSummary(cora));
 		CharacterSelectView.open(player, data, actions);
 		assertTrue(ui.last().bodyText().endsWith("Pouch and bank: unavailable\n2 of 4 character slots used"), ui.last().bodyText());
 		CharacterSelectView.guilds = p -> "";
-		assertEquals("Shared by all your characters\nGuild: none", text(CharacterSelectView.accountSummary(player)));
+		assertEquals("Guild: none", text(CharacterSelectView.guildSummary(cora)));
 	}
 
 	@Test
@@ -891,20 +890,25 @@ class CharacterSelectViewTest {
 	@Test
 	void guildLookupUsesSimpleFactionsOnlyWhenEnabled() {
 		PluginManager plugins = mock(PluginManager.class);
-		try (var bukkit = mockStatic(Bukkit.class); var factions = mockStatic(FactionManager.class)) {
+		try (var bukkit = mockStatic(Bukkit.class); var factions = mockStatic(FactionManager.class);
+             var api = mockStatic(net.tfminecraft.simplefactions.api.SimpleFactionsApi.class)) {
+            api.when(net.tfminecraft.simplefactions.api.SimpleFactionsApi::ready).thenReturn(true);
 			bukkit.when(Bukkit::getPluginManager).thenReturn(plugins);
-			assertNull(CharacterSelectView.simpleFactionsGuild(player));
+			assertNull(CharacterSelectView.simpleFactionsGuild(OWNER));
 			factions.verifyNoInteractions();
 
 			when(plugins.isPluginEnabled("SimpleFactions")).thenReturn(true);
-			assertEquals("", CharacterSelectView.simpleFactionsGuild(player));
+            api.when(net.tfminecraft.simplefactions.api.SimpleFactionsApi::ready).thenReturn(false);
+            assertNull(CharacterSelectView.simpleFactionsGuild(OWNER));
+            api.when(net.tfminecraft.simplefactions.api.SimpleFactionsApi::ready).thenReturn(true);
+			assertEquals("", CharacterSelectView.simpleFactionsGuild(OWNER));
 			Guild guild = mock(Guild.class);
-			factions.when(() -> FactionManager.getGuildByMember("Owner")).thenReturn(guild);
-			assertEquals("", CharacterSelectView.simpleFactionsGuild(player));
+			factions.when(() -> FactionManager.getGuildByMember(OWNER)).thenReturn(guild);
+			assertEquals("", CharacterSelectView.simpleFactionsGuild(OWNER));
 			when(guild.getName()).thenReturn("&6Ironhand");
-			assertEquals("Ironhand", CharacterSelectView.simpleFactionsGuild(player));
-			factions.when(() -> FactionManager.getGuildByMember("Owner")).thenThrow(new IllegalStateException("loading"));
-			assertNull(CharacterSelectView.simpleFactionsGuild(player));
+			assertEquals("Ironhand", CharacterSelectView.simpleFactionsGuild(OWNER));
+			factions.when(() -> FactionManager.getGuildByMember(OWNER)).thenThrow(new IllegalStateException("loading"));
+			assertNull(CharacterSelectView.simpleFactionsGuild(OWNER));
 		}
 	}
 
@@ -920,11 +924,21 @@ class CharacterSelectViewTest {
 		try (var bukkit = mockStatic(Bukkit.class)) {
 			bukkit.when(Bukkit::getPluginManager).thenReturn(plugins);
 			bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
-			assertNull(CharacterSelectView.guilds.apply(player));
+			assertNull(CharacterSelectView.guilds.apply(OWNER));
 			CharacterSelectView.mainThread.execute(task);
 			verify(scheduler).runTask(RPCharacters.plugin, task);
 		}
 	}
+
+    @Test void eachCharacterCardShowsItsOwnGuild() {
+        UUID first=UUID.randomUUID(), second=UUID.randomUUID();
+        RPCharacter a=character(first.toString(),"First",Status.ALIVE);
+        RPCharacter b=character(second.toString(),"Second",Status.ALIVE);
+        CharacterSelectView.guilds=id -> id.equals(first) ? "Ironhand" : "Rivals";
+        assertEquals("Guild: Ironhand",text(CharacterSelectView.guildSummary(a)));
+        assertEquals("Guild: Rivals",text(CharacterSelectView.guildSummary(b)));
+        assertFalse(text(CharacterSelectView.characterCard(OWNER,b,null)).contains("Ironhand"));
+    }
 
 	/** Captures dialogs built through Paper's static builders. */
 	static final class DialogCapture implements AutoCloseable {

@@ -393,6 +393,27 @@ class CharacterDirectoryTest {
 		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("Invalid removed character ID")));
 	}
 
+	@Test
+	void deathIdsSurviveReloadAndRevivalAndLegacyDeathsHaveStableDistinctKeys() throws Exception {
+		UUID death=UUID.randomUUID();
+		save(owner,id+".json",json(id,"Dead","DEAD","\"death-id\":\""+death+"\""));
+		save(owner,second+".json",json(second,"Legacy","DEAD",""));
+		CharacterDirectory directory=load();
+		assertEquals(death,directory.deathId(id).orElseThrow());
+		UUID legacy=directory.deathId(second).orElseThrow();
+		assertEquals(legacy,load().deathId(second).orElseThrow());
+		RPCharacter old=live(second); directory.upsert(owner,old);
+		assertEquals(legacy,directory.deathId(second).orElseThrow());
+		when(old.getStatus()).thenReturn(Status.ALIVE); directory.upsert(owner,old);
+		assertEquals(legacy,directory.deathId(second).orElseThrow());
+		UUID later=UUID.randomUUID(); when(old.getDeathId()).thenReturn(later);
+		when(old.getStatus()).thenReturn(Status.DEAD); directory.upsert(owner,old);
+		assertEquals(later,directory.deathId(second).orElseThrow()); assertNotEquals(legacy,later);
+		directory.remove(owner,second.toString()); assertTrue(directory.deathId(second).isEmpty());
+		save(owner,id+".json",json(id,"Dead","DEAD","\"death-id\":\"bad\""));
+		assertTrue(load().deathId(id).isEmpty());
+	}
+
 	private CharacterDirectory load() throws IOException {
 		return CharacterDirectory.load(root, warnings::add);
 	}
