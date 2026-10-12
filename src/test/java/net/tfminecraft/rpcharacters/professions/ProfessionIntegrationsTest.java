@@ -43,6 +43,25 @@ class ProfessionIntegrationsTest extends ProfessionRuntimeFixture {
     @Test void professionPermissionsUseTheirServerContextAndPersistChanges(){try(var luck=new LuckBoundary()){var permission=upgrade("permission","craft.smith","craft.forge");upgrade("add_stats","weapons.attack_damage.1");character.addProfessionUpgrade("deleted-upgrade");ProfessionIntegrator.apply(player,character);assertEquals(List.of("craft.smith","craft.forge"),luck.added);assertTrue(luck.contexts.stream().allMatch(c->c.equals("server=realm")));player.addAttachment(plugin,"craft.smith",true);player.addAttachment(plugin,"craft.forge",true);ProfessionIntegrator.remove(player,character);assertEquals(List.of("craft.smith","craft.forge"),luck.removed);ProfessionIntegrator.applyUpgrade(player,permission);ProfessionIntegrator.removeUpgrade(player,permission);verify(luck.api.getUserManager(),times(8)).saveUser(luck.user);}}
     @Test void revocationRemovesStoredProfessionNodesEvenWhenBukkitCurrentlyDeniesThem(){try(var luck=new LuckBoundary()){ProfessionIntegrator.givePermission(player,"craft.smith");assertFalse(player.hasPermission("craft.smith"));ProfessionIntegrator.removePermission(player,"craft.smith");assertEquals(List.of("craft.smith"),luck.removed,"An ineffective contextual grant must still be removed when its character deactivates");}}
 
+
+    @Test void bodyProfessionsAreTransientAndRetireOnlyTheMatchingPersistentContext() {
+        try (var luck=new LuckBoundary()) {
+            root.when(net.tfminecraft.rpcharacters.RPCharacters::getCharacterBodies)
+                    .thenReturn(mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class));
+            var transientNodes=mock(NodeMap.class);when(luck.user.transientData()).thenReturn(transientNodes);
+            ProfessionIntegrator.givePermission(player,"craft.smith");
+            verify(transientNodes).add(any());assertTrue(luck.added.isEmpty());
+            verify(luck.api.getUserManager(),never()).saveUser(any());
+            ProfessionIntegrator.removePermission(player,"craft.smith");
+            verify(transientNodes).remove(any());assertEquals(List.of("craft.smith"),luck.removed);
+            verify(luck.api.getUserManager()).saveUser(luck.user);
+            when(luck.nodeMap.remove(any(Node.class))).thenReturn(net.luckperms.api.model.data.DataMutateResult.FAIL);
+            ProfessionIntegrator.removePermission(player,"craft.smith");
+            verify(luck.api.getUserManager(),times(1)).saveUser(luck.user);
+            assertTrue(luck.contexts.stream().allMatch(c->c.equals("server=realm")));
+        }
+    }
+
     final class LuckBoundary implements AutoCloseable {
         final LuckPerms api=mock(LuckPerms.class,RETURNS_DEEP_STUBS);final User user=mock(User.class);final NodeMap nodeMap=mock(NodeMap.class);final List<String> added=new ArrayList<>(),removed=new ArrayList<>(),contexts=new ArrayList<>();final MockedStatic<Node> nodes=mockStatic(Node.class);
         LuckBoundary(){Cache.professionPermContext="realm";when(api.getPlayerAdapter(Player.class).getUser(player)).thenReturn(user);when(user.data()).thenReturn(nodeMap);server.getServicesManager().register(LuckPerms.class,api,plugin,ServicePriority.Normal);nodes.when(()->Node.builder(anyString())).thenAnswer(call->{String permission=call.getArgument(0);var builder=mock(PermissionNode.Builder.class,RETURNS_SELF);var node=mock(PermissionNode.class);when(node.getKey()).thenReturn(permission);when(builder.withContext(anyString(),anyString())).thenAnswer(context->{contexts.add(context.getArgument(0)+"="+context.getArgument(1));return builder;});when(builder.build()).thenReturn(node);return builder;});when(nodeMap.add(any(Node.class))).thenAnswer(call->{added.add(((Node)call.getArgument(0)).getKey());return net.luckperms.api.model.data.DataMutateResult.SUCCESS;});when(nodeMap.remove(any(Node.class))).thenAnswer(call->{removed.add(((Node)call.getArgument(0)).getKey());return net.luckperms.api.model.data.DataMutateResult.SUCCESS;});}

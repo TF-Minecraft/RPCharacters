@@ -75,4 +75,42 @@ class RPCharactersStartupTest {
             }
         }
     }
+    @Test void bodyFeatureStartsAndShutsDownOnlyWhenConfigured() throws Exception {
+        plugin.createConfigs();
+        Files.writeString(plugin.getDataFolder().toPath().resolve("config.yml"), "character-bodies:\n  enabled: true\n");
+        try (var bodies = mockConstruction(net.tfminecraft.rpcharacters.body.CharacterBodies.class)) {
+            plugin.startRuntime();
+            assertFalse(RPCharacters.characterBodiesFailed());
+            assertSame(bodies.constructed().getFirst(), RPCharacters.getCharacterBodies());
+            plugin.stopRuntime();
+            verify(bodies.constructed().getFirst()).shutdown();
+            assertNull(RPCharacters.getCharacterBodies());
+        }
+    }
+    @Test void invalidBodySetupKeepsLoginGuardRegisteredRatherThanOpeningWithoutIsolation() throws Exception {
+        plugin.createConfigs();
+        Files.writeString(plugin.getDataFolder().toPath().resolve("config.yml"), "character-bodies:\n  enabled: true\n");
+        var progress = mock(net.tfminecraft.rpcharacters.progress.CharacterProgressService.class);
+        try (var active = mockStatic(net.tfminecraft.rpcharacters.progress.CharacterProgressService.class)) {
+            active.when(net.tfminecraft.rpcharacters.progress.CharacterProgressService::active).thenReturn(progress);
+            assertDoesNotThrow(plugin::startRuntime);
+            assertTrue(RPCharacters.characterBodiesFailed());
+            assertNull(RPCharacters.getCharacterBodies());
+            verify(plugins).registerEvents(isA(net.tfminecraft.rpcharacters.body.CharacterBodyStartupGuard.class), eq(plugin));
+            verify(progress).close();
+            plugin.stopRuntime();
+        }
+    }
+    @Test void enablingBodiesWithOnlinePlayersRequiresRestartAndDoesNotChangeTheirInventory() throws Exception {
+        plugin.createConfigs();
+        Files.writeString(plugin.getDataFolder().toPath().resolve("config.yml"), "character-bodies:\n  enabled: true\n");
+        var player = server.addPlayer();
+        player.getInventory().setItem(0, new org.bukkit.inventory.ItemStack(Material.DIAMOND, 3));
+        assertDoesNotThrow(plugin::startRuntime);
+        assertTrue(RPCharacters.characterBodiesFailed());
+        assertEquals(3,player.getInventory().getItem(0).getAmount());
+        assertFalse(player.isOnline());
+        plugin.stopRuntime();
+    }
+
 }

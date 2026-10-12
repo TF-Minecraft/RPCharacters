@@ -102,10 +102,10 @@ class ProfessionCommandHandlerTest {
         run(console,"confirm");run(player,"confirm");message(player,"Nothing to confirm");character.addProfessionUpgrade("mining_1");ProfessionListener.pendingRemoval.put(player,upgrade);run(player,"confirm");assertFalse(character.hasProfessionUpgrade("mining_1"));assertEquals(3,character.getSpentPointsOnProfession("mining"));assertTrue(ProfessionListener.pendingRemoval.isEmpty());message(player,"Mining I");verify(manager).savePlayer(player);
     }
 
-    @Test void refundClearsUpgradeForfeitsAndLifetimeMigrationBeforeBootstrapping() {
+    @Test void refundClearsUpgradeForfeitsAndDelegatesPoolReset() {
         run(console,"refund");run(console,"refund","missing");message(console,"No player found");character.addProfessionUpgrade("mining_1");character.addForfeitedProfessionPoints("mining",4);data.setAccountProfessionPoints("mining",10);data.setProfessionPointsInitialized(true);
-        run(console,"refund","AriaOwner");assertTrue(character.getProfessionUpgrades().isEmpty());assertTrue(character.getForfeitedProfessionPoints().isEmpty());assertTrue(data.getAccountProfessionPointsMap().isEmpty());assertFalse(data.isProfessionPointsInitialized());message(player,"Mining I");points.verify(() -> ProfessionPointService.bootstrapLifetimeFromMmoCore(player));
-        doReturn(null).when(data).getActiveCharacter();ProfessionCommandHandler.refundActiveCharacter(player);loaded.remove(player);ProfessionCommandHandler.refundActiveCharacter(player);points.verify(() -> ProfessionPointService.bootstrapLifetimeFromMmoCore(player),times(3));
+        run(console,"refund","AriaOwner");assertTrue(character.getProfessionUpgrades().isEmpty());assertTrue(character.getForfeitedProfessionPoints().isEmpty());assertEquals(10,data.getAccountProfessionPoints("mining"));assertTrue(data.isProfessionPointsInitialized());message(player,"Mining I");points.verify(() -> ProfessionPointService.resetLifetimePoints(player));
+        doReturn(null).when(data).getActiveCharacter();ProfessionCommandHandler.refundActiveCharacter(player);loaded.remove(player);ProfessionCommandHandler.refundActiveCharacter(player);points.verify(() -> ProfessionPointService.resetLifetimePoints(player),times(3));
     }
 
     @Test void completionFiltersProfessionPlayersAndUpgradesByPermissionAndPrefix() {

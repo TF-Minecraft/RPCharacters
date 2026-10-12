@@ -73,6 +73,7 @@ class CreationManagerTest {
     private RPCharacter character;
     private CharacterCreation creation;
     private PlayerManager playerManager;
+    private MockedStatic<RPCharacters> rpc;
     private CreationManager manager;
     private MockedStatic<CharacterCreation> sessions;
     private MockedStatic<PlayerManager> players;
@@ -118,7 +119,8 @@ class CreationManagerTest {
         when(creation.getCharacter()).thenReturn(character);
         when(creation.getTempData()).thenReturn(new AttributeData());
         playerManager = mock(PlayerManager.class);
-        staticMock(RPCharacters.class).when(RPCharacters::getPlayerManager).thenReturn(playerManager);
+        rpc = staticMock(RPCharacters.class);
+        rpc.when(RPCharacters::getPlayerManager).thenReturn(playerManager);
         players = staticMock(PlayerManager.class);
         players.when(() -> PlayerManager.get(player)).thenReturn(data);
         sessions = staticMock(CharacterCreation.class);
@@ -150,6 +152,38 @@ class CreationManagerTest {
         for (int i = mocks.size() - 1; i >= 0; i--) mocks.get(i).close();
         state.close();
         MockBukkit.unmock();
+    }
+
+    @Test
+    void creationWaitsForTheResourcePackAndSelectionReadiness() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.isSelecting(player)).thenReturn(true);
+        try (var created = mockConstruction(CharacterCreation.class)) {
+            CreationManager.initiateCreation(player);
+            assertTrue(created.constructed().isEmpty());
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+            message("Wait for character selection to finish loading.");
+            when(bodies.isReadyToChoose(player)).thenReturn(true);
+            CreationManager.initiateCreation(player);
+            assertSame(created.constructed().getFirst(), CreationManager.activeCreators.get(player));
+        }
+    }
+
+    @Test
+    void bodyCreationRequiresSelectionBeforePreviewingAnotherClass() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.hasLiveBody(player)).thenReturn(true);
+        try (var created = mockConstruction(CharacterCreation.class)) {
+            CreationManager.initiateCreation(player);
+            verify(bodies).requestSwitch(data, null);
+            assertTrue(created.constructed().isEmpty());
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+            when(bodies.hasLiveBody(player)).thenReturn(false);
+            CreationManager.initiateCreation(player);
+            assertSame(created.constructed().getFirst(), CreationManager.activeCreators.get(player));
+        }
     }
 
     @Test

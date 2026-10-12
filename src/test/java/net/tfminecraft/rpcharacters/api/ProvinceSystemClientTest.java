@@ -29,6 +29,18 @@ class ProvinceSystemClientTest {
             .thenReturn(GatewayClient.Result.success(json));
     }
 
+    @Test void portraitLookupUsesOnlyTheReadOnlyRouteAndRejectsPathTraversal() {
+        for (String invalid : Arrays.asList(null, " ", "../x", "x/y", "x\\y")) {
+            assertFalse(fetchWornSkin(invalid, "char").ok);
+            assertFalse(fetchWornSkin("owner", invalid).ok);
+        }
+        gateway.verifyNoInteractions();
+        respond("portrait");
+        assertEquals("portrait", fetchWornSkin(" owner ", " char ").body);
+        gateway.verify(() -> GatewayClient.request("GET", "/characters/plugin/wardrobe/owner/char/worn", null));
+        gateway.verifyNoMoreInteractions();
+    }
+
     @Test void resultFactoriesExposeSuccessPayloadsAndFailureDetails() {
         var catalog = CatalogPushResult.success(1, 2, 3, 4, "now");
         assertTrue(catalog.ok); assertEquals(1, catalog.stages); assertEquals(2, catalog.races);

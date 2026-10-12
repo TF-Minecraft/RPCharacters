@@ -2,12 +2,17 @@ package net.tfminecraft.rpcharacters.grave;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
+import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
+import net.tfminecraft.tlibs.character.CharacterInfo;
+import net.tfminecraft.tlibs.character.Characters;
 
 public final class GraveHologramTexts {
 
@@ -18,9 +23,7 @@ public final class GraveHologramTexts {
 		if (grave == null) {
 			return lines;
 		}
-		Player owner = grave.getOwner() != null ? Bukkit.getPlayer(grave.getOwner()) : null;
-		String name = owner != null ? characterOrName(owner) : offlineName(grave.getOwner());
-		lines.add(name);
+		lines.add(ownerName(grave));
 		if (GraveLoader.isHologramShowKiller()) {
 			String killerLine = killerLine(grave);
 			if (killerLine != null && !killerLine.isBlank()) {
@@ -32,6 +35,20 @@ public final class GraveHologramTexts {
 			lines.add(timerLine);
 		}
 		return lines;
+	}
+
+	private static String ownerName(Grave grave) {
+		UUID character = grave.getCharacterOwner();
+		CharacterBodies bodies = RPCharacters.getCharacterBodies();
+		if (character != null || bodies != null) {
+			if (character == null && grave.getOwner() != null) character = bodies.migrationHeir(grave.getOwner());
+			return character == null ? offlineName(grave.getOwner()) : Characters.info(character)
+					.filter(info -> info.ref().ownerId().equals(grave.getOwner()))
+					.map(CharacterInfo::name).filter(name -> !name.isBlank())
+					.orElseGet(() -> offlineName(grave.getOwner()));
+		}
+		Player owner = grave.getOwner() != null ? Bukkit.getPlayer(grave.getOwner()) : null;
+		return owner != null ? characterOrName(owner) : offlineName(grave.getOwner());
 	}
 
 	private static String killerLine(Grave grave) {

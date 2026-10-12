@@ -42,6 +42,7 @@ public class CommandTabCompleter implements TabCompleter {
 		if (args.length == 1) {
 			List<String> completions = new ArrayList<>();
 			completions.add("create");
+			if (net.tfminecraft.rpcharacters.RPCharacters.getCharacterBodies() != null) completions.add("select");
 			completions.add("kit");
 			completions.add("next");
 			completions.add("back");

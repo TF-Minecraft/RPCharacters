@@ -86,6 +86,8 @@ public class RPCharacter {
 	/** Points lost by removing upgrades, per lowercase profession id. They stay spent. */
 	private final Map<String, Integer> forfeitedProfessionPoints = new HashMap<>();
 	private final Map<String, Integer> extraAttributeAllocation = new HashMap<>();
+	/** Per-character progress, held in memory only; its own files store it. */
+	private net.tfminecraft.rpcharacters.progress.CharacterProgress progress;
 
 	private String lastLocationWorld;
 	private Double lastLocationX;
@@ -1058,6 +1060,14 @@ public class RPCharacter {
 			spent += upgrade.getCost();
 		}
 		return spent;
+	}
+
+	public net.tfminecraft.rpcharacters.progress.CharacterProgress getProgress() {
+		return progress;
+	}
+
+	public void setProgress(net.tfminecraft.rpcharacters.progress.CharacterProgress progress) {
+		this.progress = progress;
 	}
 
 	public Map<String, Integer> getExtraAttributeAllocation() {

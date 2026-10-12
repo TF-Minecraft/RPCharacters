@@ -269,10 +269,8 @@ public class ProfessionCommandHandler implements CommandExecutor, TabCompleter {
 			if (character != null) {
 				character.clearForfeitedProfessionPoints();
 			}
-			pd.clearAccountProfessionPoints();
-			pd.setProfessionPointsInitialized(false);
 		}
-		ProfessionPointService.bootstrapLifetimeFromMmoCore(player);
+		ProfessionPointService.resetLifetimePoints(player);
 	}
 
 	private static void fixPerms(CommandSender sender) {

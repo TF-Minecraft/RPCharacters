@@ -39,7 +39,7 @@ public final class JoinUnstuckListener implements Listener {
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> unstick(player));
 	}
 
-	private static void unstick(Player player) {
+	public static void unstick(Player player) {
 		if (!player.isOnline()) {
 			return;
 		}

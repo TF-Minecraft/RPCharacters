@@ -69,6 +69,11 @@ public final class ProfessionIntegrator {
 		}
 		LuckPerms api = provider.getProvider();
 		User user = api.getPlayerAdapter(Player.class).getUser(player);
+		if (net.tfminecraft.rpcharacters.RPCharacters.getCharacterBodies() != null) {
+			user.transientData().add(Node.builder(perm)
+					.withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext).build());
+			return;
+		}
 		user.data().add(Node.builder(perm)
 				.withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext)
 				.build());
@@ -82,6 +87,13 @@ public final class ProfessionIntegrator {
 		}
 		LuckPerms api = provider.getProvider();
 		User user = api.getPlayerAdapter(Player.class).getUser(player);
+		if (net.tfminecraft.rpcharacters.RPCharacters.getCharacterBodies() != null) {
+			Node node = Node.builder(perm).withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext).build();
+			user.transientData().remove(node);
+			// Retire only the old profession grant in this server's context.
+			if (user.data().remove(node).wasSuccessful()) api.getUserManager().saveUser(user);
+			return;
+		}
 		user.data().remove(Node.builder(perm)
 				.withContext(DefaultContextKeys.SERVER_KEY, Cache.professionPermContext)
 				.build());

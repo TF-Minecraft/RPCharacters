@@ -112,3 +112,12 @@ paid-changes:
       stage: class_selection_stage
       label: class
       costs: [100, 1000, 3000]
+character-bodies:
+  # Enable only with a reviewed, checksum-pinned character-body-heirs.yml and a rollback backup.
+  # Changing this setting requires a server restart.
+  enabled: false
+  heirs-sha256: ''
+  # Requires TFMCCore resource-pack.require-on-join. Missing or failed pack delivery blocks selection.
+  require-resource-pack: false
+  selection-world: character_selection
+  persistent-keys: []

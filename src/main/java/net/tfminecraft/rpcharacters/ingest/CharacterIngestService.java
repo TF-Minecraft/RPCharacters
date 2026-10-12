@@ -436,7 +436,9 @@ public final class CharacterIngestService {
 
 		net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle.fireCreated(online, pd.getUniqueId(), character);
 
-		if (online != null && !pd.hasActiveCharacter()) {
+		if (online != null && RPCharacters.getCharacterBodies() != null) {
+			RPCharacters.getCharacterBodies().rosterChanged(pd);
+		} else if (online != null && !pd.hasActiveCharacter()) {
 			// The character is saved: a failed activation disconnects the player but the create still succeeded.
 			net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions.switchAfterCommit(pd, character);
 			net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(online);

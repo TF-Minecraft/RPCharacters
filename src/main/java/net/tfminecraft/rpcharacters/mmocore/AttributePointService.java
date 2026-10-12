@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -14,6 +15,9 @@ import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
+import net.tfminecraft.rpcharacters.progress.ProgressPools;
+import net.tfminecraft.rpcharacters.progress.ProgressRouting;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.Integrator;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -65,14 +69,35 @@ public final class AttributePointService {
 		if (player == null || character == null) {
 			return;
 		}
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
+		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player), character);
+		if (pools == null) {
 			return;
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
-		int total = pd.getAccountAttributePointsTotal();
+		int total = pools.getAttributePointsTotal();
 		int spent = character.getSpentExtraAttributePoints();
 		mmoPd.setAttributePoints(Math.max(0, total - spent));
+	}
+
+	/** Lifetime attribute points of the account, or of the live character when progress is per character. */
+	public static int lifetimePoints(Player player) {
+		ProgressPools pools = player == null ? null : ProgressRouting.pools(PlayerManager.get(player));
+		return pools == null ? 0 : pools.getAttributePointsTotal();
+	}
+
+	/** Unspent attribute points: the lifetime points less what the active character has allocated. */
+	public static int freePoints(Player player) {
+		if (player == null) {
+			return 0;
+		}
+		PlayerData pd = PlayerManager.get(player);
+		ProgressPools pools = ProgressRouting.pools(pd);
+		if (pools == null) {
+			return 0;
+		}
+		RPCharacter active = pd.getActiveCharacter();
+		int spent = active == null ? 0 : active.getSpentExtraAttributePoints();
+		return Math.max(0, pools.getAttributePointsTotal() - spent);
 	}
 
 	public static void applyCharacterAttributes(Player player, RPCharacter character) {
@@ -124,24 +149,33 @@ public final class AttributePointService {
 	}
 
 	public static void grantAttributePoints(Player player, int amount) {
+		tryGrantAttributePoints(player, amount);
+	}
+
+	/** @return false when there were no pools to credit, such as in the character room */
+	public static boolean tryGrantAttributePoints(Player player, int amount) {
 		if (player == null || amount <= 0) {
-			return;
+			return false;
 		}
 		PlayerData pd = PlayerManager.get(player);
-		if (pd == null) {
-			return;
+		ProgressPools pools = ProgressRouting.pools(pd);
+		if (pools == null) {
+			return false;
 		}
-		pd.addAccountAttributePoints(amount);
+		pools.addAttributePoints(amount);
 		RPCharacter active = pd.getActiveCharacter();
 		if (active != null) {
 			clampExcessAttributePool(player, active);
 			applyFreeAttributePoints(player, active);
 		}
 		RPCharacters.getPlayerManager().savePlayer(player);
+		CharacterProgressService.checkpoint(player);
+		return true;
 	}
 
 	public static void migrateAttributePointsIfNeeded(Player player, PlayerData pd) {
-		if (player == null || pd == null || !pd.needsAttributePointsMigration()) {
+		// Per-character totals start from the progress baseline instead.
+		if (player == null || pd == null || ProgressRouting.enabled() || !pd.needsAttributePointsMigration()) {
 			return;
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
@@ -168,25 +202,27 @@ public final class AttributePointService {
 			return;
 		}
 		RPCharacter active = pd.getActiveCharacter();
-		if (active == null) {
+		ProgressPools pools = ProgressRouting.pools(pd, active);
+		if (active == null || pools == null) {
 			return;
 		}
 		net.Indyuce.mmocore.api.player.PlayerData mmoPd = net.Indyuce.mmocore.api.player.PlayerData.get(player);
 		int spent = captureAllocationFromMmo(player, active);
 		int mmoPool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getAttributePoints() + spent);
-		int beforeTotal = pd.getAccountAttributePointsTotal();
+		int beforeTotal = pools.getAttributePointsTotal();
 		if (mmoPool != beforeTotal) {
-			pd.setAccountAttributePointsTotal(mmoPool);
+			pools.setAttributePointsTotal(mmoPool);
 			RPCharacters.getPlayerManager().savePlayer(player);
+			CharacterProgressService.checkpoint(player);
 		}
 		clampExcessAttributePool(player, active);
 		applyFreeAttributePoints(player, active);
 		if (sender != null && Cache.attributePointsAdminDebugMessages) {
-			int afterTotal = pd.getAccountAttributePointsTotal();
+			int afterTotal = pools.getAttributePointsTotal();
 			int unspent = mmoPd.getAttributePoints();
 			spent = active.getSpentExtraAttributePoints();
 			RPTexts.sendPrefixed(sender, RPTexts.WARN + player.getName()
-					+ " attribute points: account total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
+					+ " attribute points: " + pools.holder() + " total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
 					+ RPTexts.WARN + ", unspent now " + RPTexts.SUCCESS + unspent
 					+ RPTexts.WARN + " (spent on character: " + RPTexts.SUCCESS + spent
 					+ RPTexts.WARN + ", mmo pool: " + RPTexts.SUCCESS + mmoPool + RPTexts.WARN + ")");
@@ -203,8 +239,9 @@ public final class AttributePointService {
 		if (player == null) {
 			return;
 		}
+		BooleanSupplier current = ProgressRouting.sessionGuard(player);
 		Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
-			if (player.isOnline()) {
+			if (current.getAsBoolean()) {
 				syncAttributePoints(player, sender);
 			}
 		}, 1L);
@@ -220,11 +257,11 @@ public final class AttributePointService {
 	}
 
 	public static void clampExcessAttributePool(Player player, RPCharacter character) {
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null || character == null) {
+		ProgressPools pools = character == null ? null : ProgressRouting.pools(PlayerManager.get(player), character);
+		if (pools == null) {
 			return;
 		}
-		int lifetime = pd.getAccountAttributePointsTotal();
+		int lifetime = pools.getAttributePointsTotal();
 		while (character.getSpentExtraAttributePoints() > lifetime) {
 			Map<String, Integer> mutable = new HashMap<>(character.getExtraAttributeAllocation());
 			String target = null;

@@ -86,7 +86,8 @@ public final class SkinPortrait {
 		return null;
 	}
 
-	static SkinTexture parseTextures(String base64) {
+	/** Reads a signed-profile texture value, accepting only Mojang's texture host. */
+	public static SkinTexture parseTextures(String base64) {
 		try {
 			JsonObject root = JsonParser.parseString(
 					new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8)).getAsJsonObject();

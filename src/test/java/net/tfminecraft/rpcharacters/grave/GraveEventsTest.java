@@ -9,6 +9,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.logging.Logger;
 import net.tfminecraft.rpcharacters.*;
+import net.tfminecraft.rpcharacters.body.CharacterBodies;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.pvp.*;
@@ -37,7 +38,7 @@ class GraveEventsTest extends GraveRuntimeFixture {
         boolean[] kept={false}; when(event.getKeepInventory()).thenAnswer(call -> kept[0]); doAnswer(call -> { kept[0]=call.getArgument(0); return null; }).when(event).setKeepInventory(anyBoolean());
         return event;
     }
-    PlayerRespawnEvent respawn() { PlayerRespawnEvent event = mock(PlayerRespawnEvent.class); when(event.getPlayer()).thenReturn(player); return event; }
+    PlayerRespawnEvent respawn() { PlayerRespawnEvent event = mock(PlayerRespawnEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getRespawnLocation()).thenReturn(player.getLocation()); return event; }
     Grave newest() { return manager.findNewestByOwner(player.getUniqueId()); }
 
     @Test void deathDoesNothingWhenDisabledKeptOrThereIsNoLoot() {
@@ -158,9 +159,54 @@ class GraveEventsTest extends GraveRuntimeFixture {
     @Test void splitInsuranceTicketIsReturnedOneTickAfterRespawn() {
         player.getInventory().setItem(0, new ItemStack(Material.DIAMOND)); player.getInventory().setItem(1, new ItemStack(Material.PAPER, 3));
         GraveDeathListener listener = new GraveDeathListener(); listener.onPlayerDeath(death(0)); UUID id = newest().getId();
-        player.getInventory().clear(); listener.onPlayerRespawn(respawn()); assertEquals(2, player.getInventory().getItem(1).getAmount());
+        player.getInventory().clear();
+        try (var runtime = mockStatic(RPCharacters.class)) {
+            runtime.when(RPCharacters::getCharacterBodies).thenReturn(mock(CharacterBodies.class));
+            listener.onPlayerRespawn(respawn());
+        }
+        assertEquals(2, player.getInventory().getItem(1).getAmount());
         assertNull(GraveInsuranceTickets.boundGrave(player.getInventory().getItem(1))); server.getScheduler().performOneTick();
         assertTrue(Arrays.stream(player.getInventory().getStorageContents()).filter(Objects::nonNull).anyMatch(item -> id.equals(GraveInsuranceTickets.boundGrave(item))));
+    }
+
+    @Test void recoveryRespawnReturnsSplitTicketBeforeAnotherQuitCanLoseIt() {
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND));
+        player.getInventory().setItem(1, new ItemStack(Material.PAPER, 3));
+        GraveDeathListener listener = new GraveDeathListener(); listener.onPlayerDeath(death(0)); UUID id = newest().getId();
+        player.getInventory().clear();
+        CharacterBodies bodies = mock(CharacterBodies.class);
+        when(bodies.isRespawning(player)).thenReturn(true);
+        try (var runtime = mockStatic(RPCharacters.class)) {
+            runtime.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+            listener.onPlayerRespawn(respawn());
+        }
+        assertEquals(2, player.getInventory().getItem(1).getAmount());
+        assertEquals(1, Arrays.stream(player.getInventory().getStorageContents()).filter(Objects::nonNull)
+                .filter(item -> id.equals(GraveInsuranceTickets.boundGrave(item))).count());
+        player.getInventory().clear(); // Simulate stowing the recovered body before the next tick.
+        server.getScheduler().performOneTick();
+        assertTrue(player.getInventory().all(Material.PAPER).isEmpty(), "No deferred ticket may appear in another body");
+    }
+
+    @Test void recoveryTicketOverflowDropsAtRespawnDestinationBeforeThePlayerHasMovedThere() {
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND));
+        player.getInventory().setItem(1, new ItemStack(Material.PAPER, 3));
+        GraveDeathListener listener = new GraveDeathListener(); listener.onPlayerDeath(death(0)); UUID id = newest().getId();
+        for (int slot=0;slot<player.getInventory().getSize();slot++) player.getInventory().setItem(slot,new ItemStack(Material.STONE,64));
+        World destination = server.addSimpleWorld("respawn");
+        Location bed = new Location(destination, 84, 65, 12);
+        PlayerRespawnEvent event = respawn(); when(event.getRespawnLocation()).thenReturn(bed);
+        CharacterBodies bodies = mock(CharacterBodies.class); when(bodies.isRespawning(player)).thenReturn(true);
+        try (var runtime = mockStatic(RPCharacters.class)) {
+            runtime.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+            listener.onPlayerRespawn(event);
+        }
+        Item ticket = destination.getEntities().stream().filter(Item.class::isInstance).map(Item.class::cast)
+                .filter(item -> id.equals(GraveInsuranceTickets.boundGrave(item.getItemStack()))).findFirst().orElseThrow();
+        assertEquals(bed, ticket.getLocation());
+        assertNotEquals(destination, player.getWorld(), "Respawn event fires before the player changes worlds");
+        assertTrue(world.getEntities().stream().filter(Item.class::isInstance).map(Item.class::cast)
+                .noneMatch(item -> id.equals(GraveInsuranceTickets.boundGrave(item.getItemStack()))));
     }
 
     @Test void splitTicketDropsOnOverflowAndOfflineRecipientsAreIgnored() {

@@ -267,6 +267,21 @@ class GraveManagerTest {
         assertNull(manager.getById(grave.getId()).getHologramId());
     }
 
+    @Test void corruptCharacterOwnersAreRejectedWithoutDowngradingToLegacyOwnership() throws Exception {
+        for (String invalid : List.of("not-a-uuid", "", " ")) {
+            UUID id = UUID.randomUUID(); JsonObject json = record(id); json.addProperty("characterOwner", invalid);
+            write(id + ".json", json.toString());
+        }
+        UUID legacy = UUID.randomUUID(); write(legacy + ".json", record(legacy).toString());
+        UUID explicitNull = UUID.randomUUID(); JsonObject unbound = record(explicitNull);
+        unbound.add("characterOwner", JsonNull.INSTANCE); write(explicitNull + ".json", unbound.toString());
+        manager.loadAll();
+        assertEquals(Set.of(legacy, explicitNull), byId.keySet());
+        assertNull(manager.getById(legacy).getCharacterOwner());
+        assertNull(manager.getById(explicitNull).getCharacterOwner());
+        verify(logger, times(3)).warning(startsWith("Could not load grave file"));
+    }
+
     String encoded(Object value) throws Exception {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream(); BukkitObjectOutputStream stream = new BukkitObjectOutputStream(bytes)) {
             stream.writeObject(value); stream.flush(); return Base64.getEncoder().encodeToString(bytes.toByteArray());

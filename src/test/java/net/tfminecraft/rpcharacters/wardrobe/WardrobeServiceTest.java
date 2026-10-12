@@ -22,6 +22,56 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockito.MockedStatic;
 
 class WardrobeServiceTest extends WardrobeFixture {
+    @Test void delayedRefreshCannotPublishIntoANewSessionOfTheSameCharacter() {
+        try (var identities = mockStatic(net.tfminecraft.tlibs.character.Characters.class)) {
+            var session = mock(net.tfminecraft.tlibs.character.CharacterSession.class);
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.currentSession(player))
+                    .thenReturn(Optional.of(session));
+            client.when(() -> ProvinceSystemClient.fetchWardrobe(anyString(), anyString()))
+                    .thenReturn(ok(json("alpha", "base", true)));
+            client.when(() -> ProvinceSystemClient.ackWardrobe(anyString(), anyString(), anyList()))
+                    .thenReturn(ok("{}"));
+            var done = new ArrayList<String>();
+            WardrobeService.refreshActiveAsync(player, () -> done.add("done"));
+            async.removeFirst().run();
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(false);
+            main.removeFirst().run();
+            assertNull(WardrobeCache.get(player));
+            assertTrue(done.isEmpty());
+            assertTrue(async.isEmpty(), "Stale refresh must not acknowledge pending slots");
+            assertEquals("account-value", SkinApplyHelper.readTextures(player).getValue());
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(true);
+            WardrobeService.refreshActiveAsync(player, () -> done.add("done"));
+            drain();
+            assertEquals(List.of("done"), done);
+            assertNotNull(WardrobeCache.get(player));
+        }
+    }
+
+    @Test void delayedSlotSelectionCannotApplyIntoANewSessionOfTheSameCharacter() {
+        try (var identities = mockStatic(net.tfminecraft.tlibs.character.Characters.class)) {
+            var session = mock(net.tfminecraft.tlibs.character.CharacterSession.class);
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.currentSession(player))
+                    .thenReturn(Optional.of(session));
+            client.when(() -> ProvinceSystemClient.setWardrobeActive(anyString(), anyString(), anyString()))
+                    .thenReturn(ok("{}"));
+            cache(snapshot());
+            var errors = new ArrayList<String>();
+            WardrobeService.setActiveAndApply(player, "extra_1", errors::add);
+            async.removeFirst().run();
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(false);
+            main.removeFirst().run();
+            assertTrue(errors.getFirst().contains("active character changed"));
+            assertEquals("base", WardrobeCache.get(player).getActiveSlot());
+            assertEquals("account-value", SkinApplyHelper.readTextures(player).getValue());
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(true);
+            WardrobeService.setActiveAndApply(player, "extra_1", errors::add);
+            drain();
+            assertNull(errors.getLast());
+            assertEquals("extra_1", WardrobeCache.get(player).getActiveSlot());
+        }
+    }
+
     @Test void refreshGuardsAndSoftRefreshTimersRespectOnlineActiveCharacters() {
         WardrobeService.refreshActiveAsync(null);WardrobeService.refreshAsync(null,"alpha");WardrobeService.refreshAsync(player,null);WardrobeService.refreshAsync(player," ");var offline=server.addPlayer();offline.disconnect();WardrobeService.refreshActiveAsync(offline);WardrobeService.refreshAsync(offline,"alpha");players.when(()->PlayerManager.get(player)).thenReturn(null);WardrobeService.refreshActiveAsync(player);players.when(()->PlayerManager.get(player)).thenReturn(account);active.set(null);WardrobeService.refreshActiveAsync(player);assertTrue(async.isEmpty());
         WardrobeService.startSoftRefresh(plugin);var first=timerTasks.getFirst();WardrobeService.startSoftRefresh(plugin);verify(first).cancel();timers.getLast().run();assertTrue(async.isEmpty());active.set(character);timers.getLast().run();assertEquals(1,async.size());WardrobeService.stopSoftRefresh();WardrobeService.stopSoftRefresh();verify(timerTasks.getLast()).cancel();

@@ -47,6 +47,15 @@ class RPCharacterRuntimeTest {
     RPCharacter character() {var c=new RPCharacter(player); c.setName("Aria"); c.setRace(race); return c;}
     ClassManager installMmo() throws Exception {MMOCore.plugin=mock(MMOCore.class); var manager=mock(ClassManager.class); var field=MMOCore.class.getField("classManager"); field.setAccessible(true); field.set(MMOCore.plugin,manager); return manager;}
 
+    @Test void loadedProgressBelongsToItsCharacterAndClearingItDoesNotAffectAnother() {
+        RPCharacter a=character(), b=character();
+        var progress=mock(net.tfminecraft.rpcharacters.progress.CharacterProgress.class);
+        assertNull(a.getProgress());a.setProgress(progress);
+        assertSame(progress,a.getProgress());assertNull(b.getProgress());
+        a.setProgress(null);assertNull(a.getProgress());
+        database.verifyNoInteractions();
+    }
+
     @Test void constructorsAndRefreshMergeSheetDataWithoutChangingSharedTemplates() {
         var background=trait("history","background",3); when(background.getDesc()).thenReturn(Arrays.asList("One line",null," ","Two lines"));
         var empty=trait("empty","background",0); when(empty.getDesc()).thenReturn(Arrays.asList(null,"")); var ordinary=trait("strong","physical",4);

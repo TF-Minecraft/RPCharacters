@@ -127,6 +127,14 @@ public class RPCharacters extends JavaPlugin{
 	public static RPCharacters plugin;
 	private net.tfminecraft.rpcharacters.identity.CharacterIdentityService characterIdentity;
 	private net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions characterTransitions;
+	private net.tfminecraft.rpcharacters.body.CharacterBodies characterBodies;
+	private boolean characterBodiesFailed;
+
+	public static boolean characterBodiesFailed() { return plugin != null && plugin.characterBodiesFailed; }
+
+	public static net.tfminecraft.rpcharacters.body.CharacterBodies getCharacterBodies() {
+		return plugin == null ? null : plugin.characterBodies;
+	}
 
 	public static net.tfminecraft.rpcharacters.identity.CharacterIdentityService getCharacterIdentity() {
 		return plugin == null ? null : plugin.characterIdentity;
@@ -253,6 +261,7 @@ public class RPCharacters extends JavaPlugin{
 	@Override
 	public void onEnable() {
 		plugin = this;
+		characterBodiesFailed = false;
 		initDependencyComponents();
 		createFolders();
 		createConfigs();
@@ -279,7 +288,22 @@ public class RPCharacters extends JavaPlugin{
 		}
 		focusModule = new net.tfminecraft.rpcharacters.focus.FocusModule(this);
 		focusModule.start();
-		loadPlayers();
+		var bodyConfig = org.bukkit.configuration.file.YamlConfiguration
+				.loadConfiguration(new File(getDataFolder(), "config.yml")).getConfigurationSection("character-bodies");
+		if (bodyConfig != null && bodyConfig.getBoolean("enabled")) {
+			try {
+				if (!Bukkit.getOnlinePlayers().isEmpty()) throw new java.io.IOException("Character bodies require a server restart");
+				characterBodies = new net.tfminecraft.rpcharacters.body.CharacterBodies(this, bodyConfig);
+			} catch (java.io.IOException | RuntimeException ex) {
+				characterBodiesFailed = true;
+				var progress = net.tfminecraft.rpcharacters.progress.CharacterProgressService.active();
+				if (progress != null) progress.close();
+				getLogger().log(java.util.logging.Level.SEVERE, "Character bodies could not start; logins are blocked until repaired and restarted", ex);
+				getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.body.CharacterBodyStartupGuard(), this);
+				for (Player player : Bukkit.getOnlinePlayers()) player.kickPlayer("Character storage is unavailable. Please contact staff.");
+			}
+		}
+		if (!characterBodiesFailed) loadPlayers();
 		var focusCommand = new net.tfminecraft.rpcharacters.focus.FocusCommand(this);
 		getCommand("focus").setExecutor(focusCommand);
 		getCommand("focus").setTabCompleter(focusCommand);
@@ -310,6 +334,7 @@ public class RPCharacters extends JavaPlugin{
 	@Override
 	public void onDisable() {
 		if (characterTransitions != null) characterTransitions.shutdown();
+		if (characterBodies != null) characterBodies.shutdown();
 		if (characterIdentity != null) getServer().getServicesManager().unregister(characterIdentity);
 		characterIdentity = null;
 		characterTransitions = null;
@@ -337,6 +362,7 @@ public class RPCharacters extends JavaPlugin{
 		GraveManager.get().saveAll();
 		PaidChangeListener.settleAll();
 		save();
+		characterBodies = null;
 	}
 	
 	public void save() {
@@ -770,26 +796,11 @@ public class RPCharacters extends JavaPlugin{
 	}
 
 	public static int getAccountAttributePointsTotal(Player player) {
-		if (player == null) {
-			return 0;
-		}
-		PlayerData data = PlayerManager.get(player);
-		return data != null ? data.getAccountAttributePointsTotal() : 0;
+		return AttributePointService.lifetimePoints(player);
 	}
 
 	public static int getFreeAttributePoints(Player player) {
-		if (player == null) {
-			return 0;
-		}
-		PlayerData data = PlayerManager.get(player);
-		if (data == null) {
-			return 0;
-		}
-		RPCharacter active = data.getActiveCharacter();
-		if (active == null) {
-			return data.getAccountAttributePointsTotal();
-		}
-		return Math.max(0, data.getAccountAttributePointsTotal() - active.getSpentExtraAttributePoints());
+		return AttributePointService.freePoints(player);
 	}
 
 	private void registerPlaceholderApi() {

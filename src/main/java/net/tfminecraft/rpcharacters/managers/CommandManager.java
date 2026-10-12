@@ -55,6 +55,13 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (!cmd.getName().equalsIgnoreCase(cmd1)) {
 			return true;
 		}
+		if (args.length == 1 && args[0].equalsIgnoreCase("select")
+				&& sender instanceof Player player && RPCharacters.getCharacterBodies() != null) {
+			var bodies = RPCharacters.getCharacterBodies();
+			if (bodies.hasLiveBody(player)) player.kickPlayer("Reconnect to choose a character. Normal logout rules apply.");
+			else bodies.show(player);
+			return true;
+		}
 		if (args.length >= 1 && CharCommand.isPersonaSubcommand(args[0])) {
 			return CharCommand.handle(sender, label, args);
 		}

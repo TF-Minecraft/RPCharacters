@@ -236,6 +236,9 @@ public final class PermadeathService {
 				}
 			}
 		}
+		if (wasActive && !killEntity && !player.isDead() && RPCharacters.getCharacterBodies() != null) {
+			RPCharacters.getCharacterBodies().finishDeath(player);
+		}
 		return true;
 	}
 
@@ -259,11 +262,21 @@ public final class PermadeathService {
 			// Shutting down: the character is already saved as dead and the player is about to leave.
 			return;
 		}
+		var bodies = RPCharacters.getCharacterBodies();
+		UUID body = bodies == null ? null : bodies.liveCharacter(player);
 		ignoreNextZoneDeath.add(player.getUniqueId());
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			if (!player.isOnline() || player.isDead()) {
 				ignoreNextZoneDeath.remove(player.getUniqueId());
 				return;
+			}
+			if (bodies != null) {
+				boolean awaitingDeath = bodies.awaitingDeadBody(player);
+				if (body == null || !body.equals(bodies.liveCharacter(player)) || !awaitingDeath) {
+					// A newer body may already have its own pending death; leave its markers alone.
+					if (!awaitingDeath) clearPendingPermadeathRespawn(player);
+					return;
+				}
 			}
 			player.setHealth(0);
 		});

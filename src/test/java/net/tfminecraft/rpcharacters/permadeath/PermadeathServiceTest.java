@@ -39,6 +39,57 @@ import net.tfminecraft.rpcharacters.utils.Integrator;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
 class PermadeathServiceTest extends PermadeathRuntimeFixture {
+    @Test void bodyDeathAfterAnExistingRespawnReturnsToTheSelectorWithoutKillingAgain() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.prepareDeath(data, character)).thenReturn(true);
+        assertTrue(PermadeathService.killCharacter(player, character, PermakillCause.STRIKES, null, false));
+        verify(bodies).finishDeath(player);
+        assertTrue(tasks.isEmpty());
+        verify(player, never()).setHealth(anyDouble());
+    }
+
+    @Test void delayedEntityDeathRequiresTheSameDeadBodyAndClearsStaleDeathMarkers() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        UUID id = UUID.fromString(character.getId());
+        when(bodies.prepareDeath(data, character)).thenReturn(true);
+        when(bodies.liveCharacter(player)).thenReturn(id);
+        when(bodies.awaitingDeadBody(player)).thenReturn(true);
+        assertTrue(PermadeathService.killCharacter(player, character, PermakillCause.COMMAND));
+        assertTrue(PermadeathService.isAwaitingPermakillRespawn(player));
+        when(bodies.liveCharacter(player)).thenReturn(UUID.randomUUID());
+        when(bodies.awaitingDeadBody(player)).thenReturn(false);
+        runTask();
+        verify(player, never()).setHealth(anyDouble());
+        assertFalse(PermadeathService.isAwaitingPermakillRespawn(player));
+        assertFalse(PermadeathService.consumePendingPermakillSounds(player));
+    }
+
+    @Test void anOldDeathTaskCannotClearANewerCharactersPendingDeath() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.prepareDeath(data, character)).thenReturn(true);
+        when(bodies.liveCharacter(player)).thenReturn(UUID.fromString(character.getId()));
+        when(bodies.awaitingDeadBody(player)).thenReturn(true);
+        assertTrue(PermadeathService.killCharacter(player, character, PermakillCause.COMMAND));
+        when(bodies.liveCharacter(player)).thenReturn(UUID.randomUUID());
+        runTask();
+        verify(player, never()).setHealth(anyDouble());
+        assertTrue(PermadeathService.isAwaitingPermakillRespawn(player));
+    }
+
+    @Test void delayedEntityDeathStillKillsTheCommittedBodyWhenItIsCurrent() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.prepareDeath(data, character)).thenReturn(true);
+        when(bodies.liveCharacter(player)).thenReturn(UUID.fromString(character.getId()));
+        when(bodies.awaitingDeadBody(player)).thenReturn(true);
+        assertTrue(PermadeathService.killCharacter(player, character, PermakillCause.COMMAND));
+        runTask();
+        verify(player).setHealth(0);
+    }
+
     @Test void riskCountsHealingAndPermanentInjuriesButNotOtherTraits() throws Exception {
         chance(12);character.addTrait(healing);character.addTrait(permanent);character.addTrait(trait("wise","background",false));character.addTrait(trait("unkeyed",null,false));
         var risk=PermadeathService.computeRisk(character);assertEquals(2,risk.getInjuryCount());assertEquals(24,risk.getChancePercent());assertEquals(12,risk.getChancePerInjury());
@@ -199,12 +250,12 @@ abstract class PermadeathRuntimeFixture {
     @TempDir Path folder;
     RuntimeTestState state;RPCharacters plugin;Logger logger;Player player;PlayerData data;RPCharacter character;Race race;Trait healing,permanent;PlayerManager manager;World world;PluginManager pluginManager;BukkitScheduler scheduler;
     final List<AutoCloseable> boundaries=new ArrayList<>();final Map<Player,PlayerData> loaded=new HashMap<>();final List<String> messages=new ArrayList<>();final Deque<Runnable> tasks=new ArrayDeque<>();final List<CharacterPermakillEvent> events=new ArrayList<>();boolean cancelEvents;
-    MockedStatic<Bukkit> bukkit;MockedStatic<ClueAdminModeService> admins;MockedStatic<PermadeathBattleExemption> battles;MockedStatic<PvpStrikeService> strikes;MockedStatic<PermadeathAreaLookup> area;MockedStatic<PermadeathZoneListener> zones;MockedStatic<WardrobeService> wardrobe;MockedStatic<RosterSyncService> roster;MockedStatic<CharacterLifecycle> lifecycle;
+    MockedStatic<RPCharacters> root;MockedStatic<Bukkit> bukkit;MockedStatic<ClueAdminModeService> admins;MockedStatic<PermadeathBattleExemption> battles;MockedStatic<PvpStrikeService> strikes;MockedStatic<PermadeathAreaLookup> area;MockedStatic<PermadeathZoneListener> zones;MockedStatic<WardrobeService> wardrobe;MockedStatic<RosterSyncService> roster;MockedStatic<CharacterLifecycle> lifecycle;
     @BeforeEach void setupPermadeath() throws Exception {
         var server=MockBukkit.mock();state=new RuntimeTestState(RPCharacters.class,TraitLoader.class,InjuryPoolLoader.class,InjuryProgressionLoader.class,PermadeathZoneLoader.class,PermadeathService.class,PvpStartSessions.class);Cache.attributes=new ArrayList<>();Cache.professions=new ArrayList<>();Cache.backgroundTraitTypes=new ArrayList<>();TraitLoader.oList=new ArrayList<>();
         plugin=mock(RPCharacters.class);logger=mock(Logger.class);when(plugin.getLogger()).thenReturn(logger);when(plugin.getDataFolder()).thenReturn(folder.toFile());when(plugin.isEnabled()).thenReturn(true);RPCharacters.plugin=plugin;
         world=server.addSimpleWorld("permadeath");player=mock(Player.class);when(player.getUniqueId()).thenReturn(UUID.randomUUID());when(player.getName()).thenReturn("Aria");when(player.isOnline()).thenReturn(true);when(player.getWorld()).thenReturn(world);when(player.getLocation()).thenReturn(new Location(world,1,64,2));doAnswer(call->{messages.add(call.getArgument(0));return null;}).when(player).sendMessage(anyString());
-        manager=mock(PlayerManager.class);var root=boundary(RPCharacters.class);root.when(RPCharacters::getPlayerManager).thenReturn(manager);var players=boundary(PlayerManager.class);players.when(()->PlayerManager.get(any(Player.class))).thenAnswer(call->loaded.get(call.getArgument(0)));
+        manager=mock(PlayerManager.class);root=boundary(RPCharacters.class);root.when(RPCharacters::getPlayerManager).thenReturn(manager);var players=boundary(PlayerManager.class);players.when(()->PlayerManager.get(any(Player.class))).thenAnswer(call->loaded.get(call.getArgument(0)));
         boundary(Database.class);boundary(AttributePointService.class);boundary(ProfessionIntegrator.class);boundary(MmoCorePlayerReady.class);lifecycle=boundary(CharacterLifecycle.class);boundaries.add(mockConstruction(Integrator.class));roster=boundary(RosterSyncService.class);wardrobe=boundary(WardrobeService.class);admins=boundary(ClueAdminModeService.class);battles=boundary(PermadeathBattleExemption.class);strikes=boundary(PvpStrikeService.class);area=boundary(PermadeathAreaLookup.class);zones=boundary(PermadeathZoneListener.class);
         pluginManager=mock(PluginManager.class);doAnswer(call->{if(call.getArgument(0) instanceof CharacterPermakillEvent event){events.add(event);event.setCancelled(cancelEvents);}return null;}).when(pluginManager).callEvent(any());scheduler=mock(BukkitScheduler.class);when(scheduler.runTask(eq(plugin),any(Runnable.class))).thenAnswer(call->{tasks.add(call.getArgument(1));return mock(BukkitTask.class);});
         bukkit=mockStatic(Bukkit.class,CALLS_REAL_METHODS);boundaries.add(bukkit);bukkit.when(Bukkit::getPluginManager).thenReturn(pluginManager);bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);bukkit.when(()->Bukkit.getPlayerExact(anyString())).thenAnswer(call->player.getName().equals(call.getArgument(0))?player:null);
