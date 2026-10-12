@@ -285,6 +285,7 @@ class CharacterBodiesTest {
         diskLeases.begin(owner,original); tag=original; bodies.join(player);
         Player stale=mock(Player.class); when(stale.getUniqueId()).thenReturn(owner);
         bodies.quit(stale); verify(player,never()).saveData(); verify(leases,never()).complete(any(),any());
+        view.verify(()->CharacterSelectView.close(stale)); view.verify(()->CharacterSelectView.close(player),never());
         diskLeases.validate(owner,original);
         // Restore the interrupted connection's pending recovery, then exercise an I/O failure.
         tag=original; when(store.read(owner,first)).thenReturn(Optional.of(record(first,2)));
@@ -492,7 +493,7 @@ class CharacterBodiesTest {
     }
     @Test void switchRequestsRequireARealLogoutAndShutdownStowsThenClosesProgress() throws Exception {
         play();bodies.requestSwitch(account,a);verify(player,never()).kickPlayer(anyString());bodies.requestSwitch(account,b);verify(player).kickPlayer(contains("Reconnect"));
-        bodies.checkpoint();verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);verify(progress).close();
+        bodies.checkpoint();verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
     }
     @Test void configurationRejectsMissingWorldUnsafeKeysAndSharedSelectionWorld() {
         config.set("spawn-world","absent");assertThrows(IOException.class,()->new CharacterBodies(plugin,config));

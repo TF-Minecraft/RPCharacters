@@ -279,6 +279,14 @@ public final class ProvinceSystemClient {
 		);
 	}
 
+	/** Read-only portrait lookup; unlike the wardrobe route, never reconciles slots. */
+	public static SimpleResult fetchWornSkin(String playerUuid, String characterId) {
+		String uuid = sanitizePathSegment(playerUuid);
+		String cid = sanitizePathSegment(characterId);
+		if (uuid == null || cid == null) return SimpleResult.fail("invalid player or character id");
+		return request("GET", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/worn", null);
+	}
+
 	/**
 	 * POST /characters/plugin/wardrobe/{playerUuid}/{characterId}/active
 	 * Same as PATCH — POST used because Java HttpURLConnection often rejects PATCH.

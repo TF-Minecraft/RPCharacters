@@ -561,6 +561,7 @@ public final class CharacterBodies {
 
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
+        CharacterSelectView.close(player);
         RoomEntry entry = enteringRoom.get(owner);
         if (entry != null && entry.player == player && entry.recoveredFrom != null) {
             try {
@@ -586,6 +587,7 @@ public final class CharacterBodies {
     }
 
     public void shutdown() {
+        CharacterSelectView.cleanupAll();
         for (PlayerData account : PlayerManager.getOnlineData()) stow(account, "shutdown");
         progress.close();
     }
