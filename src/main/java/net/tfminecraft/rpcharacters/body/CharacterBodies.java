@@ -341,6 +341,14 @@ public final class CharacterBodies {
             BodyRecord latest = store.read(owner, body.characterId()).orElseThrow();
             if (latest.rev() != body.rev()) throw new IOException("Selected body changed while its location loaded");
             var resources = progress.resources(account, character);
+            if (!player.teleport(destination)) {
+                if (current(player, account)) {
+                    player.sendMessage("Your character could not be entered yet. If a resource pack is loading, wait for it to finish and try again.");
+                    show(player);
+                }
+                return;
+            }
+            if (!current(player, account)) return;
             leases.begin(owner, new BodyTag.Live(body.characterId(), body.rev()));
             account.clearTempAlias();
             character.setActiveState(true);
@@ -350,7 +358,6 @@ public final class CharacterBodies {
             MmoInventorySlots.refresh(player);
             progress.restoreResources(account, character, resources);
             body.body().applyHealth(player);
-            if (!player.teleport(destination)) throw new IOException("Character teleport was refused");
             if (previous.lastCharacterId() != null && !previous.lastCharacterId().equals(body.characterId())) {
                 account.recordCharacterSwitch();
             }

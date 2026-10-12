@@ -162,7 +162,7 @@ class CharacterBodiesTest {
     }
     @Test void selectionRestoresBeforePublishingTheSessionAndQuitStowsBeforeClearing() throws Exception {
         play();assertEquals(first,bodies.liveCharacter(player));assertFalse(bodies.isSelecting(player));assertFalse(bodies.isApplying(player));
-        InOrder order=inOrder(progress,a,snapshot,player,transitions);order.verify(progress).activate(account,a);order.verify(a).tryActivate();order.verify(snapshot).apply(eq(player),anySet());order.verify(player).teleport(spawn);order.verify(player).saveData();order.verify(transitions).selected(account);
+        InOrder order=inOrder(progress,a,snapshot,player,transitions);order.verify(player).teleport(spawn);order.verify(progress).activate(account,a);order.verify(a).tryActivate();order.verify(snapshot).apply(eq(player),anySet());order.verify(player).saveData();order.verify(transitions).selected(account);
         clearInvocations(database);bodies.stow(account,"quit");verify(progress).save(account,a);verify(store).write(owner,first,1,"quit",snapshot);verify(database).trySavePlayer(account);
         assertEquals(new BodyTag.Room(first),tag);assertFalse(bodies.hasLiveBody(player));verify(a).stampLastLocation(spawn);
         bodies.quit(player);assertFalse(bodies.isSelecting(player));assertNull(bodies.liveCharacter(player));
@@ -225,9 +225,61 @@ class CharacterBodiesTest {
         bodies.quit(player);tag=new BodyTag.Room(first);when(snapshot.location()).thenReturn(spawn);ready();bodies.select(account,a);
         when(store.read(owner,first)).thenReturn(Optional.of(record(first,2)));drain();verify(progress,never()).activate(any(),any());
     }
-    @Test void refusedClassOrTeleportDoesNotPublishReadySession() throws Exception {
+    @Test void refusedClassDoesNotPublishReadySession() throws Exception {
         ready();when(a.tryActivate()).thenReturn(false);bodies.select(account,a);drain();verify(transitions,never()).selected(any());
-        bodies.quit(player);tag=new BodyTag.Room(first);when(a.tryActivate()).thenReturn(true);when(player.teleport(spawn)).thenReturn(false);ready();bodies.select(account,a);drain();verify(transitions,never()).selected(any());assertFalse(bodies.hasLiveBody(player));
+        assertFalse(bodies.hasLiveBody(player));
+    }
+    @Test void cancelledTeleportKeepsRoomAndStoredBodiesUntouchedAndCanRetryWithoutReconnecting() throws Exception {
+        useRealLeases(); ready(); account.setTempAlias("Room alias");
+        CharacterSelectView.Actions originalActions=actions;
+        clearInvocations(player,progress,store,leases,a,b,player.getInventory());
+        when(player.teleport(spawn)).thenAnswer(call->{
+            assertTrue(bodies.isSelecting(player)); assertTrue(bodies.isApplying(player));
+            assertFalse(bodies.hasLiveBody(player)); assertEquals(new BodyTag.Room(first),tag);
+            return false;
+        });
+        bodies.select(account,b); drain();
+        assertEquals(new BodyTag.Room(first),tag); diskLeases.validate(owner,tag);
+        assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isApplying(player)); assertFalse(bodies.hasLiveBody(player));
+        assertNull(account.getActiveCharacter()); assertEquals("Room alias",account.getTempAlias());
+        assertNull(bodies.blockReason(account,b)); assertNotSame(originalActions,actions);
+        verify(player).sendMessage(contains("try again")); verify(player,never()).kickPlayer(anyString());
+        verify(player,never()).saveData(); verify(leases,never()).begin(any(),any());
+        verify(progress,never()).activate(any(),any()); verify(progress,never()).save(any(),any());
+        verify(a,never()).tryActivate(); verify(b,never()).tryActivate(); verify(b,never()).setActiveState(true);
+        verify(snapshot,never()).apply(any(),anySet()); verify(player.getInventory(),never()).clear();
+        verify(store,never()).write(any(),any(),anyLong(),anyString(),any());
+        verify(transitions,never()).selected(any());
+        doReturn(true).when(player).teleport(spawn);
+        actions.play(b); drain();
+        assertEquals(new BodyTag.Live(second,1),tag); diskLeases.validate(owner,tag);
+        assertTrue(bodies.hasLiveBody(player)); assertFalse(bodies.isSelecting(player));
+        verify(leases).begin(owner,new BodyTag.Live(second,1)); verify(progress).activate(account,b);
+        verify(snapshot).apply(eq(player),anySet()); verify(transitions).selected(account);
+    }
+    @Test void disconnectInsideTeleportCannotBeginActivationOrPoisonNextJoin() throws Exception {
+        useRealLeases(); ready(); clearInvocations(progress,store,leases,snapshot,transitions);
+        when(player.teleport(spawn)).thenAnswer(call->{when(player.isOnline()).thenReturn(false); return true;});
+        bodies.select(account,a); drain();
+        assertEquals(new BodyTag.Room(first),tag); diskLeases.validate(owner,tag);
+        verify(leases,never()).begin(any(),any()); verify(progress,never()).activate(any(),any());
+        verify(snapshot,never()).apply(any(),anySet()); verify(transitions,never()).selected(any());
+        bodies.quit(player); when(player.isOnline()).thenReturn(true); doReturn(true).when(player).teleport(spawn);
+        ready(); bodies.select(account,a); drain(); assertTrue(bodies.hasLiveBody(player));
+    }
+    @Test void cancelledTeleportAfterDisconnectDoesNotReopenTheOldConnection() throws Exception {
+        useRealLeases(); ready(); CharacterSelectView.Actions originalActions=actions;
+        when(player.teleport(spawn)).thenAnswer(call->{when(player.isOnline()).thenReturn(false); return false;});
+        bodies.select(account,a); drain();
+        assertSame(originalActions,actions); verify(player,never()).sendMessage(contains("try again"));
+        verify(leases,never()).begin(any(),any()); diskLeases.validate(owner,new BodyTag.Room(first));
+    }
+    @Test void replacementAccountDuringTeleportCannotActivateOnTheStaleConnection() throws Exception {
+        useRealLeases(); ready();
+        when(player.teleport(spawn)).thenAnswer(call->{players.when(()->PlayerManager.get(player)).thenReturn(new PlayerData(player)); return true;});
+        bodies.select(account,a); drain();
+        verify(leases,never()).begin(any(),any()); verify(progress,never()).activate(any(),any());
+        verify(snapshot,never()).apply(any(),anySet()); diskLeases.validate(owner,new BodyTag.Room(first));
     }
     @Test void stowFailurePreservesRawLiveBodyForNextJoinRecovery() throws Exception {
         play();doThrow(new IOException("disk")).when(store).write(owner,first,1,"quit",snapshot);
