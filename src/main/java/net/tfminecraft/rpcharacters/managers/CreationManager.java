@@ -62,6 +62,10 @@ public class CreationManager implements Listener{
 		}
 		PlayerData pd = PlayerManager.get(p);
 		var bodies = RPCharacters.getCharacterBodies();
+        if (bodies != null && bodies.isSelecting(p) && !bodies.isReadyToChoose(p)) {
+            RPTexts.send(p, RPTexts.ERROR + "Wait for character selection to finish loading.");
+            return;
+        }
 		if (bodies != null && bodies.hasLiveBody(p)) {
 			bodies.requestSwitch(pd, null);
 			return;

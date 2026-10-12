@@ -36,6 +36,7 @@ public final class CharacterBodies {
     private final BodyLeaseStore leases;
     private final CharacterBodyMigration migration;
     private final CharacterProgressService progress;
+    private final CharacterPackGate packs;
     private final Location room;
     private final Set<NamespacedKey> bodyKeys;
     private final Map<UUID, Location> originalSpawns = new ConcurrentHashMap<>();
@@ -90,6 +91,7 @@ public final class CharacterBodies {
         if (mainWorld.getName().equals(roomName)) throw new IOException("Selection must use its own world");
         room = CharacterSelectionWorld.create(roomName);
         progress = new CharacterProgressService(data.resolve("progress"));
+        packs = new CharacterPackGate(plugin, config.getBoolean("require-resource-pack", false));
         Bukkit.getPluginManager().registerEvents(new CharacterSelectionGuard(this, plugin), plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::checkpoint, 6000L, 6000L);
     }
@@ -98,6 +100,9 @@ public final class CharacterBodies {
     public boolean isSelecting(Player player) { return selecting.contains(player.getUniqueId()); }
     public boolean isApplying(Player player) { return applying.contains(player.getUniqueId()); }
     public boolean hasLiveBody(Player player) { return live.containsKey(player.getUniqueId()); }
+    public boolean isReadyToChoose(Player player) {
+        return current(player, PlayerManager.get(player)) && ready.contains(player.getUniqueId()) && packs.ready(player);
+    }
     public boolean isRespawning(Player player) {
         return pendingRespawns.containsKey(player.getUniqueId());
     }
@@ -174,6 +179,10 @@ public final class CharacterBodies {
             if (entry.recoveredFrom != null) {
                 saveRecoveredRoom(player, entry.recoveredFrom);
                 entry.recoveredFrom = null;
+            }
+            if (!packs.ready(player)) {
+                packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account), () -> enterRoom(entry));
+                return;
             }
             if (!pendingRespawns.containsKey(owner)) {
                 applying.add(owner);
@@ -268,6 +277,10 @@ public final class CharacterBodies {
             deferredPrepare.add(account.getUniqueId());
             return;
         }
+        if (!packs.ready(player)) {
+            packs.await(player, () -> current(player, account), () -> prepare(account));
+            return;
+        }
         try {
             PendingRespawn pending = pendingRespawns.get(account.getUniqueId());
             if (pending != null) {
@@ -328,10 +341,10 @@ public final class CharacterBodies {
 
     public void show(Player player) {
         PlayerData account = PlayerManager.get(player);
-        if (!current(player, account) || !ready.contains(player.getUniqueId())) return;
+        if (!isReadyToChoose(player)) return;
         CharacterSelectView.open(player, account, new CharacterSelectView.Actions() {
             public boolean isCurrent(Player viewer, PlayerData data) {
-                return viewer == player && data == account && current(player, account);
+                return viewer == player && data == account && isReadyToChoose(player);
             }
             public String blockReason(RPCharacter character) { return CharacterBodies.this.blockReason(account, character); }
             public void play(RPCharacter character) { select(account, character); }
@@ -348,6 +361,7 @@ public final class CharacterBodies {
     public String blockReason(PlayerData account, RPCharacter character) {
         Player player = account.getPlayer();
         if (!current(player, account) || !ready.contains(account.getUniqueId())) return "Character data is still loading.";
+        if (!packs.ready(player)) return "The TFMC resource pack is still loading.";
         if (!account.getCharacters().contains(character) || character.getStatus() != Status.ALIVE) return "This character cannot be played.";
         if (CreationManager.activeCreators.containsKey(player)) return "Finish or cancel character creation first.";
         if (net.tfminecraft.rpcharacters.gate.DiscordGatePolicy.freezes(
@@ -561,6 +575,7 @@ public final class CharacterBodies {
 
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
+        packs.quit(player);
         CharacterSelectView.close(player);
         RoomEntry entry = enteringRoom.get(owner);
         if (entry != null && entry.player == player && entry.recoveredFrom != null) {
@@ -587,6 +602,7 @@ public final class CharacterBodies {
     }
 
     public void shutdown() {
+        packs.close();
         CharacterSelectView.cleanupAll();
         for (PlayerData account : PlayerManager.getOnlineData()) stow(account, "shutdown");
         progress.close();

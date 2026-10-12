@@ -155,6 +155,22 @@ class CreationManagerTest {
     }
 
     @Test
+    void creationWaitsForTheResourcePackAndSelectionReadiness() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        when(bodies.isSelecting(player)).thenReturn(true);
+        try (var created = mockConstruction(CharacterCreation.class)) {
+            CreationManager.initiateCreation(player);
+            assertTrue(created.constructed().isEmpty());
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+            message("Wait for character selection to finish loading.");
+            when(bodies.isReadyToChoose(player)).thenReturn(true);
+            CreationManager.initiateCreation(player);
+            assertSame(created.constructed().getFirst(), CreationManager.activeCreators.get(player));
+        }
+    }
+
+    @Test
     void bodyCreationRequiresSelectionBeforePreviewingAnotherClass() {
         var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
         rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);

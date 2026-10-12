@@ -72,6 +72,9 @@ class CharacterBodiesTest {
     BodyTag tag;
     CharacterSelectView.Actions actions;
     YamlConfiguration config;
+    CharacterPackGate packs;
+    java.util.function.BooleanSupplier packCurrent;
+    Runnable packResume;
 
     @BeforeEach void setup() throws Exception {
         mocks = new ArrayList<>(); queued = new ArrayList<>();
@@ -121,8 +124,14 @@ class CharacterBodiesTest {
         tags.when(()->BodyTag.live(eq(player),any(),anyLong())).thenAnswer(c->{tag=new BodyTag.Live(c.getArgument(1),c.getArgument(2));return null;});
         view=mockStatic(CharacterSelectView.class);mocks.add(view);view.when(()->CharacterSelectView.open(eq(player),eq(account),any())).thenAnswer(c->{actions=c.getArgument(2);return null;});
         config=new YamlConfiguration(); config.set("persistent-keys",List.of("accessory:test"));
+        var packGates=mockConstruction(CharacterPackGate.class,(gate,context)-> {
+            when(gate.ready(any())).thenReturn(true);
+            doAnswer(call->{packCurrent=call.getArgument(1);packResume=call.getArgument(2);return null;})
+                    .when(gate).await(any(),any(),any());
+        }); mocks.add(packGates);
         respawns=mockStatic(BodyRespawn.class); mocks.add(respawns);
         bodies=new CharacterBodies(plugin,config);rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        packs=packGates.constructed().getFirst();
         database=dbs.constructed().getFirst();store=stores.constructed().getFirst();migration=migrations.constructed().getFirst();progress=progresses.constructed().getFirst();
         leases=leaseStores.constructed().getFirst();
         when(migration.initialize(account,snapshot)).thenReturn(first);when(migration.migrated(owner)).thenReturn(true);
@@ -138,6 +147,53 @@ class CharacterBodiesTest {
     void drain(){for(int i=0;!queued.isEmpty()&&i<20;i++)queued.removeFirst().run();}
     void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);drain();}
     void play(){ready();bodies.select(account,a);drain();assertTrue(bodies.hasLiveBody(player));}
+
+    @Test void requiredPackHoldsRoomEntryAndSelectionButCompletesBodyRecoveryFirst() throws Exception {
+        tag=new BodyTag.Live(first,1); when(packs.ready(player)).thenReturn(false);
+        bodies.join(player); bodies.prepare(account); queued.removeFirst().run();
+        verify(store).write(owner,first,1,"join-recovery",snapshot);
+        verify(player).saveData(); verify(leases).complete(owner,new BodyTag.Live(first,1));
+        verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isReadyToChoose(player)); assertNull(actions);
+        bodies.select(account,a); verify(leases,never()).begin(any(),any()); assertTrue(packCurrent.getAsBoolean());
+        when(packs.ready(player)).thenReturn(true); packResume.run();
+        verify(player).teleport(room); verify(progress).prepare(account); assertNotNull(actions);
+        assertTrue(bodies.isReadyToChoose(player));
+        var original=actions; when(packs.ready(player)).thenReturn(false);
+        assertFalse(original.isCurrent(player,account));
+        assertEquals("The TFMC resource pack is still loading.",bodies.blockReason(account,a));
+        bodies.select(account,a); verify(leases,never()).begin(any(),any());
+        bodies.show(player); assertSame(original,actions);
+    }
+
+    @Test void pendingPackContinuationCannotResumeAfterQuitOrNewRoomEntry() throws Exception {
+        when(packs.ready(player)).thenReturn(false); bodies.join(player); bodies.prepare(account); drain();
+        var oldCurrent=packCurrent; var oldResume=packResume; assertTrue(oldCurrent.getAsBoolean());
+        bodies.quit(player); verify(packs).quit(player); assertFalse(oldCurrent.getAsBoolean());
+        when(packs.ready(player)).thenReturn(true); oldResume.run();
+        verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        bodies.join(player); assertFalse(oldCurrent.getAsBoolean());
+    }
+
+    @Test void preparationAlsoWaitsIfPackProviderBecomesUnavailableAfterRoomEntry() throws Exception {
+        bodies.join(player); drain(); verify(player).teleport(room);
+        when(packs.ready(player)).thenReturn(false); bodies.prepare(account);
+        verify(progress,never()).prepare(account); assertNull(actions); assertTrue(packCurrent.getAsBoolean());
+        when(packs.ready(player)).thenReturn(true); packResume.run();
+        verify(progress).prepare(account); assertNotNull(actions);
+        bodies.shutdown(); verify(packs).close();
+    }
+
+    @Test void deadPlayerCannotRespawnOrSelectUntilRequiredPackFinishes() throws Exception {
+        tag=new BodyTag.Live(first,1); when(player.isDead()).thenReturn(true);
+        when(packs.ready(player)).thenReturn(false);
+        respawns.when(()->BodyRespawn.respawn(player)).thenAnswer(call->{
+            when(player.isDead()).thenReturn(false); bodies.respawned(player); return null;
+        });
+        bodies.join(player); bodies.prepare(account); drain(); respawns.verifyNoInteractions(); assertNull(actions);
+        when(packs.ready(player)).thenReturn(true); packResume.run(); drain();
+        respawns.verify(()->BodyRespawn.respawn(player)); verify(progress).prepare(account); assertNotNull(actions);
+    }
     void useRealLeases() throws Exception {
         doAnswer(c->{diskLeases.validate(c.getArgument(0),c.getArgument(1));return null;}).when(leases).validate(any(),any());
         doAnswer(c->{diskLeases.begin(c.getArgument(0),c.getArgument(1));return null;}).when(leases).begin(any(),any());

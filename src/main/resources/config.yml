@@ -117,5 +117,7 @@ character-bodies:
   # Changing this setting requires a server restart.
   enabled: false
   heirs-sha256: ''
+  # Requires TFMCCore resource-pack.require-on-join. Missing or failed pack delivery blocks selection.
+  require-resource-pack: false
   selection-world: character_selection
   persistent-keys: []
