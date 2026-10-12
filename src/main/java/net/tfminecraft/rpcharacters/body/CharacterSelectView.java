@@ -250,19 +250,20 @@ public final class CharacterSelectView {
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
 			body.add(text(characterCard(player.getUniqueId(), selected, reason)));
 		}
-		body.add(text(footer(player, data, alive.size())));
 
 		List<ActionButton> buttons = new ArrayList<>();
 		if (selected != null) {
 			String id = selected.getId();
 			Component label = reason == null ? Component.text("▶ Play", TEAL, TextDecoration.BOLD)
 					: Component.text("▶ Play", DIM);
-			buttons.add(button(label, reason == null ? "Play as " + name(selected) : reason, 110, session,
+			String action = reason == null ? "Play as " + name(selected) : reason;
+			buttons.add(button(label, action + "\n" + details(player.getUniqueId(), selected), 110, session,
 					s -> play(s, id)));
 		}
 		String createBlock = createBlockReason(player, data);
 		buttons.add(button(Component.text("New character", createBlock == null ? PALE : DIM),
-				createBlock == null ? "Start a new character" : createBlock, 100, session, CharacterSelectView::create));
+				(createBlock == null ? "Start a new character" : createBlock) + "\n" + slotsUsed(player, alive.size()),
+				100, session, CharacterSelectView::create));
 		int fallen = memorials(data).size();
 		if (fallen > 0) {
 			buttons.add(button(Component.text("Memorials (" + fallen + ")", MUTED),
@@ -437,10 +438,8 @@ public final class CharacterSelectView {
 		}
 	}
 
-	private static Component footer(Player player, PlayerData data, int alive) {
-		int slots = CharacterSlotService.getMaxAliveCharacters(player);
-		Component used = Component.text(alive + " of " + slots + " character slots used", DIM);
-		return used;
+	private static String slotsUsed(Player player, int alive) {
+		return alive + " of " + CharacterSlotService.getMaxAliveCharacters(player) + " character slots used";
 	}
 
 	/** Living characters, most recently played first, then memorials. */
@@ -484,14 +483,13 @@ public final class CharacterSelectView {
 		return null;
 	}
 
-	/** The guild line, or null when guilds can't be read. */
-	static Component guildSummary(RPCharacter character) {
+	/** The character's guild name, or null when it has none or guilds can't be read. */
+	static String guild(RPCharacter character) {
 		UUID id;
 		try { id = UUID.fromString(character.getId()); }
 		catch (IllegalArgumentException | NullPointerException invalid) { return null; }
 		String guild = guilds.apply(id);
-		if (guild == null) return null;
-		return Component.text("Guild: " + (guild.isBlank() ? "none" : guild), MUTED);
+		return guild == null || guild.isBlank() ? null : guild;
 	}
 
 	/** This character's own pouch and bank; empty for a record without a character ID. */
@@ -507,27 +505,36 @@ public final class CharacterSelectView {
 				+ " • Bank: " + PaidChangeService.formatCents(wallet.balance(ref, Account.BANK));
 	}
 
+	/** The card keeps to who the character is; the Play tooltip carries the rest. */
 	static Component characterCard(UUID owner, RPCharacter character, String blockReason) {
 		TextComponent.Builder card = Component.text()
 				.append(Component.text(name(character), PALE, TextDecoration.BOLD));
 		line(card, joined(race(character), className(character), age(character)), TEAL);
-		List<String> history = new ArrayList<>();
-		history.add("Played " + formatPlaytime(character.getOnlinePlaytimeSeconds()));
-		if (character.getLastPlayedAt() != null) {
-			long seconds = Duration.between(character.getLastPlayedAt(), Instant.now()).getSeconds();
-			history.add("Last played " + AgeFormatter.formatAge(seconds) + " ago");
-		}
-		line(card, String.join(" • ", history), MUTED);
-		line(card, balances(owner, character), MUTED);
-		Component guild = guildSummary(character);
-		if (guild != null) card.append(Component.newline()).append(guild);
-		if (character.hasLastLocation()) {
-			line(card, String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
-					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),
-					(long) Math.floor(character.getLastLocationZ())), DIM);
-		}
+		line(card, joined(guild(character), lastPlayed(character)), MUTED);
 		if (blockReason != null) line(card, blockReason, WARN);
 		return card.build();
+	}
+
+	/** Birthday, playtime, money and last location, one per line. */
+	static String details(UUID owner, RPCharacter character) {
+		List<String> lines = new ArrayList<>();
+		String born = birthday(character);
+		if (born != null) lines.add("Born " + born);
+		lines.add("Played " + formatPlaytime(character.getOnlinePlaytimeSeconds()));
+		String money = balances(owner, character);
+		if (!money.isEmpty()) lines.add(money);
+		if (character.hasLastLocation()) {
+			lines.add(String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
+					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),
+					(long) Math.floor(character.getLastLocationZ())));
+		}
+		return String.join("\n", lines);
+	}
+
+	private static String lastPlayed(RPCharacter character) {
+		if (character.getLastPlayedAt() == null) return null;
+		long seconds = Duration.between(character.getLastPlayedAt(), Instant.now()).getSeconds();
+		return seconds < 3600 ? "Last played <1h ago" : "Last played " + AgeFormatter.formatAge(seconds) + " ago";
 	}
 
 	static Component memorialCard(RPCharacter character) {
@@ -576,9 +583,13 @@ public final class CharacterSelectView {
 	}
 
 	private static String age(RPCharacter character) {
+		return birthday(character) == null ? null : "Age " + AgeCalculator.formatAge(character.getBirthday());
+	}
+
+	private static String birthday(RPCharacter character) {
 		String birthday = character.getBirthday();
 		if (birthday == null || birthday.isBlank() || FantasyCalendar.fromIso(birthday) == null) return null;
-		return "Age " + AgeCalculator.formatAge(birthday) + ", born " + FantasyCalendar.formatBirthday(birthday);
+		return FantasyCalendar.formatBirthday(birthday);
 	}
 
 	static String formatPlaytime(int seconds) {
