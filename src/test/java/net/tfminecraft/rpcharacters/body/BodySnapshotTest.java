@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import org.bukkit.Location;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -495,6 +496,53 @@ class BodySnapshotTest {
         assertNotNull(BodySnapshot.capture(player, Set.of()));
 
         assertThrows(IllegalArgumentException.class, () -> BodySnapshot.capture(player, Set.of(BodyTag.KEY)));
+    }
+
+    @Test
+    void creativeDefaultInventoryCanBeCapturedAndRestoredWithoutChangingGameMode() throws Exception {
+        player.setGameMode(GameMode.CREATIVE);
+        Inventory grid = server.createInventory(null, 9);
+        player.openInventory(new SimpleInventoryViewMock(player, grid, player.getInventory(), InventoryType.CREATIVE));
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND, 3));
+        player.getEnderChest().setItem(1, new ItemStack(Material.EMERALD, 2));
+
+        BodySnapshot body = BodySnapshot.capture(player, Set.of(), MOCK_PDC);
+        player.getInventory().clear();
+        player.getEnderChest().clear();
+        body.apply(player, Set.of(), MOCK_PDC);
+
+        assertEquals(GameMode.CREATIVE, player.getGameMode());
+        assertEquals(new ItemStack(Material.DIAMOND, 3), player.getInventory().getItem(0));
+        assertEquals(new ItemStack(Material.EMERALD, 2), player.getEnderChest().getItem(1));
+    }
+
+    @Test
+    void creativeCaptureStillRejectsCursorGridAndExternalContainers() throws Exception {
+        BodySnapshot body = BodySnapshot.capture(player, Set.of(), MOCK_PDC);
+        player.setGameMode(GameMode.CREATIVE);
+        Inventory grid = server.createInventory(null, 9);
+        player.openInventory(new SimpleInventoryViewMock(player, grid, player.getInventory(), InventoryType.CREATIVE));
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND, 3));
+        player.setItemOnCursor(new ItemStack(Material.STICK));
+        assertTrue(assertThrows(IOException.class, () -> BodySnapshot.capture(player, Set.of()))
+                .getMessage().contains("cursor holds an item"));
+        assertTrue(assertThrows(IOException.class, () -> body.apply(player, Set.of(), MOCK_PDC))
+                .getMessage().contains("cursor holds an item"));
+
+        player.setItemOnCursor(null);
+        grid.setItem(1, new ItemStack(Material.OAK_PLANKS));
+        assertTrue(assertThrows(IOException.class, () -> BodySnapshot.capture(player, Set.of()))
+                .getMessage().contains("crafting grid holds items"));
+        assertTrue(assertThrows(IOException.class, () -> body.apply(player, Set.of(), MOCK_PDC))
+                .getMessage().contains("crafting grid holds items"));
+
+        grid.clear();
+        player.openInventory(server.createInventory(null, 9));
+        assertTrue(assertThrows(IOException.class, () -> BodySnapshot.capture(player, Set.of()))
+                .getMessage().contains("CHEST is open"));
+        assertTrue(assertThrows(IOException.class, () -> body.apply(player, Set.of(), MOCK_PDC))
+                .getMessage().contains("CHEST is open"));
+        assertEquals(new ItemStack(Material.DIAMOND, 3), player.getInventory().getItem(0));
     }
 
     @Test

@@ -291,7 +291,8 @@ public final class BodySnapshot {
     private static void requireClosedInventory(Player player) throws IOException {
         if (!player.getItemOnCursor().isEmpty()) throw new IOException("Close the inventory first: the cursor holds an item");
         InventoryView view = player.getOpenInventory();
-        if (view.getType() != InventoryType.CRAFTING) {
+        // Paper reports the default player inventory as CREATIVE in creative mode.
+        if (view.getType() != InventoryType.CRAFTING && view.getType() != InventoryType.CREATIVE) {
             throw new IOException("Close the inventory first: " + view.getType() + " is open");
         }
         Inventory grid = view.getTopInventory();
