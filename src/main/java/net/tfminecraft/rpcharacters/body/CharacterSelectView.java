@@ -101,8 +101,8 @@ public final class CharacterSelectView {
 	static final String NO_PORTRAIT = "No portrait";
 	static final TextColor TEAL = TextColor.color(0x4FD1C5);
 	static final TextColor PALE = TextColor.color(0xD7E9E7);
-	static final TextColor MUTED = TextColor.color(0x8A9A9C);
-	static final TextColor DIM = TextColor.color(0x5C6869);
+	static final TextColor MUTED = TextColor.color(0xB4C4C6);
+	static final TextColor DIM = TextColor.color(0x8E9EA0);
 	static final TextColor WARN = TextColor.color(0xE8806E);
 	private static final int WIDTH = 300;
 	private static final ClickCallback.Options CALLBACKS = ClickCallback.Options.builder()
