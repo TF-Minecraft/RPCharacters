@@ -70,6 +70,14 @@ class CharacterSelectionGuardTest {
         guard.respawn(respawn); verify(respawn,never()).setRespawnLocation(any());
     }
 
+    @Test void onlyAllowedLoginsAreDressedForSelection() {
+        AsyncPlayerPreLoginEvent login = mock(AsyncPlayerPreLoginEvent.class);
+        when(login.getLoginResult()).thenReturn(AsyncPlayerPreLoginEvent.Result.KICK_BANNED);
+        guard.login(login); verify(bodies, never()).dressAtLogin(any());
+        when(login.getLoginResult()).thenReturn(AsyncPlayerPreLoginEvent.Result.ALLOWED);
+        guard.login(login); verify(bodies).dressAtLogin(login);
+    }
+
     @Test void anyDamageToAPlayerStopsTheirReturnToSelection() {
         EntityDamageEvent hurt = mock(EntityDamageEvent.class); when(hurt.getEntity()).thenReturn(player);
         guard.hurt(hurt); verify(bodies).interruptReturn(eq(player), contains("hurt"));

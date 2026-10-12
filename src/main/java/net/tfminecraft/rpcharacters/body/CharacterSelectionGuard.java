@@ -18,6 +18,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -47,6 +48,11 @@ final class CharacterSelectionGuard implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void spawn(AsyncPlayerSpawnLocationEvent event) {
         bodies.rememberSpawn(event.getConnection().getProfile().getId(), event.getSpawnLocation());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void login(AsyncPlayerPreLoginEvent event) {
+        if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.ALLOWED) bodies.dressAtLogin(event);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

@@ -140,6 +140,11 @@ class WardrobeServiceTest extends WardrobeFixture {
         cache(snapshot());WardrobeService.applyFor(player);assertNull(WardrobeCache.getAccountSkin(player));
         when(bodies.isSelecting(player)).thenReturn(false);WardrobeService.applyFor(player);assertEquals("account-value",WardrobeCache.getAccountSkin(player).getValue());
     }
+    @Test void aLoginSkinSwapIsRememberedSoTheRoomSkinIsNotReapplied() {
+        var account=new SkinTextures("real-value","real-signature");var worn=new SkinTextures("steve-value","steve-signature");
+        WardrobeCache.rememberLoginSkin(player,account,worn);
+        assertSame(account,WardrobeCache.getAccountSkin(player));assertSame(worn,WardrobeCache.getLastApplied(player));
+    }
     @Test void directApplyCannotUseThePreviousCharactersCachedSkin() {
         cache(snapshot());active.set(otherCharacter("beta"));WardrobeService.applyFor(player);assertEquals("account-value",SkinApplyHelper.readTextures(player).getValue());
     }
