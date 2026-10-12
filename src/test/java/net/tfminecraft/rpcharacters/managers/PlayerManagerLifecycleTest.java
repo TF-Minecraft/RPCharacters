@@ -451,6 +451,16 @@ class PlayerManagerLifecycleTest extends PlayerManagerFixture {
     }
 
     @Test
+    void savingOneCharacterNowWritesOnlyALoadedOwnersFile() {
+        UUID id = player.getUniqueId(); when(database.trySaveCharacter(data, character)).thenReturn(true);
+        assertTrue(manager.saveCharacterNow(id, character));
+        assertTrue(net.tfminecraft.rpcharacters.paidchange.Payments.save(id, character));
+        assertFalse(manager.saveCharacterNow(UUID.randomUUID(), character));
+        rpc.when(RPCharacters::getPlayerManager).thenReturn(null);
+        assertFalse(net.tfminecraft.rpcharacters.paidchange.Payments.save(id, character));
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     void joiningLoadsOnceRecoversPaidChangesAndDefersMmoUntilReady() {
         tracked.clear();

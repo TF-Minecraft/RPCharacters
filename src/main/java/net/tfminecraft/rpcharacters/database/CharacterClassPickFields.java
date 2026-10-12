@@ -1,14 +1,18 @@
 package net.tfminecraft.rpcharacters.database;
 
 import java.util.Map;
+import java.util.logging.Logger;
 
 import org.json.simple.JSONObject;
 
+import net.tfminecraft.rpcharacters.classpick.PendingClassPick;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.paidchange.Payment;
 
 /**
  * Class picker state in the character file, under "class-picks": whether the free subclass pick
- * is used ("subclass-picked") and how many picks were paid for ("paid").
+ * is used ("subclass-picked"), how many picks were paid for ("paid") and a paid pick saved before
+ * its debit ("pending").
  */
 public final class CharacterClassPickFields {
 	private CharacterClassPickFields() {}
@@ -22,16 +26,32 @@ public final class CharacterClassPickFields {
 		if (picks.get("paid") instanceof Number paid) {
 			character.setPaidClassPicks(paid.intValue());
 		}
+		if (picks.get("pending") instanceof Map<?, ?> pending) {
+			try {
+				character.setPendingClassPick(new PendingClassPick((String) pending.get("target"),
+						Payment.fromJson((Map<?, ?>) pending.get("payment"))));
+			} catch (RuntimeException e) {
+				Logger.getLogger("RPCharacters").warning("[RPCharacters] Unreadable pending class pick " + pending
+						+ "; refund it by hand if denars were taken.");
+			}
+		}
 	}
 
 	@SuppressWarnings("unchecked")
 	public static void save(Map<String, Object> defaults, RPCharacter character) {
-		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0) {
+		PendingClassPick pending = character.getPendingClassPick();
+		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0 && pending == null) {
 			return;
 		}
 		JSONObject picks = new JSONObject();
 		picks.put("subclass-picked", character.hasPickedSubclass());
 		picks.put("paid", character.getPaidClassPicks());
+		if (pending != null) {
+			JSONObject held = new JSONObject();
+			held.put("target", pending.targetClass());
+			held.put("payment", pending.payment().toJson());
+			picks.put("pending", held);
+		}
 		defaults.put("class-picks", picks);
 	}
 }

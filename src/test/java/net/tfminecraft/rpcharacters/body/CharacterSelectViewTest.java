@@ -56,6 +56,7 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.races.Race;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
@@ -97,8 +98,8 @@ class CharacterSelectViewTest {
 		when(actions.isCurrent(player, data)).thenReturn(true);
 		wallet = mock(DenarWallet.class);
 		when(wallet.available()).thenReturn(true);
-		when(wallet.balance(OWNER, Account.POUCH)).thenReturn(new BigDecimal("12.50"));
-		when(wallet.balance(OWNER, Account.BANK)).thenReturn(new BigDecimal("300.00"));
+		when(wallet.balance(any(CharacterRef.class), eq(Account.POUCH))).thenReturn(1_250L);
+		when(wallet.balance(any(CharacterRef.class), eq(Account.BANK))).thenReturn(30_000L);
 		CharacterSelectView.wallet = wallet;
 		CharacterSelectView.guilds = p -> "Ironhand";
 		CharacterSelectView.accountTextures = p -> p == player ? ACCOUNT_SKIN : null;
@@ -223,7 +224,8 @@ class CharacterSelectViewTest {
 	void focusesTheMostRecentCharacterWithStripBustCardActionsAndSharedFooter() {
 		Race race = mock(Race.class);
 		when(race.getName()).thenReturn("&6Human");
-		RPCharacter wren = character("wren", "Lady Wren", Status.ALIVE);
+		String wrenId = UUID.randomUUID().toString();
+		RPCharacter wren = character(wrenId, "Lady Wren", Status.ALIVE);
 		when(wren.getRace()).thenReturn(race);
 		when(wren.getMMOClass()).thenReturn("SWORD_MASTER");
 		String birthday = FantasyCalendar.toIso(FantasyCalendar.getCurrentDate().minusYears(27).minusDays(3));
@@ -251,12 +253,14 @@ class CharacterSelectViewTest {
 		assertEquals(HoverEvent.Action.SHOW_TEXT, strip().get("‹").hoverEvent().action());
 		assertEquals(SkinPortrait.ROW_WIDTH, ui.last().portraitPart().width());
 		assertEquals(CharacterSelectView.placeholder(CharacterSelectView.LOADING), ui.last().portrait());
-		assertEquals(List.of("wren|" + ACCOUNT_SKIN.url()), requested);
+		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
 		assertEquals("‹   Lady Wren   Rowan   ›\nLady Wren\nHuman • Sword master • Age 27, born "
 				+ FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m • Last played 2d 2h ago\n"
+				+ "Pouch: 12.50 denars • Bank: 300 denars\n"
 				+ "Last location: world 120, 64, -31\n"
 				+ "2 of 4 character slots used • Shared by all your characters\n"
-				+ "Guild: Ironhand • Pouch: 12.50 denars • Bank: 300 denars", ui.last().bodyText());
+				+ "Guild: Ironhand", ui.last().bodyText());
+		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
 			if (part != ui.last().portraitPart()) assertEquals(300, part.width());
 		}
@@ -802,30 +806,34 @@ class CharacterSelectViewTest {
 		when(newer.getDiedAt()).thenReturn(Instant.parse("2026-06-01T00:00:00Z"));
 		RPCharacter missing = character("m", "Missing", Status.MISSING);
 		assertEquals(List.of(recent, unnamed, alpha, beta, newer, older, missing), CharacterSelectView.cards(data));
-		assertEquals("Unnamed\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(unnamed, null)));
+		assertEquals("Unnamed\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, unnamed, null)));
 		when(unnamed.getName()).thenReturn(" ");
-		assertTrue(text(CharacterSelectView.characterCard(unnamed, null)).startsWith("Unnamed"));
+		assertTrue(text(CharacterSelectView.characterCard(OWNER, unnamed, null)).startsWith("Unnamed"));
 		assertEquals(List.of(), CharacterSelectView.page(List.of(), 3));
 	}
 
 	@Test
-	void accountValuesSayUnavailableInsteadOfZeroAndOmitUnreadableGuild() {
+	void balancesSayUnavailableInsteadOfZeroAndTheFooterOmitsAnUnreadableGuild() {
 		when(wallet.available()).thenReturn(false);
-		CharacterSelectView.guilds = p -> null;
-		assertEquals("Shared by all your characters\nPouch and bank: unavailable", text(CharacterSelectView.accountSummary(player)));
+		RPCharacter cora = character(UUID.randomUUID().toString(), "Cora", Status.ALIVE);
+		assertEquals("Pouch and bank: unavailable", CharacterSelectView.balances(OWNER, cora));
+		assertEquals("", CharacterSelectView.balances(OWNER, character("not-an-id", "Odd", Status.ALIVE)));
 		verify(wallet, never()).balance(any(), any());
+		CharacterSelectView.guilds = p -> null;
+		assertNull(CharacterSelectView.accountSummary(player));
+		CharacterSelectView.open(player, data, actions);
+		assertTrue(ui.last().bodyText().endsWith("Pouch and bank: unavailable\n2 of 4 character slots used"), ui.last().bodyText());
 		CharacterSelectView.guilds = p -> "";
-		assertEquals("Shared by all your characters\nGuild: none • Pouch and bank: unavailable",
-				text(CharacterSelectView.accountSummary(player)));
+		assertEquals("Shared by all your characters\nGuild: none", text(CharacterSelectView.accountSummary(player)));
 	}
 
 	@Test
 	void cardsSkipBirthdaysThatCannotBeRead() {
 		RPCharacter c = character("c", "Cora", Status.ALIVE);
 		when(c.getBirthday()).thenReturn(" ");
-		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(c, null)));
+		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, c, null)));
 		when(c.getBirthday()).thenReturn("not a date");
-		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(c, null)));
+		assertEquals("Cora\nPlayed 0d 0h 0m", text(CharacterSelectView.characterCard(OWNER, c, null)));
 	}
 
 	@Test

@@ -58,6 +58,7 @@ import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
 import net.tfminecraft.rpcharacters.playerlist.SkinPortrait.SkinTexture;
 import net.tfminecraft.rpcharacters.utils.AgeFormatter;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
+import net.tfminecraft.tlibs.character.CharacterRef;
 
 /**
  * Join-time character picker, shown while the player has no active body. It
@@ -247,7 +248,7 @@ public final class CharacterSelectView {
 		} else {
 			reason = session.actions.blockReason(selected);
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
-			body.add(text(characterCard(selected, reason)));
+			body.add(text(characterCard(player.getUniqueId(), selected, reason)));
 		}
 		body.add(text(footer(player, data, alive.size())));
 
@@ -438,7 +439,9 @@ public final class CharacterSelectView {
 
 	private static Component footer(Player player, PlayerData data, int alive) {
 		int slots = CharacterSlotService.getMaxAliveCharacters(player);
-		return Component.text(alive + " of " + slots + " character slots used • ", DIM).append(accountSummary(player));
+		Component used = Component.text(alive + " of " + slots + " character slots used", DIM);
+		Component account = accountSummary(player);
+		return account == null ? used : used.append(Component.text(" • ", DIM)).append(account);
 	}
 
 	/** Living characters, most recently played first, then memorials. */
@@ -482,22 +485,29 @@ public final class CharacterSelectView {
 		return null;
 	}
 
+	/** The guild line, or null when guilds can't be read. */
 	static Component accountSummary(Player player) {
-		List<String> parts = new ArrayList<>();
 		String guild = guilds.apply(player);
-		if (guild != null) parts.add("Guild: " + (guild.isBlank() ? "none" : guild));
-		if (wallet.available()) {
-			parts.add("Pouch: " + PaidChangeService.formatDenars(wallet.balance(player.getUniqueId(), Account.POUCH)));
-			parts.add("Bank: " + PaidChangeService.formatDenars(wallet.balance(player.getUniqueId(), Account.BANK)));
-		} else {
-			parts.add("Pouch and bank: unavailable");
-		}
+		if (guild == null) return null;
 		return Component.text("Shared by all your characters", DIM)
 				.append(Component.newline())
-				.append(Component.text(String.join(" • ", parts), MUTED));
+				.append(Component.text("Guild: " + (guild.isBlank() ? "none" : guild), MUTED));
 	}
 
-	static Component characterCard(RPCharacter character, String blockReason) {
+	/** This character's own pouch and bank; empty for a record without a character ID. */
+	static String balances(UUID owner, RPCharacter character) {
+		CharacterRef ref;
+		try {
+			ref = new CharacterRef(owner, UUID.fromString(character.getId()));
+		} catch (IllegalArgumentException | NullPointerException notACharacterId) {
+			return "";
+		}
+		if (!wallet.available()) return "Pouch and bank: unavailable";
+		return "Pouch: " + PaidChangeService.formatCents(wallet.balance(ref, Account.POUCH))
+				+ " • Bank: " + PaidChangeService.formatCents(wallet.balance(ref, Account.BANK));
+	}
+
+	static Component characterCard(UUID owner, RPCharacter character, String blockReason) {
 		TextComponent.Builder card = Component.text()
 				.append(Component.text(name(character), PALE, TextDecoration.BOLD));
 		line(card, joined(race(character), className(character), age(character)), TEAL);
@@ -508,6 +518,7 @@ public final class CharacterSelectView {
 			history.add("Last played " + AgeFormatter.formatAge(seconds) + " ago");
 		}
 		line(card, String.join(" • ", history), MUTED);
+		line(card, balances(owner, character), MUTED);
 		if (character.hasLastLocation()) {
 			line(card, String.format(Locale.ROOT, "Last location: %s %d, %d, %d", character.getLastLocationWorld(),
 					(long) Math.floor(character.getLastLocationX()), (long) Math.floor(character.getLastLocationY()),

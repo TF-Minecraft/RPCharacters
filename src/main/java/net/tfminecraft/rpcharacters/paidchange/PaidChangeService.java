@@ -19,13 +19,16 @@ import net.tfminecraft.rpcharacters.creation.StageEditLock;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Posting;
 import net.tfminecraft.rpcharacters.utils.AgeFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
+import net.tfminecraft.tlibs.character.CharacterRef;
 
 /**
- * Pay to reopen a locked creation stage. The player pays when the stage opens, and the denars
- * stay held on the edit session until they leave it. A changed character keeps the payment and
- * raises the next price; an unchanged one gets the denars back.
+ * Pay to reopen a locked creation stage. The edited character pays from its own pouch or bank
+ * when the stage opens, and the payment stays held on the character until the edit session ends.
+ * A changed character keeps the payment and raises the next price; an unchanged one gets the
+ * denars back.
  */
 public final class PaidChangeService {
 
@@ -43,7 +46,11 @@ public final class PaidChangeService {
 		/** Nothing changed and the denars went back. */
 		REFUNDED,
 		/** Nothing changed but the refund failed; the payment stays held for a later retry. */
-		REFUND_FAILED
+		REFUND_FAILED,
+		/** The debit never went through, so there is nothing to keep or refund. */
+		DISCARDED,
+		/** The ledger can't say whether the debit went through; the payment stays held. */
+		UNCONFIRMED
 	}
 
 	private static final Logger LOG = Logger.getLogger("RPCharacters");
@@ -81,37 +88,63 @@ public final class PaidChangeService {
 		return ruleFor(stage) != null && wallet.available();
 	}
 
-	/** Takes the next price from the first account that covers it. */
-	public static ChargeResult charge(UUID payerId, PaidChangeRule rule, RPCharacter character) {
+	/**
+	 * Takes the next price from the character's first account that covers it. A paid charge is
+	 * held on the character and saved before the debit is posted.
+	 */
+	public static ChargeResult charge(UUID ownerId, PaidChangeRule rule, RPCharacter character) {
 		BigDecimal cost = rule.costAfter(character.getPaidChangeCount(rule.getStageId()));
 		String before = snapshot(character);
 		if (cost.signum() <= 0) {
-			return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, null, cost, before), cost);
+			return new ChargeResult(ChargeStatus.PAID,
+					new PendingPaidChange(rule.getStageId(), rule.getLabel(), null, before), cost);
 		}
 		if (!wallet.available()) {
 			return new ChargeResult(ChargeStatus.UNAVAILABLE, null, cost);
 		}
-		for (Account account : accountOrder) {
-			if (wallet.balance(payerId, account).compareTo(cost) >= 0 && wallet.withdraw(payerId, account, cost)) {
-				return new ChargeResult(ChargeStatus.PAID, pending(rule, payerId, account, cost, before), cost);
-			}
-		}
-		return new ChargeResult(ChargeStatus.INSUFFICIENT_FUNDS, null, cost);
+		Payments.Charge taken = Payments.take(wallet, DenarWallet.PAID_CHANGE, rule.getStageId(),
+				Payments.payer(ownerId, character), accountOrder, Payments.cents(cost),
+				payment -> hold(ownerId, character, rule, payment, before));
+		return switch (taken.status()) {
+			case PAID -> new ChargeResult(ChargeStatus.PAID, character.getPendingPaidChange(), cost);
+			case UNAVAILABLE -> new ChargeResult(ChargeStatus.UNAVAILABLE, null, cost);
+			default -> new ChargeResult(ChargeStatus.INSUFFICIENT_FUNDS, null, cost);
+		};
 	}
 
-	private static PendingPaidChange pending(PaidChangeRule rule, UUID payerId, Account account, BigDecimal amount,
+	/** Holds the payment on the character and saves it; null drops a payment that was never taken. */
+	private static boolean hold(UUID ownerId, RPCharacter character, PaidChangeRule rule, Payment payment,
 			String before) {
-		return new PendingPaidChange(rule.getStageId(), rule.getLabel(), payerId, account, amount, before);
+		PendingPaidChange previous = character.getPendingPaidChange();
+		character.setPendingPaidChange(
+				payment == null ? null : new PendingPaidChange(rule.getStageId(), rule.getLabel(), payment, before));
+		if (Payments.save(ownerId, character) || payment == null) {
+			return true;
+		}
+		character.setPendingPaidChange(previous);
+		return false;
 	}
 
 	/**
-	 * Settles the payment held on the character. A changed character keeps it and counts the
-	 * change; an unchanged one is refunded. The hold is cleared only once one of those happened.
+	 * Settles the payment held on the character. A payment whose debit never applied is dropped
+	 * without a refund. Otherwise a changed character keeps it and counts the change, and an
+	 * unchanged one is refunded with the stored refund ID. The hold is cleared only once one of
+	 * those happened.
 	 */
 	public static Outcome resolve(RPCharacter character) {
 		PendingPaidChange pending = character.getPendingPaidChange();
 		if (pending == null) {
 			return null;
+		}
+		Payment payment = pending.payment();
+		Payments.Debit debit = payment == null ? Payments.Debit.APPLIED : Payments.debited(wallet, payment);
+		if (debit == Payments.Debit.UNKNOWN) {
+			return Outcome.UNCONFIRMED;
+		}
+		if (debit == Payments.Debit.NOT_APPLIED) {
+			LOG.info("[RPCharacters] " + payment.debitOpId() + " never went through; dropping its hold.");
+			character.setPendingPaidChange(null);
+			return Outcome.DISCARDED;
 		}
 		if (!snapshot(character).equals(pending.before())) {
 			character.setPaidChangeCount(pending.stageId(),
@@ -119,11 +152,9 @@ public final class PaidChangeService {
 			character.setPendingPaidChange(null);
 			return Outcome.KEPT;
 		}
-		if (pending.account() != null && pending.amount().signum() > 0
-				&& !wallet.deposit(pending.payerId(), pending.account(), pending.amount())) {
-			LOG.log(Level.WARNING, "[RPCharacters] Could not refund " + pending.amount() + " denars to "
-					+ pending.payerId() + " (" + pending.account() + ") for a " + pending.label()
-					+ " change; keeping it held to retry.");
+		if (payment != null && Payments.refund(wallet, payment) != Posting.APPLIED) {
+			LOG.log(Level.WARNING, "[RPCharacters] Could not post " + payment.refundOpId() + " for a "
+					+ pending.label() + " change; keeping it held to retry.");
 			return Outcome.REFUND_FAILED;
 		}
 		character.setPendingPaidChange(null);
@@ -151,22 +182,20 @@ public final class PaidChangeService {
 				return false;
 			}
 			case INSUFFICIENT_FUNDS -> {
-				UUID id = player.getUniqueId();
+				CharacterRef payer = Payments.payer(player.getUniqueId(), character);
 				RPTexts.send(player, RPTexts.ERROR + "Changing your " + rule.getLabel() + " costs "
-						+ formatDenars(result.cost()) + ". You have " + formatDenars(wallet.balance(id, Account.POUCH))
-						+ " in your pouch and " + formatDenars(wallet.balance(id, Account.BANK)) + " in the bank.");
+						+ formatDenars(result.cost()) + ". You have " + formatCents(wallet.balance(payer, Account.POUCH))
+						+ " in your pouch and " + formatCents(wallet.balance(payer, Account.BANK)) + " in the bank.");
 				return false;
 			}
 			default -> {
 			}
 		}
 		PendingPaidChange pending = result.pending();
-		// Saved with the character on the normal schedule, not forced here. DenarEconomy keeps online
-		// balances in memory until its own save, so after a crash it rolls the withdrawal back; a hold
-		// forced to disk now would then be refunded a second time on the next join.
+		// A paid hold is already set and saved; a free one needs no save.
 		character.setPendingPaidChange(pending);
-		if (pending.amount().signum() > 0) {
-			RPTexts.send(player, RPTexts.SUCCESS + "Paid " + formatDenars(pending.amount()) + " from your "
+		if (pending.cents() > 0) {
+			RPTexts.send(player, RPTexts.SUCCESS + "Paid " + formatCents(pending.cents()) + " from your "
 					+ pending.account().displayName() + " to change your " + rule.getLabel() + ".");
 			RPTexts.send(player, RPTexts.MUTED + "Leave without changing it and you get the denars back.");
 		}
@@ -206,14 +235,21 @@ public final class PaidChangeService {
 				return RPTexts.SUCCESS + "Your " + pending.label() + " change is paid for." + next;
 			}
 			case REFUNDED -> {
-				if (pending.amount().signum() <= 0) {
+				if (pending.cents() <= 0) {
 					return null;
 				}
 				return RPTexts.SUCCESS + "Your " + pending.label() + " is unchanged, so "
-						+ formatDenars(pending.amount()) + " went back to your " + pending.account().displayName() + ".";
+						+ formatCents(pending.cents()) + " went back to your " + pending.account().displayName() + ".";
+			}
+			case DISCARDED -> {
+				return null;
+			}
+			case UNCONFIRMED -> {
+				return RPTexts.ERROR + "Your " + formatCents(pending.cents()) + " payment for a " + pending.label()
+						+ " change couldn't be checked yet. It will be settled when you next join.";
 			}
 			default -> {
-				return RPTexts.ERROR + "Your " + formatDenars(pending.amount()) + " refund couldn't go through yet. "
+				return RPTexts.ERROR + "Your " + formatCents(pending.cents()) + " refund couldn't go through yet. "
 						+ "It will be retried when you next join.";
 			}
 		}
@@ -255,6 +291,10 @@ public final class PaidChangeService {
 		lines.add(RPTexts.MUTED + "The change after costs " + RPTexts.WARN + after);
 		lines.add(RPTexts.MUTED + "Refunded if you keep your " + rule.getLabel());
 		return lines;
+	}
+
+	public static String formatCents(long cents) {
+		return formatDenars(Payments.denars(cents));
 	}
 
 	public static String formatDenars(BigDecimal amount) {

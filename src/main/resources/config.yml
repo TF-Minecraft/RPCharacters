@@ -102,9 +102,10 @@ class-selection:
 
 # Pay to change a choice after its stage's lock-time runs out (class is locked after 5d).
 # With class-selection enabled, the class rule prices the class picker instead of the edit stage.
-# Players pay when they open the choice, and get the denars back if they leave without changing it.
+# The changed character pays when the choice opens, and gets the denars back if it is left unchanged.
 # costs: the first paid change, the second, and so on. The last cost repeats after that.
-# accounts: where to take the denars from, tried in order. The whole cost comes from one account.
+# accounts: the character's accounts to take the denars from, tried in order. The whole cost comes
+# from one account.
 paid-changes:
   accounts: [pouch, bank]
   rules:

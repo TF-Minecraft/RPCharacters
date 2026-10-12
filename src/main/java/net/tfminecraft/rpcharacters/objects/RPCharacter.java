@@ -117,6 +117,8 @@ public class RPCharacter {
 	private final Map<String, Integer> paidChangeCounts = new HashMap<>();
 	/** Denars held for an open paid stage, saved so a crash can't lose the refund or the count. */
 	private net.tfminecraft.rpcharacters.paidchange.PendingPaidChange pendingPaidChange;
+	/** A paid class pick saved before its debit, cleared once the class is applied or refunded. */
+	private net.tfminecraft.rpcharacters.classpick.PendingClassPick pendingClassPick;
 	/** True once the character has picked a subclass, which uses up its free subclass pick. */
 	private boolean subclassPicked;
 	/** Class picks this character has paid for. */
@@ -264,6 +266,14 @@ public class RPCharacter {
 
 	public void setPaidClassPicks(int paidClassPicks) {
 		this.paidClassPicks = Math.max(0, paidClassPicks);
+	}
+
+	public net.tfminecraft.rpcharacters.classpick.PendingClassPick getPendingClassPick() {
+		return pendingClassPick;
+	}
+
+	public void setPendingClassPick(net.tfminecraft.rpcharacters.classpick.PendingClassPick pending) {
+		this.pendingClassPick = pending;
 	}
 
 	public net.tfminecraft.rpcharacters.paidchange.PendingPaidChange getPendingPaidChange() {
