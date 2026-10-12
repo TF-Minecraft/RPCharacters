@@ -16,6 +16,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.kyori.adventure.text.Component;
@@ -232,6 +234,7 @@ public final class CharacterBodies {
                     applying.remove(owner);
                 }
                 if (!current(player, account)) return;
+                hideFromSelf(player);
                 player.saveData();
                 entry.entered = true;
             }
@@ -480,6 +483,7 @@ public final class CharacterBodies {
             character.setActiveState(true);
             progress.activate(account, character);
             if (!character.tryActivate()) throw new IOException("Character class is not ready");
+            player.removePotionEffect(PotionEffectType.INVISIBILITY);
             body.body().apply(player, bodyKeys);
             MmoInventorySlots.refresh(player);
             progress.restoreResources(account, character, resources);
@@ -639,6 +643,15 @@ public final class CharacterBodies {
             return;
         }
         enterAfterRecovery(account);
+    }
+
+    /**
+     * Hides the room body in third person. Not spectator mode: it ignores inventory clicks,
+     * which creation menus in the room need. The body's own effects replace this on Play.
+     */
+    static void hideFromSelf(Player player) {
+        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0,
+                false, false, false));
     }
 
     /** Only once the account skin is known, so Play and portraits can still restore it; repeats are skipped. */

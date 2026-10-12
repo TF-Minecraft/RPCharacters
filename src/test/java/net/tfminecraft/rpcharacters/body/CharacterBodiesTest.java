@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 import org.bukkit.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -652,6 +653,18 @@ class CharacterBodiesTest {
         order.verify(wardrobes,()->WardrobeCache.captureAccountSkinIfNeeded(player));
         order.verify(skins,()->SkinApplyHelper.apply(player,SelectionSkin.STEVE));
         verify(player,never()).teleport(any(Location.class)); assertTrue(queued.size()>0);
+    }
+
+    @Test void roomBodyIsInvisibleUntilTheCharacterBodyReplacesIt() throws Exception {
+        ready();
+        InOrder entered=inOrder(player);
+        entered.verify(player).teleport(room);
+        entered.verify(player).addPotionEffect(argThat(effect->effect.getType().equals(PotionEffectType.INVISIBILITY)
+                && effect.isInfinite() && !effect.hasParticles() && !effect.hasIcon() && !effect.isAmbient()));
+        bodies.select(account,a); drain(); assertTrue(bodies.hasLiveBody(player));
+        InOrder played=inOrder(player,snapshot);
+        played.verify(player).removePotionEffect(PotionEffectType.INVISIBILITY);
+        played.verify(snapshot).apply(eq(player),any());
     }
 
     @Test void roomSkinNeedsAKnownAccountSkinToRestore() throws Exception {
