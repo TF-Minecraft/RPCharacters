@@ -320,10 +320,53 @@ class CharacterDirectoryTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"playerdata", "characterdata"})
-	void invalidOwnerIdsAbortInitializationInsteadOfPretendingCompleteness(String directory) throws Exception {
-		Files.createDirectories(root.resolve(directory).resolve("not-an-owner"));
-		assertThrows(IOException.class, this::load);
-		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("Cannot identify character owner")));
+	void strayEntriesBesideAccountsAreNamedAndSkippedWithoutHidingAnyAccount(String directory) throws Exception {
+		account(owner, "{}");
+		save(owner, id + ".json", json(id, "Kept", "ALIVE", ""));
+		Path folder = root.resolve(directory);
+		List<Path> strays = List.of(Files.writeString(folder.resolve(owner + ".json.bak"), "{}"),
+				Files.writeString(folder.resolve(".DS_Store"), "finder"),
+				Files.createDirectory(folder.resolve("not-an-owner")));
+		CharacterDirectory loaded = load();
+		assertEquals("Kept", loaded.info(id).orElseThrow().name());
+		assertEquals(1, loaded.characters(owner).orElseThrow().size());
+		for (Path stray : strays) {
+			assertTrue(warnings.contains("Skipped " + stray + ": the name is not an account UUID"), stray.toString());
+		}
+		assertEquals(strays.size(), warnings.size());
+	}
+
+	@Test
+	void legacyRecordsWithoutTimestampsFallBackToTheCharacterStillFlaggedActive() throws Exception {
+		UUID third = UUID.fromString("eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee");
+		save(owner, id + ".json", json(id, "Benched", "ALIVE", "\"active\":\"false\""));
+		save(owner, second + ".json", json(second, "Current", "ALIVE", "\"active\":\"true\""));
+		save(other, third + ".json", json(third, "Inactive", "ALIVE", "\"active\":\"false\""));
+		CharacterDirectory directory = load();
+		assertEquals(second, directory.lastPlayed(owner).orElseThrow().ref().characterId());
+		assertTrue(directory.lastPlayed(other).isEmpty(), "Inactive legacy records do not imply a last character");
+
+		save(owner, second + ".json", json(second, "Fell", "DEAD", "\"active\":true"));
+		CharacterInfo dead = load().lastPlayed(owner).orElseThrow();
+		assertEquals(second, dead.ref().characterId());
+		assertEquals(CharacterStatus.DEAD, dead.status());
+
+		save(owner, id + ".json", json(id, "Played since", "ALIVE", "\"active\":\"false\",\"last-played-at-ms\":1000"));
+		assertEquals(id, load().lastPlayed(owner).orElseThrow().ref().characterId(), "A timestamp beats a flag alone");
+	}
+
+	@Test
+	void liveActiveFlagsAndRemovalsUpdateTheLegacyFallback() throws Exception {
+		CharacterDirectory directory = load();
+		RPCharacter live = live(id);
+		when(live.isActive()).thenReturn(true);
+		directory.upsert(owner, live);
+		assertEquals(id, directory.lastPlayed(owner).orElseThrow().ref().characterId());
+		directory.remove(other, id.toString());
+		assertEquals(id, directory.lastPlayed(owner).orElseThrow().ref().characterId());
+		when(live.isActive()).thenReturn(false);
+		directory.upsert(owner, live);
+		assertTrue(directory.lastPlayed(owner).isEmpty());
 	}
 
 	@Test

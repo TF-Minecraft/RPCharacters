@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +67,8 @@ class CharacterCreationTest {
     private MockedStatic<RPTexts> texts;
     private MockedStatic<CharacterSlotService> slots;
     private MockedStatic<ClassService> classes;
+    private MockedStatic<KitService> kits;
+    private MockedStatic<RosterSyncService> roster;
     private MockedConstruction<InventoryManager> inventories;
 
     @BeforeEach
@@ -106,8 +110,8 @@ class CharacterCreationTest {
         staticMock(ProstheticTraitRules.class);
         staticMock(StageRevisions.class);
         staticMock(CharacterLifecycle.class);
-        staticMock(KitService.class);
-        staticMock(RosterSyncService.class);
+        kits = staticMock(KitService.class);
+        roster = staticMock(RosterSyncService.class);
         staticMock(WardrobeService.class);
         inventories = mockConstruction(InventoryManager.class);
         mocks.add(inventories);
@@ -443,6 +447,7 @@ class CharacterCreationTest {
         CharacterCreation creation = draft();
         RPCharacter draft = creation.getCharacter();
         CreationManager.activeCreators.put(player, creation);
+        when(player.isOnline()).thenReturn(true);
         creation.finish();
         verify(draft).setCreatedAtEpochSeconds(intThat(value -> value > 1_700_000_000));
         verify(draft).update();
@@ -458,6 +463,31 @@ class CharacterCreationTest {
         when(restoredDraft.getCreatedAtEpochSeconds()).thenReturn(123);
         restored.finish();
         verify(restoredDraft, never()).setCreatedAtEpochSeconds(anyInt());
+    }
+
+    @Test
+    void failedActivationAfterCreationStillFinishesTheCommittedBookkeeping() {
+        RPCharacters previous = RPCharacters.plugin;
+        RPCharacters.plugin = mock(RPCharacters.class);
+        Logger logger = mock(Logger.class);
+        when(RPCharacters.plugin.getLogger()).thenReturn(logger);
+        try {
+            CharacterCreation creation = draft();
+            RPCharacter draft = creation.getCharacter();
+            CreationManager.activeCreators.put(player, creation);
+            doAnswer(call -> {
+                kits.verify(() -> KitService.onCharacterCreated(player, playerData, draft));
+                throw new IllegalStateException("Could not save character activation");
+            }).when(playerData).setActiveCharacter(draft);
+            assertDoesNotThrow(creation::finish);
+            verify(logger).log(eq(Level.SEVERE), contains("Could not activate character"), any(IllegalStateException.class));
+            verify(playerManager).savePlayer(player);
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+            roster.verify(() -> RosterSyncService.pushRosterForPlayer(player));
+            verify(player, never()).closeInventory();
+        } finally {
+            RPCharacters.plugin = previous;
+        }
     }
 
     @Test

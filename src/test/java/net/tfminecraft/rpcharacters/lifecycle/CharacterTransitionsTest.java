@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
@@ -465,6 +466,66 @@ class CharacterTransitionsTest {
         assertEquals(1, events(CharacterDeathEvent.class).size());
         assertEquals(1, events(CharacterSessionStartEvent.class).size());
         wardrobe.verifyNoInteractions();
+    }
+
+    @Test
+    void committedDeathStillReportsKilledWhenTheReplacementCannotActivate() {
+        CharacterSession session = join(data);
+        doReturn(false).when(bob).tryActivate();
+        var result = CharacterTransitions.kill(player, alice, PermakillCause.SACRIFICE, player);
+        assertTrue(result.killed());
+        assertTrue(result.wasActive());
+        assertNull(result.replacementName());
+        assertEquals(Status.DEAD, alice.getStatus());
+        assertEquals(1, events(CharacterDeathEvent.class).size());
+        assertFalse(player.isOnline());
+        assertFalse(runtime.isCurrent(session));
+        assertTrue(runtime.currentSession(player).isEmpty());
+        verify(logger).severe(contains("Character class was not ready"));
+        String aliceId = alice.getId();
+        verify(logger).log(eq(Level.SEVERE), contains("Could not activate a replacement after the death of " + aliceId),
+                any(IllegalStateException.class));
+        wardrobe.verifyNoInteractions();
+    }
+
+    @Test
+    void committedDeathSurvivesAFailedReplacementSaveOrAnUnexpectedActivationError() {
+        join(data);
+        when(database.trySavePlayer(data)).thenReturn(false);
+        var unsaved = CharacterTransitions.kill(player, alice, PermakillCause.COMMAND, null);
+        assertTrue(unsaved.killed());
+        assertNull(unsaved.replacementName());
+        assertFalse(player.isOnline());
+        verify(logger).severe(contains("Could not save character activation"));
+
+        when(database.trySavePlayer(data)).thenReturn(true);
+        player.disconnect();
+        assertTrue(player.reconnect());
+        RPCharacter carol = character(player, "Carol", false);
+        data.addCharacter(carol);
+        join(data);
+        doThrow(new IllegalArgumentException("MMOCore class missing")).when(carol).tryActivate();
+        var broken = CharacterTransitions.kill(player, bob, PermakillCause.COMMAND, null);
+        assertTrue(broken.killed());
+        assertNull(broken.replacementName());
+        assertFalse(player.isOnline(), "An unexpected activation error still disconnects the player");
+        assertEquals(2, events(CharacterDeathEvent.class).size());
+    }
+
+    @Test
+    void switchAfterCommitDisconnectsInsteadOfThrowingAndOtherwiseSwitches() {
+        CharacterSession session = join(data);
+        CharacterTransitions.switchAfterCommit(data, alice);
+        assertTrue(runtime.isCurrent(session));
+        doReturn(false).when(bob).tryActivate();
+        assertDoesNotThrow(() -> CharacterTransitions.switchAfterCommit(data, bob));
+        assertFalse(player.isOnline());
+        assertTrue(runtime.currentSession(player).isEmpty());
+        String bobId = bob.getId();
+        verify(logger).log(eq(Level.SEVERE), contains("Could not activate character " + bobId), any(IllegalStateException.class));
+        data.bindPlayer(null);
+        RPCharacter foreign = character(player, "Foreign", false);
+        assertDoesNotThrow(() -> CharacterTransitions.switchAfterCommit(data, foreign));
     }
 
     @Test

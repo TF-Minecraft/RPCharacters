@@ -40,6 +40,8 @@ public final class CharacterDirectory {
 	private final Map<UUID, Map<UUID, CharacterInfo>> accounts = new HashMap<>();
 	private final Map<UUID, UUID> owners = new HashMap<>();
 	private final Set<UUID> unavailable = new HashSet<>();
+	/** Characters saved with the legacy {@code active} flag, which predates session timestamps. */
+	private final Set<CharacterRef> flaggedActive = new HashSet<>();
 	private final Consumer<String> warn;
 
 	private CharacterDirectory(Consumer<String> warn) {
@@ -69,25 +71,37 @@ public final class CharacterDirectory {
 		return Optional.ofNullable(accounts.getOrDefault(ownerId, Map.of()).get(characterId));
 	}
 
-	/** Legacy records without a session-start timestamp do not imply a most recent character. */
+	/**
+	 * The latest session start wins. Records saved before session timestamps fall back to the
+	 * character still flagged active; any timestamp beats a flag alone.
+	 */
 	public Optional<CharacterInfo> lastPlayed(UUID ownerId) {
 		return characters(ownerId).flatMap(characters -> characters.stream()
-				.filter(character -> character.lastPlayedAt() != null)
-				.max(Comparator.comparing(CharacterInfo::lastPlayedAt)
+				.filter(character -> character.lastPlayedAt() != null || flaggedActive.contains(character.ref()))
+				.max(Comparator.comparing(CharacterInfo::lastPlayedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
 						.thenComparing(character -> character.ref().characterId())));
 	}
 
 	/** Updates a saved/live snapshot; only a fresh successful load can clear quarantine. */
 	public void upsert(UUID ownerId, RPCharacter character) {
 		Objects.requireNonNull(ownerId, "ownerId");
+		CharacterInfo info;
 		try {
-			UUID id = uuid(character.getId());
-			claim(ownerId, id);
-			CharacterInfo info = snapshot(ownerId, character);
-			accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
+			info = snapshot(ownerId, character);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid live character: " + error.getMessage());
+			return;
 		}
+		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()));
+	}
+
+	/** Updates from a snapshot taken earlier, such as when a save finished off the main thread. */
+	public void upsert(UUID ownerId, CharacterInfo info, boolean active) {
+		Objects.requireNonNull(ownerId, "ownerId");
+		UUID id = info.ref().characterId();
+		claim(ownerId, id);
+		accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
+		flag(info.ref(), active);
 	}
 
 	public void remove(UUID ownerId, String characterId) {
@@ -96,6 +110,7 @@ public final class CharacterDirectory {
 			UUID id = uuid(characterId);
 			Map<UUID, CharacterInfo> characters = accounts.get(ownerId);
 			if (characters != null) characters.remove(id);
+			flaggedActive.remove(new CharacterRef(ownerId, id));
 			if (!unavailable.contains(ownerId)) owners.remove(id, ownerId);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid removed character ID: " + error.getMessage());
@@ -117,6 +132,7 @@ public final class CharacterDirectory {
 		for (Path file : entries(root, true)) {
 			if (staging(file)) continue;
 			UUID ownerId = ownerId(file, true);
+			if (ownerId == null) continue;
 			if (!seen.add(ownerId)) quarantine(ownerId, "Duplicate account file " + file);
 			try {
 				readObject(file);
@@ -130,6 +146,7 @@ public final class CharacterDirectory {
 		Set<UUID> seen = new HashSet<>();
 		for (Path folder : entries(root, true)) {
 			UUID ownerId = ownerId(folder, false);
+			if (ownerId == null) continue;
 			if (!seen.add(ownerId)) quarantine(ownerId, "Duplicate owner directory " + folder);
 			Map<UUID, CharacterInfo> characters = accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>());
 			try {
@@ -168,6 +185,7 @@ public final class CharacterDirectory {
 			CharacterInfo info = new CharacterInfo(new CharacterRef(ownerId, id), plainName(string(json.get("name"))),
 					CharacterStatus.valueOf(string(json.get("status")).toUpperCase(Locale.ROOT)), race, traits, seconds, lastPlayed);
 			characters.put(id, info);
+			flag(info.ref(), Boolean.parseBoolean(String.valueOf(json.get("active"))));
 		} catch (IOException | RuntimeException error) {
 			quarantine(ownerId, "Cannot read character " + file + ": " + error.getMessage());
 		}
@@ -181,18 +199,23 @@ public final class CharacterDirectory {
 		}
 	}
 
+	private void flag(CharacterRef ref, boolean active) {
+		if (active) flaggedActive.add(ref);
+		else flaggedActive.remove(ref);
+	}
+
 	private void quarantine(UUID ownerId, String reason) {
 		unavailable.add(ownerId);
 		warn.accept("Character directory unavailable for " + ownerId + ": " + reason);
 	}
 
-	private UUID ownerId(Path path, boolean accountFile) throws IOException {
+	/** Null for stray entries such as backups or {@code .DS_Store}, which belong to no account. */
+	private UUID ownerId(Path path, boolean accountFile) {
 		try {
 			return uuid(accountFile ? stem(path) : path.getFileName().toString());
 		} catch (IllegalArgumentException error) {
-			String message = "Cannot identify character owner at " + path;
-			warn.accept(message);
-			throw new IOException(message, error);
+			warn.accept("Skipped " + path + ": the name is not an account UUID");
+			return null;
 		}
 	}
 

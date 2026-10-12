@@ -111,6 +111,12 @@ class CharacterIngestServiceTest extends IngestFixture {
         when(pd.hasActiveCharacter()).thenReturn(true);pending(row("beta",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();verify(pd,times(1)).setActiveCharacter(any(RPCharacter.class));assertEquals(true,result(0).get("ok"));
     }
 
+    @Test void failedActivationAfterTheSaveStillAcknowledgesTheSavedCharacter() {
+        PlayerData pd=mockData();online(pd);when(pd.hasActiveCharacter()).thenReturn(false);when(player.isOnline()).thenReturn(true);doThrow(new IllegalStateException("Character class was not ready")).when(pd).setActiveCharacter(any(RPCharacter.class));
+        pending(row("alpha",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();
+        assertEquals(obj("id","alpha","ok",true,"character_id","alpha"),result(0));assertTrue(Files.exists(characterFolder.resolve("alpha.json")));verify(logger).log(eq(java.util.logging.Level.SEVERE),contains("Could not activate character alpha"),any(IllegalStateException.class));verify(player).kickPlayer(anyString());roster.verify(() -> RosterSyncService.pushRosterAsync(owner));
+    }
+
     @Test void unregisteredOnlinePlayerLoadsOrCreatesAndPersistsTheirAccount() throws Exception {
         bukkit.when(() -> Bukkit.getPlayer(owner)).thenReturn(player);pending(row("alpha",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals(true,result(0).get("ok"));assertTrue(Files.exists(playerFile));assertTrue(Files.exists(characterFolder.resolve("alpha.json")));verify(manager,never()).savePlayer(any());wardrobe.verify(() -> WardrobeService.refreshActiveAsync(player));
         pending(row("beta",payload()));CharacterIngestService.pullAsync(plugin);runWorkers();assertEquals(true,result(0).get("ok"));assertTrue(Files.exists(characterFolder.resolve("beta.json")));
