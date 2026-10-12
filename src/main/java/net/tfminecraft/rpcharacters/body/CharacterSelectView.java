@@ -248,7 +248,7 @@ public final class CharacterSelectView {
 		} else {
 			reason = session.actions.blockReason(selected);
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
-			body.add(text(characterCard(player.getUniqueId(), selected, reason)));
+			body.add(text(characterCard(selected, reason)));
 		}
 
 		List<ActionButton> buttons = new ArrayList<>();
@@ -506,7 +506,7 @@ public final class CharacterSelectView {
 	}
 
 	/** The card keeps to who the character is; the Play tooltip carries the rest. */
-	static Component characterCard(UUID owner, RPCharacter character, String blockReason) {
+	static Component characterCard(RPCharacter character, String blockReason) {
 		TextComponent.Builder card = Component.text()
 				.append(Component.text(name(character), PALE, TextDecoration.BOLD));
 		line(card, joined(race(character), className(character), age(character)), TEAL);

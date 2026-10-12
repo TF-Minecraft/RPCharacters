@@ -804,9 +804,9 @@ class CharacterSelectViewTest {
 		when(newer.getDiedAt()).thenReturn(Instant.parse("2026-06-01T00:00:00Z"));
 		RPCharacter missing = character("m", "Missing", Status.MISSING);
 		assertEquals(List.of(recent, unnamed, alpha, beta, newer, older, missing), CharacterSelectView.cards(data));
-		assertEquals("Unnamed", text(CharacterSelectView.characterCard(OWNER, unnamed, null)));
+		assertEquals("Unnamed", text(CharacterSelectView.characterCard(unnamed, null)));
 		when(unnamed.getName()).thenReturn(" ");
-		assertTrue(text(CharacterSelectView.characterCard(OWNER, unnamed, null)).startsWith("Unnamed"));
+		assertTrue(text(CharacterSelectView.characterCard(unnamed, null)).startsWith("Unnamed"));
 		assertEquals(List.of(), CharacterSelectView.page(List.of(), 3));
 	}
 
@@ -827,13 +827,24 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void lastPlayedRoundsUnderAnHourAndTheCardOmitsAnEmptyThirdLine() {
+		RPCharacter c = character("c", "Cora", Status.ALIVE);
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
+		when(c.getLastPlayedAt()).thenReturn(Instant.now().minusSeconds(3590));
+		assertEquals("Cora\nLast played <1h ago", text(CharacterSelectView.characterCard(c, null)));
+		when(c.getLastPlayedAt()).thenReturn(Instant.now().minusSeconds(3600));
+		String hour = text(CharacterSelectView.characterCard(c, null));
+		assertTrue(hour.startsWith("Cora\nLast played ") && hour.endsWith(" ago") && !hour.contains("<1h"), hour);
+	}
+
+	@Test
 	void cardsSkipBirthdaysThatCannotBeRead() {
 		RPCharacter c = character("c", "Cora", Status.ALIVE);
 		when(c.getBirthday()).thenReturn(" ");
-		assertEquals("Cora", text(CharacterSelectView.characterCard(OWNER, c, null)));
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
 		assertEquals("Played 0d 0h 0m", CharacterSelectView.details(OWNER, c));
 		when(c.getBirthday()).thenReturn("not a date");
-		assertEquals("Cora", text(CharacterSelectView.characterCard(OWNER, c, null)));
+		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));
 		assertEquals("Played 0d 0h 0m", CharacterSelectView.details(OWNER, c));
 	}
 
@@ -939,7 +950,7 @@ class CharacterSelectViewTest {
         CharacterSelectView.guilds=id -> id.equals(first) ? "Ironhand" : "Rivals";
         assertEquals("Ironhand",CharacterSelectView.guild(a));
         assertEquals("Rivals",CharacterSelectView.guild(b));
-        assertFalse(text(CharacterSelectView.characterCard(OWNER,b,null)).contains("Ironhand"));
+        assertFalse(text(CharacterSelectView.characterCard(b,null)).contains("Ironhand"));
     }
 
 	/** Captures dialogs built through Paper's static builders. */
