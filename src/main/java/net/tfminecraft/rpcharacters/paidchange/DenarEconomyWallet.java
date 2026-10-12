@@ -20,6 +20,7 @@ public final class DenarEconomyWallet implements DenarWallet {
 	private static final Logger LOG = Logger.getLogger("RPCharacters");
 
 	private Plugin boundTo;
+    private Plugin failedToBind;
 	private Method ready;
 	private Method pouch;
 	private Method bank;
@@ -111,6 +112,7 @@ public final class DenarEconomyWallet implements DenarWallet {
 		if (plugin == boundTo) {
 			return true;
 		}
+        if (plugin == failedToBind) return false;
 		try {
 			Class<?> denars = Class.forName("net.tfminecraft.denareconomy.api.Denars", true,
 					plugin.getClass().getClassLoader());
@@ -126,8 +128,10 @@ public final class DenarEconomyWallet implements DenarWallet {
 			transfer = api[4];
 			status = api[5];
 			boundTo = plugin;
+            failedToBind = null;
 			return true;
 		} catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            failedToBind = plugin;
 			LOG.log(Level.WARNING, "[RPCharacters] DenarEconomy has no Denars ledger API; paid changes are off", e);
 			return false;
 		}

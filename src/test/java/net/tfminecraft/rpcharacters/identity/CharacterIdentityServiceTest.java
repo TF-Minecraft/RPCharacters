@@ -262,6 +262,8 @@ class CharacterIdentityServiceTest {
         });
         UUID offline = UUID.randomUUID();
         RPCharacter character = character("Saved off thread", false);
+        UUID capturedDeath = UUID.randomUUID();
+        character.setDeathRecord(capturedDeath, null);
         UUID id = UUID.fromString(character.getId());
         try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
@@ -277,8 +279,10 @@ class CharacterIdentityServiceTest {
         assertTrue(service.info(id).isEmpty());
         // The queued update keeps what was saved, not later edits to the live character.
         character.setName("Renamed after the save");
+        character.setDeathRecord(UUID.randomUUID(), null);
         queued.getFirst().run();
         assertEquals("Saved off thread", service.info(id).orElseThrow().name());
+        assertEquals(capturedDeath, service.deathId(id).orElseThrow());
         queued.getLast().run();
         assertTrue(service.info(id).isEmpty());
     }

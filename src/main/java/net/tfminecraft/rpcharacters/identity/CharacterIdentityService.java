@@ -139,7 +139,8 @@ public final class CharacterIdentityService implements CharacterIdentity {
             return;
         }
         boolean active = Boolean.TRUE.equals(character.isActive());
-        onMainThread(directory -> directory.upsert(owner, info, active));
+        UUID deathId = character.getDeathId();
+        onMainThread(directory -> directory.upsert(owner, info, active, deathId));
     }
 
     public static void removed(UUID owner, String characterId) {

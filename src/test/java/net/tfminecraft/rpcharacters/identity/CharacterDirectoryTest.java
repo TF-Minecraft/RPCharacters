@@ -400,7 +400,11 @@ class CharacterDirectoryTest {
 		save(owner,second+".json",json(second,"Legacy","DEAD",""));
 		CharacterDirectory directory=load();
 		assertEquals(death,directory.deathId(id).orElseThrow());
+        directory.remove(other, id.toString());
+        assertEquals(death, directory.deathId(id).orElseThrow());
 		UUID legacy=directory.deathId(second).orElseThrow();
+        directory.upsert(owner, directory.info(second).orElseThrow(), false);
+        assertEquals(legacy, directory.deathId(second).orElseThrow());
 		assertEquals(legacy,load().deathId(second).orElseThrow());
 		RPCharacter old=live(second); directory.upsert(owner,old);
 		assertEquals(legacy,directory.deathId(second).orElseThrow());

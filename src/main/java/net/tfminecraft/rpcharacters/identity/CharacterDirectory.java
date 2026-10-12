@@ -105,17 +105,21 @@ public final class CharacterDirectory {
 			quarantine(ownerId, "Invalid live character: " + error.getMessage());
 			return;
 		}
-		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()));
-		rememberDeath(info, character.getDeathId());
+		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()), character.getDeathId());
 	}
 
 	/** Updates from a snapshot taken earlier, such as when a save finished off the main thread. */
 	public void upsert(UUID ownerId, CharacterInfo info, boolean active) {
+        upsert(ownerId, info, active, null);
+    }
+
+    public void upsert(UUID ownerId, CharacterInfo info, boolean active, UUID deathId) {
 		Objects.requireNonNull(ownerId, "ownerId");
 		UUID id = info.ref().characterId();
 		claim(ownerId, id);
 		accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
 		flag(info.ref(), active);
+        rememberDeath(info, deathId);
 	}
 
 	public void remove(UUID ownerId, String characterId) {
@@ -125,7 +129,7 @@ public final class CharacterDirectory {
 			Map<UUID, CharacterInfo> characters = accounts.get(ownerId);
 			if (characters != null) characters.remove(id);
 			flaggedActive.remove(new CharacterRef(ownerId, id));
-			deaths.remove(id);
+			if (ownerId.equals(owners.get(id))) deaths.remove(id);
 			if (!unavailable.contains(ownerId)) owners.remove(id, ownerId);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid removed character ID: " + error.getMessage());
