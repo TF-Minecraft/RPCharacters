@@ -71,12 +71,19 @@ class CharacterSelectionGuardTest {
     }
 
     @Test void selectionLocksPositionAndTeleportButAllowsLookingAroundAndTheAuthoritativeRestoreTeleport() {
-        PlayerMoveEvent move = mock(PlayerMoveEvent.class); when(move.getPlayer()).thenReturn(player); when(move.getFrom()).thenReturn(room);
-        when(move.hasChangedPosition()).thenReturn(true); guard.move(move); verify(move, never()).setTo(any());
-        when(bodies.isSelecting(player)).thenReturn(true); when(move.hasChangedPosition()).thenReturn(false);
-        guard.move(move); verify(move, never()).setTo(any());
-        when(move.hasChangedPosition()).thenReturn(true); guard.move(move); verify(move).setTo(room);
-        when(bodies.isApplying(player)).thenReturn(true); clearInvocations(move); guard.move(move); verify(move, never()).setTo(any());
+        Location destination = room.clone().add(.2, 0, 0);
+        PlayerMoveEvent move = new PlayerMoveEvent(player, room, destination);
+        guard.move(move); assertFalse(move.isCancelled());
+        when(bodies.isSelecting(player)).thenReturn(true);
+        Location looking = room.clone(); looking.setYaw(90);
+        PlayerMoveEvent look = new PlayerMoveEvent(player, room, looking);
+        guard.move(look); assertFalse(look.isCancelled()); assertEquals(looking, look.getTo());
+        guard.move(move); assertTrue(move.isCancelled());
+        // Cancellation corrects directly; changing the destination triggers our blocked teleport handler.
+        assertEquals(destination, move.getTo());
+        when(bodies.isApplying(player)).thenReturn(true);
+        PlayerMoveEvent restore = new PlayerMoveEvent(player, room, destination);
+        guard.move(restore); assertFalse(restore.isCancelled());
         PlayerTeleportEvent teleport = mock(PlayerTeleportEvent.class); when(teleport.getPlayer()).thenReturn(player);
         guard.teleport(teleport); verify(teleport, never()).setCancelled(anyBoolean());
         when(bodies.isApplying(player)).thenReturn(false); guard.teleport(teleport); verify(teleport).setCancelled(true);

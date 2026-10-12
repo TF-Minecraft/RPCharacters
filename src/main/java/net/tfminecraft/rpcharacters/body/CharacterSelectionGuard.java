@@ -66,7 +66,8 @@ final class CharacterSelectionGuard implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void move(PlayerMoveEvent event) {
         if (!bodies.isSelecting(event.getPlayer()) || bodies.isApplying(event.getPlayer())) return;
-        if (event.hasChangedPosition()) event.setTo(event.getFrom());
+        // Cancellation corrects directly; setTo would trigger our blocked teleport handler.
+        if (event.hasChangedPosition()) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

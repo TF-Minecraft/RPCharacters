@@ -40,6 +40,8 @@ final class CharacterSelectionWorld {
         world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
         world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+        // Every waiting player shares one platform; Paper's collision limit is set per world in server config.
+        world.setGameRule(GameRule.MAX_ENTITY_CRAMMING, 0);
         world.setTime(6000);
         for (int x = -4; x <= 4; x++) {
             for (int z = -4; z <= 4; z++) world.getBlockAt(x, 63, z).setType(Material.SMOOTH_QUARTZ, false);

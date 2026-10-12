@@ -544,19 +544,42 @@ class CharacterBodiesTest {
     }
     @Test void permanentDeathCannotPublishSelectionBeforeItsRoomTeleportSucceeds() throws Exception {
         play(); bodies.markDead(account,a); when(a.getStatus()).thenReturn(Status.DEAD); a.setActiveState(false);
-        actions=null; when(player.teleport(room)).thenReturn(false);
+        actions=null; when(player.teleport(room)).thenReturn(false); clearInvocations(other);
         bodies.finishDeath(player); queued.removeFirst().run();
         assertNull(actions); assertTrue(bodies.isSelecting(player)); assertFalse(bodies.hasLiveBody(player));
         assertEquals(new BodyTag.Room(first),tag); assertTrue(bodies.blockReason(account,b).contains("loading"));
+        verify(other).hidePlayer(plugin,player); verify(other,never()).showPlayer(any(),any());
         verify(store).write(owner,first,1,"permadeath",snapshot); verify(player,never()).kickPlayer(anyString());
         when(player.teleport(room)).thenReturn(true); drain(); assertNotNull(actions); assertNull(bodies.blockReason(account,b));
         verify(b,never()).tryActivate();
+    }
+    @SuppressWarnings("unchecked") void selectingPeer() throws Exception {
+        var field=CharacterBodies.class.getDeclaredField("selecting"); field.setAccessible(true);
+        ((Set<UUID>) field.get(bodies)).add(other.getUniqueId());
+    }
+    @Test void selectingPeersStayMutuallyHiddenFromJoinThroughPermanentDeathRoomEntry() throws Exception {
+        selectingPeer(); play();
+        verify(other).hidePlayer(plugin,player); verify(player).hidePlayer(plugin,other);
+        verify(other,never()).showPlayer(plugin,player); verify(player,never()).showPlayer(plugin,other);
+        bodies.markDead(account,a); when(a.getStatus()).thenReturn(Status.DEAD); a.setActiveState(false); clearInvocations(player,other);
+        bodies.finishDeath(player);
+        // The guard sets the room respawn and calls finishDeath before vanilla moves the entity there.
+        verify(other).hidePlayer(plugin,player); verify(player).hidePlayer(plugin,other);
+        assertEquals(1,queued.size()); verify(store,never()).write(any(),any(),anyLong(),eq("permadeath"),any());
+        drain(); verify(store).write(owner,first,1,"permadeath",snapshot); verify(player).teleport(room);
+        verify(other,never()).showPlayer(any(),any()); verify(player,never()).showPlayer(any(),any());
+    }
+    @Test void playablePeersAreRevealedButSimultaneousDeathsAreHiddenBeforeTheRoomRespawn() throws Exception {
+        play(); verify(other).showPlayer(plugin,player); verify(player).showPlayer(plugin,other);
+        bodies.markDead(account,a); when(a.getStatus()).thenReturn(Status.DEAD); a.setActiveState(false); clearInvocations(player,other);
+        bodies.finishDeath(player); verify(other).hidePlayer(plugin,player); verify(player).hidePlayer(plugin,other); assertFalse(queued.isEmpty());
     }
     @Test void failedDeathProgressSaveRefusesPermanentDeath() throws Exception {
         play();doThrow(new IOException("progress")).when(progress).save(account,a);assertFalse(bodies.prepareDeath(account,a));verify(player).kickPlayer(contains("needs attention"));
     }
     @Test void staleDeathCallbackDoesNotActOnReconnectedAccount() throws Exception {
-        play();bodies.markDead(account,a);bodies.finishDeath(player);var reconnected=new PlayerData(player);players.when(()->PlayerManager.get(player)).thenReturn(reconnected);drain();verify(store,never()).write(any(),any(),anyLong(),eq("permadeath"),any());
+        play();bodies.markDead(account,a);clearInvocations(player,other);bodies.finishDeath(player);var reconnected=new PlayerData(player);players.when(()->PlayerManager.get(player)).thenReturn(reconnected);drain();verify(store,never()).write(any(),any(),anyLong(),eq("permadeath"),any());
+        verify(other).hidePlayer(plugin,player);verify(other,never()).showPlayer(plugin,player);verify(player,never()).teleport(room);
     }
     @Test void rosterChangesPrepareNewRecordsOnlyWhileSelecting() throws Exception {
         bodies.rosterChanged(account);verify(progress,never()).ensureFresh(any(),any());ready();bodies.rosterChanged(account);drain();verify(progress).ensureFresh(account,a);verify(progress).ensureFresh(account,b);

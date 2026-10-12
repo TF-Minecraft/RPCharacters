@@ -64,6 +64,7 @@ class CharacterSelectionWorldTest {
             verify(world).setGameRule(GameRule.DO_MOB_SPAWNING, false);
             verify(world).setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
             verify(world).setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+            verify(world).setGameRule(GameRule.MAX_ENTITY_CRAMMING, 0);
             verify(world).setTime(6000); verify(world).setSpawnLocation(0, 64, 0); verify(world).save();
             verify(block, times(81)).setType(Material.SMOOTH_QUARTZ, false);
             for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) verify(world).getBlockAt(x, 63, z);
@@ -81,6 +82,7 @@ class CharacterSelectionWorldTest {
             verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
             data.set(marker, PersistentDataType.BYTE, (byte) 0);
             assertThrows(IOException.class, () -> CharacterSelectionWorld.create("character_selection"));
+            verify(world, never()).setGameRule(any(), any());
             data.set(marker, PersistentDataType.BYTE, (byte) 1);
             assertEquals(world, CharacterSelectionWorld.create("character_selection").getWorld());
             assertTrue(creators.constructed().isEmpty());

@@ -535,13 +535,12 @@ public final class CharacterBodies {
         PlayerData account = PlayerManager.get(player);
         if (account == null || !awaitingDeadBody(player)) return;
         selecting.add(player.getUniqueId());
+        // Runs inside PlayerRespawnEvent, so the room entity never spawns visible to other selecting players.
+        hide(player);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline() || PlayerManager.get(player) != account || !awaitingDeadBody(player)) return;
             stow(account, "permadeath");
-            if (!failed.contains(account.getUniqueId())) {
-                hide(player);
-                enterAfterRecovery(account);
-            }
+            if (!failed.contains(account.getUniqueId())) enterAfterRecovery(account);
         }, 2L);
     }
 
