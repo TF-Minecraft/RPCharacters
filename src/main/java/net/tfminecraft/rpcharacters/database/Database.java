@@ -655,8 +655,10 @@ public class Database {
 	    Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 	    if (durable) {
 	      // Fails closed: the caller must not act on a save whose rename may not survive a power loss.
-	      try (FileChannel directory = FileChannel.open(target.getParent(), StandardOpenOption.READ)) {
-	        sync.force(directory);
+	      for (Path parent = target.getParent(); parent != null; parent = parent.getParent()) {
+	        try (FileChannel directory = FileChannel.open(parent, StandardOpenOption.READ)) {
+	          sync.force(directory);
+	        }
 	      }
 	    }
 

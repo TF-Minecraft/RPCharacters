@@ -47,12 +47,22 @@ class DurableCharacterSaveTest extends DatabaseFixture {
             }
         };
         assertEquals(Payments.Taken.PAID, charge(character).status());
-        assertEquals(List.of("force", "force", "withdraw, on disk: true"), events);
+        assertTrue(events.size() > 3, "New owner directories must be published before the debit");
+        assertEquals("withdraw, on disk: true", events.getLast());
+        assertTrue(events.subList(0, events.size() - 1).stream().allMatch("force"::equals));
     }
 
     @Test void anIntentWhoseDirectoryCannotBeForcedIsNeverDebited() {
         RPCharacter character = character(UUID.randomUUID().toString(), false);
         Database.sync = channel -> { events.add("force"); if (events.size() == 2) throw new IOException("directory sync failed"); };
+        wallet.set(Account.POUCH, 5_000);
+        assertEquals(Payments.Taken.UNAVAILABLE, charge(character).status());
+        assertTrue(wallet.attempts.isEmpty()); assertEquals(5_000, wallet.get(Account.POUCH));
+    }
+
+    @Test void anIntentWhoseOwnerDirectoryEntryCannotBeForcedIsNeverDebited() {
+        RPCharacter character = character(UUID.randomUUID().toString(), false);
+        Database.sync = channel -> { events.add("force"); if (events.size() == 3) throw new IOException("owner directory publication failed"); };
         wallet.set(Account.POUCH, 5_000);
         assertEquals(Payments.Taken.UNAVAILABLE, charge(character).status());
         assertTrue(wallet.attempts.isEmpty()); assertEquals(5_000, wallet.get(Account.POUCH));
