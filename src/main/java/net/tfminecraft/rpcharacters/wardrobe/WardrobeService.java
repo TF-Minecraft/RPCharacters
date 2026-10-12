@@ -175,6 +175,11 @@ public final class WardrobeService {
 		if (player == null || !player.isOnline()) {
 			return;
 		}
+		// Selection dresses everyone as Steve; late helmet or mask callbacks must not undo it.
+		var bodies = RPCharacters.getCharacterBodies();
+		if (bodies != null && bodies.isSelecting(player)) {
+			return;
+		}
 		WardrobeCache.captureAccountSkinIfNeeded(player);
 		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		if (snapshot == null) {

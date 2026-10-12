@@ -34,6 +34,15 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
 import net.tfminecraft.rpcharacters.professions.ProfessionIntegrator;
+import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
+import net.tfminecraft.rpcharacters.pvp.Duels;
+import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
+import net.tfminecraft.rpcharacters.lifecycle.CharacterSelectionRequestEvent;
+import net.tfminecraft.rpcharacters.wardrobe.SkinApplyHelper;
+import net.tfminecraft.rpcharacters.wardrobe.SkinTextures;
+import net.tfminecraft.rpcharacters.wardrobe.WardrobeCache;
+import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
+import net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason;
 import net.tfminecraft.tlibs.character.Characters;
 
 /** Exercises the join/select/stow transaction with persistence and server boundaries independently tested. */
@@ -65,6 +74,14 @@ class CharacterBodiesTest {
     MockedStatic<Bukkit> bukkit;
     MockedStatic<RPCharacters> rpc;
     MockedStatic<BodyRespawn> respawns;
+    MockedStatic<SkinApplyHelper> skins;
+    MockedStatic<WardrobeCache> wardrobes;
+    MockedStatic<WardrobeService> wardrobeService;
+    MockedStatic<net.tfminecraft.rpcharacters.evilrp.EvilRpService> evil;
+    MockedStatic<Duels> duels;
+    MockedStatic<ArmourDonning> donning;
+    Runnable timer;
+    org.bukkit.scheduler.BukkitTask timerTask;
     MockedConstruction<BodyStore> stores;
     MockedConstruction<BodyLeaseStore> leaseStores;
     MockedConstruction<CharacterBodyMigration> migrations;
@@ -105,6 +122,8 @@ class CharacterBodiesTest {
         var scheduler=mock(BukkitScheduler.class); bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
         doAnswer(c->{queued.add(c.getArgument(1)); return null;}).when(scheduler).runTask(eq(plugin),any(Runnable.class));
         doAnswer(c->{queued.add(c.getArgument(1)); return null;}).when(scheduler).runTaskLater(eq(plugin),any(Runnable.class),anyLong());
+        timer=null; timerTask=mock(org.bukkit.scheduler.BukkitTask.class);
+        doAnswer(c->{timer=c.getArgument(1); return timerTask;}).when(scheduler).runTaskTimer(eq(plugin),any(Runnable.class),eq(20L),eq(20L));
         var worlds=mockStatic(CharacterSelectionWorld.class); mocks.add(worlds);
         worlds.when(()->CharacterSelectionWorld.create(anyString())).thenReturn(room);
         var dbs=mockConstruction(Database.class,(db,c)-> {when(db.loadPlayerData(owner)).thenReturn(account);when(db.trySavePlayer(account)).thenReturn(true);});mocks.add(dbs);
@@ -116,7 +135,11 @@ class CharacterBodiesTest {
         players=mockStatic(PlayerManager.class);mocks.add(players);players.when(()->PlayerManager.get(player)).thenReturn(account);players.when(PlayerManager::getOnlineData).thenReturn(List.of(account));
         rpc=mockStatic(RPCharacters.class);mocks.add(rpc);manager=mock(PlayerManager.class);transitions=mock(CharacterTransitions.class);
         rpc.when(RPCharacters::getPlayerManager).thenReturn(manager);rpc.when(RPCharacters::getCharacterTransitions).thenReturn(transitions);
-        for(Class<?> type:List.of(ProfessionIntegrator.class,MmoInventorySlots.class,net.tfminecraft.rpcharacters.wardrobe.WardrobeService.class,net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener.class,net.tfminecraft.rpcharacters.evilrp.EvilRpService.class))mocks.add(mockStatic(type));
+        skins=mockStatic(SkinApplyHelper.class);mocks.add(skins);wardrobes=mockStatic(WardrobeCache.class);mocks.add(wardrobes);
+        duels=mockStatic(Duels.class);mocks.add(duels);donning=mockStatic(ArmourDonning.class);mocks.add(donning);
+        wardrobeService=mockStatic(WardrobeService.class);mocks.add(wardrobeService);
+        for(Class<?> type:List.of(ProfessionIntegrator.class,MmoInventorySlots.class,net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener.class))mocks.add(mockStatic(type));
+        evil=mockStatic(net.tfminecraft.rpcharacters.evilrp.EvilRpService.class);mocks.add(evil);
         groups=mockStatic(PermissionGroupService.class);mocks.add(groups);
         sessions=mockStatic(Characters.class);mocks.add(sessions);
         tags=mockStatic(BodyTag.class);mocks.add(tags);tag=new BodyTag.Untagged();tags.when(()->BodyTag.read(player)).thenAnswer(c->tag);
@@ -585,11 +608,122 @@ class CharacterBodiesTest {
         bodies.rosterChanged(account);verify(progress,never()).ensureFresh(any(),any());ready();bodies.rosterChanged(account);drain();verify(progress).ensureFresh(account,a);verify(progress).ensureFresh(account,b);
         doThrow(new IOException("new record")).when(progress).ensureFresh(account,a);bodies.rosterChanged(account);verify(player).kickPlayer(contains("needs attention"));
     }
-    @Test void switchRequestsRequireARealLogoutAndShutdownStowsThenClosesProgress() throws Exception {
-        play();bodies.requestSwitch(account,a);verify(player,never()).kickPlayer(anyString());bodies.requestSwitch(account,b);verify(player).kickPlayer(contains("Reconnect"));
+    @Test void switchRequestsStartTheReturnToSelectionAndShutdownStowsThenClosesProgress() throws Exception {
+        play();bodies.requestSwitch(account,a);assertNull(timer);bodies.requestSwitch(account,b);assertNotNull(timer);verify(player,never()).kickPlayer(anyString());
         view.when(CharacterSelectView::refreshAll).thenAnswer(call->{verify(progress).save(account,a);return null;});
         bodies.checkpoint();view.verify(CharacterSelectView::refreshAll);verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
     }
+    void leaveRunsOutgoing() {
+        doAnswer(c->{((Runnable)c.getArgument(2)).run();return null;}).when(transitions).leave(eq(account),eq(Reason.SWITCH),any());
+    }
+    void countdown(int seconds) {for(int i=0;i<seconds;i++)timer.run();}
+
+    @Test void selectFromAPlayingCharacterStaysConnectedAndEntersTheRoomAsSteveAfterStandingStill() throws Exception {
+        var accountSkin=new SkinTextures("account","signed");
+        wardrobes.when(()->WardrobeCache.getAccountSkin(player)).thenReturn(accountSkin);
+        play(); leaveRunsOutgoing(); clearInvocations(player,other,progress); skins.clearInvocations(); actions=null;
+        bodies.requestSelection(player); verify(player).sendMessage(contains("5 seconds"));
+        net.tfminecraft.rpcharacters.pvp.PvpStartSessions.begin(List.of(owner),System.currentTimeMillis()-120_000L,60_000L);
+        countdown(4); verify(transitions,never()).leave(any(),any(),any()); verify(player,times(4)).sendActionBar(any(net.kyori.adventure.text.Component.class));
+        verify(player).sendActionBar(net.kyori.adventure.text.Component.text("Character selection in 1..."));
+        timer.run(); verify(timerTask).cancel();
+        InOrder order=inOrder(transitions,store,player);
+        order.verify(transitions).leave(eq(account),eq(Reason.SWITCH),any());
+        order.verify(store).write(owner,first,1,"selection",snapshot);
+        order.verify(player).teleport(room);
+        duels.verify(()->Duels.forget(player)); donning.verify(()->ArmourDonning.cancel(player));
+        verify(other).hidePlayer(plugin,player); verify(player,never()).kickPlayer(anyString());
+        assertFalse(bodies.hasLiveBody(player)); assertTrue(bodies.isSelecting(player)); assertEquals(new BodyTag.Room(first),tag);
+        verify(progress).save(account,a); verify(progress).prepare(account); assertNotNull(actions);
+        skins.verify(()->SkinApplyHelper.apply(player,SelectionSkin.STEVE));
+        // Coming back to the same character restores the account skin straight away and is not a switch.
+        actions.play(a); drain(); assertTrue(bodies.hasLiveBody(player));
+        skins.verify(()->SkinApplyHelper.apply(player,accountSkin));
+        wardrobes.when(()->WardrobeCache.get(player)).thenReturn(mock(net.tfminecraft.rpcharacters.wardrobe.WardrobeSnapshot.class));
+        bodies.requestSelection(player);countdown(5);actions.play(a);drain();wardrobeService.verify(()->WardrobeService.applyFor(player));
+        assertNull(account.getLastCharacterSwitchAtMs());
+    }
+
+    @Test void roomSkinNeedsAKnownAccountSkinToRestore() throws Exception {
+        ready(); skins.verify(()->SkinApplyHelper.apply(any(Player.class),any(SkinTextures.class)),never());
+        wardrobes.verify(()->WardrobeCache.captureAccountSkinIfNeeded(player));
+    }
+
+    @Test void movingOrBeingHurtKeepsTheCharacterAndOnlyOneCountdownRuns() throws Exception {
+        play(); leaveRunsOutgoing();
+        bodies.requestSelection(player); bodies.requestSelection(player); verify(player).sendMessage(contains("already returning"));
+        when(player.getLocation()).thenReturn(new Location(world,15.3,70,25)); timer.run();
+        verify(player).sendMessage(contains("You moved")); verify(timerTask).cancel();
+        when(player.getLocation()).thenReturn(spawn); var oldTimer=timer; oldTimer.run(); verify(transitions,never()).leave(any(),any(),any());
+        when(player.getLocation()).thenReturn(new Location(selection,15,70,25)); bodies.requestSelection(player);
+        when(player.getLocation()).thenReturn(spawn); timer.run(); verify(player,times(2)).sendMessage(contains("You moved"));
+        bodies.requestSelection(player); bodies.interruptReturn(player,"You were hurt."); bodies.interruptReturn(player,"twice");
+        verify(player).sendMessage("You were hurt."); verify(player,never()).sendMessage("twice");
+        countdown(5); verify(transitions,never()).leave(any(),any(),any()); assertTrue(bodies.hasLiveBody(player));
+    }
+
+    @Test void countdownEndsQuietlyAfterQuitOrAnotherConnection() throws Exception {
+        play(); bodies.requestSelection(player); bodies.quit(player); verify(timerTask).cancel(); timer.run();
+        var reconnected=new PlayerData(player); play(); bodies.requestSelection(player); players.when(()->PlayerManager.get(player)).thenReturn(reconnected);
+        countdown(5); verify(transitions,never()).leave(any(),any(),any());
+        players.when(()->PlayerManager.get(player)).thenReturn(account); bodies.requestSelection(player); when(player.isOnline()).thenReturn(false); countdown(5);
+        verify(transitions,never()).leave(any(),any(),any()); verify(player,never()).sendMessage(contains("You moved"));
+        players.when(()->PlayerManager.get(player)).thenReturn(null); bodies.requestSelection(player); verify(transitions,never()).leave(any(),any(),any());
+    }
+
+    @Test void selectWithoutALiveBodyReopensTheSelector() throws Exception {
+        ready(); var opened=actions; actions=null; bodies.requestSelection(player); assertNotNull(actions); assertNotNull(opened); assertNull(timer);
+    }
+
+    @Test void returnIsRefusedWhileDeadMountedFallingEditingDuellingKnockedOutOrHeldByAnotherPlugin() throws Exception {
+        play(); var events=mock(PluginManager.class); bukkit.when(Bukkit::getPluginManager).thenReturn(events);
+        when(player.isDead()).thenReturn(true); bodies.requestSelection(player); verify(player).sendMessage(contains("while dead"));
+        when(player.isDead()).thenReturn(false); when(player.isInsideVehicle()).thenReturn(true); bodies.requestSelection(player); verify(player).sendMessage(contains("Dismount"));
+        when(player.isInsideVehicle()).thenReturn(false); when(player.getFallDistance()).thenReturn(2f); bodies.requestSelection(player); verify(player).sendMessage(contains("Land"));
+        when(player.getFallDistance()).thenReturn(0f); CreationManager.activeCreators.put(player,mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class));
+        bodies.requestSelection(player); verify(player).sendMessage(contains("editing")); CreationManager.activeCreators.remove(player);
+        duels.when(()->Duels.isDuelling(owner)).thenReturn(true); bodies.requestSelection(player); verify(player).sendMessage(contains("duel"));
+        duels.when(()->Duels.isDuelling(owner)).thenReturn(false); var knockouts=mock(PvpKnockoutManager.class); rpc.when(RPCharacters::getPvpKnockoutManager).thenReturn(knockouts);
+        when(knockouts.isDown(player)).thenReturn(true); bodies.requestSelection(player); verify(player).sendMessage(contains("knocked out"));
+        when(knockouts.isDown(player)).thenReturn(false);
+        net.tfminecraft.rpcharacters.pvp.PvpStartSessions.begin(List.of(owner),System.currentTimeMillis(),60_000L);
+        bodies.requestSelection(player); verify(player).sendMessage(contains("fight")); net.tfminecraft.rpcharacters.pvp.PvpStartSessions.end(owner);
+        net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption.set(p->p==player);
+        try { bodies.requestSelection(player); verify(player).sendMessage(contains("battle")); }
+        finally { net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption.set(null); }
+        evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenReturn(true);
+        bodies.requestSelection(player); verify(player).sendMessage(contains("roleplay"));
+        evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenReturn(false);
+        doAnswer(c->{((CharacterSelectionRequestEvent)c.getArgument(0)).deny("Finish the battle first.");return null;}).when(events).callEvent(any(CharacterSelectionRequestEvent.class));
+        bodies.requestSelection(player); verify(player).sendMessage("Finish the battle first."); assertNull(timer);
+        // A plugin can also refuse later in the countdown.
+        doNothing().when(events).callEvent(any()); bodies.requestSelection(player); assertNotNull(timer);
+        doAnswer(c->{((CharacterSelectionRequestEvent)c.getArgument(0)).deny("A raid just started.");return null;}).when(events).callEvent(any(CharacterSelectionRequestEvent.class));
+        timer.run(); verify(player).sendMessage("A raid just started."); verify(transitions,never()).leave(any(),any(),any());
+    }
+
+    @Test void returnRefusedWhileAlreadyRespawningOrApplying() throws Exception {
+        play(); bodies.markDead(account,a); bodies.requestSelection(player); verify(player).sendMessage(contains("while dead"));
+        bodies.quit(player); play();
+        var field=CharacterBodies.class.getDeclaredField("applying"); field.setAccessible(true);
+        @SuppressWarnings("unchecked") Set<UUID> applying=(Set<UUID>)field.get(bodies); applying.add(owner);
+        bodies.requestSelection(player); verify(player).sendMessage(contains("still loading"));
+    }
+
+    @Test void busyTransitionLeavesThePlayerPlaying() throws Exception {
+        play(); doThrow(new IllegalStateException("busy")).when(transitions).leave(eq(account),eq(Reason.SWITCH),any());
+        bodies.requestSelection(player); countdown(5);
+        verify(player).sendMessage(contains("busy")); assertTrue(bodies.hasLiveBody(player)); assertFalse(bodies.isSelecting(player));
+    }
+
+    @Test void failedOrMissingStowNeverEntersTheRoom() throws Exception {
+        play(); leaveRunsOutgoing(); clearInvocations(player); when(database.trySavePlayer(account)).thenReturn(false);
+        bodies.requestSelection(player); countdown(5); verify(player).kickPlayer(contains("needs attention")); verify(player,never()).teleport(room);
+        bodies.quit(player); when(database.trySavePlayer(account)).thenReturn(true); play(); clearInvocations(player);
+        doNothing().when(transitions).leave(eq(account),eq(Reason.SWITCH),any());
+        bodies.requestSelection(player); countdown(5); verify(player).kickPlayer(contains("needs attention")); verify(player,never()).teleport(room);
+    }
+
     @Test void configurationRejectsMissingWorldUnsafeKeysAndSharedSelectionWorld() {
         config.set("spawn-world","absent");assertThrows(IOException.class,()->new CharacterBodies(plugin,config));
         config.set("spawn-world","world");config.set("persistent-keys",List.of("rpcharacters:body"));assertThrows(IOException.class,()->new CharacterBodies(plugin,config));

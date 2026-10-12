@@ -16,10 +16,13 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 
+import net.kyori.adventure.text.Component;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.database.Database;
 import net.tfminecraft.rpcharacters.enums.Status;
+import net.tfminecraft.rpcharacters.lifecycle.CharacterSelectionRequestEvent;
 import net.tfminecraft.rpcharacters.managers.CreationManager;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -27,8 +30,17 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
 import net.tfminecraft.rpcharacters.professions.ProfessionIntegrator;
+import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
+import net.tfminecraft.rpcharacters.pvp.Duels;
+import net.tfminecraft.rpcharacters.pvp.PvpSituations;
+import net.tfminecraft.rpcharacters.pvp.PvpStartSessions;
+import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
+import net.tfminecraft.rpcharacters.wardrobe.SkinApplyHelper;
+import net.tfminecraft.rpcharacters.wardrobe.WardrobeCache;
+import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
+import net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason;
 
-/** Coordinates the single live body with stowed bodies. Selection never performs an in-world swap. */
+/** Coordinates the single live body with stowed bodies. Selection never swaps one live body for another. */
 public final class CharacterBodies {
     private final RPCharacters plugin;
     private final Database database;
@@ -51,6 +63,8 @@ public final class CharacterBodies {
     private final Set<UUID> applying = new HashSet<>();
     private final Map<UUID, Object> requests = new HashMap<>();
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
+    private final Map<UUID, Countdown> returning = new HashMap<>();
+    private final int returnSeconds;
 
     private static final class RoomEntry {
         final Player player;
@@ -60,6 +74,17 @@ public final class CharacterBodies {
         boolean entered;
         boolean notified;
         RoomEntry(Player player, PlayerData account) { this.player = player; this.account = account; }
+    }
+
+    /** A playing character standing still before returning to selection. */
+    private static final class Countdown {
+        final PlayerData account;
+        final Location start;
+        int remaining;
+        BukkitTask task;
+        Countdown(PlayerData account, Location start, int remaining) {
+            this.account = account; this.start = start; this.remaining = remaining;
+        }
     }
 
     private static final class PendingRespawn {
@@ -93,6 +118,7 @@ public final class CharacterBodies {
         room = CharacterSelectionWorld.create(roomName);
         progress = new CharacterProgressService(data.resolve("progress"));
         packs = new CharacterPackGate(plugin, config.getBoolean("require-resource-pack", false));
+        returnSeconds = Math.max(1, config.getInt("return-seconds", 5));
         Bukkit.getPluginManager().registerEvents(new CharacterSelectionGuard(this, plugin), plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::checkpoint, 6000L, 6000L);
     }
@@ -211,6 +237,7 @@ public final class CharacterBodies {
                 return;
             }
             enteringRoom.remove(owner, entry);
+            wearRoomSkin(player);
             if (deferredPrepare.remove(owner)) prepare(account);
         } catch (IOException | RuntimeException error) {
             fail(player, "entering character selection", error);
@@ -468,7 +495,8 @@ public final class CharacterBodies {
                 RPCharacters.getPlayerManager().releaseFreeze(player);
                 RPCharacters.getPlayerManager().reevaluateFreeze(player);
                 net.tfminecraft.rpcharacters.joinsafety.JoinUnstuckListener.unstick(player);
-                net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(player);
+                takeOffRoomSkin(player);
+                WardrobeService.refreshActiveAsync(player);
                 var session = net.tfminecraft.tlibs.character.Characters.currentSession(player).orElse(null);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (session != null && net.tfminecraft.tlibs.character.Characters.isCurrent(session)) {
@@ -495,10 +523,131 @@ public final class CharacterBodies {
         if (player == null || !player.isOnline()) return;
         if (hasLiveBody(player)) {
             if (account.getActiveCharacter() == next) return;
-            player.kickPlayer("Reconnect to choose your character. Switching follows the normal logout rules.");
+            requestSelection(player);
         } else {
             rosterChanged(account);
         }
+    }
+
+    /** Opens selection, or starts the stand-still countdown back to it from a playing character. */
+    public void requestSelection(Player player) {
+        PlayerData account = PlayerManager.get(player);
+        if (account == null) return;
+        if (!hasLiveBody(player)) {
+            show(player);
+            return;
+        }
+        UUID owner = account.getUniqueId();
+        if (returning.containsKey(owner)) {
+            player.sendMessage("You are already returning to character selection.");
+            return;
+        }
+        String blocked = returnBlockReason(player, account);
+        if (blocked != null) {
+            player.sendMessage(blocked);
+            return;
+        }
+        Countdown countdown = new Countdown(account, player.getLocation(), returnSeconds);
+        returning.put(owner, countdown);
+        player.sendMessage("Returning to character selection in " + returnSeconds + " seconds. Stand still.");
+        countdown.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(countdown), 20L, 20L);
+    }
+
+    /** Damage, like movement, keeps the player with their character. */
+    public void interruptReturn(Player player, String message) {
+        if (stopReturn(player.getUniqueId())) player.sendMessage(message);
+    }
+
+    private boolean stopReturn(UUID owner) {
+        Countdown countdown = returning.remove(owner);
+        if (countdown == null) return false;
+        if (countdown.task != null) countdown.task.cancel();
+        return true;
+    }
+
+    private void tick(Countdown countdown) {
+        PlayerData account = countdown.account;
+        Player player = account.getPlayer();
+        UUID owner = account.getUniqueId();
+        if (returning.get(owner) != countdown) return;
+        if (!player.isOnline() || PlayerManager.get(player) != account || !hasLiveBody(player)) {
+            stopReturn(owner);
+            return;
+        }
+        Location now = player.getLocation();
+        if (!now.getWorld().equals(countdown.start.getWorld()) || now.distanceSquared(countdown.start) > 0.04) {
+            interruptReturn(player, CharacterSelectionGuard.MOVED);
+            return;
+        }
+        String blocked = returnBlockReason(player, account);
+        if (blocked != null) {
+            interruptReturn(player, blocked);
+            return;
+        }
+        if (--countdown.remaining > 0) {
+            player.sendActionBar(Component.text("Character selection in " + countdown.remaining + "..."));
+            return;
+        }
+        stopReturn(owner);
+        returnToRoom(account);
+    }
+
+    private String returnBlockReason(Player player, PlayerData account) {
+        if (player.isDead() || awaitingDeadBody(player) || isRespawning(player)) return "You cannot change character while dead.";
+        if (isApplying(player)) return "Your character is still loading.";
+        if (player.isInsideVehicle()) return "Dismount before returning to character selection.";
+        if (player.getFallDistance() > 0) return "Land before returning to character selection.";
+        if (CreationManager.activeCreators.containsKey(player)) return "Finish or cancel character editing first.";
+        if (Duels.isDuelling(account.getUniqueId())) return "Finish your duel first.";
+        if (PvpSituations.involves(account.getUniqueId()) || PvpStartSessions.isActive(account.getUniqueId(), System.currentTimeMillis())) {
+            return "Finish your fight first.";
+        }
+        // Logging out of a started battle counts against the player's side; selection must not skip that.
+        if (PermadeathBattleExemption.isInStartedBattle(player)) return "You cannot leave a battle for character selection.";
+        var knockouts = RPCharacters.getPvpKnockoutManager();
+        if (knockouts != null && knockouts.isDown(player)) return "You cannot change character while knocked out.";
+        if (net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)) return "Your current roleplay situation must finish first.";
+        CharacterSelectionRequestEvent event = new CharacterSelectionRequestEvent(player);
+        Bukkit.getPluginManager().callEvent(event);
+        return event.isCancelled() ? event.getReason() : null;
+    }
+
+    /** Ends the session as a switch, then stows the body and enters the room as at login. */
+    private void returnToRoom(PlayerData account) {
+        Player player = account.getPlayer();
+        UUID owner = account.getUniqueId();
+        try {
+            RPCharacters.getCharacterTransitions().leave(account, Reason.SWITCH, () -> {
+                Duels.forget(player);
+                PvpStartSessions.end(owner);
+                ArmourDonning.cancel(player);
+                account.clearTempAlias();
+                selecting.add(owner);
+                hide(player);
+                stow(account, "selection");
+            });
+        } catch (IllegalStateException busy) {
+            player.sendMessage("Your character is busy. Try again in a moment.");
+            return;
+        }
+        if (failed.contains(owner)) return;
+        if (live.containsKey(owner)) {
+            fail(player, "stowing the outgoing character", new IOException("Live body was not stowed"));
+            return;
+        }
+        enterAfterRecovery(account);
+    }
+
+    /** Only once the account skin is known, so Play and portraits can still restore it. */
+    private void wearRoomSkin(Player player) {
+        WardrobeCache.captureAccountSkinIfNeeded(player);
+        if (WardrobeCache.getAccountSkin(player) != null) SkinApplyHelper.apply(player, SelectionSkin.STEVE);
+    }
+
+    /** The cached wardrobe or account skin goes on now, in case the wardrobe refresh cannot reach the site. */
+    private static void takeOffRoomSkin(Player player) {
+        if (WardrobeCache.get(player) != null) WardrobeService.applyFor(player);
+        else SkinApplyHelper.apply(player, WardrobeCache.getAccountSkin(player));
     }
 
     public void rosterChanged(PlayerData account) {
@@ -581,6 +730,7 @@ public final class CharacterBodies {
 
     public void quit(Player player) {
         UUID owner = player.getUniqueId();
+        stopReturn(owner);
         packs.quit(player);
         CharacterSelectView.close(player);
         RoomEntry entry = enteringRoom.get(owner);

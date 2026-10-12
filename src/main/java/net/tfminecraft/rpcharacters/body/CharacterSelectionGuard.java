@@ -11,6 +11,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -34,6 +35,7 @@ import net.tfminecraft.rpcharacters.managers.CreationManager;
 
 /** Selection has no playable body, even when a player dismisses a dialog or sends packets directly. */
 final class CharacterSelectionGuard implements Listener {
+    static final String MOVED = "You moved, so you stay with your character.";
     private final CharacterBodies bodies;
     private final Plugin plugin;
 
@@ -80,6 +82,26 @@ final class CharacterSelectionGuard implements Listener {
         if (event.getEntity() instanceof Player player && bodies.isSelecting(player)) event.setCancelled(true);
         if (event instanceof EntityDamageByEntityEvent attack && attack.getDamager() instanceof Player player
                 && bodies.isSelecting(player)) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void hurt(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player) bodies.interruptReturn(player, "You were hurt, so you stay with your character.");
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void moved(PlayerMoveEvent event) {
+        if (event.hasChangedPosition()) bodies.interruptReturn(event.getPlayer(), MOVED);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void teleported(PlayerTeleportEvent event) {
+        bodies.interruptReturn(event.getPlayer(), MOVED);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void mounted(EntityMountEvent event) {
+        if (event.getEntity() instanceof Player player) bodies.interruptReturn(player, MOVED);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

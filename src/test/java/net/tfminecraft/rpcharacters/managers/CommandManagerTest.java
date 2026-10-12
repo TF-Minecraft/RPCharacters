@@ -110,16 +110,12 @@ class CommandManagerTest {
         PlayerClass value = mock(PlayerClass.class); when(value.getName()).thenReturn("Warrior"); when(manager.get(id)).thenReturn(value); return value;
     }
 
-    @Test void selectReopensTheRoomAndRequiresReconnectFromALiveBody() {
+    @Test void selectAsksCharacterBodiesWithoutDisconnecting() {
         var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
         globals.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
-        assertTrue(run("select"));
-        verify(bodies).show(player);
+        assertTrue(run("select")); assertTrue(run("SELECT"));
+        verify(bodies, times(2)).requestSelection(player);
         assertTrue(player.isOnline());
-        when(bodies.hasLiveBody(player)).thenReturn(true);
-        assertTrue(run("SELECT"));
-        assertFalse(player.isOnline());
-        verify(bodies, times(1)).show(player);
     }
 
     @Test void unknownCommandsEmptyInputConsoleAndBadArityAreHandled() {

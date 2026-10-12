@@ -1,0 +1,13 @@
+package net.tfminecraft.rpcharacters.body;
+
+import net.tfminecraft.rpcharacters.wardrobe.SkinTextures;
+
+/**
+ * Everyone in character selection wears default Steve. Mojang-signed through MineSkin
+ * (skin 9e9ee2513d4c44958617a39b7ceb66bc); one unused pixel differs so it keeps classic arms.
+ */
+interface SelectionSkin {
+    SkinTextures STEVE = new SkinTextures(
+            "ewogICJ0aW1lc3RhbXAiIDogMTc5MTgyMjM5ODg0NywKICAicHJvZmlsZUlkIiA6ICJkYTA1Y2Q3OWZkYjc0MDJlYTdjNjMzY2NkZmYzMDI4YyIsCiAgInByb2ZpbGVOYW1lIiA6ICJGZXJuYW5kMGFsMG5zMCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8xZDQwY2UxZjQyZjhiYjBlNTQ5MzgyMmUzODEyODk0ZmE1MTZmYzJkYzVkZGE4NzU4MTI4ZjEzMjk5Y2NiOWQ3IgogICAgfQogIH0KfQ==",
+            "joCn1pezTsVxeg9a43OpUfgtAwDDE+5JwXdv+Qa1AvzW85JDxyjCtQu+Ten06+J6QXPrDOwwrdkwRWSiPZOYStoWS1iLLTqc4vNWUNFUxNXgOH0xgtjPxbmoBRrjZJ6Y7OX9biTscH6XnE0RQSi2QIBD9kY+Ko+UotJB/XgnTGS47g6LtVOalCQu3vIHudgNieoELxYXs8SX8Zc1b8QdLoD6+EjlGC5GIHQ0IugkhSRf2WjP8fs8elDs3Hn/rx7Tq1WDGXLuNeZeIOau51dltq8bBD4bs+vTUaEuU+EVd6K9SCYF9TZdgIGQzxXbPQLlXyRR73s1ChEoSU/AMTJDgMliEWDMsLjIQt6tV98LKirrYhZI1NLsO0sywdeWfCRYwIjHxmloPws/fHfzWh/zCDLC+QjpBDhfBrEcwNazFVUE2slMEDVvFHtXDhsI/hamj1fCfcDY5O6clz/nBZiOXyrTeBJtoPfvm/lsXOgT3pdW4/aI7FC5bNFwdOa379GgTd1ApOnYe7Xp2aQen/pxxJAdvvLfOdKNItIMKfZyhM0xgUqYsMTJtUig0Z5uvs8UeRWey7aEBayu6EHGieJ2Bf924JRLAsAeukX0xOzyht1uPejGGTDiG2dnSASM9zB14VnbikI6papT8bqYUMQzEfQdLlZv/pZNGBmVwjNAoR4=");
+}
