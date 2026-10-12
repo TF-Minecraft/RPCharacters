@@ -70,6 +70,18 @@ class BodyHeirsTest(unittest.TestCase):
         self.assertNotIn(A, manifest)
         self.assertIn("override-not-found", report)
 
+    def test_override_for_an_account_without_characters_blocks(self):
+        code, _, report = self.run_tool({A: []}, {B: "11111111-1111-4111-8111-000000000001"})
+        self.assertEqual(code, 1)
+        self.assertIn(f"override-not-found: account {B}", report)
+
+    def test_malformed_record_is_reported(self):
+        cid, record = character(1)
+        record["online-playtime-seconds"] = "lots"
+        code, _, report = self.run_tool({A: [(cid, record)], B: [(cid.replace("1111-4", "2222-4"), [])]})
+        self.assertEqual(code, 1)
+        self.assertEqual(report.count("- unreadable:"), 2)
+
     def test_duplicate_character_ids_block_both_accounts(self):
         cid, record = character(1, active=True)
         code, manifest, report = self.run_tool({A: [(cid, record)], B: [(cid, record)]})

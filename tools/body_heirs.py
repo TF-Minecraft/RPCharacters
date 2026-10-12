@@ -63,7 +63,10 @@ def load(data):
         for file in sorted(folder.glob("*.json")) if folder.is_dir() else []:
             try:
                 record = json.loads(file.read_text(encoding="utf-8"))
-            except (OSError, ValueError) as error:
+                if not isinstance(record, dict):
+                    raise ValueError("not a JSON object")
+                seconds = max(0, int(record.get("online-playtime-seconds") or 0))
+            except (OSError, ValueError, TypeError) as error:
                 problems.append(("unreadable", owner, file.name, str(error)))
                 continue
             cid = parse_uuid(record.get("id"))
@@ -74,7 +77,7 @@ def load(data):
                 "id": cid,
                 "name": record.get("name", ""),
                 "status": str(record.get("status", "")).upper(),
-                "seconds": int(record.get("online-playtime-seconds") or 0),
+                "seconds": seconds,
                 "active": str(record.get("active")).lower() == "true",
             })
         accounts[owner] = {"name": names.get(owner, ""), "characters": characters}
@@ -92,6 +95,8 @@ def propose(accounts, problems, overrides):
     blocked |= {seen[p[2]] for p in problems if p[0] == "duplicate-character-id"}
 
     heirs, review = {}, []
+    for owner in sorted(set(overrides) - {o for o, a in accounts.items() if a["characters"]}):
+        problems.append(("override-not-found", owner, overrides[owner], "account has no characters"))
     for owner, account in sorted(accounts.items()):
         characters = account["characters"]
         if not characters or owner in blocked:
