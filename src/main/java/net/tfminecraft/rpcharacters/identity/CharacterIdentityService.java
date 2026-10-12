@@ -1,7 +1,10 @@
 package net.tfminecraft.rpcharacters.identity;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -27,11 +30,24 @@ public final class CharacterIdentityService implements CharacterIdentity {
         this.transitions = transitions;
     }
 
-    /** Overlays live edits for one owner's loaded account. */
+    /**
+     * Overlays live edits for one owner's loaded account, and for any other loaded account sharing
+     * one of its character IDs, so a live duplicate still quarantines both owners.
+     */
     private void refreshOwner(UUID ownerId) {
         CharacterTransitions.requireMainThread();
+        Set<String> ids = new HashSet<>();
         for (PlayerData data : PlayerManager.getOnlineData()) {
-            if (ownerId.equals(data.getUniqueId())) refresh(data);
+            if (!ownerId.equals(data.getUniqueId())) continue;
+            for (RPCharacter character : data.getCharacters()) {
+                if (character.getId() != null) ids.add(character.getId().toLowerCase(Locale.ROOT));
+            }
+        }
+        for (PlayerData data : PlayerManager.getOnlineData()) {
+            if (ownerId.equals(data.getUniqueId()) || data.getCharacters().stream().anyMatch(
+                    character -> character.getId() != null && ids.contains(character.getId().toLowerCase(Locale.ROOT)))) {
+                refresh(data);
+            }
         }
     }
 
@@ -85,7 +101,21 @@ public final class CharacterIdentityService implements CharacterIdentity {
     }
 
     public static void saved(UUID owner, RPCharacter character) {
-        onMainThread(directory -> directory.upsert(owner, character));
+        if (RPCharacters.getCharacterIdentity() == null) return;
+        if (Bukkit.isPrimaryThread()) {
+            onMainThread(directory -> directory.upsert(owner, character));
+            return;
+        }
+        // Snapshot now: the live character may change before the queued update runs.
+        CharacterInfo info;
+        try {
+            info = CharacterDirectory.snapshot(owner, character);
+        } catch (RuntimeException invalid) {
+            onMainThread(directory -> directory.upsert(owner, character));
+            return;
+        }
+        boolean active = Boolean.TRUE.equals(character.isActive());
+        onMainThread(directory -> directory.upsert(owner, info, active));
     }
 
     public static void removed(UUID owner, String characterId) {

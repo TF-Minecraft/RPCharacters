@@ -85,15 +85,23 @@ public final class CharacterDirectory {
 	/** Updates a saved/live snapshot; only a fresh successful load can clear quarantine. */
 	public void upsert(UUID ownerId, RPCharacter character) {
 		Objects.requireNonNull(ownerId, "ownerId");
+		CharacterInfo info;
 		try {
-			UUID id = uuid(character.getId());
-			claim(ownerId, id);
-			CharacterInfo info = snapshot(ownerId, character);
-			accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
-			flag(info.ref(), Boolean.TRUE.equals(character.isActive()));
+			info = snapshot(ownerId, character);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid live character: " + error.getMessage());
+			return;
 		}
+		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()));
+	}
+
+	/** Updates from a snapshot taken earlier, such as when a save finished off the main thread. */
+	public void upsert(UUID ownerId, CharacterInfo info, boolean active) {
+		Objects.requireNonNull(ownerId, "ownerId");
+		UUID id = info.ref().characterId();
+		claim(ownerId, id);
+		accounts.computeIfAbsent(ownerId, ignored -> new LinkedHashMap<>()).put(id, info);
+		flag(info.ref(), active);
 	}
 
 	public void remove(UUID ownerId, String characterId) {

@@ -253,10 +253,50 @@ class CharacterIdentityServiceTest {
         verify(logger).warning(contains("while disabled"));
         assertEquals(2, queued.size());
         assertTrue(service.info(id).isEmpty());
+        // The queued update keeps what was saved, not later edits to the live character.
+        character.setName("Renamed after the save");
         queued.getFirst().run();
         assertEquals("Saved off thread", service.info(id).orElseThrow().name());
         queued.getLast().run();
         assertTrue(service.info(id).isEmpty());
+    }
+
+    @Test
+    void anOffThreadSaveThatCannotBeSnapshottedQueuesTheLiveUpdate() {
+        RPCharacters.plugin = mock(RPCharacters.class);
+        BukkitScheduler scheduler = mock(BukkitScheduler.class);
+        List<Runnable> queued = new ArrayList<>();
+        when(scheduler.runTask(eq(RPCharacters.plugin), any(Runnable.class))).thenAnswer(call -> {
+            queued.add(call.getArgument(1));
+            return null;
+        });
+        UUID offline = UUID.randomUUID();
+        RPCharacter invalid = mock(RPCharacter.class);
+        when(invalid.getId()).thenReturn("not-a-uuid");
+        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            CharacterIdentityService.saved(offline, invalid);
+        }
+        assertEquals(1, queued.size());
+        queued.getFirst().run();
+        assertTrue(service.characters(offline).isEmpty());
+    }
+
+    @Test
+    void ownerLookupsCatchALiveDuplicateOnAnotherOnlineAccount() {
+        join();
+        PlayerMock other = server.addPlayer("Other");
+        PlayerData otherData = new PlayerData(other);
+        loaded.put(other, otherData);
+        RPCharacter duplicate = mock(RPCharacter.class);
+        when(duplicate.getId()).thenReturn(alice.getId().toUpperCase(java.util.Locale.ROOT));
+        when(duplicate.getName()).thenReturn("Different owner");
+        when(duplicate.getStatus()).thenReturn(Status.ALIVE);
+        when(duplicate.getTraits()).thenReturn(List.of());
+        otherData.addCharacter(duplicate);
+        assertTrue(service.characters(player.getUniqueId()).isEmpty());
+        assertTrue(service.lastPlayed(player.getUniqueId()).isEmpty());
     }
 
     @Test
