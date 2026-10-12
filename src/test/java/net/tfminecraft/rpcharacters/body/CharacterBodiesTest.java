@@ -148,12 +148,15 @@ class CharacterBodiesTest {
     void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);drain();}
     void play(){ready();bodies.select(account,a);drain();assertTrue(bodies.hasLiveBody(player));}
 
-    @Test void requiredPackHoldsRoomEntryAndSelectionButCompletesBodyRecoveryFirst() throws Exception {
+    @Test void requiredPackWaitsInsideRoomAfterRecoveryWithoutOpeningSelectionOrTeleportingTwice() throws Exception {
         tag=new BodyTag.Live(first,1); when(packs.ready(player)).thenReturn(false);
         bodies.join(player); bodies.prepare(account); queued.removeFirst().run();
         verify(store).write(owner,first,1,"join-recovery",snapshot);
-        verify(player).saveData(); verify(leases).complete(owner,new BodyTag.Live(first,1));
-        verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
+        verify(player,times(2)).saveData(); verify(leases).complete(owner,new BodyTag.Live(first,1));
+        InOrder order=inOrder(player,packs);
+        order.verify(player).saveData(); order.verify(player).teleport(room); order.verify(player).saveData();
+        order.verify(packs).await(eq(player),any(),any());
+        verify(progress,never()).prepare(account);
         assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isReadyToChoose(player)); assertNull(actions);
         bodies.select(account,a); verify(leases,never()).begin(any(),any()); assertTrue(packCurrent.getAsBoolean());
         when(packs.ready(player)).thenReturn(true); packResume.run();
@@ -168,11 +171,23 @@ class CharacterBodiesTest {
 
     @Test void pendingPackContinuationCannotResumeAfterQuitOrNewRoomEntry() throws Exception {
         when(packs.ready(player)).thenReturn(false); bodies.join(player); bodies.prepare(account); drain();
+        verify(player).teleport(room); clearInvocations(player);
         var oldCurrent=packCurrent; var oldResume=packResume; assertTrue(oldCurrent.getAsBoolean());
         bodies.quit(player); verify(packs).quit(player); assertFalse(oldCurrent.getAsBoolean());
         when(packs.ready(player)).thenReturn(true); oldResume.run();
         verify(player,never()).teleport(room); verify(progress,never()).prepare(account);
         bodies.join(player); assertFalse(oldCurrent.getAsBoolean());
+    }
+
+    @Test void cancelledEarlyRoomTeleportStillOpensLoadingBeforePackAndRetriesAfterItLoads() throws Exception {
+        when(packs.ready(player)).thenReturn(false);
+        when(player.teleport(room)).thenReturn(false,false,true);
+        bodies.join(player); bodies.prepare(account); queued.removeFirst().run();
+        verify(packs).await(eq(player),any(),any()); assertTrue(packCurrent.getAsBoolean());
+        assertNull(actions); assertTrue(queued.isEmpty()); verify(progress,never()).prepare(account);
+        when(packs.ready(player)).thenReturn(true); packResume.run();
+        assertNull(actions); assertEquals(1,queued.size()); queued.removeFirst().run();
+        verify(player,times(3)).teleport(room); verify(progress).prepare(account); assertNotNull(actions);
     }
 
     @Test void preparationAlsoWaitsIfPackProviderBecomesUnavailableAfterRoomEntry() throws Exception {

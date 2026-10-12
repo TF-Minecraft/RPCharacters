@@ -57,6 +57,7 @@ public final class CharacterBodies {
         final PlayerData account;
         BodyTag recoveredFrom;
         boolean detached;
+        boolean entered;
         boolean notified;
         RoomEntry(Player player, PlayerData account) { this.player = player; this.account = account; }
     }
@@ -180,15 +181,16 @@ public final class CharacterBodies {
                 saveRecoveredRoom(player, entry.recoveredFrom);
                 entry.recoveredFrom = null;
             }
-            if (!packs.ready(player)) {
-                packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account), () -> enterRoom(entry));
-                return;
-            }
-            if (!pendingRespawns.containsKey(owner)) {
+            if (!pendingRespawns.containsKey(owner) && !entry.entered) {
                 applying.add(owner);
                 try {
                     if (!player.teleport(room)) {
                         if (current(player, account)) {
+                            if (!packs.ready(player)) {
+                                packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account),
+                                        () -> enterRoom(entry));
+                                return;
+                            }
                             if (!entry.notified) {
                                 player.sendMessage("Loading character selection. Please wait for your resource pack to finish.");
                                 entry.notified = true;
@@ -202,6 +204,11 @@ public final class CharacterBodies {
                 }
                 if (!current(player, account)) return;
                 player.saveData();
+                entry.entered = true;
+            }
+            if (!packs.ready(player)) {
+                packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account), () -> enterRoom(entry));
+                return;
             }
             enteringRoom.remove(owner, entry);
             if (deferredPrepare.remove(owner)) prepare(account);
