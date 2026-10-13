@@ -143,6 +143,33 @@ public final class BodySnapshot {
         return new BodySnapshot(copy);
     }
 
+    /** This body with storage, armour, offhand and ender chest emptied; everything else is kept. */
+    public BodySnapshot stripped() throws IOException {
+        JsonObject copy = data.deepCopy();
+        copy.addProperty("inventory", BodyJson.encode(emptyItems(slots(BodyJson.bytes(data, "inventory")))));
+        copy.addProperty("enderChest", BodyJson.encode(emptyItems(slots(BodyJson.bytes(data, "enderChest")))));
+        return new BodySnapshot(copy);
+    }
+
+    /**
+     * Every stack in the inventory and then the ender chest, as Paper's single-item bytes
+     * ({@link ItemStack#serializeAsBytes()}), read without a server so the result is the same each time.
+     */
+    public List<byte[]> possessions() throws IOException {
+        List<byte[]> stacks = new ArrayList<>();
+        for (String key : List.of("inventory", "enderChest")) {
+            ByteBuffer buffer = ByteBuffer.wrap(BodyJson.bytes(data, key));
+            buffer.get();
+            int count = buffer.getInt();
+            for (int slot = 0; slot < count; slot++) {
+                byte[] item = new byte[buffer.getInt()];
+                buffer.get(item);
+                if (item.length > 0) stacks.add(item);
+            }
+        }
+        return stacks;
+    }
+
     public String serialize() {
         return json;
     }

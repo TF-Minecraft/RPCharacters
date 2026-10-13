@@ -104,6 +104,11 @@ final class BodyLeaseStore {
         files.syncDirectory(root);
     }
 
+    /** Whether the account's activation lease names this character, whose body is then still in player data. */
+    synchronized boolean names(UUID owner, UUID character) throws IOException {
+        return read(owner).map(lease -> lease.body().characterId().equals(character)).orElse(false);
+    }
+
     private Optional<Lease> read(UUID owner) throws IOException {
         Path file = file(owner);
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();

@@ -142,6 +142,10 @@ public final class CharacterBodies {
         return body == null ? null : body.characterId();
     }
     public UUID migrationHeir(UUID owner) { return migration.heir(owner); }
+    /** Stowed bodies, for the estate participant that strips a dead character's body. */
+    public BodyStore store() { return store; }
+    /** True while the account's activation lease names the character: its body is still in vanilla player data. */
+    public boolean hasLease(UUID owner, UUID character) throws IOException { return leases.names(owner, character); }
 
     public void rememberSpawn(UUID owner, Location original) {
         originalSpawns.put(owner, original.clone());

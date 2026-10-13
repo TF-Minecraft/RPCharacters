@@ -90,6 +90,19 @@ public final class CharacterIdentityService implements CharacterIdentity {
         return directory.deathId(characterId);
     }
 
+    /** Whether the character's account is quarantined or unreadable, so a lookup must wait. */
+    public boolean unreadable(UUID characterId) {
+        refreshCharacter(characterId);
+        return directory.unreadable(characterId);
+    }
+
+    /** Every dead character in a readable account, with live edits overlaid. */
+    public List<CharacterDirectory.Death> deaths() {
+        CharacterTransitions.requireMainThread();
+        for (PlayerData data : PlayerManager.getOnlineData()) refresh(data);
+        return directory.deaths();
+    }
+
     /** Overlays every loaded account first, as {@link #info(UUID)} does, so unsaved renames count. */
     @Override
     public List<CharacterInfo> findByName(String name) {
