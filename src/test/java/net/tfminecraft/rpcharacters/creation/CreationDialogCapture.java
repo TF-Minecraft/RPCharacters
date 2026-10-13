@@ -101,6 +101,7 @@ final class CreationDialogCapture implements AutoCloseable {
 				when(input.key()).thenReturn(call.getArgument(0));
 				when(input.entries()).thenReturn(List.copyOf(call.getArgument(2)));
 				when(input.label()).thenReturn(call.getArgument(3));
+				when(input.labelVisible()).thenReturn(call.getArgument(4));
 				return input;
 			});
 			inputs.when(() -> DialogInput.bool(anyString(), any(), anyBoolean(), anyString(), anyString())).thenAnswer(call -> {

@@ -266,7 +266,7 @@ public class SelectionStage extends Stage{
 			}
 		}
 		active = false;
-		p.closeInventory();
+		if (cc == null || cc.getWizard() == null) p.closeInventory();
 		if(cc != null) {
 			if (target.equalsIgnoreCase("trait") && key != null) {
 				List<Trait> toRemove = new ArrayList<>();

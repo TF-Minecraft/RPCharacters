@@ -342,7 +342,7 @@ public class AttributesStage extends Stage {
 			}
 		}
 		active = false;
-		p.closeInventory();
+		if (cc == null || cc.getWizard() == null) p.closeInventory();
 		if (cc == null) {
 			return;
 		}

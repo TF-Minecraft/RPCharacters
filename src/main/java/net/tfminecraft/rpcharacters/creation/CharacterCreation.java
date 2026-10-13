@@ -1094,7 +1094,7 @@ public class CharacterCreation {
 
 		canNext = false;
 
-		p.closeInventory();
+		if (wizard == null) p.closeInventory();
 
 		currentStage = index + 1;
 

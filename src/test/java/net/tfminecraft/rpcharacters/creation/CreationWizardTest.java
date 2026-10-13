@@ -66,6 +66,7 @@ class CreationWizardTest {
 	private CharacterCreation creation;
 	private Race human, elf;
 	private PlayerClass mage;
+	private MockedStatic<PlaytimeGate> playtime;
 	private MockedStatic<RPCharacters> pluginStatic;
 	private MockedStatic<CharacterSlotService> slots;
 	private CreationDialogCapture.CapturedDialog localDialog;
@@ -113,7 +114,8 @@ class CreationWizardTest {
 		statics(MmoCoreClassGuiHelper.class).when(() -> MmoCoreClassGuiHelper.buildClassOptions(anyInt(), anyMap()))
 				.thenAnswer(call -> new MmoCoreClassGuiHelper.ClassGuiData(List.of(new SelectableItem(mage)), List.of(10)));
 		statics(MmoCoreAttributeHelper.class).when(() -> MmoCoreAttributeHelper.exists(anyString())).thenReturn(true);
-		statics(PlaytimeGate.class).when(() -> PlaytimeGate.canSelectTrait(eq(player), any())).thenReturn(true);
+		playtime = statics(PlaytimeGate.class);
+		playtime.when(() -> PlaytimeGate.canSelectTrait(eq(player), any())).thenReturn(true);
 		statics(Database.class);
 		statics(PaidChangeService.class);
 		statics(ClassService.class);
@@ -206,7 +208,9 @@ class CreationWizardTest {
 	private void choose(String id) {
 		SelectionStage stage = (SelectionStage) creation.getActiveStage();
 		if (stage.getMaxSelections() == 1) form().put("choice", id);
-		else for (int i = 0; i < stage.getOptions().size(); i++) if (stage.getOptions().get(i).getId().equals(id)) form().put("choice_" + i, "true");
+		else if (stage.getMaxSelections() == 2) {
+			for (int i = 0; i < 2; i++) if (form().getOrDefault("choice_" + i, "").isEmpty()) { form().put("choice_" + i, id); break; }
+		} else form().put("option_" + id, "true");
 	}
 
 	private void click(String label) { click(label, Map.of()); }
@@ -367,7 +371,7 @@ class CreationWizardTest {
 		creation.getCharacter().setRace(human);
 		click("Next", Map.of("value", "200")); assertTrue(body().contains("between 18 and 110"));
 		click("Next", Map.of("value", "30")); assertTrue(body().contains("Age: 30"));
-		click("Edit Age"); assertEquals("30", ui.last().field("value").initial());
+		click("Edit Age"); assertEquals(30f, ((NumberRangeDialogInput) ui.last().base().inputs().getFirst()).initial());
 	}
 
 	@Test
@@ -386,8 +390,8 @@ class CreationWizardTest {
 	void pointBuyChecksTheWholeBudgetAndOnlySavesOnNext() throws Exception {
 		trait("str1", "attributes", 0);
 		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
-		click("Next"); assertTrue(body().contains("Spend exactly 1"));
-		click("Next", Map.of("rank_strength", "2")); assertTrue(body().contains("3 selected"));
+		click("Next"); assertTrue(body().contains("1 points remaining"));
+		click("Next", Map.of("rank_strength", "2")); assertTrue(body().contains("2 points over budget"));
 		click("Next", Map.of("rank_strength", "1"));
 		assertTrue(body().contains("Strength 1"));
 		click("Edit Attributes"); click("Back to review", Map.of("rank_strength", "0"));
@@ -515,7 +519,7 @@ class CreationWizardTest {
 		assertTrue(optionDetails().contains("Requires all: base"));
 		click("Next");
 		click("Edit Gift");
-		click("Save and review", Map.of("choice_0", "false", "choice_1", "true"));
+		click("Save and review", Map.of("choice_0", "", "choice_1", "dependent"));
 		assertTrue(body().contains("Lacking requirements"));
 		assertFalse(body().contains("Dependency{"));
 	}
@@ -536,7 +540,7 @@ class CreationWizardTest {
 	@Test
 	void checkboxPagesRetainChoicesAndBoundaryClicksDoNotReplaceTheDialog() throws Exception {
 		for (int i = 0; i < 10; i++) trait("gift" + i, "gift", 1);
-		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 2\npoints: 2"), summary());
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 4\npoints: 2"), summary());
 		int shown = ui.opened.size();
 		click("Previous choices"); click("Previous choices");
 		assertEquals(shown, ui.opened.size());
@@ -556,9 +560,9 @@ class CreationWizardTest {
 		assertTrue(body().contains("Cannot afford"));
 		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
 		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
-		click("Next", Map.of("choice_1", "false"));
+		click("Next", Map.of("choice_1", ""));
 		assertEquals(List.of("cheap"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
-		click("Edit Gift"); click("Save and review", Map.of("choice_0", "false", "choice_1", "false"));
+		click("Edit Gift"); click("Save and review", Map.of("choice_0", "", "choice_1", ""));
 		assertTrue(creation.getCharacter().getTraits().isEmpty());
 		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
 	}
@@ -642,6 +646,97 @@ class CreationWizardTest {
 		verify(bodies).requestSelection(player);
 		verify(player, never()).sendMessage(anyString());
 		verify(player, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+	}
+
+	@Test
+	void twoPickStepsHaveTwoControlsAndCannotSubmitDuplicatesOrMoreThanTwo() throws Exception {
+		for (int i = 0; i < 6; i++) trait("gift" + i, "gift", 0);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 2\nmax-select: 2"), summary());
+		assertEquals(2, ui.last().base().inputs().size());
+		assertTrue(ui.last().base().inputs().stream().allMatch(input -> input instanceof SingleOptionDialogInput));
+		assertFalse(body().contains("Details"));
+		assertFalse(body().contains("Hover"));
+		assertFalse(body().contains("1–1"));
+		assertTrue(body().contains("Choose 2 different options"));
+		click("Next", Map.of("choice_0", "gift0", "choice_1", "gift0"));
+		assertTrue(body().contains("different options"));
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		click("Next", Map.of("choice_0", "gift0", "choice_1", "gift1", "choice_2", "gift2"));
+		assertEquals(List.of("gift0", "gift1"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+	}
+
+	@Test
+	void incompatibleUnavailableAndUnaffordableOptionsAreAbsentAndCannotBeForged() throws Exception {
+		var existing = trait("existing", "previous", 0);
+		trait("allowed", "virtue", 0);
+		var blocked = trait("blocked", "virtue", 0);
+		when(blocked.getTraitData().hasExclusives()).thenReturn(true);
+		when(blocked.getTraitData().getExclusive()).thenReturn(List.of("existing"));
+		var gated = trait("gated", "virtue", 0);
+		{
+			var gate = playtime;
+			gate.when(() -> PlaytimeGate.canSelectTrait(eq(player), any())).thenReturn(true);
+			gate.when(() -> PlaytimeGate.canSelectTrait(player, gated)).thenReturn(false);
+			start(stage("virtue_stage", "type: selection\ntarget: trait\nkey: virtue\nmin-select: 1\nmax-select: 1"), summary());
+			creation.getCharacter().addTrait(existing);
+			creation.getWizard().resume();
+			var input = (SingleOptionDialogInput) ui.last().base().inputs().getFirst();
+			assertEquals(List.of("", "allowed"), input.entries().stream().map(SingleOptionDialogInput.OptionEntry::id).toList());
+			assertFalse(input.labelVisible());
+			assertEquals("Choose", CreationDialogCapture.text(input.entries().getFirst().display()));
+			assertFalse(body().contains("blocked"));
+			click("Next", Map.of("choice", "blocked"));
+			assertTrue(body().contains("incompatible"));
+			assertEquals(List.of("existing"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		}
+	}
+
+	@Test
+	void nextAndBackNeverCloseTheInventoryWhileTheDialogWizardIsOpen() throws Exception {
+		trait("str1", "attributes", 0);
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"),
+				stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
+		choose("human"); click("Next");
+		click("Next", Map.of("rank_strength", "1"));
+		click("Back"); click("Back", Map.of("rank_strength", "1"));
+		verify(player, never()).closeInventory();
+		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void ageUsesABoundedWholeYearSliderAndCluesHaveNoOverlappingCounter() throws Exception {
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"), setter("age_stage", "age"), stage("clues_stage", "type: clue"), summary());
+		choose("human"); click("Next");
+		assertInstanceOf(NumberRangeDialogInput.class, ui.last().base().inputs().getFirst());
+		click("Next", Map.of("value", "30.5")); assertTrue(body().contains("Whole number"));
+		click("Next", Map.of("value", "30"));
+		assertEquals("30", AgeCalculator.formatAge(creation.getCharacter().getBirthday()));
+		assertTrue(ui.last().base().inputs().stream().allMatch(input -> ((TextDialogInput)input).multiline() == null));
+	}
+
+	@Test
+	void attributeControlsShowCostsHideUnaffordableRanksAndBalanceWithoutCommitting() throws Exception {
+		Cache.attributes = new ArrayList<>(List.of("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"));
+		for (String attr : Cache.attributes) for (int rank = 1; rank <= 2; rank++) trait(AttributesStage.traitId(attr, rank), "attributes", 0);
+		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 12\nmax-rank: 4\nattributes: [strength, dexterity, constitution, intelligence, wisdom, charisma]"), summary());
+		var input = (SingleOptionDialogInput) ui.last().base().inputs().getFirst();
+		assertEquals(List.of("0", "1", "2", "3"), input.entries().stream().map(SingleOptionDialogInput.OptionEntry::id).toList());
+		assertTrue(CreationDialogCapture.text(input.entries().get(2).display()).contains("3 points"));
+		click("Check points"); assertTrue(body().contains("12 points remaining"));
+		click("Balanced");
+		assertEquals(0, ((AttributesStage)creation.getActiveStage()).spentPoints());
+		click("Check points"); assertTrue(body().contains("All points assigned"));
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		click("Next");
+		assertEquals(9, creation.getCharacter().getTraits().size());
+		verify(player, never()).closeInventory();
+	}
+
+	@Test
+	void impossibleBalancedBudgetsAndUnknownRankValuesStayInline() throws Exception {
+		start(stage("attributes_stage", "type: attributes\npoints: 2\nmax-rank: 1\nattributes: [strength]"));
+		click("Balanced"); assertTrue(body().contains("cannot fit"));
+		click("Next", Map.of("rank_strength", "unknown")); assertTrue(body().contains("whole rank"));
 	}
 
 }
