@@ -96,6 +96,11 @@ class CharacterBodiesTest {
     java.util.function.BooleanSupplier packCurrent;
     Runnable packResume;
 
+    @BeforeAll static void initializeIngestBeforeDatabaseConstructionIsMocked() throws ClassNotFoundException {
+        // The service's static database must not retain this fixture's constructor mock.
+        Class.forName("net.tfminecraft.rpcharacters.ingest.CharacterIngestService");
+    }
+
     @BeforeEach void setup() throws Exception {
         mocks = new ArrayList<>(); queued = new ArrayList<>();
         plugin=mock(RPCharacters.class); when(plugin.getDataFolder()).thenReturn(temp.toFile());
