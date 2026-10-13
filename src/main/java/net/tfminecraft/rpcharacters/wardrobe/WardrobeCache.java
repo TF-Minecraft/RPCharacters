@@ -40,6 +40,7 @@ public final class WardrobeCache {
 			return;
 		}
 		SNAPSHOTS.remove(playerId);
+		SkinApplyHelper.clearPending(playerId);
 		ACCOUNT_SKINS.remove(playerId);
 		LAST_APPLIED.remove(playerId);
 	}

@@ -5,7 +5,7 @@ version: ${project.version}
 author: Drefvelin
 
 depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
-softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions, GSit, Codex]
+softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions, GSit, Codex, ModelEngine]
 
 commands:
   class:

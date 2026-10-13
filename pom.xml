@@ -85,6 +85,12 @@
         </dependency>
         <dependency>
             <groupId>local</groupId>
+            <artifactId>ModelEngine</artifactId>
+            <version>R4.1.1-tfmc-44ee292392dd</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>local</groupId>
             <artifactId>ItemsAdder</artifactId>
             <version>4.0.18-tfmc-5a01b37bd744</version>
             <scope>provided</scope>

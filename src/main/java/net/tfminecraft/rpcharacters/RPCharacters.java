@@ -349,6 +349,7 @@ public class RPCharacters extends JavaPlugin{
 		ChatRecipientResolverRegistry.unregister(RealmChatDependencyListener.RESOLVER_ID);
 		net.tfminecraft.rpcharacters.ingest.CharacterIngestService.stopPeriodicPull();
 		WardrobeService.stopSoftRefresh();
+		net.tfminecraft.rpcharacters.wardrobe.SkinApplyHelper.stopPending();
 		ProtocolLibBridge.shutdown();
 		GraveVisualManager.get().shutdown();
 		GraveExpiryService.get().shutdown();

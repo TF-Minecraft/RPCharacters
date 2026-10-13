@@ -8,6 +8,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
@@ -35,6 +36,16 @@ public final class WardrobeListener implements Listener {
 			if (player.isOnline()) {
 				WardrobeService.applyFor(player);
 			}
+		});
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void onRespawn(PlayerRespawnEvent event) {
+		Player player = event.getPlayer();
+		SkinApplyHelper.clearPending(player.getUniqueId());
+		// Death may drop the mask; choose from the restored inventory after respawn.
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			if (player.isOnline()) WardrobeService.applyFor(player);
 		});
 	}
 
