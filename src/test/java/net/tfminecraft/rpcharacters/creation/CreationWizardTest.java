@@ -7,6 +7,8 @@ import static org.mockito.Mockito.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import io.papermc.paper.registry.data.dialog.input.*;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -49,6 +51,7 @@ import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.objects.trait.TraitData;
 import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
+import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.utils.PlaytimeGate;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeService;
 
@@ -63,7 +66,10 @@ class CreationWizardTest {
 	private CharacterCreation creation;
 	private Race human, elf;
 	private PlayerClass mage;
+	private MockedStatic<RPCharacters> pluginStatic;
 	private MockedStatic<CharacterSlotService> slots;
+	private CreationDialogCapture.CapturedDialog localDialog;
+	private final Map<String, String> localValues = new HashMap<>();
 
 	@BeforeEach
 	void setup() {
@@ -94,7 +100,8 @@ class CreationWizardTest {
 		account = new PlayerData(player);
 		players = mock(PlayerManager.class);
 		statics(PlayerManager.class).when(() -> PlayerManager.get(player)).thenReturn(account);
-		statics(RPCharacters.class).when(RPCharacters::getPlayerManager).thenReturn(players);
+		pluginStatic = statics(RPCharacters.class);
+		pluginStatic.when(RPCharacters::getPlayerManager).thenReturn(players);
 		mage = mock(PlayerClass.class);
 		when(mage.getId()).thenReturn("MAGE");
 		when(mage.getName()).thenReturn("Mage");
@@ -176,11 +183,41 @@ class CreationWizardTest {
 		CreationManager.activeCreators.put(player, creation);
 	}
 
+	private Map<String, String> form() {
+		if (localDialog != ui.last()) {
+			localDialog = ui.last();
+			localValues.clear();
+			for (DialogInput input : localDialog.base().inputs()) {
+				if (input instanceof TextDialogInput text) localValues.put(input.key(), text.initial());
+				else if (input instanceof SingleOptionDialogInput choice) localValues.put(input.key(), choice.entries().stream().filter(SingleOptionDialogInput.OptionEntry::initial).map(SingleOptionDialogInput.OptionEntry::id).findFirst().orElse(""));
+				else if (input instanceof BooleanDialogInput bool) localValues.put(input.key(), Boolean.toString(bool.initial()));
+				else if (input instanceof NumberRangeDialogInput range) localValues.put(input.key(), Float.toString(range.initial()));
+			}
+		}
+		return localValues;
+	}
+
 	private void click(String label, Map<String, String> values) {
-		ui.click(ui.last().button(label), player, values);
+		Map<String, String> submitted = new HashMap<>(form());
+		submitted.putAll(values);
+		ui.click(ui.last().button(label), player, submitted);
+	}
+
+	private void choose(String id) {
+		SelectionStage stage = (SelectionStage) creation.getActiveStage();
+		if (stage.getMaxSelections() == 1) form().put("choice", id);
+		else for (int i = 0; i < stage.getOptions().size(); i++) if (stage.getOptions().get(i).getId().equals(id)) form().put("choice_" + i, "true");
 	}
 
 	private void click(String label) { click(label, Map.of()); }
+	private String optionDetails() {
+		return ui.last().base().inputs().stream().flatMap(input -> input instanceof SingleOptionDialogInput choice
+				? choice.entries().stream().map(SingleOptionDialogInput.OptionEntry::display)
+				: java.util.stream.Stream.of(((BooleanDialogInput) input).label()))
+				.map(label -> label.hoverEvent() == null ? "" : CreationDialogCapture.text((net.kyori.adventure.text.Component) label.hoverEvent().value()))
+				.reduce("", (a, b) -> a + b);
+	}
+
 	private String body() { return ui.last().bodyText(); }
 	private String title() { return CreationDialogCapture.text(ui.last().base().title()); }
 	private SetterStage setter(String id, String target) throws Exception { return (SetterStage) stage(id, "type: setter\ntarget: " + target); }
@@ -193,13 +230,13 @@ class CreationWizardTest {
 				setter("age_stage", "age"), setter("description_stage", "description"), stage("clues_stage", "type: clue"), summary());
 		assertEquals("Name", title());
 		click("Next", Map.of("value", "aren ashford"));
-		click("Mage");
-		assertTrue(body().contains("Uses magic."));
+		choose("MAGE");
+		assertTrue(optionDetails().contains("Uses magic."));
 		click("Next");
-		click("Human");
-		click("Elf");
-		assertEquals(1, ((SelectionStage) creation.getActiveStage()).getSelections());
-		assertTrue(body().contains("Elf lore."));
+		choose("human");
+		choose("elf");
+		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections(), "Choices stay client-local until Next");
+		assertTrue(optionDetails().contains("Elf lore."));
 		click("Next");
 		click("Next", Map.of("value", "30"));
 		assertNotNull(ui.last().field("value").multiline());
@@ -217,6 +254,8 @@ class CreationWizardTest {
 		assertEquals("MAGE", creation.getCharacter().getMMOClass());
 		verify(players).savePlayer(player);
 		verify(player).closeDialog();
+		verify(player, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+		verify(player, never()).sendMessage(anyString());
 	}
 
 	@Test
@@ -243,8 +282,8 @@ class CreationWizardTest {
 	void reviewEditingReturnsToReviewAndBackShowsOnlySavedValues() throws Exception {
 		start(setter("name_stage", "name"), stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"), summary());
 		click("Next", Map.of("value", "Aren"));
-		click("Human"); click("Next");
-		click("Edit Race"); click("Elf"); click("Back to review");
+		choose("human"); click("Next");
+		click("Edit Race"); choose("elf"); click("Back to review");
 		assertTrue(body().contains("Race: Human"));
 		click("Edit Race"); click("Save and review");
 		assertTrue(body().contains("Race: Elf"));
@@ -307,11 +346,10 @@ class CreationWizardTest {
 	void realAgeUsesExplicitChoicesAndSkipsPreviouslyAttestedStages() throws Exception {
 		var age = setter("real_age_stage", "real_age"); age.setRepeat(false);
 		start(age, summary());
-		assertTrue(ui.last().base().inputs().isEmpty());
-		click("Yes");
+		click("Next", Map.of("value", "Yes"));
 		assertTrue(account.isEighteen());
 		assertTrue(body().contains("18+"));
-		click("Edit Real age"); click("No");
+		click("Edit Real age"); click("Save and review", Map.of("value", "No"));
 		assertFalse(account.isEighteen());
 		assertTrue(body().contains("Under 18"));
 		creation.cancel();
@@ -333,31 +371,28 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void traitBudgetsPagesAndReviewPagesKeepTheChosenOptions() throws Exception {
+	void traitBudgetsRetainInvalidChoicesWithoutMutatingTheSavedDraft() throws Exception {
 		for (int i = 0; i < 10; i++) trait("gift" + i, "gift", i == 9 ? 3 : 1);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 1\npoints: 2"), summary());
 		click("Next"); assertTrue(body().contains("Need at least 1"));
-		click("gift0 (1)");
-		assertTrue(body().contains("Points remaining: 1"));
-		click("More choices"); assertTrue(body().contains("page 2"));
-		click("gift9 (3)"); assertTrue(body().contains("Cannot afford"));
-		click("gift8 (1)"); assertEquals(1, ((SelectionStage) creation.getActiveStage()).getSelections());
-		click("Previous choices"); click("More choices"); click("Next");
+		choose("gift9"); click("Next"); assertTrue(body().contains("Cannot afford"));
+		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
+		choose("gift8"); click("Next");
 		assertTrue(body().contains("Gift: gift8"));
 		assertEquals(List.of("gift8"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 	@Test
-	void pointBuyUsesTheExistingCostsAndRequiresTheWholeBudget() throws Exception {
+	void pointBuyChecksTheWholeBudgetAndOnlySavesOnNext() throws Exception {
 		trait("str1", "attributes", 0);
 		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
-		click("Next"); assertTrue(body().contains("Spend all 1"));
-		click("+ Strength"); assertTrue(body().contains("Points remaining: 0"));
-		click("+ Strength"); assertTrue(body().contains("Strength: 1 / 2"));
-		click("− Strength"); assertTrue(body().contains("Points remaining: 1"));
-		click("+ Strength"); click("Next");
+		click("Next"); assertTrue(body().contains("Spend exactly 1"));
+		click("Next", Map.of("rank_strength", "2")); assertTrue(body().contains("3 selected"));
+		click("Next", Map.of("rank_strength", "1"));
 		assertTrue(body().contains("Strength 1"));
-		click("Edit Attributes"); click("− Strength"); click("Back to review");
+		click("Edit Attributes"); click("Back to review", Map.of("rank_strength", "0"));
+		assertTrue(body().contains("Strength 1"));
+		click("Edit Attributes"); click("Save and review", Map.of("rank_strength", "1"));
 		assertTrue(body().contains("Strength 1"));
 	}
 
@@ -367,7 +402,7 @@ class CreationWizardTest {
 		click("Next", Map.of("clue_0", "Same clue", "clue_1", "Same clue"));
 		assertTrue(body().contains("Duplicate"));
 		assertTrue(creation.getCharacter().getPlayerClues().isEmpty());
-		click("Next", Map.of("clue_0", "A green coat")); assertTrue(body().contains("at least 2"));
+		click("Next", Map.of("clue_0", "A green coat", "clue_1", "")); assertTrue(body().contains("at least 2"));
 		click("Next", Map.of("clue_0", "A green coat", "clue_1", "Ink-stained fingers"));
 		click("Edit Character clues");
 		assertEquals("A green coat", ui.last().field("clue_0").initial());
@@ -399,9 +434,9 @@ class CreationWizardTest {
 		var gifts = stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 1");
 		gifts.setDependency(dependency);
 		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"), gifts, summary());
-		click("Human"); click("Next"); click("human_gift"); click("Next");
+		choose("human"); click("Next"); choose("human_gift"); click("Next");
 		assertEquals(1, creation.getCharacter().getTraits().size());
-		click("Edit Race"); click("Elf"); click("Save and review");
+		click("Edit Race"); choose("elf"); click("Save and review");
 		assertTrue(creation.getCharacter().getTraits().isEmpty());
 		assertFalse(body().contains("human_gift"));
 		var savedGifts = (SelectionStage) creation.getStages().get(1);
@@ -448,7 +483,7 @@ class CreationWizardTest {
 		new CreationManager().chatEvent(event);
 		assertTrue(event.isCancelled());
 		assertNull(creation.getCharacter().getName());
-		verify(player).sendMessage(contains("reopens your draft"));
+		verify(player, never()).sendMessage(anyString());
 	}
 
 	@Test
@@ -473,13 +508,140 @@ class CreationWizardTest {
 		when(base.getTraitData().getExclusive()).thenReturn(List.of("future_choice"));
 		base.getTraitData().getAttributeData().getModifiers().getFirst().add(2);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
-		click("base");
-		assertTrue(body().contains("Strength: +2"));
-		assertTrue(body().contains("Incompatible with: Future choice"));
-		click("dependent");
-		assertTrue(body().contains("Requires all: base"));
-		click("✓ base");
-		assertTrue(body().contains("remove that first"));
+		choose("base");
+		assertTrue(optionDetails().contains("Strength: +2"));
+		assertTrue(optionDetails().contains("Incompatible with: Future choice"));
+		choose("dependent");
+		assertTrue(optionDetails().contains("Requires all: base"));
+		click("Next");
+		click("Edit Gift");
+		click("Save and review", Map.of("choice_0", "false", "choice_1", "true"));
+		assertTrue(body().contains("Lacking requirements"));
 		assertFalse(body().contains("Dependency{"));
 	}
+	@Test
+	void formChoicesStayLocalAndNavigationNeverSharesTheChoiceRow() throws Exception {
+		for (int i = 0; i < 5; i++) race("race" + i, "Race " + i, 110);
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"), summary());
+		assertFalse(ui.last().base().canCloseWithEscape());
+		assertEquals(io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction.NONE, ui.last().base().afterAction());
+		assertEquals(List.of("Back", "Next"), ui.last().buttons().stream().map(b -> CreationDialogCapture.text(b.label())).toList());
+		int shown = ui.opened.size();
+		choose("human"); choose("elf"); choose("human");
+		assertEquals(shown, ui.opened.size());
+		assertTrue(creation.getCharacter().getRace() == null);
+		click("Next"); assertEquals(human, creation.getCharacter().getRace());
+	}
+
+	@Test
+	void checkboxPagesRetainChoicesAndBoundaryClicksDoNotReplaceTheDialog() throws Exception {
+		for (int i = 0; i < 10; i++) trait("gift" + i, "gift", 1);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 2\npoints: 2"), summary());
+		int shown = ui.opened.size();
+		click("Previous choices"); click("Previous choices");
+		assertEquals(shown, ui.opened.size());
+		choose("gift0"); click("More choices"); choose("gift8");
+		click("Previous choices");
+		assertTrue(((BooleanDialogInput) ui.last().base().inputs().getFirst()).initial());
+		click("Next");
+		assertEquals(List.of("gift0", "gift8"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+	}
+
+	@Test
+	void invalidChoiceFormsCannotPartiallyChangeDraftAttributesOrSavedTraits() throws Exception {
+		trait("cheap", "gift", 1).getTraitData().getAttributeData().getModifiers().getFirst().add(2);
+		trait("expensive", "gift", 3);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2\npoints: 2"), summary());
+		choose("cheap"); choose("expensive"); click("Next");
+		assertTrue(body().contains("Cannot afford"));
+		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
+		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
+		click("Next", Map.of("choice_1", "false"));
+		assertEquals(List.of("cheap"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		click("Edit Gift"); click("Save and review", Map.of("choice_0", "false", "choice_1", "false"));
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
+	}
+
+	@Test
+	void dependenciesInAFormCanPrecedeTheirPrerequisiteAndUnknownIdsAreRejected() throws Exception {
+		var dependent = trait("dependent", "gift", 0);
+		trait("base", "gift", 0);
+		YamlConfiguration config = new YamlConfiguration();
+		config.loadFromString("type: trait\nmode: all\ndepends-on: [base]");
+		when(dependent.getTraitData().hasDependency()).thenReturn(true);
+		when(dependent.getTraitData().getDependency()).thenReturn(new Dependency(config));
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
+		choose("dependent"); choose("base"); click("Next");
+		assertEquals(2, creation.getCharacter().getTraits().size());
+		creation.cancel();
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"));
+		click("Next", Map.of("choice", "missing")); assertTrue(body().contains("available option"));
+	}
+
+	@Test
+	void malformedAttributeRanksStayInlineAndCannotHangOrChangeTheDraft() throws Exception {
+		start(stage("attributes_stage", "type: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"));
+		for (String value : List.of("NaN", "Infinity", "-1", "1.5", "3")) {
+			click("Next", Map.of("rank_strength", value));
+			assertTrue(body().contains("whole rank"));
+			assertEquals(0, ((AttributesStage) creation.getActiveStage()).getRank("strength"));
+		}
+		int shown = ui.opened.size();
+		click("Next", Map.of("rank_strength", "3"));
+		assertEquals(shown, ui.opened.size(), "An unchanged error does not replace the dialog");
+	}
+
+	@Test
+	void paletteCustomGradientsAndPreviewRespectRankLimitsAndPersistOnSave() throws Exception {
+		try (var perks = mockStatic(PermissionGroupService.class, CALLS_REAL_METHODS)) {
+			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(2);
+			start(setter("name_stage", "name"), summary());
+			assertEquals(2, ui.last().base().inputs().stream().filter(input -> input.key().startsWith("colour_")).count());
+			click("Preview name", Map.of("value", "Aren", "colour_0", "#ffaa00", "colour_1", "#ffffff"));
+			assertTrue(body().contains("Aren"));
+			assertNull(creation.getCharacter().getNameColour());
+			int shown = ui.opened.size();
+			click("Preview name"); assertEquals(shown, ui.opened.size());
+			click("Next", Map.of("colours", "#zzzzzz")); assertTrue(body().contains("hex colours"));
+			click("Next", Map.of("colours", "#ff0000 #00ff00 #0000ff")); assertTrue(body().contains("up to 2"));
+			click("Next", Map.of("colours", "#FF0000 00ff00"));
+			assertEquals(List.of("#ff0000", "#00ff00"), creation.getCharacter().getNameColour().getHexCodes());
+			assertTrue(body().contains("Colours: #ff0000, #00ff00"));
+			click("Edit Name"); click("Save and review", Map.of("colours", "", "colour_0", "", "colour_1", ""));
+			assertNull(creation.getCharacter().getNameColour());
+		}
+	}
+
+	@Test
+	void coloursCannotBypassDonorPermissionsAndGenderIsOptionalPlainText() throws Exception {
+		start(setter("name_stage", "name"), setter("description_stage", "description"), summary());
+		assertTrue(body().contains("donor rank"));
+		click("Next", Map.of("value", "Aren", "colours", "#ffffff"));
+		assertTrue(body().contains("permission"));
+		click("Next", Map.of("value", "Aren", "colours", ""));
+		String description = "A quiet traveller with a faded coat and ink-stained fingers.";
+		click("Next", Map.of("value", description, "gender", "&cBad"));
+		assertTrue(body().contains("Gender may contain"));
+		click("Next", Map.of("value", description, "gender", "Non-binary"));
+		assertEquals("Non-binary", creation.getCharacter().getGender());
+		assertTrue(body().contains("Gender: Non-binary"));
+		click("Edit Description"); click("Save and review", Map.of("gender", ""));
+		assertTrue(body().contains("Gender: Unspecified"));
+	}
+
+	@Test
+	void discardingACharacterWorldDraftReturnsToTheSelectorWithoutChatOrTitles() throws Exception {
+		var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+		pluginStatic.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+		when(bodies.isSelecting(player)).thenReturn(true);
+		start(setter("name_stage", "name"));
+		ui.click(((MultiActionType) ui.last().type()).exitAction(), player, Map.of("value", "Aren"));
+		assertFalse(ui.last().base().canCloseWithEscape());
+		click("Discard draft");
+		verify(bodies).requestSelection(player);
+		verify(player, never()).sendMessage(anyString());
+		verify(player, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+	}
+
 }

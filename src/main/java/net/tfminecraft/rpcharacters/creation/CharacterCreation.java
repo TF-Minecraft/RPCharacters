@@ -885,7 +885,7 @@ public class CharacterCreation {
 
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
 
-			RPTexts.send(p, RPTexts.ERROR + "No free character slot. A web create may have taken it.");
+			CreationWizard.sendError(p, this, "No free character slot. A web create may have taken it.");
 
 			cancel();
 
@@ -938,9 +938,9 @@ public class CharacterCreation {
 
 		p.closeInventory();
 
-		RPTexts.title(p, RPTexts.SUCCESS + "Finished!", RPTexts.WARN + "Character " + RPTexts.MUTED + character.getName() + RPTexts.WARN + " created!", 5, 50, 5);
+		if (wizard == null) RPTexts.title(p, RPTexts.SUCCESS + "Finished!", RPTexts.WARN + "Character " + RPTexts.MUTED + character.getName() + RPTexts.WARN + " created!", 5, 50, 5);
 
-		RPTexts.send(p, RPTexts.MUTED + "Edit later with " + RPTexts.COMMAND + "/rpcharacter edit" + RPTexts.MUTED + ".");
+		if (wizard == null) RPTexts.send(p, RPTexts.MUTED + "Edit later with " + RPTexts.COMMAND + "/rpcharacter edit" + RPTexts.MUTED + ".");
 
 	}
 
@@ -1167,7 +1167,7 @@ public class CharacterCreation {
 
 		cancelled = true;
 
-		if(oldclass != null) {
+		if(wizard == null && oldclass != null) {
 
 			ClassService.applyClass(p, oldclass.getId());
 
@@ -1175,9 +1175,11 @@ public class CharacterCreation {
 
 		}
 
-		RPTexts.title(p, RPTexts.ERROR + "Cancelled!", RPTexts.WARN + "Character creation cancelled", 5, 50, 5);
+		if (wizard == null) RPTexts.title(p, RPTexts.ERROR + "Cancelled!", RPTexts.WARN + "Character creation cancelled", 5, 50, 5);
 
 		s.cancel();
+		if (wizard != null && p.isOnline() && RPCharacters.getCharacterBodies() != null
+				&& RPCharacters.getCharacterBodies().isSelecting(p)) RPCharacters.getCharacterBodies().requestSelection(p);
 
 	}
 

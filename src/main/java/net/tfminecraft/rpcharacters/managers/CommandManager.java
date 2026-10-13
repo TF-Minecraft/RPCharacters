@@ -55,6 +55,14 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (!cmd.getName().equalsIgnoreCase(cmd1)) {
 			return true;
 		}
+		if (sender instanceof Player player && args.length == 1) {
+			var creation = CreationManager.activeCreators.get(player);
+			if (creation != null && creation.getWizard() != null
+					&& java.util.Set.of("select", "create", "next", "back", "help", "cancel").contains(args[0].toLowerCase(java.util.Locale.ROOT))) {
+				creation.getWizard().resume();
+				return true;
+			}
+		}
 		if (args.length == 1 && args[0].equalsIgnoreCase("select")
 				&& sender instanceof Player player && RPCharacters.getCharacterBodies() != null) {
 			RPCharacters.getCharacterBodies().requestSelection(player);
@@ -218,18 +226,7 @@ public class CommandManager implements Listener, CommandExecutor{
 				net.tfminecraft.rpcharacters.kit.KitService.tryClaim(p, args[1]);
 				return true;
 			} else if(cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("create") && args.length == 1) {
-				if(CreationManager.activeCreators.containsKey(p)) {
-					var creation = CreationManager.activeCreators.get(p);
-					if (creation.getWizard() != null) creation.getWizard().resume();
-					else RPTexts.send(p, RPTexts.ERROR + "You are already creating a character");
-					return true;
-				}
-				PlayerData pd = PlayerManager.get(p);
-				if(!CharacterSlotService.hasFreeSlot(p, pd)){
-					RPTexts.send(p, RPTexts.ERROR + "You don't have a free character slot!");
-					return true;
-				}
-				CreationManager.initiateCreation(p);
+				RPTexts.send(p, RPTexts.INFO + "Use New character in the character menu.");
 				return true;
 			} else if(cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("next") && args.length == 1) {
 				if(!CreationManager.activeCreators.containsKey(p)) {

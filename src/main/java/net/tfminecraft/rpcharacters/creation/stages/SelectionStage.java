@@ -294,11 +294,11 @@ public class SelectionStage extends Stage{
 						} else {
 							cc.getCharacter().setRace(r);
 						}
-						RPTexts.send(p, RPTexts.SUCCESS + "Race set to " + r.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Race set to " + r.getName());
 					} else if(item.getType().equalsIgnoreCase("trait")) {
 						Trait t = TraitLoader.getByString(item.getId());
 						cc.getCharacter().addTrait(t);
-						RPTexts.send(p, RPTexts.SUCCESS + "Added trait " + t.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Added trait " + t.getName());
 					} else if(item.getType().equalsIgnoreCase("class")) {
 						if (cc.isEditing()) {
 							RPCharacter character = cc.getCharacter();
@@ -310,7 +310,7 @@ public class SelectionStage extends Stage{
 						} else {
 							cc.getCharacter().setMMOClass(item.getId());
 						}
-						RPTexts.send(p, RPTexts.SUCCESS + "Class set to " + item.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Class set to " + item.getName());
 					}
 				}
 			}

@@ -202,13 +202,11 @@ public class CreationManager implements Listener{
 	}
 
 	public static void sendChatBlockedDuringCreationHint(Player player) {
-		RPTexts.send(player, RPTexts.ERROR + "Chat is blocked during character creation.");
 		CharacterCreation creation = activeCreators.get(player);
 		if (creation != null && creation.getWizard() != null) {
-			RPTexts.send(player, RPTexts.MUTED + "Use the creator's fields. " + RPTexts.COMMAND + "/rpcharacter create "
-					+ RPTexts.MUTED + "reopens your draft.");
 			return;
 		}
+		RPTexts.send(player, RPTexts.ERROR + "Chat is blocked during character creation.");
 		RPTexts.send(player, RPTexts.MUTED + "Type " + RPTexts.COMMAND + "/rpcharacter help "
 				+ RPTexts.MUTED + "for guidance on this stage.");
 	}

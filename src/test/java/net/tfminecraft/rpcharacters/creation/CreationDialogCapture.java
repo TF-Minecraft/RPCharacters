@@ -87,6 +87,36 @@ final class CreationDialogCapture implements AutoCloseable {
 			var multiline = mockStatic(TextDialogInput.MultilineOptions.class);
 			statics.add(multiline);
 			multiline.when(() -> TextDialogInput.MultilineOptions.create(any(), any())).thenReturn(mock(TextDialogInput.MultilineOptions.class));
+			var entries = mockStatic(SingleOptionDialogInput.OptionEntry.class);
+			statics.add(entries);
+			entries.when(() -> SingleOptionDialogInput.OptionEntry.create(anyString(), any(), anyBoolean())).thenAnswer(call -> {
+				var entry = mock(SingleOptionDialogInput.OptionEntry.class);
+				when(entry.id()).thenReturn(call.getArgument(0));
+				when(entry.display()).thenReturn(call.getArgument(1));
+				when(entry.initial()).thenReturn(call.getArgument(2));
+				return entry;
+			});
+			inputs.when(() -> DialogInput.singleOption(anyString(), anyInt(), anyList(), any(), anyBoolean())).thenAnswer(call -> {
+				var input = mock(SingleOptionDialogInput.class);
+				when(input.key()).thenReturn(call.getArgument(0));
+				when(input.entries()).thenReturn(List.copyOf(call.getArgument(2)));
+				when(input.label()).thenReturn(call.getArgument(3));
+				return input;
+			});
+			inputs.when(() -> DialogInput.bool(anyString(), any(), anyBoolean(), anyString(), anyString())).thenAnswer(call -> {
+				var input = mock(BooleanDialogInput.class);
+				when(input.key()).thenReturn(call.getArgument(0));
+				when(input.label()).thenReturn(call.getArgument(1));
+				when(input.initial()).thenReturn(call.getArgument(2));
+				return input;
+			});
+			inputs.when(() -> DialogInput.numberRange(anyString(), anyInt(), any(), anyString(), anyFloat(), anyFloat(), any(), any())).thenAnswer(call -> {
+				var input = mock(NumberRangeDialogInput.class);
+				when(input.key()).thenReturn(call.getArgument(0));
+				when(input.label()).thenReturn(call.getArgument(2));
+				when(input.initial()).thenReturn(call.getArgument(6));
+				return input;
+			});
 			var types = mockStatic(DialogType.class);
 			statics.add(types);
 			types.when(() -> DialogType.multiAction(anyList(), any(), anyInt())).thenAnswer(call -> {
@@ -120,6 +150,8 @@ final class CreationDialogCapture implements AutoCloseable {
 		void click(ActionButton button, Audience viewer, Map<String, String> values) {
 			var response = mock(io.papermc.paper.dialog.DialogResponseView.class);
 			when(response.getText(anyString())).thenAnswer(call -> values.get(call.getArgument(0)));
+			when(response.getBoolean(anyString())).thenAnswer(call -> values.containsKey(call.getArgument(0)) ? Boolean.valueOf(values.get(call.getArgument(0))) : null);
+			when(response.getFloat(anyString())).thenAnswer(call -> values.containsKey(call.getArgument(0)) ? Float.valueOf(values.get(call.getArgument(0))) : null);
 			callbacks.get(button.action()).accept(response, viewer);
 		}
 

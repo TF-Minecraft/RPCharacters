@@ -116,7 +116,7 @@ public class SetterStage extends Stage{
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}
-				RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "18+", 5, 50, 5);
+				if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "18+", 5, 50, 5);
 			} else if(n.equalsIgnoreCase("no")) {
 				if (!cc.isPreview()) {
 					PlayerManager.get(p).setEighteen(false);
@@ -124,7 +124,7 @@ public class SetterStage extends Stage{
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}
-				RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "below 18", 5, 50, 5);
+				if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "below 18", 5, 50, 5);
 			} else {
 				if (!CreationWizard.reportError(cc, "Choose Yes or No.")) RPTexts.send(p, RPTexts.ERROR + "Write " + RPTexts.WARN + "yes " + RPTexts.MUTED + "or " + RPTexts.WARN + "no.");
 				return;
@@ -146,8 +146,8 @@ public class SetterStage extends Stage{
 				return;
 			}
 		}
-		RPTexts.title(p, " ", RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n, 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n);
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n, 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n);
 		cc.getCharacter().modify(target, n);
 		scheduleAdvance(p, cc);
 	}
@@ -160,8 +160,8 @@ public class SetterStage extends Stage{
 			return;
 		}
 		cc.getCharacter().setPersonaDescription(text);
-		RPTexts.title(p, " ", RPTexts.MUTED + "Description saved", 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + "Description saved (" + RPTexts.WARN + text.length() + RPTexts.MUTED + " characters).");
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Description saved", 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + "Description saved (" + RPTexts.WARN + text.length() + RPTexts.MUTED + " characters).");
 		scheduleAdvance(p, cc);
 	}
 
@@ -194,8 +194,8 @@ public class SetterStage extends Stage{
 		);
 		cc.getCharacter().setBirthday(birthday);
 		String formattedBirthday = FantasyCalendar.formatBirthday(birthday);
-		RPTexts.title(p, " ", RPTexts.MUTED + "Age set to " + RPTexts.WARN + age, 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + "Age set to " + RPTexts.WARN + age + RPTexts.MUTED + " (born "
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Age set to " + RPTexts.WARN + age, 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + "Age set to " + RPTexts.WARN + age + RPTexts.MUTED + " (born "
 				+ RPTexts.WARN + formattedBirthday + RPTexts.MUTED + ").");
 		scheduleAdvance(p, cc);
 	}

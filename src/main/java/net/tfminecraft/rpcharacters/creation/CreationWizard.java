@@ -19,12 +19,18 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.input.DialogInput;
+import io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput;
 import io.papermc.paper.registry.data.dialog.input.TextDialogInput;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
+import net.tfminecraft.rpcharacters.identity.NameColour;
+import net.tfminecraft.rpcharacters.persona.NameColourParser;
+import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
+import net.tfminecraft.rpcharacters.objects.attributes.AttributeData;
 import net.tfminecraft.rpcharacters.calendar.AgeCalculator;
 import net.tfminecraft.rpcharacters.classpick.ClassPickService;
 import net.tfminecraft.rpcharacters.creation.stages.AttributesStage;
@@ -51,7 +57,7 @@ public final class CreationWizard {
 	private static final int WIDTH = 360;
 	private static final int PAGE_SIZE = 8;
 	private static final ClickCallback.Options CALLBACKS = ClickCallback.Options.builder()
-			.uses(1).lifetime(Duration.ofHours(1)).build();
+			.uses(ClickCallback.UNLIMITED_USES).lifetime(Duration.ofDays(7)).build();
 	private final CharacterCreation creation;
 	private final Player player;
 	private final Map<Stage, Map<String, String>> fields = new HashMap<>();
@@ -59,7 +65,6 @@ public final class CreationWizard {
 	private final Set<Stage> completedBefore = new HashSet<>();
 	private final Set<Stage> confirmed = new HashSet<>();
 	private Stage displayed;
-	private SelectableItem focused;
 	private String error;
 	private int revision;
 
@@ -79,7 +84,6 @@ public final class CreationWizard {
 	}
 
 	public void show(Stage stage) {
-		if (displayed != stage) focused = null;
 		if (stage instanceof QuestionStage question && question.getQuestions().isEmpty()) question.pick();
 		displayed = stage;
 		error = null;
@@ -91,7 +95,9 @@ public final class CreationWizard {
 	}
 
 	public void error(String message) {
-		error = ClueFormatter.stripColor(message);
+		String plain = ClueFormatter.stripColor(message);
+		if (java.util.Objects.equals(error, plain)) return;
+		error = plain;
 		render();
 	}
 
@@ -107,6 +113,10 @@ public final class CreationWizard {
 	}
 
 	public void advance(Stage stage) {
+		if (stage instanceof SetterStage setter) {
+			if ("name".equalsIgnoreCase(setter.getTarget())) creation.getCharacter().setNameColour(NameColour.of(colours()));
+			if ("description".equalsIgnoreCase(setter.getTarget())) creation.getCharacter().setGender(remembered("gender", "").trim());
+		}
 		confirmed.add(stage);
 		pruneUnavailableTraits();
 		if (creation.isEditingFromSummary()) creation.returnToSummary();
@@ -158,9 +168,9 @@ public final class CreationWizard {
 		} else if (displayed instanceof SetterStage setter) {
 			setter(body, inputs, actions, setter, seen);
 		} else if (displayed instanceof SelectionStage selection) {
-			selection(body, actions, selection, seen);
+			selection(body, inputs, actions, selection, seen);
 		} else if (displayed instanceof AttributesStage attributes) {
-			attributes(body, actions, attributes, seen);
+			attributes(body, inputs, attributes);
 		} else if (displayed instanceof ClueStage) {
 			clues(body, inputs);
 		} else if (displayed instanceof QuestionStage question) {
@@ -169,21 +179,20 @@ public final class CreationWizard {
 				inputs.add(input("answer", "Your answer", remembered("answer", ""), 256, false));
 			}
 		}
-		if (error != null) body.add(message(error, NamedTextColor.RED));
+		body.add(message(error == null ? " " : error, NamedTextColor.RED));
 		boolean review = displayed == null || displayed instanceof SummaryStage;
+		// Keep the navigation on its own row, including odd-sized review pages.
+		if (actions.size() % 2 != 0) actions.add(ActionButton.builder(Component.empty()).width(174).build());
 		actions.add(button(creation.isEditingFromSummary() ? "Back to review" : "Back", seen, response -> {
 			remember(response);
 			creation.goBack();
 		}));
-		if (!(displayed instanceof SetterStage setter && "real_age".equalsIgnoreCase(setter.getTarget()))) {
-			actions.add(button(review ? "Create character" : creation.isEditingFromSummary() ? "Save and review" : "Next", seen,
-					response -> { remember(response); submit(); }));
-		}
-		body.add(message("Esc closes this screen. /rpcharacter create resumes your draft.", NamedTextColor.DARK_GRAY));
+		actions.add(button(review ? "Create character" : creation.isEditingFromSummary() ? "Save and review" : "Next", seen,
+				response -> { remember(response); submit(); }));
 		player.showDialog(Dialog.create(builder -> builder.empty()
 				.base(DialogBase.builder(Component.text(review ? "Review your character" : title(displayed), NamedTextColor.GOLD))
-						.canCloseWithEscape(true).pause(false)
-						.afterAction(DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE)
+						.canCloseWithEscape(false).pause(false)
+						.afterAction(DialogBase.DialogAfterAction.NONE)
 						.body(body).inputs(inputs).build())
 				.type(DialogType.multiAction(actions, button("Cancel creation", seen, response -> {
 					remember(response);
@@ -197,7 +206,7 @@ public final class CreationWizard {
 		if (target.equals("real_age")) {
 			body.add(message("Are you 18 or older in real life?", NamedTextColor.WHITE));
 			body.add(message("This controls age-restricted RP. Lying results in a permanent ban with no appeal.", NamedTextColor.GRAY));
-			for (String answer : List.of("Yes", "No")) actions.add(button(answer, seen, response -> stage.finish(answer, player, creation)));
+			inputs.add(choice("value", "Your answer", remembered("value", ""), List.of("", "Yes", "No"), List.of("Choose…", "Yes", "No")));
 			return;
 		}
 		boolean description = target.equals("description");
@@ -213,39 +222,56 @@ public final class CreationWizard {
 				: "Choose the name other players will know your character by.";
 		body.add(message(hint, NamedTextColor.GRAY));
 		inputs.add(input("value", title(stage), remembered("value", initial), Math.max(1, max), description));
+		if (description) inputs.add(input("gender", "Gender (optional)", remembered("gender", character.getGender()), 24, false));
+		if (target.equals("name")) nameColours(body, inputs, actions, seen);
 	}
 
-	private void selection(List<DialogBody> body, List<ActionButton> actions, SelectionStage stage, int seen) {
-		body.add(message("Choose " + stage.getMinSelections() + "–" + stage.getMaxSelections() + ". Click a choice to read its details.", NamedTextColor.GRAY));
-		if (stage.hasPoints()) body.add(message("Points remaining: " + stage.getPoints() + " / " + stage.getInitialPoints(), NamedTextColor.GOLD));
-		if (focused != null) body.add(message(details(focused), NamedTextColor.WHITE));
+	private void selection(List<DialogBody> body, List<DialogInput> inputs, List<ActionButton> actions, SelectionStage stage, int seen) {
+		body.add(message("Choose " + stage.getMinSelections() + "–" + stage.getMaxSelections() + ". Hover a choice for details. Next saves your choices.", NamedTextColor.GRAY));
+		if (stage.hasPoints()) body.add(message("Budget: " + stage.getInitialPoints() + " points. Costs are shown beside each choice.", NamedTextColor.GOLD));
 		List<SelectableItem> options = stage.getOptions();
 		int page = pages.getOrDefault(stage, 0);
-		for (SelectableItem item : options.subList(Math.min(page * PAGE_SIZE, options.size()), Math.min((page + 1) * PAGE_SIZE, options.size()))) {
-			String label = (item.isSelected() ? "✓ " : "") + plain(item.getName())
-					+ (stage.hasPoints() ? " (" + item.getCost() + ")" : "");
-			actions.add(ActionButton.builder(Component.text(label, item.isSelected() ? NamedTextColor.GREEN : NamedTextColor.WHITE))
-					.width(174).tooltip(component(details(item)))
-					.action(action(seen, response -> {
-						focused = item;
-						error = CreationManager.toggleSelection(player, stage, creation, item);
-						render();
-					})).build());
+		List<SelectableItem> visible = stage.getMaxSelections() == 1 ? options
+				: options.subList(Math.min(page * PAGE_SIZE, options.size()), Math.min((page + 1) * PAGE_SIZE, options.size()));
+		var detailLinks = Component.text("Details: ", NamedTextColor.GRAY);
+		for (SelectableItem item : visible) detailLinks = detailLinks.append(component(item.getName()).hoverEvent(component(details(item)))).append(Component.text("  "));
+		body.add(DialogBody.plainMessage(detailLinks, WIDTH));
+		if (stage.getMaxSelections() == 1) {
+			List<SingleOptionDialogInput.OptionEntry> entries = new ArrayList<>();
+			String initial = remembered("choice", options.stream().filter(SelectableItem::isSelected).map(SelectableItem::getId).findFirst().orElse(""));
+			entries.add(SingleOptionDialogInput.OptionEntry.create("", Component.text(stage.getMinSelections() == 0 ? "None" : "Choose…"), initial.isEmpty()));
+			for (SelectableItem item : options) entries.add(SingleOptionDialogInput.OptionEntry.create(item.getId(), optionLabel(stage, item), initial.equals(item.getId())));
+			inputs.add(DialogInput.singleOption("choice", WIDTH, entries, Component.text("Your choice"), true));
+			return;
+		}
+		for (int i = page * PAGE_SIZE; i < Math.min((page + 1) * PAGE_SIZE, options.size()); i++) {
+			SelectableItem item = options.get(i);
+			inputs.add(DialogInput.bool("choice_" + i, optionLabel(stage, item), Boolean.parseBoolean(remembered("choice_" + i, Boolean.toString(item.isSelected()))), "true", "false"));
 		}
 		if (options.size() > PAGE_SIZE) {
 			body.add(message("Choices page " + (page + 1) + " of " + ((options.size() + PAGE_SIZE - 1) / PAGE_SIZE), NamedTextColor.GRAY));
-			actions.add(button("Previous choices", seen, response -> { pages.put(stage, Math.max(0, page - 1)); render(); }));
-			actions.add(button("More choices", seen, response -> { pages.put(stage, Math.min((options.size() - 1) / PAGE_SIZE, page + 1)); render(); }));
+			actions.add(button("Previous choices", seen, response -> { remember(response); changePage(stage, Math.max(0, page - 1)); }));
+			actions.add(button("More choices", seen, response -> { remember(response); changePage(stage, Math.min((options.size() - 1) / PAGE_SIZE, page + 1)); }));
 		}
 	}
 
-	private void attributes(List<DialogBody> body, List<ActionButton> actions, AttributesStage stage, int seen) {
+	private Component optionLabel(SelectionStage stage, SelectableItem item) {
+		return component(item.getName() + (stage.hasPoints() ? " (" + item.getCost() + ")" : "")).hoverEvent(component(details(item)));
+	}
+
+	private void changePage(Stage stage, int page) {
+		if (pages.getOrDefault(stage, 0) == page) return;
+		pages.put(stage, page);
+		render();
+	}
+
+	private void attributes(List<DialogBody> body, List<DialogInput> inputs, AttributesStage stage) {
 		body.add(message("Spend all " + stage.getPool() + " points. Each new rank costs 1, 2, 4, 8… points.", NamedTextColor.GRAY));
-		body.add(message("Points remaining: " + stage.getRemaining(), NamedTextColor.GOLD));
+		body.add(message("Total rank costs: 0 = 0, 1 = 1, 2 = 3, 3 = 7, 4 = 15. Next checks your budget.", NamedTextColor.GOLD));
 		for (String attr : stage.getAttributes()) {
-			body.add(message(pretty(attr) + ": " + stage.getRank(attr) + " / " + stage.getMaxRank(), NamedTextColor.WHITE));
-			actions.add(button("− " + pretty(attr), seen, response -> { stage.tryDecrease(attr); render(); }));
-			actions.add(button("+ " + pretty(attr), seen, response -> { stage.tryIncrease(attr); render(); }));
+			float initial = Float.parseFloat(remembered("rank_" + attr, Integer.toString(stage.getRank(attr))));
+			inputs.add(DialogInput.numberRange("rank_" + attr, WIDTH, Component.text(pretty(attr)), "%s: %s", 0, Math.max(1, stage.getMaxRank()),
+					Float.isFinite(initial) ? Math.clamp(initial, 0, stage.getMaxRank()) : 0f, 1f));
 		}
 	}
 
@@ -259,6 +285,69 @@ public final class CreationWizard {
 				remembered("clue_" + i, i < existing.size() ? plain(existing.get(i)) : ""), Math.max(1, Cache.clueMaxLength), true));
 	}
 
+	private int colourCap() {
+		return Math.max(0, Math.min(8, PermissionGroupService.getNameColourStops(player)));
+	}
+
+	private void nameColours(List<DialogBody> body, List<DialogInput> inputs, List<ActionButton> actions, int seen) {
+		int cap = colourCap();
+		if (cap == 0) {
+			body.add(message("Name colours are available with a donor rank.", NamedTextColor.GRAY));
+			return;
+		}
+		body.add(message("Choose up to " + cap + " colours in gradient order. Custom hex colours override the palette choices.", NamedTextColor.GRAY));
+		List<NamedTextColor> palette = List.of(NamedTextColor.BLACK, NamedTextColor.DARK_BLUE, NamedTextColor.DARK_GREEN, NamedTextColor.DARK_AQUA,
+				NamedTextColor.DARK_RED, NamedTextColor.DARK_PURPLE, NamedTextColor.GOLD, NamedTextColor.GRAY, NamedTextColor.DARK_GRAY,
+				NamedTextColor.BLUE, NamedTextColor.GREEN, NamedTextColor.AQUA, NamedTextColor.RED, NamedTextColor.LIGHT_PURPLE, NamedTextColor.YELLOW, NamedTextColor.WHITE);
+		for (int i = 0; i < cap; i++) {
+			String key = "colour_" + i;
+			String initial = remembered(key, "");
+			List<SingleOptionDialogInput.OptionEntry> options = new ArrayList<>();
+			options.add(SingleOptionDialogInput.OptionEntry.create("", Component.text("Default / unused"), initial.isEmpty()));
+			for (NamedTextColor colour : palette) options.add(SingleOptionDialogInput.OptionEntry.create(colour.asHexString().toLowerCase(Locale.ROOT),
+					Component.text(pretty(colour.toString()), colour), initial.equalsIgnoreCase(colour.asHexString())));
+			inputs.add(DialogInput.singleOption(key, WIDTH, options, Component.text("Colour " + (i + 1)), true));
+		}
+		NameColour saved = creation.getCharacter().getNameColour();
+		inputs.add(input("colours", "Custom colours (e.g. #ff8800 #ffff55)", remembered("colours", saved == null ? "" : String.join(" ", saved.getHexCodes())), 8 * 8, false));
+		body.add(message(DisplayIdentityService.colourPlain(remembered("value", creation.getCharacter().getName()), NameColour.of(colours())), NamedTextColor.WHITE));
+		actions.add(button("Preview name", seen, response -> {
+			Map<String, String> before = new HashMap<>(fields.getOrDefault(displayed, Map.of()));
+			remember(response);
+			String invalid = appearanceError();
+			if (invalid != null) error(invalid);
+			else if (!before.equals(fields.get(displayed))) { error = null; render(); }
+		}));
+	}
+
+	private List<String> rawColours() {
+		String custom = remembered("colours", "").trim();
+		if (!custom.isEmpty()) return List.of(custom.split("\\s+"));
+		List<String> colours = new ArrayList<>();
+		for (int i = 0; i < colourCap(); i++) {
+			String value = remembered("colour_" + i, "");
+			if (!value.isBlank()) colours.add(value);
+		}
+		return colours;
+	}
+
+	private List<String> colours() {
+		return rawColours().stream().map(NameColourParser::parse).flatMap(java.util.Optional::stream).toList();
+	}
+
+	private String appearanceError() {
+		if (displayed instanceof SetterStage setter && "name".equalsIgnoreCase(setter.getTarget())) {
+			List<String> raw = rawColours();
+			if (raw.stream().anyMatch(value -> NameColourParser.parse(value).isEmpty())) return "Use six-digit hex colours in the custom colour field.";
+			if (!raw.isEmpty()) return PermissionGroupService.validateNameColourHexes(player, raw, false).orElse(null);
+		}
+		if (displayed instanceof SetterStage setter && "description".equalsIgnoreCase(setter.getTarget())) {
+			String gender = remembered("gender", "").trim();
+			if (gender.length() > 24 || !gender.matches("[\\p{L}\\p{Nd} ._'\\-]*")) return "Gender may contain letters, numbers, spaces and - _ . ', up to 24 characters.";
+		}
+		return null;
+	}
+
 	private void review(List<DialogBody> body, List<ActionButton> actions, List<Stage> available, int seen) {
 		body.add(message("Check every choice. Click an entry to edit it, then return here.", NamedTextColor.GRAY));
 		List<Stage> entries = available.stream().filter(stage -> !(stage instanceof InfoStage) && !(stage instanceof SummaryStage)).toList();
@@ -266,13 +355,17 @@ public final class CreationWizard {
 		for (Stage stage : entries.subList(Math.min(page * PAGE_SIZE, entries.size()), Math.min((page + 1) * PAGE_SIZE, entries.size()))) {
 			String value = reviewValue(stage);
 			body.add(message(title(stage) + ": " + value, NamedTextColor.WHITE));
+			if (stage instanceof SetterStage setter && "name".equalsIgnoreCase(setter.getTarget()) && confirmed.contains(stage)) {
+				NameColour colour = creation.getCharacter().getNameColour();
+				body.add(DialogBody.plainMessage(Component.text("Colours: " + (colour == null ? "Default" : String.join(", ", colour.getHexCodes())), NamedTextColor.GRAY), WIDTH));
+			}
 			actions.add(ActionButton.builder(Component.text("Edit " + title(stage))).width(174)
 					.tooltip(component(value)).action(action(seen, response -> creation.jumpToStageForEdit(stage.getId()))).build());
 		}
 		if (entries.size() > PAGE_SIZE) {
 			body.add(message("Review page " + (page + 1) + " of " + ((entries.size() + PAGE_SIZE - 1) / PAGE_SIZE), NamedTextColor.GRAY));
-			actions.add(button("Previous entries", seen, response -> { pages.put(displayed, Math.max(0, page - 1)); render(); }));
-			actions.add(button("More entries", seen, response -> { pages.put(displayed, Math.min((entries.size() - 1) / PAGE_SIZE, page + 1)); render(); }));
+			actions.add(button("Previous entries", seen, response -> changePage(displayed, Math.max(0, page - 1))));
+			actions.add(button("More entries", seen, response -> changePage(displayed, Math.min((entries.size() - 1) / PAGE_SIZE, page + 1))));
 		}
 	}
 
@@ -280,8 +373,8 @@ public final class CreationWizard {
 		RPCharacter character = creation.getCharacter();
 		if (!confirmed.contains(stage)) return "Not confirmed";
 		if (stage instanceof SetterStage setter) return switch (setter.getTarget().toLowerCase(Locale.ROOT)) {
-			case "name" -> character.getName();
-			case "description" -> character.getPersonaDescription();
+			case "name" -> DisplayIdentityService.colourPlain(character.getName(), character.getNameColour());
+			case "description" -> character.getPersonaDescription() + "\nGender: " + (character.getGender() == null || character.getGender().isBlank() ? "Unspecified" : character.getGender());
 			case "age" -> AgeCalculator.formatAge(character.getBirthday());
 			case "real_age" -> PlayerManager.get(player).isEighteen() ? "18+" : "Under 18";
 			default -> fields.getOrDefault(stage, Map.of()).getOrDefault("value", "");
@@ -305,10 +398,19 @@ public final class CreationWizard {
 	}
 
 	private void submit() {
+		String invalid = appearanceError();
+		if (invalid != null) { error(invalid); return; }
 		if (displayed == null || displayed instanceof SummaryStage) creation.finish();
 		else if (displayed instanceof SetterStage setter) setter.finish(remembered("value", ""), player, creation);
-		else if (displayed instanceof SelectionStage selection) selection.confirm(player, creation);
-		else if (displayed instanceof AttributesStage attributes) attributes.confirm(player, creation);
+		else if (displayed instanceof SelectionStage selection) {
+			String selectionError = applySelection(selection);
+			if (selectionError != null) error(selectionError);
+			else selection.confirm(player, creation);
+		} else if (displayed instanceof AttributesStage attributes) {
+			String attributesError = applyAttributes(attributes);
+			if (attributesError != null) error(attributesError);
+			else attributes.confirm(player, creation);
+		}
 		else if (displayed instanceof ClueStage) saveClues();
 		else if (displayed instanceof QuestionStage question) {
 			int index = question.getCurrentQuestion();
@@ -319,6 +421,63 @@ public final class CreationWizard {
 				else { fields.remove(question); render(); }
 			} else error("Wrong answer. Try again.");
 		} else advance(displayed);
+	}
+
+	/** Validate the whole form with existing rules before replacing any draft choices. */
+	private String applySelection(SelectionStage stage) {
+		SelectionStage candidate = new SelectionStage(stage);
+		List<SelectableItem> pending = new ArrayList<>();
+		for (int i = 0; i < candidate.getOptions().size(); i++) {
+			SelectableItem item = candidate.getOptions().get(i);
+			boolean selected = stage.getMaxSelections() == 1 ? item.getId().equals(remembered("choice", ""))
+					: Boolean.parseBoolean(remembered("choice_" + i, "false"));
+			if (selected) pending.add(item);
+		}
+		if (stage.getMaxSelections() == 1 && !remembered("choice", "").isEmpty() && pending.isEmpty()) return "Choose an available option.";
+		pending.sort(java.util.Comparator.comparingInt(SelectableItem::getCost));
+		AttributeData before = new AttributeData(creation.getTempData());
+		String failure = null;
+		try {
+			while (!pending.isEmpty()) {
+				boolean progress = false;
+				for (SelectableItem item : new ArrayList<>(pending)) {
+					String invalid = CreationManager.toggleSelection(player, candidate, creation, item);
+					if (invalid == null) { pending.remove(item); progress = true; }
+					else failure = invalid;
+				}
+				if (!progress) return failure;
+			}
+		} finally {
+			creation.getTempData().clearAll();
+			creation.getTempData().mergeFrom(before);
+		}
+		for (SelectableItem item : new ArrayList<>(stage.getSelection())) {
+			stage.unSelect(item);
+			item.setSelected(false);
+			creation.getTempData().mergeFromReverse(item.getAttributeData());
+		}
+		for (SelectableItem selected : candidate.getSelection()) {
+			SelectableItem item = stage.getOptions().stream().filter(option -> option.getId().equals(selected.getId())).findFirst().orElseThrow();
+			stage.select(item);
+			item.click(creation);
+		}
+		return null;
+	}
+
+	private String applyAttributes(AttributesStage stage) {
+		Map<String, Integer> ranks = new HashMap<>();
+		long spent = 0;
+		for (String attr : stage.getAttributes()) {
+			float value = Float.parseFloat(remembered("rank_" + attr, "0"));
+			if (!Float.isFinite(value) || value != Math.floor(value) || value < 0 || value > stage.getMaxRank()) return "Choose a whole rank from 0 to " + stage.getMaxRank() + ".";
+			int rank = (int) value;
+			ranks.put(attr, rank);
+			spent += (1L << rank) - 1;
+		}
+		if (spent != stage.getPool()) return "Spend exactly " + stage.getPool() + " attribute points (" + spent + " selected).";
+		for (String attr : stage.getAttributes()) while (stage.getRank(attr) > 0) stage.tryDecrease(attr);
+		for (String attr : stage.getAttributes()) while (stage.getRank(attr) < ranks.get(attr)) stage.tryIncrease(attr);
+		return null;
 	}
 
 	private void saveClues() {
@@ -345,6 +504,7 @@ public final class CreationWizard {
 		}
 		RPCharacter character = creation.getCharacter();
 		String invalid = CreationRules.nameError(character.getName());
+		if (invalid == null && character.getNameColour() != null) invalid = PermissionGroupService.validateNameColourHexes(player, character.getNameColour().getHexCodes(), false).orElse(null);
 		if (invalid == null) invalid = CreationRules.classError(character.getMMOClass());
 		if (invalid == null) invalid = character.getRace() == null ? "Pick a race." : CreationRules.birthdayError(character, character.getBirthday());
 		if (invalid == null) invalid = CreationRules.descriptionError(character.getPersonaDescription());
@@ -357,8 +517,25 @@ public final class CreationWizard {
 	private void remember(DialogResponseView response) {
 		if (response == null) return;
 		Map<String, String> values = fields.computeIfAbsent(displayed, stage -> new HashMap<>());
-		if (displayed instanceof SetterStage) values.put("value", text(response, "value"));
-		else if (displayed instanceof QuestionStage) values.put("answer", text(response, "answer"));
+		if (displayed instanceof SetterStage setter) {
+			values.put("value", text(response, "value"));
+			if ("name".equalsIgnoreCase(setter.getTarget())) {
+				values.put("colours", text(response, "colours"));
+				for (int i = 0; i < colourCap(); i++) values.put("colour_" + i, text(response, "colour_" + i));
+			}
+			if ("description".equalsIgnoreCase(setter.getTarget())) values.put("gender", text(response, "gender"));
+		} else if (displayed instanceof SelectionStage selection) {
+			if (selection.getMaxSelections() == 1) values.put("choice", text(response, "choice"));
+			else for (int i = pages.getOrDefault(displayed, 0) * PAGE_SIZE; i < Math.min((pages.getOrDefault(displayed, 0) + 1) * PAGE_SIZE, selection.getOptions().size()); i++) {
+				Boolean value = response.getBoolean("choice_" + i);
+				values.put("choice_" + i, Boolean.toString(Boolean.TRUE.equals(value)));
+			}
+		} else if (displayed instanceof AttributesStage attributes) {
+			for (String attr : attributes.getAttributes()) {
+				Float value = response.getFloat("rank_" + attr);
+				values.put("rank_" + attr, Float.toString(value == null ? 0 : value));
+			}
+		} else if (displayed instanceof QuestionStage) values.put("answer", text(response, "answer"));
 		else if (displayed instanceof ClueStage) {
 			int count = Math.max(creation.getCharacter().getCluesNeeded(), creation.getCharacter().getPlayerClues().size());
 			for (int i = 0; i < count; i++) values.put("clue_" + i, text(response, "clue_" + i));
@@ -378,7 +555,7 @@ public final class CreationWizard {
 		int seen = ++revision;
 		player.showDialog(Dialog.create(builder -> builder.empty()
 				.base(DialogBase.builder(Component.text("Discard this character?", NamedTextColor.GOLD))
-						.canCloseWithEscape(true).pause(false).afterAction(DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE)
+						.canCloseWithEscape(false).pause(false).afterAction(DialogBase.DialogAfterAction.NONE)
 						.body(List.of(message("Your unfinished choices will be lost.", NamedTextColor.GRAY))).build())
 				.type(DialogType.multiAction(List.of(button("Keep creating", seen, response -> render()),
 						button("Discard draft", seen, response -> creation.cancel())), null, 2))));
@@ -392,7 +569,6 @@ public final class CreationWizard {
 		return DialogAction.customClick((response, audience) -> {
 			if (audience != player || !player.isOnline() || seen != revision || creation.isCancelled()
 					|| CreationManager.activeCreators.get(player) != creation) return;
-			revision++;
 			callback.accept(response);
 		}, CALLBACKS);
 	}
@@ -404,6 +580,12 @@ public final class CreationWizard {
 
 	private static DialogBody message(String text, NamedTextColor colour) {
 		return DialogBody.plainMessage(component(text).colorIfAbsent(colour), WIDTH);
+	}
+
+	private static DialogInput choice(String key, String label, String initial, List<String> values, List<String> labels) {
+		List<SingleOptionDialogInput.OptionEntry> options = new ArrayList<>();
+		for (int i = 0; i < values.size(); i++) options.add(SingleOptionDialogInput.OptionEntry.create(values.get(i), Component.text(labels.get(i)), values.get(i).equals(initial)));
+		return DialogInput.singleOption(key, WIDTH, options, Component.text(label), true);
 	}
 
 	private static Component component(String text) {

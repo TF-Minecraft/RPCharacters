@@ -363,7 +363,7 @@ public class AttributesStage extends Stage {
 			contribution.mergeFrom(trait.getTraitData().getAttributeData());
 		}
 		cc.setAttributeStageContribution(key, contribution);
-		RPTexts.send(p, RPTexts.SUCCESS + "Attributes set.");
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Attributes set.");
 		if (cc.getWizard() != null) {
 			cc.getWizard().advance(this);
 			return;
