@@ -13,7 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <argLine></argLine>
         <simplefactions.version>4.0.0</simplefactions.version>
-        <tlibs.version>2.4.1</tlibs.version>
+        <tlibs.version>2.5.0</tlibs.version>
         <vehicleframework.version>2.7.0</vehicleframework.version>
         <worldguard.version>7.0.9</worldguard.version>
     </properties>
