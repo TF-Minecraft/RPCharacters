@@ -58,7 +58,6 @@ public final class WillMenu {
         List<String> held = estates == null ? List.of() : estates.holdings(UUID.fromString(ctx.character().getId()));
         lines.add(held.isEmpty() ? "Your estate holds nothing recorded today." : "Your estate today:");
         for (String line : held) lines.add("• " + line);
-        lines.add("Pets and animals are not included yet.");
         List<Button> buttons = new ArrayList<>();
         buttons.add(button(ctx, "Name an heir", values -> ask(ctx)));
         if (will.named()) buttons.add(button(ctx, "Revoke", values -> confirm(ctx, null, "Revoke your will? Nobody will be named.")));
