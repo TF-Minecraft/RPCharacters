@@ -118,7 +118,7 @@ class CharacterTransitionsTest {
             for (RPCharacter character : account.getCharacters()) directory.upsert(account.getUniqueId(), character);
             return true;
         });
-        when(database.trySaveCharacter(any(), any())).thenAnswer(call -> {
+        when(database.trySaveCharacterDurably(any(), any())).thenAnswer(call -> {
             order.add("save-death");
             PlayerData account = call.getArgument(0);
             directory.upsert(account.getUniqueId(), call.getArgument(1));
@@ -183,7 +183,7 @@ class CharacterTransitionsTest {
         assertFalse(CharacterTransitions.kill(player, alice, PermakillCause.COMMAND, null).killed());
         assertEquals(Status.ALIVE, alice.getStatus());
         assertTrue(alice.isActive());
-        verify(database, never()).trySaveCharacter(any(), any());
+        verify(database, never()).trySaveCharacterDurably(any(), any());
         verify(bodies, never()).markDead(any(), any());
         assertTrue(events(CharacterDeathEvent.class).isEmpty());
     }
@@ -208,7 +208,7 @@ class CharacterTransitionsTest {
         verify(bodies).markDead(data, alice);
         var order = inOrder(bodies, database);
         order.verify(bodies).prepareDeath(data, alice);
-        order.verify(database).trySaveCharacter(data, alice);
+        order.verify(database).trySaveCharacterDurably(data, alice);
         order.verify(bodies).markDead(data, alice);
         assertTrue(runtime.currentSession(player).isEmpty());
         assertEquals(1, events(CharacterDeathEvent.class).size());
@@ -503,7 +503,7 @@ class CharacterTransitionsTest {
         assertFalse(runtime.isCurrent(session));
         assertEquals(Status.ALIVE, alice.getStatus());
         assertNull(alice.getDeathId());
-        verify(database, never()).trySaveCharacter(any(), any());
+        verify(database, never()).trySaveCharacterDurably(any(), any());
         verify(alice, never()).deactivate();
         verify(bob, never()).tryActivate();
         assertTrue(events(CharacterDeathEvent.class).isEmpty());
@@ -525,7 +525,7 @@ class CharacterTransitionsTest {
         assertEquals(Status.DEAD, alice.getStatus());
         assertNotNull(alice.getDeathId());
         assertFalse(alice.isActive());
-        verify(database).trySaveCharacter(data, alice);
+        verify(database).trySaveCharacterDurably(data, alice);
         verify(database, never()).trySavePlayer(any());
         verify(alice, never()).deactivate();
         verify(bob, never()).tryActivate();
@@ -604,7 +604,7 @@ class CharacterTransitionsTest {
         assertTrue(runtime.isCurrent(session));
         bob.setStatus(Status.DEAD);
         assertFalse(CharacterTransitions.kill(player, bob, PermakillCause.OTHER, null).killed());
-        verify(database, never()).trySaveCharacter(any(), any());
+        verify(database, never()).trySaveCharacterDurably(any(), any());
         assertTrue(events(CharacterSessionEndEvent.class).isEmpty());
         assertTrue(events(CharacterDeathEvent.class).isEmpty());
     }
@@ -685,7 +685,7 @@ class CharacterTransitionsTest {
         UUID previousDeath = UUID.randomUUID();
         Instant previousAt = Instant.ofEpochMilli(1000);
         alice.setDeathRecord(previousDeath, previousAt);
-        when(database.trySaveCharacter(data, alice)).thenAnswer(call -> {
+        when(database.trySaveCharacterDurably(data, alice)).thenAnswer(call -> {
             assertEquals(Status.DEAD, alice.getStatus());
             assertFalse(alice.isActive());
             assertNotEquals(previousDeath, alice.getDeathId());
@@ -702,7 +702,7 @@ class CharacterTransitionsTest {
         assertTrue(runtime.currentSession(player).isEmpty());
         assertFalse(player.isOnline());
         verify(logger).severe(contains("Permanent death was not saved"));
-        doReturn(true).when(database).trySaveCharacter(data, alice);
+        doReturn(true).when(database).trySaveCharacterDurably(data, alice);
         // MockBukkit kick removes the player but leaves its reconnect flag set.
         player.disconnect();
         assertTrue(player.reconnect());
@@ -723,7 +723,7 @@ class CharacterTransitionsTest {
         assertNotEquals(first, bob.getDeathId());
         assertEquals(List.of(first, bob.getDeathId()), events(CharacterDeathEvent.class).stream()
                 .map(CharacterDeathEvent::getDeathId).toList());
-        verify(database, times(2)).trySaveCharacter(data, bob);
+        verify(database, times(2)).trySaveCharacterDurably(data, bob);
         assertTrue(events(CharacterSessionEndEvent.class).isEmpty());
     }
 
@@ -735,7 +735,7 @@ class CharacterTransitionsTest {
         assertFalse(CharacterTransitions.kill(player, alice, PermakillCause.COMMAND, null).killed());
         assertEquals(Status.ALIVE, alice.getStatus());
         assertEquals(Status.ALIVE, foreign.getStatus());
-        verify(database, never()).trySaveCharacter(any(), any());
+        verify(database, never()).trySaveCharacterDurably(any(), any());
     }
 
     @Test
