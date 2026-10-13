@@ -886,10 +886,10 @@ public class CharacterCreation {
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
 
 			CreationWizard.sendError(p, this, "No free character slot. A web create may have taken it.");
-
-			cancel();
-
-			p.closeInventory();
+			if (wizard == null) {
+				cancel();
+				p.closeInventory();
+			}
 
 			net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 
@@ -936,7 +936,7 @@ public class CharacterCreation {
 
 		net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(p);
 
-		p.closeInventory();
+		if (wizard == null) p.closeInventory();
 
 		if (wizard == null) RPTexts.title(p, RPTexts.SUCCESS + "Finished!", RPTexts.WARN + "Character " + RPTexts.MUTED + character.getName() + RPTexts.WARN + " created!", 5, 50, 5);
 

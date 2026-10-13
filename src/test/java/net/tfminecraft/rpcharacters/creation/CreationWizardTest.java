@@ -265,6 +265,31 @@ class CreationWizardTest {
 		verify(player).closeDialog();
 		verify(player, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
 		verify(player, never()).sendMessage(anyString());
+		verify(player, never()).closeInventory();
+	}
+
+	@Test
+	void lastSlotTakenWhileReviewingKeepsTheDraftAndInlineErrorUntilItCanFinish() throws Exception {
+		start(setter("name_stage", "name"), stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"),
+				setter("age_stage", "age"), setter("description_stage", "description"), stage("clues_stage", "type: clue"), summary());
+		creation.getCharacter().setMMOClass("MAGE");
+		click("Next", Map.of("value", "Aren")); choose("human"); click("Next");
+		click("Next", Map.of("value", "30"));
+		click("Next", Map.of("value", "A quiet traveller with a faded coat and ink-stained fingers."));
+		click("Next", Map.of("clue_0", "A faded green coat", "clue_1", "Ink-stained fingers"));
+		slots.when(() -> CharacterSlotService.hasFreeSlot(player, account)).thenReturn(false);
+		click("Create character");
+		assertSame(creation, CreationManager.activeCreators.get(player));
+		assertFalse(creation.isCancelled()); assertEquals("Review your character", title());
+		assertTrue(body().contains("No free character slot")); assertTrue(body().contains("Aren"));
+		assertTrue(account.getCharacters().isEmpty());
+		verify(player, never()).closeDialog(); verify(player, never()).closeInventory();
+		click("Edit Name"); click("Save and review", Map.of("value", "Mira"));
+		slots.when(() -> CharacterSlotService.hasFreeSlot(player, account)).thenReturn(true);
+		click("Create character");
+		assertEquals(1, account.getCharacters().size()); assertEquals("Mira", account.getCharacters().getFirst().getName());
+		assertFalse(CreationManager.activeCreators.containsKey(player));
+		verify(player, never()).closeInventory();
 	}
 
 	@Test
@@ -452,6 +477,28 @@ class CreationWizardTest {
 		assertFalse(body().contains("human_gift"));
 		var savedGifts = (SelectionStage) creation.getStages().get(1);
 		assertEquals(0, savedGifts.getSelections());
+	}
+
+	@Test
+	void pruningATraitClearsItsRememberedTickWhenTheStageRemainsAvailable() throws Exception {
+		var gift = trait("human_gift", "gift", 0); trait("universal", "gift", 0);
+		YamlConfiguration config = new YamlConfiguration();
+		config.loadFromString("type: race\nmode: one-or-more\ndepends-on: [human]");
+		when(gift.getTraitData().hasDependency()).thenReturn(true);
+		when(gift.getTraitData().getDependency()).thenReturn(new Dependency(config));
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"),
+				stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 1"), summary());
+		choose("human"); click("Next"); choose("human_gift"); click("Next");
+		click("Edit Race"); choose("elf"); click("Save and review");
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		click("Edit Gift");
+		assertTrue(CreationDialogCapture.text(optionRow("human_gift")).startsWith("☒"));
+		assertNull(optionRow("human_gift").clickEvent());
+		assertTrue(CreationDialogCapture.text(optionRow("universal")).startsWith("☐"));
+		click("Save and review");
+		assertEquals("Review your character", title()); assertTrue(creation.getCharacter().getTraits().isEmpty());
+		click("Edit Gift"); choose("universal"); click("Save and review");
+		assertEquals(List.of("universal"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 	@Test
@@ -651,6 +698,8 @@ class CreationWizardTest {
 	void coloursCannotBypassDonorPermissionsAndGenderIsOptionalPlainText() throws Exception {
 		start(setter("name_stage", "name"), setter("description_stage", "description"), summary());
 		assertTrue(ui.last().buttons().stream().noneMatch(b -> CreationDialogCapture.text(b.label()).equals("Edit colours")));
+		assertFalse(body().contains("Name preview"));
+		assertEquals(List.of("Back", "Next"), ui.last().buttons().stream().map(b -> CreationDialogCapture.text(b.label())).toList());
 		creation.getCharacter().setNameColour(net.tfminecraft.rpcharacters.identity.NameColour.of(List.of("#ffffff")));
 		click("Next", Map.of("value", "Aren"));
 		assertTrue(body().contains("permission"));

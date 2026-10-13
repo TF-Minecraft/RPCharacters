@@ -143,6 +143,7 @@ public final class CreationWizard {
 						character.removeTrait(trait);
 						confirmed.remove(stage);
 						selection.hydrateFromCharacter(character);
+						fields.remove(stage);
 						changed = true;
 					}
 				}
@@ -356,8 +357,8 @@ public final class CreationWizard {
 	}
 
 	private void nameColours(List<DialogBody> body, List<ActionButton> actions, int seen) {
-		body.add(namePreview());
 		if (colourCap() == 0) return;
+		body.add(namePreview());
 		actions.add(button("Preview name", seen, this::preview));
 		actions.add(button("Edit colours", seen, response -> {
 			remember(response);
