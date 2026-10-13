@@ -158,7 +158,11 @@ class InventoryManagerViewsTest extends InventoryFixture {
     @Test void classButtonAndClassSummaryEntryOpenTheClassPicker() throws Exception {
         var classes=installMmo(); var warrior=mock(PlayerClass.class); when(warrior.getName()).thenReturn("Warrior"); when(classes.get("warrior")).thenReturn(warrior);
         classGui.when(() -> MmoCoreClassGuiHelper.formatLine(anyString())).thenAnswer(call -> call.getArgument(0)); when(character.isActive()).thenReturn(true);
+        when(character.getWill()).thenReturn(net.tfminecraft.rpcharacters.will.CharacterWill.NONE);
         manager.characterView(player,character); var button=top().getItem(InventoryManager.CLASS_PICK_SLOT);
+        assertEquals(Material.PAPER,top().getItem(InventoryManager.WILL_SLOT).getType()); assertTrue(lore(top().getItem(InventoryManager.WILL_SLOT)).contains("No heir is named"));
+        when(character.getWill()).thenReturn(new net.tfminecraft.rpcharacters.will.CharacterWill(java.util.UUID.randomUUID(),1,1L,null));
+        assertTrue(lore(manager.getWillItem(character)).contains("An heir is named"));
         assertEquals(Material.NETHERITE_SWORD,button.getType()); assertTrue(lore(button).contains("Warrior")); assertTrue(button.getItemMeta().getPersistentDataContainer().has(key(InventoryManager.OPEN_CLASS_PICK_KEY)));
         manager.characterView(other,character); assertEquals(Material.GRAY_STAINED_GLASS_PANE,other.getOpenInventory().getTopInventory().getItem(InventoryManager.CLASS_PICK_SLOT).getType());
         when(character.hasMMOClass()).thenReturn(false); assertTrue(lore(manager.getClassPickItem(character)).contains("Not selected")); when(character.hasMMOClass()).thenReturn(true);

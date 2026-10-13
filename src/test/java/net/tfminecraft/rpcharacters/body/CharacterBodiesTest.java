@@ -173,6 +173,12 @@ class CharacterBodiesTest {
     void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);drain();}
     void play(){ready();bodies.select(account,a);drain();assertTrue(bodies.hasLiveBody(player));}
 
+    @Test void estatesReadTheStoreAndAskTheLeaseWhetherABodyIsStillInPlay() throws Exception {
+        assertSame(store,bodies.store());
+        when(leases.names(owner,first)).thenReturn(true);
+        assertTrue(bodies.hasLease(owner,first));
+        assertFalse(bodies.hasLease(owner,second));
+    }
     @Test void requiredPackWaitsInsideRoomAfterRecoveryWithoutOpeningSelectionOrTeleportingTwice() throws Exception {
         tag=new BodyTag.Live(first,1); when(packs.ready(player)).thenReturn(false);
         bodies.join(player); bodies.prepare(account); queued.removeFirst().run();

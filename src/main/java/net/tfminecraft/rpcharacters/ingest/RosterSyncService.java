@@ -202,6 +202,7 @@ public final class RosterSyncService {
 				row.put("kit_status", starter.toStorage());
 			}
 			appendSheetFields(row, c);
+			net.tfminecraft.rpcharacters.will.WillRoster.append(row, c);
 			characters.add(row);
 		}
 		root.put("characters", characters);

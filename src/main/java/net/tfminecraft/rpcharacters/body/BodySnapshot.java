@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.body;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -141,6 +142,71 @@ public final class BodySnapshot {
         JsonObject copy = data.deepCopy();
         copy.add("health", JsonNull.INSTANCE);
         return new BodySnapshot(copy);
+    }
+
+    /** Inventory items that stay with the body, such as MMOInventory slot placeholders (graves keep them too). */
+    @FunctionalInterface
+    public interface Kept {
+        Kept NONE = (slot, item) -> false;
+
+        /** {@code slot} is the player inventory index: 0-35 storage, 36-39 armour, 40 offhand. */
+        boolean keep(int slot, ItemStack item);
+    }
+
+    /**
+     * This body with storage, armour, offhand and ender chest emptied, except inventory items {@code kept}
+     * leaves in place; everything else is kept.
+     */
+    public BodySnapshot stripped(Kept kept) throws IOException {
+        List<byte[]> inventory = slotBytes("inventory");
+        ByteBuffer rebuilt = ByteBuffer.allocate(BodyJson.bytes(data, "inventory").length).put((byte) 1).putInt(inventory.size());
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            byte[] item = inventory.get(slot);
+            if (item.length == 0 || !keeps(kept, slot, item)) item = new byte[0];
+            rebuilt.putInt(item.length).put(item);
+        }
+        JsonObject copy = data.deepCopy();
+        copy.addProperty("inventory", BodyJson.encode(Arrays.copyOf(rebuilt.array(), rebuilt.position())));
+        copy.addProperty("enderChest", BodyJson.encode(emptyItems(slots(BodyJson.bytes(data, "enderChest")))));
+        return new BodySnapshot(copy);
+    }
+
+    /**
+     * Every stack {@link #stripped} takes, inventory first and then the ender chest, as Paper's single-item
+     * bytes ({@link ItemStack#serializeAsBytes()}), so the same body and rules always give the same list.
+     */
+    public List<byte[]> possessions(Kept kept) throws IOException {
+        List<byte[]> stacks = new ArrayList<>();
+        List<byte[]> inventory = slotBytes("inventory");
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            byte[] item = inventory.get(slot);
+            if (item.length > 0 && !keeps(kept, slot, item)) stacks.add(item);
+        }
+        for (byte[] item : slotBytes("enderChest")) if (item.length > 0) stacks.add(item);
+        return stacks;
+    }
+
+    private static boolean keeps(Kept kept, int slot, byte[] item) throws IOException {
+        if (kept == Kept.NONE) return false;
+        try {
+            return kept.keep(slot, ItemStack.deserializeBytes(item));
+        } catch (RuntimeException error) {
+            throw new IOException("Character body item in slot " + slot + " could not be read", error);
+        }
+    }
+
+    /** Each slot's item bytes, empty for an empty slot. */
+    private List<byte[]> slotBytes(String key) throws IOException {
+        ByteBuffer buffer = ByteBuffer.wrap(BodyJson.bytes(data, key));
+        buffer.get();
+        int count = buffer.getInt();
+        List<byte[]> slots = new ArrayList<>();
+        for (int slot = 0; slot < count; slot++) {
+            byte[] item = new byte[buffer.getInt()];
+            buffer.get(item);
+            slots.add(item);
+        }
+        return slots;
     }
 
     public String serialize() {

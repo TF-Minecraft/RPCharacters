@@ -3,6 +3,7 @@ package net.tfminecraft.rpcharacters.lifecycle;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -16,6 +17,8 @@ import org.bukkit.entity.Player;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.database.Database;
 import net.tfminecraft.rpcharacters.enums.Status;
+import net.tfminecraft.rpcharacters.estate.EstateHooks;
+import net.tfminecraft.rpcharacters.estate.EstateLink;
 import net.tfminecraft.rpcharacters.identity.CharacterDirectory;
 import net.tfminecraft.rpcharacters.mail.MailRecipientDirectory;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -23,6 +26,7 @@ import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.permadeath.CharacterPermakillEvent;
 import net.tfminecraft.rpcharacters.permadeath.PermakillCause;
+import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.utils.ProstheticTraitRules;
 import net.tfminecraft.tlibs.character.CharacterDeathEvent;
 import net.tfminecraft.tlibs.character.CharacterRef;
@@ -235,6 +239,50 @@ public final class CharacterTransitions {
         }
     }
 
+    /** How a revive ended; {@code blockers} say why a decided estate holds it back. */
+    public record ReviveResult(ReviveStatus status, List<String> blockers) {
+        static ReviveResult of(ReviveStatus status) {
+            return new ReviveResult(status, List.of());
+        }
+    }
+
+    public enum ReviveStatus { REVIVED, NOT_DEAD, OWNER_OFFLINE, NO_SLOT, ESTATE_BLOCKED, NOT_SAVED }
+
+    /**
+     * Brings a dead character back under the account's transition guard (design E12). The owner must be
+     * online with a free living slot. A decided estate holds the revive back until everything has moved,
+     * unless {@code force}; the ALIVE state is saved durably before the estate is told, and a failed save
+     * leaves the character dead and fires nothing. The caller activates the character afterwards.
+     */
+    public static ReviveResult revive(PlayerData data, RPCharacter character, boolean force, String by) {
+        CharacterTransitions runtime = RPCharacters.getCharacterTransitions();
+        if (runtime != null) runtime.enter(data.getUniqueId());
+        try {
+            if (character.getStatus() != Status.DEAD || !data.getCharacters().contains(character)) {
+                return ReviveResult.of(ReviveStatus.NOT_DEAD);
+            }
+            Player owner = Bukkit.getPlayer(data.getUniqueId());
+            if (owner == null || !owner.isOnline()) return ReviveResult.of(ReviveStatus.OWNER_OFFLINE);
+            if (!CharacterSlotService.hasFreeSlot(owner, data)) return ReviveResult.of(ReviveStatus.NO_SLOT);
+            UUID characterId = UUID.fromString(character.getId());
+            UUID deathId = character.getDeathId() != null ? character.getDeathId() : CharacterDirectory.legacyDeathId(characterId);
+            EstateHooks estates = EstateLink.current();
+            List<String> blockers = estates == null ? List.of() : estates.reviveBlockers(deathId);
+            if (!blockers.isEmpty() && !force) return new ReviveResult(ReviveStatus.ESTATE_BLOCKED, blockers);
+            character.setStatus(Status.ALIVE);
+            Database database = runtime != null ? runtime.database : new Database();
+            if (!database.trySaveCharacterDurably(data, character)) {
+                character.setStatus(Status.DEAD);
+                return ReviveResult.of(ReviveStatus.NOT_SAVED);
+            }
+            if (estates != null) estates.revived(new CharacterRef(data.getUniqueId(), characterId), deathId,
+                    !blockers.isEmpty(), by);
+            return new ReviveResult(ReviveStatus.REVIVED, blockers);
+        } finally {
+            if (runtime != null) runtime.changing.remove(data.getUniqueId());
+        }
+    }
+
     public record DeathResult(boolean killed, boolean wasActive, String replacementName) {}
 
     public static DeathResult kill(Player player, RPCharacter character, PermakillCause cause, Player killer) {
@@ -263,16 +311,19 @@ public final class CharacterTransitions {
             character.setDeathRecord(UUID.randomUUID(), Instant.now());
             if (runtime != null) {
                 character.setActiveState(false);
-                if (!runtime.database.trySaveCharacter(data, character)) {
+                if (!runtime.database.trySaveCharacterDurably(data, character)) {
                     character.setStatus(Status.ALIVE);
                     character.setActiveState(wasActive);
                     character.setDeathRecord(oldDeathId, oldDiedAt);
                     suspend(player, "Permanent death was not saved for " + character.getId());
                     return new DeathResult(false, false, null);
                 }
+                UUID killerAccount = killer == null ? null : killer.getUniqueId();
+                EstateHooks estates = EstateLink.current();
+                if (estates != null) estates.died(data.getUniqueId(), character, wasActive, cause.name(), killerAccount, killerRef);
                 Bukkit.getPluginManager().callEvent(new CharacterDeathEvent(
                         CharacterDirectory.snapshot(data.getUniqueId(), character).ref(), character.getDeathId(),
-                        character.getDiedAt(), killer == null ? null : killer.getUniqueId(), killerRef, cause.name()));
+                        character.getDiedAt(), killerAccount, killerRef, cause.name()));
             }
             if (runtime != null && !player.isOnline()) return new DeathResult(true, wasActive, null);
             String replacementName = null;
