@@ -356,6 +356,32 @@ class EstateCoordinatorTest {
     }
 
     @Test
+    void theServiceGivesEveryParticipantTheSameDecisionValueUntilANewRevision() {
+        kit.clock.now = EstateTestKit.T0.plusNanos(123_456_789);
+        EstateRecord record = kit.died(aria, kira.characterId());
+        kit.clock.advance(Duration.ofDays(1).plusNanos(987_654_321));
+        List<Boolean> same = new ArrayList<>();
+        money.answer = d -> {
+            kit.coordinator.report(d.deathId(), "thievery", d.revision(), Outcome.AT_RESTART);
+            return Outcome.done();
+        };
+        EstateTestKit.Participant later = new EstateTestKit.Participant("research");
+        later.answer = d -> {
+            same.add(kit.coordinator.decision(d.deathId()).equals(Optional.of(d)));
+            return Outcome.done();
+        };
+        kit.world.participants.add(later);
+        kit.coordinator.decideDue();
+        assertEquals(List.of(true), same);
+        var event = assertInstanceOf(EstateDecidedEvent.class, kit.events.getFirst());
+        assertEquals(kit.coordinator.decision(record.deathId).orElseThrow(), event.getDecision());
+        assertEquals(event.getDecision(), kit.coordinator.decided().getFirst());
+        EstateBook reloaded = new EstateBook(root.resolve("estates"), DurableFiles.DISK, kit.clock, kit.logger);
+        assertDoesNotThrow(reloaded::load);
+        assertEquals(event.getDecision(), reloaded.get(record.deathId).orElseThrow().toDecision());
+    }
+
+    @Test
     void theServiceAnswersForDecidedEstatesAndTheLatestDeath() {
         EstateRecord open = kit.died(aria, null);
         assertTrue(kit.coordinator.decision(open.deathId).isEmpty());

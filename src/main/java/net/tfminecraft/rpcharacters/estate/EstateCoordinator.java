@@ -269,7 +269,8 @@ final class EstateCoordinator implements EstateService {
         }
     }
 
-    private void published(EstateRecord record) {
+    private void published(EstateRecord saved) {
+        EstateRecord record = book.get(saved.deathId).orElseThrow();
         events.accept(new EstateDecidedEvent(record.toDecision()));
         rosterPush.accept(record.testator.ownerId());
         settleLogged(record.deathId, true);

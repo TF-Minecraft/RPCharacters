@@ -90,11 +90,16 @@ final class EstateBook {
         return EstateJson.read(EstateJson.write(record));
     }
 
-    /** Stamps {@code updatedAt}, writes the record durably, then replaces the stored one. */
+    /**
+     * Stamps {@code updatedAt}, writes the record durably, then stores it as read back from what was written.
+     * Every stored record is therefore exactly what a restart loads, so the decision it gives participants is
+     * equal (to the millisecond) to the one they were given before, until a new revision.
+     */
     void save(EstateRecord record) throws IOException {
         record.updatedAt = clock.instant();
-        write(folder.resolve(record.deathId + ".json"), EstateJson.write(record).getBytes(StandardCharsets.UTF_8));
-        records.put(record.deathId, record);
+        String json = EstateJson.write(record);
+        write(folder.resolve(record.deathId + ".json"), json.getBytes(StandardCharsets.UTF_8));
+        records.put(record.deathId, EstateJson.read(json));
     }
 
     /** Appends one line to a log beside the records, such as {@code audit.log}. Failures are logged only. */
