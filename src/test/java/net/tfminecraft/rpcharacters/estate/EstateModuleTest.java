@@ -116,7 +116,15 @@ class EstateModuleTest {
         EstateModule module = EstateModule.start(plugin);
         assertNotNull(server.getServicesManager().load(EstateService.class));
         assertTrue(server.getServicesManager().getRegistrations(EstateParticipant.class).isEmpty());
-        verify(command).setExecutor(any(EstateCommand.class));
+        var executor = org.mockito.ArgumentCaptor.forClass(EstateCommand.class);
+        verify(command).setExecutor(executor.capture());
+        PlayerMock kira = server.addPlayer("Kira");
+        try (var characters = mockStatic(Characters.class)) {
+            characters.when(() -> Characters.currentSession(kira)).thenReturn(Optional.of(
+                    new CharacterSession(new CharacterRef(kira.getUniqueId(), UUID.randomUUID()), 1)));
+            executor.getValue().onCommand(kira, null, "estate", new String[] {"collect"});
+            assertEquals("You have no inheritance to collect.", kira.nextMessage());
+        }
         Path record = root.resolve("data/estates/" + death + ".json");
         assertTrue(Files.exists(record));
         EstateRecord saved = EstateJson.read(Files.readString(record));
@@ -261,8 +269,5 @@ class EstateModuleTest {
         assertEquals(Status.DEAD, Status.valueOf(CharacterStatus.DEAD.name()));
         verify(identity, atLeastOnce()).deaths();
         roster.verify(() -> RosterSyncService.pushRosterAsync(aria.ownerId()), atLeastOnce());
-        try (var characters = mockStatic(Characters.class)) {
-            characters.when(() -> Characters.currentSession(kira)).thenReturn(Optional.empty());
-        }
     }
 }

@@ -148,6 +148,93 @@ class CharacterTransitionsTest {
         if (!listenerFailures.isEmpty()) throw new AssertionError("Event listener assertion failed", listenerFailures.getFirst());
     }
 
+    private MockedStatic<net.tfminecraft.rpcharacters.persona.CharacterSlotService> slots;
+
+    private net.tfminecraft.rpcharacters.estate.EstateHooks estates() {
+        var hooks = mock(net.tfminecraft.rpcharacters.estate.EstateHooks.class);
+        boundary(net.tfminecraft.rpcharacters.estate.EstateLink.class)
+                .when(net.tfminecraft.rpcharacters.estate.EstateLink::current).thenReturn(hooks);
+        slots = boundary(net.tfminecraft.rpcharacters.persona.CharacterSlotService.class);
+        slots.when(() -> net.tfminecraft.rpcharacters.persona.CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
+        return hooks;
+    }
+
+    @Test
+    void theEstateOpensRightAfterTheDurableDeathSaveAndBeforeTheDeathEvent() {
+        var hooks = estates();
+        doAnswer(call -> { order.add("estate"); return null; }).when(hooks).died(any(), any(), anyBoolean(), any(), any(), any());
+        join(data);
+        Player killer = server.addPlayer("Killer");
+        assertTrue(CharacterTransitions.kill(player, bob, PermakillCause.COMMAND, killer).killed());
+        verify(hooks).died(data.getUniqueId(), bob, false, "COMMAND", killer.getUniqueId(), null);
+        assertEquals(List.of("save-death", "estate", "death"), order.subList(order.indexOf("save-death"), order.size()));
+    }
+
+    @Test
+    void reviveSavesAliveDurablyThenTellsTheEstateAndKeepsTheDeathId() {
+        var hooks = estates();
+        join(data);
+        assertTrue(CharacterTransitions.kill(player, bob, PermakillCause.COMMAND, null).killed());
+        UUID death = bob.getDeathId();
+        when(hooks.reviveBlockers(death)).thenReturn(List.of());
+        var result = CharacterTransitions.revive(data, bob, false, "Mod");
+        assertEquals(CharacterTransitions.ReviveStatus.REVIVED, result.status());
+        assertEquals(Status.ALIVE, bob.getStatus());
+        assertEquals(death, bob.getDeathId());
+        var ordered = inOrder(database, hooks);
+        ordered.verify(database).trySaveCharacterDurably(data, bob);
+        ordered.verify(hooks).revived(new net.tfminecraft.tlibs.character.CharacterRef(data.getUniqueId(),
+                UUID.fromString(bob.getId())), death, false, "Mod");
+        assertEquals(CharacterTransitions.ReviveStatus.NOT_DEAD, CharacterTransitions.revive(data, bob, false, "Mod").status());
+    }
+
+    @Test
+    void aDecidedEstateBlocksTheReviveUntilForcedAndAFailedSaveKeepsTheCharacterDead() {
+        var hooks = estates();
+        bob.setStatus(Status.DEAD);
+        UUID legacy = CharacterDirectory.legacyDeathId(UUID.fromString(bob.getId()));
+        when(hooks.reviveBlockers(legacy)).thenReturn(List.of("thievery moves its records at the next restart"));
+        var blocked = CharacterTransitions.revive(data, bob, false, "Mod");
+        assertEquals(CharacterTransitions.ReviveStatus.ESTATE_BLOCKED, blocked.status());
+        assertEquals(List.of("thievery moves its records at the next restart"), blocked.blockers());
+        assertEquals(Status.DEAD, bob.getStatus());
+        verify(database, never()).trySaveCharacterDurably(any(), any());
+        when(database.trySaveCharacterDurably(data, bob)).thenReturn(false);
+        assertEquals(CharacterTransitions.ReviveStatus.NOT_SAVED, CharacterTransitions.revive(data, bob, true, "Mod").status());
+        assertEquals(Status.DEAD, bob.getStatus());
+        verify(hooks, never()).revived(any(), any(), anyBoolean(), any());
+        when(database.trySaveCharacterDurably(data, bob)).thenReturn(true);
+        var forced = CharacterTransitions.revive(data, bob, true, "Mod");
+        assertEquals(CharacterTransitions.ReviveStatus.REVIVED, forced.status());
+        verify(hooks).revived(any(), eq(legacy), eq(true), eq("Mod"));
+    }
+
+    @Test
+    void reviveKeepsTheOwnerOnlineAndFreeSlotPreconditions() {
+        estates();
+        bob.setStatus(Status.DEAD);
+        RPCharacter foreign = character(player, "Foreign", false);
+        foreign.setStatus(Status.DEAD);
+        assertEquals(CharacterTransitions.ReviveStatus.NOT_DEAD, CharacterTransitions.revive(data, foreign, false, "Mod").status());
+        slots.when(() -> net.tfminecraft.rpcharacters.persona.CharacterSlotService.hasFreeSlot(player, data)).thenReturn(false);
+        assertEquals(CharacterTransitions.ReviveStatus.NO_SLOT, CharacterTransitions.revive(data, bob, false, "Mod").status());
+        player.disconnect();
+        assertEquals(CharacterTransitions.ReviveStatus.OWNER_OFFLINE, CharacterTransitions.revive(data, bob, false, "Mod").status());
+        assertEquals(Status.DEAD, bob.getStatus());
+    }
+
+    @Test
+    void withoutTheRuntimeOrEstatesReviveStillSavesThroughItsOwnDatabase() {
+        boundary(net.tfminecraft.rpcharacters.persona.CharacterSlotService.class)
+                .when(() -> net.tfminecraft.rpcharacters.persona.CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
+        plugin.when(RPCharacters::getCharacterTransitions).thenReturn(null);
+        bob.setStatus(Status.DEAD);
+        try (var saves = mockConstruction(Database.class, (db, context) -> when(db.trySaveCharacterDurably(data, bob)).thenReturn(true))) {
+            assertEquals(CharacterTransitions.ReviveStatus.REVIVED, CharacterTransitions.revive(data, bob, false, "Mod").status());
+            verify(saves.constructed().getFirst()).trySaveCharacterDurably(data, bob);
+        }
+    }
+
     @Test
     void selectionPublishesOnlyAfterBothBodyAndProgressAreReady() {
         var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);

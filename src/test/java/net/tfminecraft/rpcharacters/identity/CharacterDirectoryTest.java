@@ -447,6 +447,27 @@ class CharacterDirectoryTest {
 		assertThrows(NullPointerException.class, () -> directory.findByName(null));
 	}
 
+	@Test
+	void deathsListReadableDeadCharactersInIdOrderAndUnreadableAccountsSayWait() throws Exception {
+		UUID recorded = UUID.fromString("eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee");
+		UUID death = UUID.randomUUID();
+		save(owner, recorded + ".json", json(recorded, "Aria", "DEAD", "\"death-id\":\"" + death + "\",\"died-at-ms\":5"));
+		save(owner, second + ".json", json(second, "Ilvaran", "DEAD", ""));
+		save(owner, id + ".json", json(id, "Kira", "ALIVE", ""));
+		UUID quarantined = UUID.fromString("ffffffff-ffff-4fff-afff-ffffffffffff");
+		save(other, quarantined + ".json", json(quarantined, "Lost", "DEAD", ""));
+		save(other, "broken.json", "{");
+		CharacterDirectory directory = load();
+		assertEquals(List.of(second, recorded), directory.deaths().stream().map(d -> d.info().ref().characterId()).toList());
+		assertEquals(CharacterDirectory.legacyDeathId(second), directory.deaths().getFirst().deathId());
+		assertEquals(death, directory.deaths().getLast().deathId());
+		assertEquals(UUID.nameUUIDFromBytes(("rpcharacters:legacy-death:" + second).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+				CharacterDirectory.legacyDeathId(second));
+		assertTrue(directory.unreadable(quarantined));
+		assertFalse(directory.unreadable(id));
+		assertFalse(directory.unreadable(UUID.randomUUID()));
+	}
+
 	private CharacterDirectory load() throws IOException {
 		return CharacterDirectory.load(root, warnings::add);
 	}

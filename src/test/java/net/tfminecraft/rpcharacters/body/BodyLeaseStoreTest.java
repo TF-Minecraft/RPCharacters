@@ -17,6 +17,15 @@ class BodyLeaseStoreTest {
     final UUID owner = UUID.randomUUID(), character = UUID.randomUUID();
     final BodyTag.Live live = new BodyTag.Live(character, 7);
 
+    @Test void aLeaseNamesOnlyTheCharacterWhoseBodyIsInPlay() throws Exception {
+        BodyLeaseStore store = new BodyLeaseStore(temp.resolve("names"));
+        assertFalse(store.names(owner, character));
+        store.begin(owner, live);
+        assertTrue(store.names(owner, character));
+        assertFalse(store.names(owner, UUID.randomUUID()));
+        assertFalse(store.names(UUID.randomUUID(), character));
+    }
+
     @Test void liveAuthorityRequiresTheExactDurableLeaseAndCompletionRemovesOnlyThatLease() throws Exception {
         Path root = temp.resolve("data/body-leases");
         BodyFiles files = spy(BodyFiles.DISK);

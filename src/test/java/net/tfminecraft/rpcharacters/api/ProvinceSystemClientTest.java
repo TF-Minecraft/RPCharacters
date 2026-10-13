@@ -41,6 +41,13 @@ class ProvinceSystemClientTest {
         gateway.verifyNoMoreInteractions();
     }
 
+    @Test void willRoutesCarryTheRealmExplicitly() {
+        assertTrue(ProvinceSystemClient.fetchPendingWills("dev realm").ok);
+        gateway.verify(() -> GatewayClient.request("GET", "/characters/plugin/wills/pending?realm_id=dev+realm", null));
+        assertTrue(ProvinceSystemClient.ackWills("{\"realm_id\":\"dev\"}").ok);
+        gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wills/applied", "{\"realm_id\":\"dev\"}"));
+    }
+
     @Test void resultFactoriesExposeSuccessPayloadsAndFailureDetails() {
         var catalog = CatalogPushResult.success(1, 2, 3, 4, "now");
         assertTrue(catalog.ok); assertEquals(1, catalog.stages); assertEquals(2, catalog.races);
