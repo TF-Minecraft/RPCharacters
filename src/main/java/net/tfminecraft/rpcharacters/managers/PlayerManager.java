@@ -654,6 +654,10 @@ public class PlayerManager implements Listener{
 				InventoryManager inv = new InventoryManager();
 				inv.profileView(p, o);
 				p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
+			} else if (e.getSlot() == InventoryManager.WILL_SLOT) {
+				if (e.getCurrentItem() == null || !e.getCurrentItem().getType().equals(Material.PAPER) || !p.equals(o)) return;
+				p.closeInventory();
+				net.tfminecraft.rpcharacters.will.WillMenu.open(p);
 			} else if(e.getSlot() == 8) {
 				ItemStack i = e.getInventory().getItem(10);
 				if (i == null || i.getItemMeta() == null || e.getCurrentItem() == null) return;

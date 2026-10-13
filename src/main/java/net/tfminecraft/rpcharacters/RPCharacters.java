@@ -334,9 +334,15 @@ public class RPCharacters extends JavaPlugin{
 				partyChatRecipientResolver);
 		realmChatDependencyListener.registerIfPresent();
 		registerPlaceholderApi();
+		var will = new net.tfminecraft.rpcharacters.will.WillCommand();
+		getCommand("will").setExecutor(will);
+		net.tfminecraft.rpcharacters.will.WillQueue.start(this);
+		if (!characterBodiesFailed) net.tfminecraft.rpcharacters.estate.EstateLink.start(this);
 	}
 	@Override
 	public void onDisable() {
+		net.tfminecraft.rpcharacters.estate.EstateLink.stop();
+		net.tfminecraft.rpcharacters.will.WillQueue.stop();
 		if (characterTransitions != null) characterTransitions.shutdown();
 		if (characterBodies != null) characterBodies.shutdown();
 		if (characterIdentity != null) getServer().getServicesManager().unregister(characterIdentity);
