@@ -212,6 +212,14 @@ class CreationWizardTest {
 	private void choose(String id) {
 		ui.click(optionRow(id), player, Map.of());
 	}
+	private net.kyori.adventure.text.Component attributeControl(String attr, String control) {
+		return ui.last().base().body().stream().map(b -> ((io.papermc.paper.registry.data.dialog.body.PlainMessageDialogBody) b).contents())
+				.filter(c -> CreationDialogCapture.text(c).startsWith(attr))
+				.flatMap(CreationDialogCapture::components).filter(c -> CreationDialogCapture.text(c).equals(control)).findFirst().orElseThrow();
+	}
+	private void adjust(String attr, String control) {
+		ui.click(attributeControl(attr, control), player, Map.of());
+	}
 	private net.kyori.adventure.text.Component optionRow(String id) {
 		SelectionStage stage = (SelectionStage) creation.getActiveStage();
 		String name = net.tfminecraft.rpcharacters.utils.ClueFormatter.stripColor(stage.getOptions().stream().filter(o -> o.getId().equals(id)).findFirst().orElseThrow().getName());
@@ -422,13 +430,15 @@ class CreationWizardTest {
 	void pointBuyChecksTheWholeBudgetAndOnlySavesOnNext() throws Exception {
 		trait("str1", "attributes", 0);
 		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
-		click("Next"); assertTrue(body().contains("1 points remaining"));
-		click("Next", Map.of("rank_strength", "2")); assertTrue(body().contains("2 points over budget"));
-		click("Next", Map.of("rank_strength", "1"));
+		click("Next"); assertTrue(body().contains("Spend the remaining 1 point"));
+		adjust("Strength", "[+]");
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		assertEquals(0, ((AttributesStage) creation.getActiveStage()).getRank("strength"));
+		click("Next");
 		assertTrue(body().contains("Strength 1"));
-		click("Edit Attributes"); click("Back to review", Map.of("rank_strength", "0"));
+		click("Edit Attributes"); adjust("Strength", "[-]"); click("Back to review");
 		assertTrue(body().contains("Strength 1"));
-		click("Edit Attributes"); click("Save and review", Map.of("rank_strength", "1"));
+		click("Edit Attributes"); adjust("Strength", "[+]"); click("Save and review");
 		assertTrue(body().contains("Strength 1"));
 	}
 
@@ -655,11 +665,11 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void malformedAttributeRanksStayInlineAndCannotHangOrChangeTheDraft() throws Exception {
+	void clientSuppliedAttributeRanksAreIgnoredAndRepeatedErrorsDoNotReplaceTheDialog() throws Exception {
 		start(stage("attributes_stage", "type: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"));
-		for (String value : List.of("NaN", "Infinity", "-1", "1.5", "3")) {
+		for (String value : List.of("NaN", "Infinity", "-1", "1.5", "3", "1")) {
 			click("Next", Map.of("rank_strength", value));
-			assertTrue(body().contains("whole rank"));
+			assertTrue(body().contains("Spend the remaining 1 point"));
 			assertEquals(0, ((AttributesStage) creation.getActiveStage()).getRank("strength"));
 		}
 		int shown = ui.opened.size();
@@ -934,8 +944,8 @@ class CreationWizardTest {
 		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"),
 				stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
 		choose("human"); click("Next");
-		click("Next", Map.of("rank_strength", "1"));
-		click("Back"); click("Back", Map.of("rank_strength", "1"));
+		adjust("Strength", "[+]"); click("Next");
+		click("Back"); click("Back");
 		verify(player, never()).closeInventory();
 		verify(player, never()).closeDialog();
 	}
@@ -968,17 +978,33 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void attributeControlsShowCostsHideUnaffordableRanksAndBalanceWithoutCommitting() throws Exception {
+	void attributeControlsTrackCostsRefundsAndBudgetAndBalanceWithoutCommitting() throws Exception {
 		Cache.attributes = new ArrayList<>(List.of("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"));
 		for (String attr : Cache.attributes) for (int rank = 1; rank <= 2; rank++) trait(AttributesStage.traitId(attr, rank), "attributes", 0);
 		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 12\nmax-rank: 4\nattributes: [strength, dexterity, constitution, intelligence, wisdom, charisma]"), summary());
-		var input = (SingleOptionDialogInput) ui.last().base().inputs().getFirst();
-		assertEquals(List.of("0", "1", "2", "3"), input.entries().stream().map(SingleOptionDialogInput.OptionEntry::id).toList());
-		assertTrue(CreationDialogCapture.text(input.entries().get(2).display()).contains("3 points"));
-		click("Check points"); assertTrue(body().contains("12 points remaining"));
+		assertTrue(ui.last().base().inputs().isEmpty());
+		assertTrue(body().contains("12 points left"));
+		assertNull(attributeControl("Strength", "[-]").clickEvent());
+		assertTrue(optionDetails().contains("Already at rank 0."));
+		assertTrue(optionDetails().contains("Costs 1 point"));
+		var first = attributeControl("Strength", "[+]");
+		ui.click(first, player, Map.of("rank_strength", "31"));
+		assertTrue(body().contains("11 points left"));
+		int shown = ui.opened.size(); ui.click(first, player, Map.of()); assertEquals(shown, ui.opened.size(), "Stale plus clicks cannot spend twice");
+		assertTrue(optionDetails().contains("Costs 2 points"));
+		adjust("Strength", "[+]"); assertTrue(body().contains("9 points left"));
+		adjust("Strength", "[+]"); assertTrue(body().contains("5 points left"));
+		assertNull(attributeControl("Strength", "[+]").clickEvent());
+		assertTrue(optionDetails().contains("costs 8 points; 5 points remain"));
+		assertTrue(optionDetails().contains("Refunds 4 points"));
+		adjust("Strength", "[-]"); assertTrue(body().contains("9 points left"));
+		assertNotNull(attributeControl("Strength", "[+]").clickEvent());
+		click("Reset"); assertTrue(body().contains("12 points left"));
+		assertNull(attributeControl("Strength", "[-]").clickEvent());
 		click("Balanced");
 		assertEquals(0, ((AttributesStage)creation.getActiveStage()).spentPoints());
-		click("Check points"); assertTrue(body().contains("All points assigned"));
+		assertTrue(body().contains("All points assigned"));
+		for (String attr : List.of("Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma")) assertNull(attributeControl(attr, "[+]").clickEvent());
 		assertTrue(creation.getCharacter().getTraits().isEmpty());
 		click("Next");
 		assertEquals(9, creation.getCharacter().getTraits().size());
@@ -986,10 +1012,47 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void impossibleBalancedBudgetsAndUnknownRankValuesStayInline() throws Exception {
+	void impossibleBalancedBudgetsKeepRanksEditableAndCannotExceedTheLimit() throws Exception {
 		start(stage("attributes_stage", "type: attributes\npoints: 2\nmax-rank: 1\nattributes: [strength]"));
 		click("Balanced"); assertTrue(body().contains("cannot fit"));
-		click("Next", Map.of("rank_strength", "unknown")); assertTrue(body().contains("whole rank"));
+		adjust("Strength", "[+]"); assertTrue(body().contains("1 point left"));
+		assertNull(attributeControl("Strength", "[+]").clickEvent());
+		assertTrue(optionDetails().contains("Maximum rank reached."));
+		click("Next", Map.of("rank_strength", "unknown")); assertTrue(body().contains("Spend the remaining 1 point"));
+	}
+
+	@Test
+	void attributeCallbacksRecheckLiveBoundsAndBudgetBeforeChangingTheDraft() throws Exception {
+		Cache.attributes.add("dexterity");
+		start(stage("attributes_stage", "type: attributes\npoints: 3\nmax-rank: 2\nattributes: [strength, dexterity]"));
+		var plus = attributeControl("Strength", "[+]");
+		AttributesStage stage = (AttributesStage) creation.getActiveStage();
+		stage.tryIncrease("strength"); stage.tryIncrease("strength");
+		ui.click(plus, player, Map.of());
+		assertTrue(optionDetails().contains("Maximum rank reached."));
+		stage.tryDecrease("strength"); creation.getWizard().resume();
+		var minus = attributeControl("Strength", "[-]");
+		stage.tryDecrease("strength"); ui.click(minus, player, Map.of());
+		assertNull(attributeControl("Strength", "[-]").clickEvent());
+		plus = attributeControl("Dexterity", "[+]");
+		stage.tryIncrease("strength"); stage.tryIncrease("strength");
+		ui.click(plus, player, Map.of());
+		assertNull(attributeControl("Dexterity", "[+]").clickEvent());
+		assertEquals(0, stage.getRank("dexterity"));
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+	}
+
+	@Test
+	void previouslySavedOverBudgetAllocationCanBeReducedWithoutReplacingTraitsOnError() throws Exception {
+		Trait one = trait("str1", "attributes", 0), two = trait("str2", "attributes", 0);
+		start(stage("attributes_stage", "type: attributes\nkey: attributes\npoints: 1\nmax-rank: 2\nattributes: [strength]"), summary());
+		creation.getCharacter().addTrait(one); creation.getCharacter().addTrait(two);
+		((AttributesStage) creation.getActiveStage()).hydrateFromCharacter(creation.getCharacter());
+		creation.getWizard().resume();
+		click("Next"); assertTrue(body().contains("2 points over budget"));
+		assertEquals(2, creation.getCharacter().getTraits().size());
+		adjust("Strength", "[-]"); assertTrue(body().contains("All points assigned"));
+		click("Next"); assertEquals(List.of("str1"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 }

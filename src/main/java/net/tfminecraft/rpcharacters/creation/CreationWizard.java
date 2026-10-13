@@ -178,7 +178,7 @@ public final class CreationWizard {
 		} else if (displayed instanceof SelectionStage selection) {
 			selection(body, inputs, actions, selection, seen);
 		} else if (displayed instanceof AttributesStage attributes) {
-			attributes(body, inputs, actions, attributes, seen);
+			attributes(body, actions, attributes, seen);
 		} else if (displayed instanceof ClueStage) {
 			clues(body, inputs);
 		} else if (displayed instanceof QuestionStage question) {
@@ -187,7 +187,7 @@ public final class CreationWizard {
 				inputs.add(input("answer", "Your answer", remembered("answer", ""), 256, false));
 			}
 		}
-		body.add(message(error == null ? " " : error, "All points assigned".equals(error) ? NamedTextColor.GREEN : NamedTextColor.RED));
+		body.add(message(error == null ? " " : error, NamedTextColor.RED));
 		boolean review = displayed == null || displayed instanceof SummaryStage;
 		actions.add(button(creation.isEditingFromSummary() ? "Back to review" : "Back", seen, response -> {
 			remember(response);
@@ -330,17 +330,57 @@ public final class CreationWizard {
 		render();
 	}
 
-	private void attributes(List<DialogBody> body, List<DialogInput> inputs, List<ActionButton> actions, AttributesStage stage, int seen) {
-		body.add(message(stage.getPool() + " points to spend", NamedTextColor.GOLD));
+	private void attributes(List<DialogBody> body, List<ActionButton> actions, AttributesStage stage, int seen) {
+		long remaining = attributeRemaining(stage);
+		body.add(message(remaining == 0 ? "All points assigned" : points(remaining) + " left", remaining == 0 ? NamedTextColor.GREEN : NamedTextColor.GOLD));
+		int labelWidth = stage.getAttributes().stream().mapToInt(attr -> GuiText.width(pretty(attr))).max().orElse(0) + 16;
 		for (String attr : stage.getAttributes()) {
-			String initial = remembered("rank_" + attr, Integer.toString(stage.getRank(attr)));
-			List<SingleOptionDialogInput.OptionEntry> options = new ArrayList<>();
-			for (int rank = 0; rank <= stage.getMaxRank() && rankCost(rank) <= stage.getPool(); rank++) options.add(SingleOptionDialogInput.OptionEntry.create(Integer.toString(rank),
-					Component.text("Rank " + rank, NamedTextColor.WHITE).append(Component.text(" · " + rankCost(rank) + " points", NamedTextColor.GOLD)), initial.equals(Integer.toString(rank))));
-			inputs.add(DialogInput.singleOption("rank_" + attr, WIDTH, options, Component.text(pretty(attr), NamedTextColor.AQUA), true));
+			int rank = attributeRank(stage, attr);
+			long cost = AttributesStage.costForRank(rank + 1);
+			String increase = rank >= stage.getMaxRank() ? "Maximum rank reached." : cost > remaining ? "Disabled because it costs " + points(cost) + "; " + points(remaining) + " remain." : null;
+			Component row = GuiText.padded("§b" + pretty(attr), labelWidth)
+					.append(attributeControl(stage, attr, -1, rank == 0 ? "Already at rank 0." : null, seen))
+					.append(Component.text("   "))
+					.append(GuiText.padded("§fRank " + rank, 54).hoverEvent(Component.text(points(rankCost(rank)) + " spent", NamedTextColor.GOLD)))
+					.append(attributeControl(stage, attr, 1, increase, seen));
+			body.add(DialogBody.plainMessage(row, WIDTH));
 		}
-		actions.add(button("Check points", seen, response -> { remember(response); String invalid = applyAttributes(stage, false); error(invalid == null ? "All points assigned" : invalid); }));
-		actions.add(button("Balanced", seen, response -> { remember(response); balance(stage); }));
+		actions.add(button("Reset", seen, response -> {
+			Map<String, String> values = fields.computeIfAbsent(displayed, ignored -> new HashMap<>());
+			for (String attr : stage.getAttributes()) values.put("rank_" + attr, "0");
+			error = null;
+			render();
+		}));
+		actions.add(button("Balanced", seen, response -> balance(stage)));
+	}
+
+	private Component attributeControl(AttributesStage stage, String attr, int delta, String disabled, int seen) {
+		int rank = attributeRank(stage, attr);
+		String tooltip = disabled == null ? (delta > 0 ? "Upgrade " : "Reduce ") + pretty(attr) + " to rank " + (rank + delta)
+				+ "\n" + (delta > 0 ? "Costs " : "Refunds ") + points(AttributesStage.costForRank(delta > 0 ? rank + 1 : rank)) : disabled;
+		Component label = Component.text(delta > 0 ? "[+]" : "[-]", disabled == null ? NamedTextColor.AQUA : NamedTextColor.DARK_GRAY)
+				.hoverEvent(Component.text(tooltip, disabled == null ? NamedTextColor.WHITE : NamedTextColor.GRAY));
+		if (disabled != null) return label;
+		return link(label, seen, response -> {
+			int current = attributeRank(stage, attr);
+			if (current + delta < 0 || current + delta > stage.getMaxRank()
+					|| delta > 0 && AttributesStage.costForRank(current + 1) > attributeRemaining(stage)) { render(); return; }
+			fields.computeIfAbsent(displayed, ignored -> new HashMap<>()).put("rank_" + attr, Integer.toString(current + delta));
+			error = null;
+			render();
+		});
+	}
+
+	private int attributeRank(AttributesStage stage, String attr) {
+		return Integer.parseInt(remembered("rank_" + attr, Integer.toString(stage.getRank(attr))));
+	}
+
+	private long attributeRemaining(AttributesStage stage) {
+		return (long) stage.getPool() - stage.getAttributes().stream().mapToLong(attr -> rankCost(attributeRank(stage, attr))).sum();
+	}
+
+	private static String points(long amount) {
+		return amount + (amount == 1 ? " point" : " points");
 	}
 
 	private void clues(List<DialogBody> body, List<DialogInput> inputs) {
@@ -537,7 +577,7 @@ public final class CreationWizard {
 			if (selectionError != null) error(selectionError);
 			else selection.confirm(player, creation);
 		} else if (displayed instanceof AttributesStage attributes) {
-			String attributesError = applyAttributes(attributes, true);
+			String attributesError = applyAttributes(attributes);
 			if (attributesError != null) error(attributesError);
 			else attributes.confirm(player, creation);
 		}
@@ -592,18 +632,15 @@ public final class CreationWizard {
 		return null;
 	}
 
-	private String applyAttributes(AttributesStage stage, boolean commit) {
+	private String applyAttributes(AttributesStage stage) {
 		Map<String, Integer> ranks = new HashMap<>();
 		long spent = 0;
 		for (String attr : stage.getAttributes()) {
-			float value = parseNumber(remembered("rank_" + attr, "0"), Float.NaN);
-			if (!Float.isFinite(value) || value != Math.floor(value) || value < 0 || value > stage.getMaxRank()) return "Choose a whole rank from 0 to " + stage.getMaxRank() + ".";
-			int rank = (int) value;
+			int rank = attributeRank(stage, attr);
 			ranks.put(attr, rank);
 			spent += rankCost(rank);
 		}
-		if (spent != stage.getPool()) return spent > stage.getPool() ? (spent - stage.getPool()) + " points over budget" : (stage.getPool() - spent) + " points remaining";
-		if (!commit) return null;
+		if (spent != stage.getPool()) return spent > stage.getPool() ? points(spent - stage.getPool()) + " over budget" : "Spend the remaining " + points(stage.getPool() - spent) + ".";
 		for (String attr : stage.getAttributes()) while (stage.getRank(attr) > 0) stage.tryDecrease(attr);
 		for (String attr : stage.getAttributes()) while (stage.getRank(attr) < ranks.get(attr)) stage.tryIncrease(attr);
 		return null;
@@ -679,8 +716,6 @@ public final class CreationWizard {
 				values.put("value", age != null && Float.isFinite(age) && age == Math.floor(age) ? Integer.toString(age.intValue()) : "");
 			} else values.put("value", text(response, "value"));
 			if ("description".equalsIgnoreCase(setter.getTarget())) values.put("gender", text(response, "gender"));
-		} else if (displayed instanceof AttributesStage attributes) {
-			for (String attr : attributes.getAttributes()) values.put("rank_" + attr, text(response, "rank_" + attr));
 		} else if (displayed instanceof QuestionStage) values.put("answer", text(response, "answer"));
 		else if (displayed instanceof ClueStage) {
 			int count = Math.max(creation.getCharacter().getCluesNeeded(), creation.getCharacter().getPlayerClues().size());
