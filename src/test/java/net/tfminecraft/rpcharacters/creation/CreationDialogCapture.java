@@ -19,6 +19,9 @@ import io.papermc.paper.registry.data.dialog.type.*;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.nbt.api.BinaryTagHolder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 final class CreationDialogCapture implements AutoCloseable {
@@ -68,6 +71,8 @@ final class CreationDialogCapture implements AutoCloseable {
 			statics.add(actions);
 			actions.when(() -> DialogAction.customClick(any(DialogActionCallback.class), any(ClickCallback.Options.class))).thenAnswer(call -> {
 				var action = mock(DialogAction.CustomClickAction.class);
+					when(action.id()).thenReturn(Key.key("test:dialog_" + callbacks.size()));
+					when(action.additions()).thenReturn(BinaryTagHolder.binaryTagHolder("{}"));
 				callbacks.put(action, call.getArgument(0));
 				options.put(action, call.getArgument(1));
 				return action;
@@ -149,11 +154,21 @@ final class CreationDialogCapture implements AutoCloseable {
 		}
 
 		void click(ActionButton button, Audience viewer, Map<String, String> values) {
+			click(button.action(), viewer, values);
+		}
+
+		void click(Component link, Audience viewer, Map<String, String> values) {
+			var payload = (ClickEvent.Payload.Custom) link.clickEvent().payload();
+			DialogAction action = callbacks.keySet().stream().filter(a -> ((DialogAction.CustomClickAction) a).id().equals(payload.key())).findFirst().orElseThrow();
+			click(action, viewer, values);
+		}
+
+		private void click(DialogAction action, Audience viewer, Map<String, String> values) {
 			var response = mock(io.papermc.paper.dialog.DialogResponseView.class);
 			when(response.getText(anyString())).thenAnswer(call -> values.get(call.getArgument(0)));
 			when(response.getBoolean(anyString())).thenAnswer(call -> values.containsKey(call.getArgument(0)) ? Boolean.valueOf(values.get(call.getArgument(0))) : null);
 			when(response.getFloat(anyString())).thenAnswer(call -> values.containsKey(call.getArgument(0)) ? Float.valueOf(values.get(call.getArgument(0))) : null);
-			callbacks.get(button.action()).accept(response, viewer);
+			callbacks.get(action).accept(response, viewer);
 		}
 
 		@Override
@@ -165,6 +180,14 @@ final class CreationDialogCapture implements AutoCloseable {
 			String bodyText() { return base.body().stream().map(b -> text(((PlainMessageDialogBody) b).contents())).collect(Collectors.joining("\n")); }
 			TextDialogInput field(String key) { return (TextDialogInput) base.inputs().stream().filter(input -> input.key().equals(key)).findFirst().orElseThrow(); }
 			ActionButton button(String label) { return buttons().stream().filter(button -> text(button.label()).equals(label)).findFirst().orElseThrow(() -> new AssertionError(label + " not in " + buttons().stream().map(b -> text(b.label())).toList())); }
+			Component link(String label) {
+				return base.body().stream().flatMap(b -> components(((PlainMessageDialogBody) b).contents()))
+						.filter(c -> c.clickEvent() != null && (text(c).equals(label) || c.hoverEvent() != null && text((Component) c.hoverEvent().value()).equals(label)))
+						.findFirst().orElseThrow(() -> new AssertionError("Missing link: " + label));
+			}
+		}
+		static java.util.stream.Stream<Component> components(Component component) {
+			return java.util.stream.Stream.concat(java.util.stream.Stream.of(component), component.children().stream().flatMap(CreationDialogCapture::components));
 		}
 		static String text(Component component) { return PlainTextComponentSerializer.plainText().serialize(component); }
 

@@ -164,7 +164,15 @@ class CharacterSelectViewTest {
 	}
 
 	private void click(String label) {
-		ui.click(button(label), player);
+		var button = ui.last().buttons().stream().filter(b -> text(b.label()).equals(label)).findFirst();
+		if (button.isPresent()) ui.click(button.get(), player);
+		else {
+			Component link = ui.last().parts().stream().flatMap(p -> components(p.contents())).filter(c -> c.clickEvent() != null && text(c).equals(label)).findFirst().orElseThrow();
+			links.get(link.clickEvent()).accept(player);
+		}
+	}
+	private static java.util.stream.Stream<Component> components(Component c) {
+		return java.util.stream.Stream.concat(java.util.stream.Stream.of(c), c.children().stream().flatMap(CharacterSelectViewTest::components));
 	}
 
 	/** The roster strip's clickable parts, by plain label. */
@@ -242,28 +250,31 @@ class CharacterSelectViewTest {
 		verify(player).showDialog(ui.last().dialog());
 		assertEquals("Choose your character", text(ui.last().base().title()));
 		assertFalse(ui.last().base().canCloseWithEscape());
-		assertEquals(List.of("‹", "Lady Wren", "Rowan", "›"), tabs());
-		assertEquals("‹   Lady Wren   Rowan   ›", text(ui.last().strip()));
+		assertEquals(List.of("‹", "Lady Wren", "Rowan", "New character", "›"), tabs());
+		assertEquals("‹   Lady Wren   Rowan   New character   ›", text(ui.last().strip()));
 		assertEquals("Lady Wren", text((Component) strip().get("Lady Wren").hoverEvent().value()));
 		assertEquals(HoverEvent.Action.SHOW_TEXT, strip().get("‹").hoverEvent().action());
 		assertEquals(SkinPortrait.ROW_WIDTH, ui.last().portraitPart().width());
 		assertEquals(CharacterSelectView.placeholder(CharacterSelectView.LOADING), ui.last().portrait());
 		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
-		assertEquals("‹   Lady Wren   Rowan   ›\nLady Wren\nHuman • Sword master • Age 27\n"
-				+ "Ironhand • Last played 2d 2h ago", ui.last().bodyText());
+		assertEquals("‹   Lady Wren   Rowan   New character   ›\nLady Wren\nHuman • Sword master • Age 27\n"
+				+ "Ironhand • Last played 2d 2h ago\nMemorials (2)", ui.last().bodyText());
 		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
-			if (part != ui.last().portraitPart()) assertEquals(300, part.width());
+			if (part != ui.last().portraitPart()) assertEquals(text(part.contents()).startsWith("‹") ? 360 : 300, part.width());
 		}
-		assertEquals(List.of("▶ Play", "New character", "Memorials (2)"), labels());
-		assertEquals(3, columns());
+		assertEquals(List.of("▶ Play"), labels());
+		assertEquals(1, columns());
 		assertEquals("Play as Lady Wren\nBorn " + FantasyCalendar.formatBirthday(birthday) + "\nPlayed 2d 3h 4m\n"
 				+ "Pouch: 12.50 denars • Bank: 300 denars",
 				text(button("▶ Play").tooltip()));
-		assertEquals("Start a new character\n2 of 4 character slots used", text(button("New character").tooltip()));
-		assertEquals(List.of(110, 100, 90), ui.last().buttons().stream().map(ActionButton::width).toList());
-		assertEquals("Leave", text(exit().label()));
-		assertEquals("Disconnect from the server", text(exit().tooltip()));
+		assertEquals(List.of(110), ui.last().buttons().stream().map(ActionButton::width).toList());
+		assertNull(exit());
+		link("New character");
+		assertEquals(List.of("Create character"), labels());
+		assertEquals("Start a new character\n2 of 4 character slots used", text(button("Create character").tooltip()));
+		assertTrue(ui.last().bodyText().contains("Create a new character"));
+		verify(actions, never()).create();
 	}
 
 	@Test
@@ -347,13 +358,13 @@ class CharacterSelectViewTest {
 		RPCharacter rowan = character("rowan", "Rowan", Status.ALIVE);
 		when(actions.blockReason(rowan)).thenReturn("Rowan can be played again in 2d 4h.");
 		CharacterSelectView.open(player, data, actions);
-		assertTrue(ui.last().bodyText().equals("Rowan\nRowan can be played again in 2d 4h."));
+		assertTrue(ui.last().bodyText().contains("Rowan\nRowan can be played again in 2d 4h."));
 		assertEquals("Rowan can be played again in 2d 4h.", text(button("▶ Play").tooltip()).lines().findFirst().orElseThrow());
 		assertEquals(CharacterSelectView.DIM, button("▶ Play").label().color());
-		assertNull(ui.last().strip());
+		assertNotNull(ui.last().strip());
 		click("▶ Play");
 		verify(actions, never()).play(any());
-		assertTrue(ui.last().bodyText().startsWith("Rowan can be played again in 2d 4h.\nRowan\n"));
+		assertTrue(ui.last().bodyText().startsWith("Rowan can be played again in 2d 4h.\n"));
 		verify(player, never()).closeDialog();
 	}
 
@@ -542,7 +553,7 @@ class CharacterSelectViewTest {
 		when(actions.isCurrent(player, data)).thenReturn(false);
 		ui.click(play, player);
 		link("Rowan");
-		ui.click(exit(), player);
+		assertNull(exit());
 		verify(actions, never()).play(any());
 		verify(actions, never()).leave();
 		assertEquals(1, ui.opened.size());
@@ -550,7 +561,7 @@ class CharacterSelectViewTest {
 		when(actions.isCurrent(player, data)).thenReturn(true);
 		ui.click(play, player);
 		verify(actions).play(wren);
-		ui.click(exit(), player);
+		assertNull(exit());
 		verify(actions, never()).leave();
 	}
 
@@ -558,7 +569,9 @@ class CharacterSelectViewTest {
 	void leaveEndsTheSessionBeforeTheOwnerDisconnects() {
 		roster("wren");
 		doAnswer(call -> { assertNull(CharacterSelectView.session(OWNER)); return null; }).when(actions).leave();
+		character("fallen", "Fallen", Status.DEAD);
 		CharacterSelectView.open(player, data, actions);
+		click("Memorials (1)");
 		ui.click(exit(), player);
 		verify(actions).leave();
 	}
@@ -592,7 +605,7 @@ class CharacterSelectViewTest {
 		when(actions.blockReason(wren)).thenReturn("Wren is on cooldown for 3h.");
 		click("▶ Play");
 		assertEquals(2, ui.opened.size());
-		assertTrue(ui.last().bodyText().startsWith("Wren is on cooldown for 3h.\nWren\n"));
+		assertTrue(ui.last().bodyText().startsWith("Wren is on cooldown for 3h.\n"));
 
 		when(wren.getStatus()).thenReturn(Status.DEAD);
 		click("▶ Play");
@@ -602,9 +615,10 @@ class CharacterSelectViewTest {
 		ActionButton play = button("▶ Play");
 		data.getCharacters().clear();
 		ui.click(play, player);
-		assertTrue(ui.last().bodyText().equals("That character can no longer be played.\nYou have no characters yet."));
-		assertNull(ui.last().portrait());
-		assertEquals(List.of("New character"), labels());
+		assertTrue(ui.last().bodyText().startsWith("That character can no longer be played.\n"));
+		assertTrue(ui.last().bodyText().contains("Create a new character"));
+		assertNotNull(ui.last().portrait());
+		assertEquals(List.of("Create character"), labels());
 		assertEquals(1, columns());
 		verify(actions, never()).play(any());
 
@@ -615,7 +629,7 @@ class CharacterSelectViewTest {
 			CharacterSelectView.open(player, data, actions);
 			return null;
 		}).when(actions).play(wren);
-		click("New character");
+		click("Create character");
 		verify(actions).create();
 		var creation = inOrder(player, actions);
 		creation.verify(player).closeDialog();
@@ -630,25 +644,28 @@ class CharacterSelectViewTest {
 	void newCharacterFollowsSlotsAndCooldownAndRechecksWhenClicked() {
 		character("wren", "Wren", Status.ALIVE);
 		CharacterSelectView.open(player, data, actions);
-		ActionButton create = button("New character");
-		assertEquals(CharacterSelectView.PALE, create.label().color());
+		link("New character");
+		ActionButton create = button("Create character");
+		assertEquals(CharacterSelectView.TEAL, create.label().color());
 
 		groups.when(() -> PermissionGroupService.hasCharacterSwitchCooldown(player, data)).thenReturn(true);
 		groups.when(() -> PermissionGroupService.getRemainingCooldownMinutes(player, data)).thenReturn(1501);
 		ui.click(create, player);
 		verify(actions, never()).create();
 		assertTrue(ui.last().bodyText().startsWith("New character available in 1d 1h 1m.\n"));
-		assertEquals("New character available in 1d 1h 1m", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
-		assertEquals(CharacterSelectView.DIM, button("New character").label().color());
+		assertEquals("New character available in 1d 1h 1m", text(button("Create character").tooltip()).lines().findFirst().orElseThrow());
+		assertEquals(CharacterSelectView.DIM, button("Create character").label().color());
 
 		when(player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)).thenReturn(true);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals("Start a new character", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
+		link("New character");
+		assertEquals("Start a new character", text(button("Create character").tooltip()).lines().findFirst().orElseThrow());
 
 		for (int i = 0; i < 3; i++) character("x" + i, "Extra " + i, Status.ALIVE);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals("No free character slot", text(button("New character").tooltip()).lines().findFirst().orElseThrow());
-		click("New character");
+		link("New character");
+		assertEquals("No free character slot", text(button("Create character").tooltip()).lines().findFirst().orElseThrow());
+		click("Create character");
 		assertTrue(ui.last().bodyText().startsWith("No free character slot.\n"));
 		verify(actions, never()).create();
 		assertNotNull(CharacterSelectView.session(OWNER));
@@ -667,19 +684,24 @@ class CharacterSelectViewTest {
 	void rosterStripShowsAWindowOfThreeAndArrowsWrap() {
 		roster("a", "b", "c", "d", "e", "f");
 		CharacterSelectView.open(player, data, actions);
-		assertEquals(List.of("‹", "a", "b", "c", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "New character", "›"), tabs());
 		link("›");
-		assertEquals(List.of("‹", "a", "b", "c", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "New character", "›"), tabs());
 		link("›");
-		assertEquals(List.of("‹", "b", "c", "d", "›"), tabs());
+		assertEquals(List.of("‹", "b", "c", "d", "New character", "›"), tabs());
 		link("d");
-		assertEquals(List.of("‹", "c", "d", "e", "›"), tabs());
+		assertEquals(List.of("‹", "c", "d", "e", "New character", "›"), tabs());
 		assertTrue(ui.last().bodyText().contains("\nd\n"));
 		link("›");
 		link("›");
-		assertEquals(List.of("‹", "d", "e", "f", "›"), tabs());
+		assertEquals(List.of("‹", "d", "e", "f", "New character", "›"), tabs());
+		link("›");
+		assertTrue(CharacterSelectView.session(OWNER).creating);
+		assertEquals(List.of("Create character"), labels());
 		link("›");
 		assertEquals("a", CharacterSelectView.session(OWNER).selected);
+		link("‹");
+		assertTrue(CharacterSelectView.session(OWNER).creating);
 		link("‹");
 		assertEquals("f", CharacterSelectView.session(OWNER).selected);
 		assertEquals(CharacterSelectView.TEAL, strip().get("f").color());
@@ -695,15 +717,17 @@ class CharacterSelectViewTest {
 		when(data.getCharacterById("c").getLastPlayedAt()).thenReturn(Instant.now());
 		link("›");
 		assertEquals("a", CharacterSelectView.session(OWNER).selected, "c moved first, so next is a");
-		assertEquals(List.of("‹", "c", "a", "b", "›"), tabs());
+		assertEquals(List.of("‹", "c", "a", "b", "New character", "›"), tabs());
 
 		when(data.getCharacterById("a").getStatus()).thenReturn(Status.DEAD);
+		link("‹");
+		assertTrue(CharacterSelectView.session(OWNER).creating, "New character precedes the first living tab");
 		link("‹");
 		assertEquals("b", CharacterSelectView.session(OWNER).selected, "a is gone, so step back from the first living one");
 		when(data.getCharacterById("c").getStatus()).thenReturn(Status.MISSING);
 		CharacterSelectView.open(player, data, actions);
 		assertEquals("b", CharacterSelectView.session(OWNER).selected);
-		assertNull(ui.last().strip());
+		assertNotNull(ui.last().strip());
 
 		data.getCharacters().forEach(c -> when(c.getStatus()).thenReturn(Status.ALIVE));
 		CharacterSelectView.open(player, data, actions);
@@ -711,8 +735,9 @@ class CharacterSelectViewTest {
 		data.getCharacters().forEach(c -> when(c.getStatus()).thenReturn(Status.DEAD));
 		links.get(next.clickEvent()).accept(player);
 		assertNull(CharacterSelectView.session(OWNER).selected);
-		assertTrue(ui.last().bodyText().equals("You have no characters yet."));
-		assertEquals(List.of("New character", "Memorials (3)"), labels());
+		assertTrue(ui.last().bodyText().contains("Create a new character"));
+		assertEquals(List.of("Create character"), labels());
+		assertTrue(ui.last().bodyText().contains("Memorials (3)"));
 	}
 
 	@Test
@@ -720,7 +745,7 @@ class CharacterSelectViewTest {
 		roster("a");
 		character("long", "Bartholomew the Unyielding of Greywater", Status.ALIVE);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals(List.of("‹", "a", "Bartholome…", "›"), tabs());
+		assertEquals(List.of("‹", "a", "Bartholome…", "New character", "›"), tabs());
 		assertEquals("Bartholomew the Unyielding of Greywater",
 				text((Component) strip().get("Bartholome…").hoverEvent().value()));
 		link("Bartholome…");
@@ -765,7 +790,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.session(OWNER).memorialPage = 5;
 		click("Back");
 		assertEquals("Choose your character", text(ui.last().base().title()));
-		assertEquals(List.of("▶ Play", "New character"), labels());
+		assertEquals(List.of("▶ Play"), labels());
 		assertEquals(CharacterSelectView.bust(skin(0xFFFF0000)), ui.last().portrait());
 	}
 
@@ -773,7 +798,7 @@ class CharacterSelectViewTest {
 	void memorialsEmptiedWhileOpenSayNoMemorials() {
 		for (int i = 0; i < 7; i++) character("d" + i, "Fallen " + i, Status.DEAD);
 		CharacterSelectView.open(player, data, actions);
-		assertEquals(List.of("New character", "Memorials (7)"), labels());
+		assertEquals(List.of("Create character"), labels());
 		click("Memorials (7)");
 		click("Older ›");
 		data.getCharacters().clear();
@@ -781,8 +806,8 @@ class CharacterSelectViewTest {
 		assertEquals("No memorials.", ui.last().bodyText());
 		assertEquals(List.of("Back"), labels());
 		click("Back");
-		assertEquals(List.of("New character"), labels());
-		click("New character");
+		assertEquals(List.of("Create character"), labels());
+		click("Create character");
 		verify(actions).create();
 	}
 

@@ -202,22 +202,27 @@ class CreationWizardTest {
 	private void click(String label, Map<String, String> values) {
 		Map<String, String> submitted = new HashMap<>(form());
 		submitted.putAll(values);
-		ui.click(ui.last().button(label), player, submitted);
+		var button = ui.last().buttons().stream().filter(b -> CreationDialogCapture.text(b.label()).equals(label)).findFirst();
+		if (button.isPresent()) ui.click(button.get(), player, submitted);
+		else if (((MultiActionType) ui.last().type()).exitAction() != null && CreationDialogCapture.text(((MultiActionType) ui.last().type()).exitAction().label()).equals(label))
+			ui.click(((MultiActionType) ui.last().type()).exitAction(), player, submitted);
+		else ui.click(ui.last().link(label), player, submitted);
 	}
 
 	private void choose(String id) {
+		ui.click(optionRow(id), player, Map.of());
+	}
+	private net.kyori.adventure.text.Component optionRow(String id) {
 		SelectionStage stage = (SelectionStage) creation.getActiveStage();
-		if (stage.getMaxSelections() == 1) form().put("choice", id);
-		else if (stage.getMaxSelections() == 2) {
-			for (int i = 0; i < 2; i++) if (form().getOrDefault("choice_" + i, "").isEmpty()) { form().put("choice_" + i, id); break; }
-		} else form().put("option_" + id, "true");
+		String name = net.tfminecraft.rpcharacters.utils.ClueFormatter.stripColor(stage.getOptions().stream().filter(o -> o.getId().equals(id)).findFirst().orElseThrow().getName());
+		return ui.last().base().body().stream().map(b -> ((io.papermc.paper.registry.data.dialog.body.PlainMessageDialogBody) b).contents())
+				.filter(c -> CreationDialogCapture.text(c).matches("[☑☐☒] " + java.util.regex.Pattern.quote(name) + "(?: · .*|)"))
+				.findFirst().orElseThrow();
 	}
 
 	private void click(String label) { click(label, Map.of()); }
 	private String optionDetails() {
-		return ui.last().base().inputs().stream().flatMap(input -> input instanceof SingleOptionDialogInput choice
-				? choice.entries().stream().map(SingleOptionDialogInput.OptionEntry::display)
-				: java.util.stream.Stream.of(((BooleanDialogInput) input).label()))
+		return ui.last().base().body().stream().flatMap(b -> CreationDialogCapture.components(((io.papermc.paper.registry.data.dialog.body.PlainMessageDialogBody) b).contents()))
 				.map(label -> label.hoverEvent() == null ? "" : CreationDialogCapture.text((net.kyori.adventure.text.Component) label.hoverEvent().value()))
 				.reduce("", (a, b) -> a + b);
 	}
@@ -379,7 +384,9 @@ class CreationWizardTest {
 		for (int i = 0; i < 10; i++) trait("gift" + i, "gift", i == 9 ? 3 : 1);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 1\npoints: 2"), summary());
 		click("Next"); assertTrue(body().contains("Need at least 1"));
-		choose("gift9"); click("Next"); assertTrue(body().contains("Cannot afford"));
+		click("More choices");
+		assertNull(optionRow("gift9").clickEvent());
+		assertTrue(optionDetails().contains("costs 3 points"));
 		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
 		choose("gift8"); click("Next");
 		assertTrue(body().contains("Gift: gift8"));
@@ -519,50 +526,62 @@ class CreationWizardTest {
 		assertTrue(optionDetails().contains("Requires all: base"));
 		click("Next");
 		click("Edit Gift");
-		click("Save and review", Map.of("choice_0", "", "choice_1", "dependent"));
+		choose("base"); click("Save and review");
 		assertTrue(body().contains("Lacking requirements"));
 		assertFalse(body().contains("Dependency{"));
 	}
 	@Test
-	void formChoicesStayLocalAndNavigationNeverSharesTheChoiceRow() throws Exception {
+	void directChoicesKeepTheLayoutAndNavigationStableAndIgnoreAnUnchangedPick() throws Exception {
 		for (int i = 0; i < 5; i++) race("race" + i, "Race " + i, 110);
 		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"), summary());
 		assertFalse(ui.last().base().canCloseWithEscape());
 		assertEquals(io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction.NONE, ui.last().base().afterAction());
 		assertEquals(List.of("Back", "Next"), ui.last().buttons().stream().map(b -> CreationDialogCapture.text(b.label())).toList());
+		assertTrue(ui.last().base().inputs().isEmpty());
 		int shown = ui.opened.size();
 		choose("human"); choose("elf"); choose("human");
-		assertEquals(shown, ui.opened.size());
-		assertTrue(creation.getCharacter().getRace() == null);
+		assertEquals(shown + 3, ui.opened.size());
+		choose("human"); assertEquals(shown + 3, ui.opened.size());
+		assertNull(creation.getCharacter().getRace());
+		assertTrue(CreationDialogCapture.text(optionRow("human")).startsWith("☑ "));
 		click("Next"); assertEquals(human, creation.getCharacter().getRace());
+		verify(player, never()).closeInventory();
+		verify(player, never()).closeDialog();
 	}
 
 	@Test
-	void checkboxPagesRetainChoicesAndBoundaryClicksDoNotReplaceTheDialog() throws Exception {
+	void checkboxPagesRetainChoicesAndOnlyOfferAvailablePages() throws Exception {
 		for (int i = 0; i < 10; i++) trait("gift" + i, "gift", 1);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 4\npoints: 2"), summary());
-		int shown = ui.opened.size();
-		click("Previous choices"); click("Previous choices");
-		assertEquals(shown, ui.opened.size());
+		assertThrows(AssertionError.class, () -> ui.last().link("Previous choices"));
 		choose("gift0"); click("More choices"); choose("gift8");
+		assertThrows(AssertionError.class, () -> ui.last().link("More choices"));
 		click("Previous choices");
-		assertTrue(((BooleanDialogInput) ui.last().base().inputs().getFirst()).initial());
+		assertTrue(CreationDialogCapture.text(optionRow("gift0")).startsWith("☑ "));
 		click("Next");
 		assertEquals(List.of("gift0", "gift8"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 	@Test
-	void invalidChoiceFormsCannotPartiallyChangeDraftAttributesOrSavedTraits() throws Exception {
+	void unavailableChoicesAreUntickableAndFinalRevalidationCannotPartiallyChangeTheDraft() throws Exception {
 		trait("cheap", "gift", 1).getTraitData().getAttributeData().getModifiers().getFirst().add(2);
 		trait("expensive", "gift", 3);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2\npoints: 2"), summary());
-		choose("cheap"); choose("expensive"); click("Next");
-		assertTrue(body().contains("Cannot afford"));
+		assertNull(optionRow("expensive").clickEvent());
+		assertTrue(optionDetails().contains("costs 3 points; 2 remain"));
+		choose("cheap");
+		var blocker = trait("blocker", "previous", 0);
+		when(blocker.getTraitData().hasExclusives()).thenReturn(true);
+		when(blocker.getTraitData().getExclusive()).thenReturn(List.of("cheap"));
+		when(blocker.getTraitData().isExclusive("cheap")).thenReturn(true);
+		creation.getCharacter().addTrait(blocker);
+		click("Next"); assertTrue(body().contains("incompatible"));
 		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
 		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
-		click("Next", Map.of("choice_1", ""));
+		creation.getCharacter().removeTrait(blocker);
+		click("Next");
 		assertEquals(List.of("cheap"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
-		click("Edit Gift"); click("Save and review", Map.of("choice_0", "", "choice_1", ""));
+		click("Edit Gift"); choose("cheap"); click("Save and review");
 		assertTrue(creation.getCharacter().getTraits().isEmpty());
 		assertEquals(0, creation.getTempData().getModifiers().getFirst().getAmount());
 	}
@@ -576,11 +595,15 @@ class CreationWizardTest {
 		when(dependent.getTraitData().hasDependency()).thenReturn(true);
 		when(dependent.getTraitData().getDependency()).thenReturn(new Dependency(config));
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
-		choose("dependent"); choose("base"); click("Next");
+		assertNull(optionRow("dependent").clickEvent());
+		assertTrue(optionDetails().contains("requires base"));
+		choose("base"); choose("dependent"); click("Next");
 		assertEquals(2, creation.getCharacter().getTraits().size());
 		creation.cancel();
 		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"));
-		click("Next", Map.of("choice", "missing")); assertTrue(body().contains("available option"));
+		click("Next", Map.of("choice", "missing", "option_human", "true"));
+		assertNull(creation.getCharacter().getRace());
+		assertTrue(body().contains("Need at least"));
 	}
 
 	@Test
@@ -597,22 +620,28 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void paletteCustomGradientsAndPreviewRespectRankLimitsAndPersistOnSave() throws Exception {
+	void compactNameAndSeparateColourEditorRespectRankLimitsAndPersistOnlyOnNext() throws Exception {
 		try (var perks = mockStatic(PermissionGroupService.class, CALLS_REAL_METHODS)) {
 			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(2);
 			start(setter("name_stage", "name"), summary());
-			assertEquals(2, ui.last().base().inputs().stream().filter(input -> input.key().startsWith("colour_")).count());
-			click("Preview name", Map.of("value", "Aren", "colour_0", "#ffaa00", "colour_1", "#ffffff"));
+			assertEquals(1, ui.last().base().inputs().size());
+			assertTrue(ui.last().buttons().stream().noneMatch(b -> CreationDialogCapture.text(b.label()).isBlank()));
+			click("Edit colours", Map.of("value", "Aren"));
+			assertTrue(ui.last().base().inputs().isEmpty());
+			click("Gradient"); assertEquals(2, ui.last().base().inputs().size());
+			click("Preview", Map.of("colour_0", "#ffaa00", "colour_1", "#ffffff"));
 			assertTrue(body().contains("Aren"));
 			assertNull(creation.getCharacter().getNameColour());
-			int shown = ui.opened.size();
-			click("Preview name"); assertEquals(shown, ui.opened.size());
-			click("Next", Map.of("colours", "#zzzzzz")); assertTrue(body().contains("hex colours"));
-			click("Next", Map.of("colours", "#ff0000 #00ff00 #0000ff")); assertTrue(body().contains("up to 2"));
-			click("Next", Map.of("colours", "#FF0000 00ff00"));
+			int shown = ui.opened.size(); click("Preview"); assertEquals(shown, ui.opened.size());
+			click("Use colours");
+			assertEquals("Aren", ui.last().field("value").initial());
+			click("Edit colours"); click("Custom hex");
+			click("Use colours", Map.of("colours", "#zzzzzz")); assertTrue(body().contains("hex colours"));
+			click("Preview", Map.of("colours", "#ff0000 #00ff00 #0000ff")); assertTrue(body().contains("up to 2"));
+			click("Use colours", Map.of("colours", "#FF0000 00ff00")); click("Next");
 			assertEquals(List.of("#ff0000", "#00ff00"), creation.getCharacter().getNameColour().getHexCodes());
-			assertTrue(body().contains("Colours: #ff0000, #00ff00"));
-			click("Edit Name"); click("Save and review", Map.of("colours", "", "colour_0", "", "colour_1", ""));
+			assertFalse(body().contains("Colours:"));
+			click("Edit Name"); click("Edit colours"); click("Default colour"); click("Save and review");
 			assertNull(creation.getCharacter().getNameColour());
 		}
 	}
@@ -620,10 +649,12 @@ class CreationWizardTest {
 	@Test
 	void coloursCannotBypassDonorPermissionsAndGenderIsOptionalPlainText() throws Exception {
 		start(setter("name_stage", "name"), setter("description_stage", "description"), summary());
-		assertTrue(body().contains("donor rank"));
-		click("Next", Map.of("value", "Aren", "colours", "#ffffff"));
+		assertTrue(ui.last().buttons().stream().noneMatch(b -> CreationDialogCapture.text(b.label()).equals("Edit colours")));
+		creation.getCharacter().setNameColour(net.tfminecraft.rpcharacters.identity.NameColour.of(List.of("#ffffff")));
+		click("Next", Map.of("value", "Aren"));
 		assertTrue(body().contains("permission"));
-		click("Next", Map.of("value", "Aren", "colours", ""));
+		creation.getCharacter().setNameColour(null);
+		click("Next", Map.of("value", "Aren", "colours", "#ffffff"));
 		String description = "A quiet traveller with a faded coat and ink-stained fingers.";
 		click("Next", Map.of("value", description, "gender", "&cBad"));
 		assertTrue(body().contains("Gender may contain"));
@@ -632,6 +663,66 @@ class CreationWizardTest {
 		assertTrue(body().contains("Gender: Non-binary"));
 		click("Edit Description"); click("Save and review", Map.of("gender", ""));
 		assertTrue(body().contains("Gender: Unspecified"));
+	}
+
+	@Test
+	void eightColourRanksStillHaveOneNameFieldAndBackRestoresTheOriginalGradient() throws Exception {
+		try (var perks = mockStatic(PermissionGroupService.class, CALLS_REAL_METHODS)) {
+			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(8);
+			start(setter("name_stage", "name"), summary());
+			creation.getCharacter().setNameColour(net.tfminecraft.rpcharacters.identity.NameColour.of(List.of("#123456", "#abcdef", "#ffffff")));
+			creation.getWizard().resume();
+			assertEquals(1, ui.last().base().inputs().size());
+			click("Edit colours", Map.of("value", "Aren")); click("Solid colour");
+			assertEquals(1, ui.last().base().inputs().size());
+			assertTrue(((SingleOptionDialogInput) ui.last().base().inputs().getFirst()).entries().stream().anyMatch(e -> e.id().equals("#123456") && e.initial()));
+			click("Preview", Map.of("colour_0", "#ff5555")); click("Back to name");
+			assertEquals("Aren", ui.last().field("value").initial());
+			click("Edit colours"); click("Custom hex");
+			assertEquals("#123456 #abcdef #ffffff", ui.last().field("colours").initial());
+			assertTrue(body().contains("Up to 8"));
+			click("Change style"); click("Gradient");
+			click("Use colours"); click("Next");
+			assertEquals(List.of("#123456", "#abcdef"), creation.getCharacter().getNameColour().getHexCodes());
+		}
+	}
+
+	@Test
+	void singleColourRanksHaveNoGradientControlAndExpiredPermissionsCannotBeUsed() throws Exception {
+		try (var perks = mockStatic(PermissionGroupService.class, CALLS_REAL_METHODS)) {
+			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(1);
+			start(setter("name_stage", "name"), summary());
+			click("Edit colours", Map.of("value", "Aren"));
+			assertThrows(AssertionError.class, () -> ui.last().button("Gradient"));
+			click("Solid colour"); click("Use colours");
+			click("Edit colours"); click("Custom hex");
+			click("Preview", Map.of("colours", "#bad"));
+			click("Change style"); click("Solid colour");
+			click("Use colours", Map.of("colour_0", ""));
+			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(2);
+			click("Edit colours"); click("Gradient");
+			click("Preview", Map.of("colour_0", "", "colour_1", ""));
+			perks.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(0);
+			click("Use colours"); assertTrue(body().contains("permission"));
+			click("Change style");
+			assertEquals(List.of("Default colour"), ui.last().buttons().stream().map(b -> CreationDialogCapture.text(b.label())).toList());
+			click("Back to name"); click("Next");
+			assertNull(creation.getCharacter().getNameColour());
+		}
+	}
+
+	@Test
+	void reviewPagesHaveOnlyRelevantLinksAndNoEmptyButtonOrHexColourRow() throws Exception {
+		List<Stage> stages = new ArrayList<>();
+		for (int i = 0; i < 17; i++) stages.add(setter("name_" + i, "name"));
+		stages.add(summary()); start(stages.toArray(Stage[]::new)); creation.openSummary();
+		assertThrows(AssertionError.class, () -> ui.last().link("Previous entries"));
+		click("More entries"); assertTrue(body().contains("page 2 of 3"));
+		click("More entries"); assertTrue(body().contains("page 3 of 3"));
+		assertThrows(AssertionError.class, () -> ui.last().link("More entries"));
+		assertEquals(List.of("Back", "Create character"), ui.last().buttons().stream().map(b -> CreationDialogCapture.text(b.label())).toList());
+		click("Previous entries"); assertTrue(body().contains("page 2 of 3"));
+		assertFalse(body().contains("Colours:"));
 	}
 
 	@Test
@@ -649,46 +740,41 @@ class CreationWizardTest {
 	}
 
 	@Test
-	void twoPickStepsHaveTwoControlsAndCannotSubmitDuplicatesOrMoreThanTwo() throws Exception {
+	void twoPickStepsDisableExtraPicksAndReenableThemWhenOneIsUnticked() throws Exception {
 		for (int i = 0; i < 6; i++) trait("gift" + i, "gift", 0);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 2\nmax-select: 2"), summary());
-		assertEquals(2, ui.last().base().inputs().size());
-		assertTrue(ui.last().base().inputs().stream().allMatch(input -> input instanceof SingleOptionDialogInput));
-		assertFalse(body().contains("Details"));
-		assertFalse(body().contains("Hover"));
-		assertFalse(body().contains("1–1"));
-		assertTrue(body().contains("Choose 2 different options"));
-		click("Next", Map.of("choice_0", "gift0", "choice_1", "gift0"));
-		assertTrue(body().contains("different options"));
-		assertTrue(creation.getCharacter().getTraits().isEmpty());
-		click("Next", Map.of("choice_0", "gift0", "choice_1", "gift1", "choice_2", "gift2"));
-		assertEquals(List.of("gift0", "gift1"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		assertTrue(ui.last().base().inputs().isEmpty());
+		var third = optionRow("gift2");
+		choose("gift0"); choose("gift1");
+		assertNull(optionRow("gift2").clickEvent());
+		assertTrue(optionDetails().contains("all 2 picks are filled"));
+		ui.click(third, player, Map.of());
+		assertTrue(body().contains("2 selected"));
+		choose("gift0"); assertNotNull(optionRow("gift2").clickEvent());
+		choose("gift2"); click("Next", Map.of("choice_2", "gift3", "option_gift3", "true"));
+		assertEquals(List.of("gift1", "gift2"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 	@Test
-	void incompatibleUnavailableAndUnaffordableOptionsAreAbsentAndCannotBeForged() throws Exception {
+	void disabledOptionsStayVisibleWithExactConflictAndPlaytimeReasonsAndCannotBeForged() throws Exception {
 		var existing = trait("existing", "previous", 0);
 		trait("allowed", "virtue", 0);
 		var blocked = trait("blocked", "virtue", 0);
 		when(blocked.getTraitData().hasExclusives()).thenReturn(true);
 		when(blocked.getTraitData().getExclusive()).thenReturn(List.of("existing"));
 		var gated = trait("gated", "virtue", 0);
-		{
-			var gate = playtime;
-			gate.when(() -> PlaytimeGate.canSelectTrait(eq(player), any())).thenReturn(true);
-			gate.when(() -> PlaytimeGate.canSelectTrait(player, gated)).thenReturn(false);
-			start(stage("virtue_stage", "type: selection\ntarget: trait\nkey: virtue\nmin-select: 1\nmax-select: 1"), summary());
-			creation.getCharacter().addTrait(existing);
-			creation.getWizard().resume();
-			var input = (SingleOptionDialogInput) ui.last().base().inputs().getFirst();
-			assertEquals(List.of("", "allowed"), input.entries().stream().map(SingleOptionDialogInput.OptionEntry::id).toList());
-			assertFalse(input.labelVisible());
-			assertEquals("Choose", CreationDialogCapture.text(input.entries().getFirst().display()));
-			assertFalse(body().contains("blocked"));
-			click("Next", Map.of("choice", "blocked"));
-			assertTrue(body().contains("incompatible"));
-			assertEquals(List.of("existing"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
-		}
+		playtime.when(() -> PlaytimeGate.canSelectTrait(player, gated)).thenReturn(false);
+		playtime.when(() -> PlaytimeGate.denialMessage(player, gated)).thenReturn("Need 2h playtime. 1h left.");
+		start(stage("virtue_stage", "type: selection\ntarget: trait\nkey: virtue\nmin-select: 1\nmax-select: 1"), summary());
+		creation.getCharacter().addTrait(existing); creation.getWizard().resume();
+		assertNull(optionRow("blocked").clickEvent());
+		assertNull(optionRow("gated").clickEvent());
+		assertTrue(optionDetails().contains("Disabled because it conflicts with existing."));
+		assertTrue(optionDetails().contains("Need 2h playtime. 1h left."));
+		click("Next", Map.of("option_blocked", "true"));
+		assertEquals(List.of("existing"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		choose("allowed"); click("Next");
+		assertEquals(List.of("existing", "allowed"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
 	}
 
 	@Test
@@ -701,6 +787,22 @@ class CreationWizardTest {
 		click("Back"); click("Back", Map.of("rank_strength", "1"));
 		verify(player, never()).closeInventory();
 		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void liveChoiceCallbacksRecheckTheReasonAndMissingTraitsStayDisabled() throws Exception {
+		var gift = trait("gift", "gift", 0);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
+		var earlier = optionRow("gift");
+		playtime.when(() -> PlaytimeGate.canSelectTrait(player, gift)).thenReturn(false);
+		playtime.when(() -> PlaytimeGate.denialMessage(player, gift)).thenReturn("Need 2h playtime. 1h left.");
+		ui.click(earlier, player, Map.of());
+		assertTrue(body().contains("Disabled because Need 2h playtime. 1h left."));
+		assertNull(optionRow("gift").clickEvent());
+		TraitLoader.oList.clear(); creation.getWizard().resume();
+		assertNull(optionRow("gift").clickEvent());
+		assertTrue(optionDetails().contains("Disabled because this trait is unavailable."));
+		assertEquals(0, ((SelectionStage) creation.getActiveStage()).getSelections());
 	}
 
 	@Test

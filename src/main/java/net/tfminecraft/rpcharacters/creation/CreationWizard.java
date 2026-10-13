@@ -24,6 +24,7 @@ import io.papermc.paper.registry.data.dialog.input.TextDialogInput;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
@@ -67,6 +68,8 @@ public final class CreationWizard {
 	private final Set<Stage> confirmed = new HashSet<>();
 	private Stage displayed;
 	private String error;
+	private String colourStyle;
+	private String coloursBefore;
 	private int revision;
 
 	CreationWizard(CharacterCreation creation) {
@@ -87,6 +90,7 @@ public final class CreationWizard {
 	public void show(Stage stage) {
 		if (stage instanceof QuestionStage question && question.getQuestions().isEmpty()) question.pick();
 		displayed = stage;
+		colourStyle = null;
 		error = null;
 		render();
 	}
@@ -151,6 +155,7 @@ public final class CreationWizard {
 	}
 
 	private void render() {
+		if (colourStyle != null) { renderColours(); return; }
 		int seen = ++revision;
 		List<DialogBody> body = new ArrayList<>();
 		List<DialogInput> inputs = new ArrayList<>();
@@ -182,8 +187,6 @@ public final class CreationWizard {
 		}
 		body.add(message(error == null ? " " : error, "All points assigned".equals(error) ? NamedTextColor.GREEN : NamedTextColor.RED));
 		boolean review = displayed == null || displayed instanceof SummaryStage;
-		// Keep the navigation on its own row, including odd-sized review pages.
-		if (actions.size() % 2 != 0) actions.add(ActionButton.builder(Component.empty()).width(174).build());
 		actions.add(button(creation.isEditingFromSummary() ? "Back to review" : "Back", seen, response -> {
 			remember(response);
 			creation.goBack();
@@ -226,79 +229,101 @@ public final class CreationWizard {
 			inputs.add(DialogInput.numberRange("value", WIDTH, Component.text("Age"), "%s: %s years", minimum, maximum, Math.clamp(age, minimum, maximum), 1f));
 		} else inputs.add(input("value", title(stage), remembered("value", initial), Math.max(1, max), description));
 		if (description) inputs.add(input("gender", "Gender (optional)", remembered("gender", character.getGender()), 24, false));
-		if (target.equals("name")) nameColours(body, inputs, actions, seen);
+		if (target.equals("name")) nameColours(body, actions, seen);
 	}
 
 	private void selection(List<DialogBody> body, List<DialogInput> inputs, List<ActionButton> actions, SelectionStage stage, int seen) {
 		if (stage.getMaxSelections() > 1) body.add(message(stage.getMinSelections() == stage.getMaxSelections()
-				? "Choose " + stage.getMaxSelections() + " different options" : "Choose up to " + stage.getMaxSelections(), NamedTextColor.GRAY));
+				? "Choose " + stage.getMaxSelections() + " · " + picked(stage).size() + " selected" : "Choose up to " + stage.getMaxSelections(), NamedTextColor.GRAY));
 		if (stage.hasPoints()) body.add(message(stage.getInitialPoints() + " points", NamedTextColor.GOLD));
-		List<SelectableItem> options = stage.getOptions().stream().filter(item -> eligible(stage, item)).toList();
+		List<SelectableItem> options = stage.getOptions();
 		int page = pages.getOrDefault(stage, 0);
-		List<SelectableItem> visible = usesPickers(stage) ? options
-				: options.subList(Math.min(page * PAGE_SIZE, options.size()), Math.min((page + 1) * PAGE_SIZE, options.size()));
-		var choices = Component.text();
-		for (int i = 0; i < visible.size(); i++) {
-			if (i > 0) choices.append(Component.text(i % 2 == 0 ? "\n" : "   •   ", NamedTextColor.DARK_GRAY));
-			choices.append(optionLabel(stage, visible.get(i)));
-		}
-		body.add(DialogBody.plainMessage(choices.build(), WIDTH));
-		if (usesPickers(stage)) {
-			List<SelectableItem> saved = stage.getSelection();
-			for (int i = 0; i < stage.getMaxSelections(); i++) {
-				String key = pickKey(stage, i);
-				String initial = remembered(key, i < saved.size() ? saved.get(i).getId() : "");
-				List<SingleOptionDialogInput.OptionEntry> entries = new ArrayList<>();
-				entries.add(SingleOptionDialogInput.OptionEntry.create("", Component.text(stage.getMinSelections() == 0 ? "None" : "Choose"), initial.isEmpty()));
-				for (SelectableItem item : options) entries.add(SingleOptionDialogInput.OptionEntry.create(item.getId(), optionLabel(stage, item), initial.equals(item.getId())));
-				inputs.add(DialogInput.singleOption(key, WIDTH, entries, Component.empty(), false));
-			}
-			return;
-		}
 		for (int i = page * PAGE_SIZE; i < Math.min((page + 1) * PAGE_SIZE, options.size()); i++) {
 			SelectableItem item = options.get(i);
-			String key = "option_" + item.getId();
-			inputs.add(DialogInput.bool(key, optionLabel(stage, item), Boolean.parseBoolean(remembered(key, Boolean.toString(item.isSelected()))), "true", "false"));
+			boolean selected = picked(stage).contains(item.getId());
+			String disabled = disabledReason(stage, item);
+			Component label = Component.text(selected ? "☑ " : disabled == null ? "☐ " : "☒ ", selected ? NamedTextColor.AQUA : NamedTextColor.DARK_GRAY)
+					.append(disabled == null ? optionLabel(stage, item) : Component.text(plain(item.getName()), NamedTextColor.DARK_GRAY));
+			label = label.hoverEvent(component(disabled == null ? details(item) : disabled + "\n\n" + details(item)));
+			if (disabled == null) label = link(label, seen, response -> togglePick(stage, item));
+			body.add(DialogBody.plainMessage(label, WIDTH));
 		}
 		if (options.size() > PAGE_SIZE) {
 			body.add(message("Choices page " + (page + 1) + " of " + ((options.size() + PAGE_SIZE - 1) / PAGE_SIZE), NamedTextColor.GRAY));
-			actions.add(button("Previous choices", seen, response -> { remember(response); changePage(stage, Math.max(0, page - 1)); }));
-			actions.add(button("More choices", seen, response -> { remember(response); changePage(stage, Math.min((options.size() - 1) / PAGE_SIZE, page + 1)); }));
+			body.add(pageLinks("choices", stage, page, options.size(), seen));
 		}
 	}
 
 	private Component optionLabel(SelectionStage stage, SelectableItem item) {
-		return Component.text(plain(item.getName()), NamedTextColor.WHITE)
+		return component(item.getName()).colorIfAbsent(NamedTextColor.WHITE)
 				.append(Component.text(stage.hasPoints() ? " · " + item.getCost() + " points" : "", NamedTextColor.GOLD))
 				.hoverEvent(component(details(item)));
 	}
 
-	private static boolean usesPickers(SelectionStage stage) { return stage.getMaxSelections() <= 2; }
-	private static String pickKey(SelectionStage stage, int index) { return stage.getMaxSelections() == 1 ? "choice" : "choice_" + index; }
+	private Set<String> picked(SelectionStage stage) {
+		Set<String> result = new HashSet<>();
+		for (SelectableItem item : stage.getOptions()) if (Boolean.parseBoolean(remembered("option_" + item.getId(), Boolean.toString(item.isSelected())))) result.add(item.getId());
+		return result;
+	}
 
-	private boolean eligible(SelectionStage stage, SelectableItem item) {
+	private void togglePick(SelectionStage stage, SelectableItem item) {
+		Set<String> selected = picked(stage);
+		if (stage.getMaxSelections() == 1 && selected.contains(item.getId())) return;
+		String disabled = disabledReason(stage, item);
+		if (disabled != null) { error(disabled); return; }
+		Map<String, String> values = fields.computeIfAbsent(displayed, ignored -> new HashMap<>());
+		if (stage.getMaxSelections() == 1) for (SelectableItem option : stage.getOptions()) values.put("option_" + option.getId(), "false");
+		values.put("option_" + item.getId(), Boolean.toString(!selected.contains(item.getId())));
+		error = null;
+		render();
+	}
+
+	private String disabledReason(SelectionStage stage, SelectableItem item) {
+		Set<String> selected = picked(stage);
+		if (selected.contains(item.getId())) return null;
 		if ("trait".equalsIgnoreCase(item.getType())) {
 			var trait = TraitLoader.getByString(item.getId());
-			if (trait == null || !PlaytimeGate.canSelectTrait(player, trait)) return false;
+			if (trait == null) return "Disabled because this trait is unavailable.";
 		}
 		SelectionStage candidate = new SelectionStage(stage);
+		if (stage.getMaxSelections() > 1) for (SelectableItem option : candidate.getOptions()) if (selected.contains(option.getId())) {
+			candidate.select(option);
+			option.setSelected(true);
+		}
 		SelectableItem copy = candidate.getOptions().stream().filter(option -> option.getId().equals(item.getId())).findFirst().orElseThrow();
 		AttributeData before = new AttributeData(creation.getTempData());
 		String denial;
 		try { denial = CreationManager.toggleSelection(player, candidate, creation, copy); }
 		finally { creation.getTempData().clearAll(); creation.getTempData().mergeFrom(before); }
-		if (denial == null) return true;
-		if (item.hasDependency() && "trait".equalsIgnoreCase(item.getDependency().getType()) && plain(denial).equals("Lacking requirements")) {
-			Set<String> possible = new HashSet<>();
-			creation.getCharacter().getTraits().forEach(trait -> possible.add(trait.getId()));
-			stage.getOptions().forEach(option -> possible.add(option.getId()));
-			return item.getDependency().satisfiedBy(possible);
+		if (denial == null) return null;
+		String reason = plain(denial);
+		if (reason.contains("incompatible")) {
+			Set<String> conflicts = new HashSet<>(stage.getMaxSelections() == 1 ? Set.of() : selected);
+			creation.getCharacter().getTraits().stream().filter(trait -> !"trait".equalsIgnoreCase(stage.getTarget())
+					|| !trait.getTraitData().getKey().equalsIgnoreCase(stage.getKey())).forEach(trait -> conflicts.add(trait.getId()));
+			List<String> names = conflicts.stream().filter(id -> {
+				var trait = TraitLoader.getByString(id);
+				return item.isExclusive(id) || trait != null && trait.getTraitData().isExclusive(item.getId());
+			}).map(this::optionName).sorted().toList();
+			return "Disabled because it conflicts with " + String.join(", ", names) + ".";
 		}
-		return false;
+		if (reason.equals("Lacking requirements")) return "Disabled because it requires "
+				+ ("all".equalsIgnoreCase(item.getDependency().getMode()) ? "" : "one of ")
+				+ String.join(", ", item.getDependency().getDependencies().stream().map(this::optionName).toList()) + ".";
+		if (reason.equals("Cannot afford this trait")) return "Disabled because it costs " + item.getCost() + " points; " + candidate.getPoints() + " remain.";
+		if (reason.equals("Cannot make any more selections")) return "Disabled because all " + stage.getMaxSelections() + " picks are filled. Untick a choice first.";
+		return "Disabled because " + reason;
+	}
+
+	private DialogBody pageLinks(String kind, Stage stage, int page, int total, int seen) {
+		var line = Component.text();
+		if (page > 0) line.append(link(Component.text("Previous " + kind, NamedTextColor.AQUA), seen, response -> changePage(stage, page - 1)));
+		if (page > 0 && (page + 1) * PAGE_SIZE < total) line.append(Component.text("   ·   ", NamedTextColor.DARK_GRAY));
+		if ((page + 1) * PAGE_SIZE < total) line.append(link(Component.text("More " + kind, NamedTextColor.AQUA), seen, response -> changePage(stage, page + 1)));
+		return DialogBody.plainMessage(line.build(), WIDTH);
 	}
 
 	private void changePage(Stage stage, int page) {
-		if (pages.getOrDefault(stage, 0) == page) return;
 		pages.put(stage, page);
 		render();
 	}
@@ -329,46 +354,114 @@ public final class CreationWizard {
 		return Math.max(0, Math.min(8, PermissionGroupService.getNameColourStops(player)));
 	}
 
-	private void nameColours(List<DialogBody> body, List<DialogInput> inputs, List<ActionButton> actions, int seen) {
-		int cap = colourCap();
-		if (cap == 0) {
-			body.add(message("Name colours are available with a donor rank.", NamedTextColor.GRAY));
-			return;
-		}
-		body.add(message("Up to " + cap + " colours · custom hex overrides the palette", NamedTextColor.GRAY));
-		List<NamedTextColor> palette = List.of(NamedTextColor.BLACK, NamedTextColor.DARK_BLUE, NamedTextColor.DARK_GREEN, NamedTextColor.DARK_AQUA,
-				NamedTextColor.DARK_RED, NamedTextColor.DARK_PURPLE, NamedTextColor.GOLD, NamedTextColor.GRAY, NamedTextColor.DARK_GRAY,
-				NamedTextColor.BLUE, NamedTextColor.GREEN, NamedTextColor.AQUA, NamedTextColor.RED, NamedTextColor.LIGHT_PURPLE, NamedTextColor.YELLOW, NamedTextColor.WHITE);
-		for (int i = 0; i < cap; i++) {
-			String key = "colour_" + i;
-			String initial = remembered(key, "");
-			List<SingleOptionDialogInput.OptionEntry> options = new ArrayList<>();
-			options.add(SingleOptionDialogInput.OptionEntry.create("", Component.text("Default / unused"), initial.isEmpty()));
-			for (NamedTextColor colour : palette) options.add(SingleOptionDialogInput.OptionEntry.create(colour.asHexString().toLowerCase(Locale.ROOT),
-					Component.text(pretty(colour.toString()), colour), initial.equalsIgnoreCase(colour.asHexString())));
-			inputs.add(DialogInput.singleOption(key, WIDTH, options, Component.text("Colour " + (i + 1)), true));
-		}
-		NameColour saved = creation.getCharacter().getNameColour();
-		inputs.add(input("colours", "Custom colours (e.g. #ff8800 #ffff55)", remembered("colours", saved == null ? "" : String.join(" ", saved.getHexCodes())), 8 * 8, false));
-		body.add(message(DisplayIdentityService.colourPlain(remembered("value", creation.getCharacter().getName()), NameColour.of(colours())), NamedTextColor.WHITE));
-		actions.add(button("Preview name", seen, response -> {
-			Map<String, String> before = new HashMap<>(fields.getOrDefault(displayed, Map.of()));
+	private void nameColours(List<DialogBody> body, List<ActionButton> actions, int seen) {
+		body.add(namePreview());
+		if (colourCap() == 0) return;
+		actions.add(button("Preview name", seen, this::preview));
+		actions.add(button("Edit colours", seen, response -> {
 			remember(response);
-			String invalid = appearanceError();
-			if (invalid != null) error(invalid);
-			else if (!before.equals(fields.get(displayed))) { error = null; render(); }
+			coloursBefore = remembered("colours", savedColours());
+			colourStyle = "choose";
+			error = null;
+			render();
 		}));
 	}
 
-	private List<String> rawColours() {
-		String custom = remembered("colours", "").trim();
-		if (!custom.isEmpty()) return List.of(custom.split("\\s+"));
-		List<String> colours = new ArrayList<>();
-		for (int i = 0; i < colourCap(); i++) {
-			String value = remembered("colour_" + i, "");
-			if (!value.isBlank()) colours.add(value);
+	private DialogBody namePreview() {
+		String name = remembered("value", creation.getCharacter().getName());
+		return message(name.isBlank() ? "Name preview" : DisplayIdentityService.colourPlain(name, NameColour.of(colours())), NamedTextColor.WHITE);
+	}
+
+	private void preview(DialogResponseView response) {
+		Map<String, String> before = new HashMap<>(fields.getOrDefault(displayed, Map.of()));
+		remember(response);
+		String invalid = appearanceError();
+		if (invalid != null) error(invalid);
+		else if (!before.equals(fields.get(displayed))) { error = null; render(); }
+	}
+
+	private void renderColours() {
+		int seen = ++revision;
+		List<DialogBody> body = new ArrayList<>(List.of(namePreview()));
+		List<DialogInput> inputs = new ArrayList<>();
+		List<ActionButton> actions = new ArrayList<>();
+		ActionButton back = button("Back to name", seen, response -> {
+			fields.get(displayed).put("colours", coloursBefore);
+			colourStyle = null;
+			error = null;
+			render();
+		});
+		boolean choosing = colourStyle.equals("choose");
+		if (choosing) {
+			actions.add(button("Default colour", seen, response -> {
+				fields.get(displayed).put("colours", "");
+				colourStyle = null;
+				error = null;
+				render();
+			}));
+			if (colourCap() > 0) {
+				actions.add(button("Solid colour", seen, response -> chooseColourStyle("solid")));
+				if (colourCap() > 1) actions.add(button("Gradient", seen, response -> chooseColourStyle("gradient")));
+				actions.add(button("Custom hex", seen, response -> chooseColourStyle("custom")));
+			}
+		} else {
+			List<String> colours = rawColours();
+			if (colourStyle.equals("custom")) {
+				body.add(message("Up to " + colourCap() + " hex colours, separated by spaces", NamedTextColor.GRAY));
+				inputs.add(input("colours", "Hex colours", remembered("colours", ""), 8 * 8, false));
+			} else {
+				inputs.add(colourPicker("colour_0", colourStyle.equals("solid") ? "Colour" : "Start colour", colours.isEmpty() ? "#ffaa00" : colours.getFirst()));
+				if (colourStyle.equals("gradient")) inputs.add(colourPicker("colour_1", "End colour", colours.isEmpty() ? "#ffffff" : colours.getLast()));
+			}
+			actions.add(button("Preview", seen, this::preview));
+			actions.add(button("Change style", seen, response -> { remember(response); colourStyle = "choose"; error = null; render(); }));
+			actions.add(back);
+			actions.add(button("Use colours", seen, response -> {
+				remember(response);
+				String invalid = appearanceError();
+				if (invalid != null) { error(invalid); return; }
+				colourStyle = null;
+				error = null;
+				render();
+			}));
 		}
-		return colours;
+		if (error != null) body.add(message(error, NamedTextColor.RED));
+		player.showDialog(Dialog.create(builder -> builder.empty()
+				.base(DialogBase.builder(Component.text("Name colour", NamedTextColor.GOLD)).canCloseWithEscape(false).pause(false)
+						.afterAction(DialogBase.DialogAfterAction.NONE).body(body).inputs(inputs).build())
+				.type(DialogType.multiAction(actions, choosing ? back : null, 2))));
+	}
+
+	private void chooseColourStyle(String style) {
+		List<String> current = rawColours();
+		String first = current.isEmpty() ? "#ffaa00" : NameColourParser.parse(current.getFirst()).orElse("#ffaa00");
+		if (style.equals("solid")) fields.get(displayed).put("colours", first);
+		else if (style.equals("gradient")) fields.get(displayed).put("colours", first + " "
+				+ (current.size() > 1 ? NameColourParser.parse(current.get(1)).orElse("#ffffff") : "#ffffff"));
+		colourStyle = style;
+		error = null;
+		render();
+	}
+
+	private DialogInput colourPicker(String key, String label, String initial) {
+		List<NamedTextColor> palette = List.of(NamedTextColor.BLACK, NamedTextColor.DARK_BLUE, NamedTextColor.DARK_GREEN, NamedTextColor.DARK_AQUA,
+				NamedTextColor.DARK_RED, NamedTextColor.DARK_PURPLE, NamedTextColor.GOLD, NamedTextColor.GRAY, NamedTextColor.DARK_GRAY,
+				NamedTextColor.BLUE, NamedTextColor.GREEN, NamedTextColor.AQUA, NamedTextColor.RED, NamedTextColor.LIGHT_PURPLE, NamedTextColor.YELLOW, NamedTextColor.WHITE);
+		List<SingleOptionDialogInput.OptionEntry> options = new ArrayList<>();
+		for (NamedTextColor colour : palette) options.add(SingleOptionDialogInput.OptionEntry.create(colour.asHexString().toLowerCase(Locale.ROOT),
+				Component.text(pretty(colour.toString()), colour), initial.equalsIgnoreCase(colour.asHexString())));
+		if (options.stream().noneMatch(SingleOptionDialogInput.OptionEntry::initial)) options.add(SingleOptionDialogInput.OptionEntry.create(initial, Component.text(initial), true));
+		return DialogInput.singleOption(key, 280, options, Component.text(label), true);
+	}
+
+	private String savedColours() {
+		NameColour saved = creation.getCharacter().getNameColour();
+		return saved == null ? "" : String.join(" ", saved.getHexCodes());
+	}
+
+	private List<String> rawColours() {
+		String custom = remembered("colours", savedColours()).trim();
+		return custom.isEmpty() ? List.of() : List.of(custom.split("\\s+"));
 	}
 
 	private List<String> colours() {
@@ -393,18 +486,14 @@ public final class CreationWizard {
 		int page = Math.min(pages.getOrDefault(displayed, 0), Math.max(0, (entries.size() - 1) / PAGE_SIZE));
 		for (Stage stage : entries.subList(Math.min(page * PAGE_SIZE, entries.size()), Math.min((page + 1) * PAGE_SIZE, entries.size()))) {
 			String value = reviewValue(stage);
-			body.add(message(title(stage) + ": " + value, NamedTextColor.WHITE));
-			if (stage instanceof SetterStage setter && "name".equalsIgnoreCase(setter.getTarget()) && confirmed.contains(stage)) {
-				NameColour colour = creation.getCharacter().getNameColour();
-				body.add(DialogBody.plainMessage(Component.text("Colours: " + (colour == null ? "Default" : String.join(", ", colour.getHexCodes())), NamedTextColor.GRAY), WIDTH));
-			}
-			actions.add(ActionButton.builder(Component.text("Edit " + title(stage))).width(174)
-					.tooltip(component(value)).action(action(seen, response -> creation.jumpToStageForEdit(stage.getId()))).build());
+			body.add(DialogBody.plainMessage(Component.text(title(stage) + ": ", NamedTextColor.GRAY)
+					.append(component(value).colorIfAbsent(NamedTextColor.WHITE)).append(Component.text("  "))
+					.append(link(Component.text("[Edit]", NamedTextColor.AQUA).hoverEvent(Component.text("Edit " + title(stage))), seen,
+							response -> creation.jumpToStageForEdit(stage.getId()))), WIDTH));
 		}
 		if (entries.size() > PAGE_SIZE) {
 			body.add(message("Review page " + (page + 1) + " of " + ((entries.size() + PAGE_SIZE - 1) / PAGE_SIZE), NamedTextColor.GRAY));
-			actions.add(button("Previous entries", seen, response -> changePage(displayed, Math.max(0, page - 1))));
-			actions.add(button("More entries", seen, response -> changePage(displayed, Math.min((entries.size() - 1) / PAGE_SIZE, page + 1))));
+			body.add(pageLinks("entries", displayed, page, entries.size(), seen));
 		}
 	}
 
@@ -466,18 +555,11 @@ public final class CreationWizard {
 	private String applySelection(SelectionStage stage) {
 		SelectionStage candidate = new SelectionStage(stage);
 		List<SelectableItem> pending = new ArrayList<>();
-		Set<String> picked = new HashSet<>();
-		if (usesPickers(stage)) for (int i = 0; i < stage.getMaxSelections(); i++) {
-			String id = remembered(pickKey(stage, i), "");
-			if (!id.isEmpty() && !picked.add(id)) return "Choose different options for each pick.";
-		}
+		Set<String> picked = picked(stage);
 		for (int i = 0; i < candidate.getOptions().size(); i++) {
 			SelectableItem item = candidate.getOptions().get(i);
-			boolean selected = usesPickers(stage) ? picked.contains(item.getId())
-					: Boolean.parseBoolean(remembered("option_" + item.getId(), Boolean.toString(stage.getOptions().get(i).isSelected())));
-			if (selected) pending.add(item);
+			if (picked.contains(item.getId())) pending.add(item);
 		}
-		if (usesPickers(stage) && picked.size() != pending.size()) return "Choose an available option.";
 		pending.sort(java.util.Comparator.comparingInt(SelectableItem::getCost));
 		AttributeData before = new AttributeData(creation.getTempData());
 		String failure = null;
@@ -583,26 +665,18 @@ public final class CreationWizard {
 	private void remember(DialogResponseView response) {
 		if (response == null) return;
 		Map<String, String> values = fields.computeIfAbsent(displayed, stage -> new HashMap<>());
+		if (colourStyle != null) {
+			if (colourStyle.equals("custom")) values.put("colours", text(response, "colours"));
+			else if (colourStyle.equals("solid")) values.put("colours", text(response, "colour_0"));
+			else if (colourStyle.equals("gradient")) values.put("colours", text(response, "colour_0") + " " + text(response, "colour_1"));
+			return;
+		}
 		if (displayed instanceof SetterStage setter) {
 			if ("age".equalsIgnoreCase(setter.getTarget()) && creation.getCharacter().getRace() != null) {
 				Float age = response.getFloat("value");
 				values.put("value", age != null && Float.isFinite(age) && age == Math.floor(age) ? Integer.toString(age.intValue()) : "");
 			} else values.put("value", text(response, "value"));
-			if ("name".equalsIgnoreCase(setter.getTarget())) {
-				values.put("colours", text(response, "colours"));
-				for (int i = 0; i < colourCap(); i++) values.put("colour_" + i, text(response, "colour_" + i));
-			}
 			if ("description".equalsIgnoreCase(setter.getTarget())) values.put("gender", text(response, "gender"));
-		} else if (displayed instanceof SelectionStage selection) {
-			if (usesPickers(selection)) for (int i = 0; i < selection.getMaxSelections(); i++) values.put(pickKey(selection, i), text(response, pickKey(selection, i)));
-			else {
-				List<SelectableItem> options = selection.getOptions().stream().filter(item -> eligible(selection, item)).toList();
-				int start = pages.getOrDefault(displayed, 0) * PAGE_SIZE;
-				for (SelectableItem item : options.subList(Math.min(start, options.size()), Math.min(start + PAGE_SIZE, options.size()))) {
-					String key = "option_" + item.getId();
-					values.put(key, Boolean.toString(Boolean.TRUE.equals(response.getBoolean(key))));
-				}
-			}
 		} else if (displayed instanceof AttributesStage attributes) {
 			for (String attr : attributes.getAttributes()) values.put("rank_" + attr, text(response, "rank_" + attr));
 		} else if (displayed instanceof QuestionStage) values.put("answer", text(response, "answer"));
@@ -641,6 +715,11 @@ public final class CreationWizard {
 					|| CreationManager.activeCreators.get(player) != creation) return;
 			callback.accept(response);
 		}, CALLBACKS);
+	}
+
+	private Component link(Component label, int seen, Consumer<DialogResponseView> callback) {
+		var click = (DialogAction.CustomClickAction) action(seen, callback);
+		return label.clickEvent(ClickEvent.custom(click.id(), click.additions()));
 	}
 
 	private static DialogInput input(String key, String label, String value, int max, boolean multiline) {

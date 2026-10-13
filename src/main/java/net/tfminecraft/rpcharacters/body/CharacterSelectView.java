@@ -132,6 +132,7 @@ public final class CharacterSelectView {
 		boolean closed;
 		boolean painting;
 		boolean memorials;
+		boolean creating;
 		int memorialPage;
 		String selected;
 		String notice;
@@ -238,13 +239,18 @@ public final class CharacterSelectView {
 		PlayerData data = session.data;
 		List<RPCharacter> alive = alive(data);
 		RPCharacter selected = focus(session, alive);
+		if (selected == null) session.creating = true;
 
 		List<DialogBody> body = new ArrayList<>();
 		if (session.notice != null) body.add(text(Component.text(session.notice, WARN)));
-		if (alive.size() > 1) body.add(text(strip(session, alive, selected)));
+		body.add(DialogBody.plainMessage(strip(session, alive, selected), 360));
 		String reason = null;
-		if (selected == null) {
-			body.add(text(Component.text("You have no characters yet.", PALE)));
+		if (session.creating) {
+			body.add(DialogBody.plainMessage(placeholder("New character"), SkinPortrait.ROW_WIDTH));
+			body.add(text(Component.text("Create a new character", TEAL, TextDecoration.BOLD)));
+			body.add(text(Component.text("Choose a name, class and race.\nReview your choices before you begin.", MUTED)));
+			String blocked = createBlockReason(player, data);
+			if (blocked != null) body.add(text(Component.text(blocked, WARN)));
 		} else {
 			reason = session.actions.blockReason(selected);
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
@@ -252,7 +258,7 @@ public final class CharacterSelectView {
 		}
 
 		List<ActionButton> buttons = new ArrayList<>();
-		if (selected != null) {
+		if (!session.creating) {
 			String id = selected.getId();
 			Component label = reason == null ? Component.text("▶ Play", TEAL, TextDecoration.BOLD)
 					: Component.text("▶ Play", DIM);
@@ -260,21 +266,22 @@ public final class CharacterSelectView {
 			buttons.add(button(label, action + "\n" + details(player.getUniqueId(), selected), 110, session,
 					s -> play(s, id)));
 		}
-		String createBlock = createBlockReason(player, data);
-		buttons.add(button(Component.text("New character", createBlock == null ? PALE : DIM),
-				(createBlock == null ? "Start a new character" : createBlock) + "\n" + slotsUsed(player, alive.size()),
-				100, session, CharacterSelectView::create));
+		else {
+			String createBlock = createBlockReason(player, data);
+			buttons.add(button(Component.text("Create character", createBlock == null ? TEAL : DIM, TextDecoration.BOLD),
+					(createBlock == null ? "Start a new character" : createBlock) + "\n" + slotsUsed(player, alive.size()),
+					160, session, CharacterSelectView::create));
+		}
 		int fallen = memorials(data).size();
 		if (fallen > 0) {
-			buttons.add(button(Component.text("Memorials (" + fallen + ")", MUTED),
-					"Characters who have died or gone missing", 90, session, s -> navigate(s, v -> {
+			body.add(text(link(Component.text("Memorials (" + fallen + ")", MUTED),
+					"Characters who have died or gone missing", session, s -> navigate(s, v -> {
 						v.memorials = true;
 						v.memorialPage = 0;
-					})));
+					}))));
 		}
 		// One row of buttons: a shared grid would widen columns to the widest button.
-		show(session, Component.text("Choose your character", TEAL, TextDecoration.BOLD), body, buttons, leave(session),
-				buttons.size());
+		show(session, Component.text("Choose your character", TEAL, TextDecoration.BOLD), body, buttons, null, 1);
 	}
 
 	private static void renderMemorials(Session session) {
@@ -332,17 +339,18 @@ public final class CharacterSelectView {
 
 	/** Clickable roster line: arrows wrap round, tabs show a window around the focused character. */
 	private static Component strip(Session session, List<RPCharacter> alive, RPCharacter selected) {
-		int index = alive.indexOf(selected);
+		int index = session.creating ? alive.size() : alive.indexOf(selected);
 		int from = Math.max(0, Math.min(index - 1, alive.size() - TABS));
-		TextComponent.Builder line = Component.text()
-				.append(link(Component.text("‹", PALE, TextDecoration.BOLD), "Previous character", session,
-						s -> step(s, -1)));
+		TextComponent.Builder line = Component.text();
+		if (!alive.isEmpty()) line.append(link(Component.text("‹", PALE, TextDecoration.BOLD), "Previous character", session, s -> step(s, -1)));
 		for (RPCharacter character : alive.subList(from, Math.min(from + TABS, alive.size()))) {
-			line.append(Component.text("   ")).append(tab(session, character, character == selected));
+			line.append(Component.text("   ")).append(tab(session, character, !session.creating && character == selected));
 		}
-		return line.append(Component.text("   "))
-				.append(link(Component.text("›", PALE, TextDecoration.BOLD), "Next character", session, s -> step(s, 1)))
-				.build();
+		line.append(Component.text(alive.isEmpty() ? "" : "   ")).append(link(session.creating
+				? Component.text("New character", TEAL, TextDecoration.BOLD, TextDecoration.UNDERLINED)
+				: Component.text("New character", MUTED), "Create a new character", session, s -> navigate(s, v -> v.creating = true)));
+		if (!alive.isEmpty()) line.append(Component.text("   ")).append(link(Component.text("›", PALE, TextDecoration.BOLD), "Next character", session, s -> step(s, 1)));
+		return line.build();
 	}
 
 	private static Component tab(Session session, RPCharacter character, boolean focused) {
@@ -351,15 +359,17 @@ public final class CharacterSelectView {
 		String label = name.length() > TAB_NAME ? name.substring(0, TAB_NAME - 1) + "…" : name;
 		Component text = focused ? Component.text(label, TEAL, TextDecoration.BOLD, TextDecoration.UNDERLINED)
 				: Component.text(label, MUTED);
-		return link(text, name, session, s -> navigate(s, v -> v.selected = id));
+		return link(text, name, session, s -> navigate(s, v -> { v.selected = id; v.creating = false; }));
 	}
 
 	private static void step(Session session, int delta) {
 		navigate(session, s -> {
 			List<RPCharacter> alive = alive(s.data);
-			if (alive.isEmpty()) return;
-			int index = alive.indexOf(focus(s, alive));
-			s.selected = alive.get(Math.floorMod(index + delta, alive.size())).getId();
+			if (alive.isEmpty()) { s.creating = true; return; }
+			int index = s.creating ? alive.size() : alive.indexOf(focus(s, alive));
+			int next = Math.floorMod(index + delta, alive.size() + 1);
+			s.creating = next == alive.size();
+			if (!s.creating) s.selected = alive.get(next).getId();
 		});
 	}
 
@@ -409,7 +419,7 @@ public final class CharacterSelectView {
 		session.loading.remove(id);
 		if (!session.live()) return;
 		session.portraits.put(id, front == null ? placeholder(NO_PORTRAIT) : bust(front));
-		if (!session.painting && !session.memorials && Objects.equals(id, session.selected)) render(session);
+		if (!session.painting && !session.memorials && !session.creating && Objects.equals(id, session.selected)) render(session);
 	}
 
 	static Component bust(BufferedImage front) {
