@@ -343,15 +343,15 @@ class BodyStoreTest {
     void aStrippedBodyKeepsEverythingButItsPossessionsWhichAreReadAsSingleItems() throws Exception {
         player.getEnderChest().setItem(3, new ItemStack(Material.ENDER_PEARL, 2));
         BodySnapshot full = body(5);
-        var stacks = full.possessions();
+        var stacks = full.possessions(BodySnapshot.Kept.NONE);
         assertEquals(2, stacks.size());
         assertEquals(new ItemStack(Material.DIAMOND, 5), ItemStack.deserializeBytes(stacks.get(0)));
         assertEquals(new ItemStack(Material.ENDER_PEARL, 2), ItemStack.deserializeBytes(stacks.get(1)));
-        BodySnapshot stripped = full.stripped();
-        assertTrue(stripped.possessions().isEmpty());
+        BodySnapshot stripped = full.stripped(BodySnapshot.Kept.NONE);
+        assertTrue(stripped.possessions(BodySnapshot.Kept.NONE).isEmpty());
         assertEquals(full.worldName(), stripped.worldName());
         assertNotEquals(full, stripped);
-        assertEquals(stripped, stripped.stripped());
+        assertEquals(stripped, stripped.stripped(BodySnapshot.Kept.NONE));
     }
 
     private BodySnapshot body(int diamonds) throws IOException {

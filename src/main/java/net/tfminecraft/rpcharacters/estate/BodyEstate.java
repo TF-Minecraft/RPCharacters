@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 import net.tfminecraft.rpcharacters.body.BodyConflictException;
 import net.tfminecraft.rpcharacters.body.BodyCorruptException;
 import net.tfminecraft.rpcharacters.body.BodyRecord;
+import net.tfminecraft.rpcharacters.body.BodySnapshot;
 import net.tfminecraft.rpcharacters.body.BodyStore;
 import net.tfminecraft.rpcharacters.estate.EstateRecord.Body;
 import net.tfminecraft.rpcharacters.estate.EstateRecord.Named;
@@ -25,7 +26,7 @@ import net.tfminecraft.tlibs.character.estate.Outcome;
 
 /**
  * The {@code rpcharacters-body} participant: strips the testator's stowed body (storage, armour, offhand and
- * ender chest) into a collection for the property recipient, through a state machine kept in the estate
+ * ender chest, but not the items graves also leave behind) into a collection for the property recipient, through a state machine kept in the estate
  * record so a crash at any step neither loses nor duplicates items (design "RPCharacters: the stored body").
  */
 final class BodyEstate implements EstateParticipant, EstateCoordinator.BodyRevival {
@@ -44,12 +45,15 @@ final class BodyEstate implements EstateParticipant, EstateCoordinator.BodyReviv
     private final EstateBook book;
     private final Bodies bodies;
     private final Predicate<EstateDecision> guard;
+    private final BodySnapshot.Kept kept;
     private final Logger logger;
 
-    BodyEstate(EstateBook book, Bodies bodies, Predicate<EstateDecision> guard, Logger logger) {
+    /** {@code kept} leaves items in the body, as graves leave them: MMOInventory slot placeholders and the like. */
+    BodyEstate(EstateBook book, Bodies bodies, Predicate<EstateDecision> guard, BodySnapshot.Kept kept, Logger logger) {
         this.book = book;
         this.bodies = bodies;
         this.guard = guard;
+        this.kept = kept;
         this.logger = logger;
     }
 
@@ -95,7 +99,7 @@ final class BodyEstate implements EstateParticipant, EstateCoordinator.BodyReviv
         if (state != null && body.rev() != state.expectedRev) {
             return Outcome.blocked("stored body moved on while it was being stripped");
         }
-        List<String> stacks = encode(body.body().possessions());
+        List<String> stacks = encode(body.body().possessions(kept));
         if (state == null) {
             if (stacks.isEmpty()) return collectable(record, stacks, body.rev());
             EstateRecord next = EstateBook.edit(record);
@@ -107,7 +111,7 @@ final class BodyEstate implements EstateParticipant, EstateCoordinator.BodyReviv
             book.save(next);
             record = next;
         }
-        bodies.store().write(owner, character, body.rev(), reason, body.body().stripped());
+        bodies.store().write(owner, character, body.rev(), reason, body.body().stripped(kept));
         return collectable(record, stacks, body.rev());
     }
 
@@ -117,7 +121,7 @@ final class BodyEstate implements EstateParticipant, EstateCoordinator.BodyReviv
         if (previous.isEmpty() || previous.get().rev() != body.rev() - 1) {
             return Outcome.blocked("stripped body has no matching previous revision");
         }
-        return collectable(record, encode(previous.get().body().possessions()), previous.get().rev());
+        return collectable(record, encode(previous.get().body().possessions(kept)), previous.get().rev());
     }
 
     private Outcome collectable(EstateRecord record, List<String> stacks, long expectedRev) throws IOException {

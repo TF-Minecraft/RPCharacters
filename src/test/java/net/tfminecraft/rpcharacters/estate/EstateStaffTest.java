@@ -289,7 +289,7 @@ class EstateStaffTest {
         };
         kit.world.participants.add(broken);
         assertTrue(staff.empty(fresh(empty)));
-        kit.world.participants.add(new BodyEstate(kit.book, null, d -> true, kit.logger));
+        kit.world.participants.add(new BodyEstate(kit.book, null, d -> true, net.tfminecraft.rpcharacters.body.BodySnapshot.Kept.NONE, kit.logger));
         assertTrue(staff.empty(fresh(empty)));
         EstateRecord withBody = fresh(empty);
         withBody.body = new EstateRecord.Body();

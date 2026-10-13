@@ -82,7 +82,7 @@ final class EstateModule implements EstateHooks, Listener {
             public boolean hasLease(UUID owner, UUID character) throws IOException {
                 return bodies.hasLease(owner, character);
             }
-        }, Estates::guardHolds, plugin.getLogger());
+        }, Estates::guardHolds, net.tfminecraft.rpcharacters.grave.GraveLoader::keepOutOfGrave, plugin.getLogger());
         coordinator.bodies(body);
         EstateCollections collections = new EstateCollections(book, ItemStack::deserializeBytes,
                 RosterSyncService::pushRosterAsync, plugin.getLogger());

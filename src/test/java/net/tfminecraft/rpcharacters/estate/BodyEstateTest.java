@@ -42,6 +42,7 @@ class BodyEstateTest {
     private BodyStore store;
     private boolean leased;
     private boolean guard = true;
+    private BodySnapshot.Kept kept = BodySnapshot.Kept.NONE;
     private BodyEstate participant;
     private CharacterRef aria;
     private CharacterRef kira;
@@ -115,7 +116,7 @@ class BodyEstateTest {
             public boolean hasLease(UUID owner, UUID character) {
                 return leased;
             }
-        }, decision -> guard, kit.logger);
+        }, decision -> guard, kept, kit.logger);
     }
 
     @AfterEach
@@ -154,9 +155,60 @@ class BodyEstateTest {
         BodyRecord after = store.read(aria.ownerId(), aria.characterId()).orElseThrow();
         assertEquals(2, after.rev());
         assertEquals("estate:" + estate.deathId, after.reason());
-        assertTrue(after.body().possessions().isEmpty());
+        assertTrue(after.body().possessions(BodySnapshot.Kept.NONE).isEmpty());
         assertEquals(done, settle(estate.deathId));
         assertEquals(2, store.read(aria.ownerId(), aria.characterId()).orElseThrow().rev());
+    }
+
+    static BodySnapshot bodyOf(Map<Integer, org.bukkit.inventory.ItemStack> inventory, List<org.bukkit.inventory.ItemStack> ender)
+            throws IOException {
+        org.bukkit.inventory.ItemStack[] slots = new org.bukkit.inventory.ItemStack[41];
+        inventory.forEach((slot, item) -> slots[slot] = item);
+        BodySnapshot base = body(List.of(), List.of());
+        com.google.gson.JsonObject data = com.google.gson.JsonParser.parseString(base.serialize()).getAsJsonObject();
+        data.addProperty("inventory", Base64.getEncoder().encodeToString(org.bukkit.inventory.ItemStack.serializeItemsAsBytes(slots)));
+        data.addProperty("enderChest", Base64.getEncoder().encodeToString(org.bukkit.inventory.ItemStack.serializeItemsAsBytes(
+                ender.toArray(new org.bukkit.inventory.ItemStack[27]))));
+        return BodySnapshot.deserialize(data.toString());
+    }
+
+    @Test
+    void mmoInventorySlotPlaceholdersStayInTheBodyAsGravesLeaveThem() throws Exception {
+        try (var tlibs = mockStatic(net.tfminecraft.tlibs.TLibs.class); var state = new net.tfminecraft.rpcharacters.RuntimeTestState(
+                net.tfminecraft.rpcharacters.grave.GraveLoader.class)) {
+            var items = mock(net.tfminecraft.tlibs.objects.api.ItemAPI.class, RETURNS_DEEP_STUBS);
+            tlibs.when(net.tfminecraft.tlibs.TLibs::getItemAPI).thenReturn(items);
+            when(items.getChecker().checkItemWithPath(any(org.bukkit.inventory.ItemStack.class), anyString())).thenAnswer(call ->
+                    ("v." + ((org.bukkit.inventory.ItemStack) call.getArgument(0)).getType().name().toLowerCase(java.util.Locale.ROOT))
+                            .equals(call.getArgument(1)));
+            new net.tfminecraft.rpcharacters.grave.GraveLoader().load(Path.of("src/main/resources/graves.yml").toFile());
+            kept = net.tfminecraft.rpcharacters.grave.GraveLoader::keepOutOfGrave;
+            participant = participant(store);
+            var hoe = new org.bukkit.inventory.ItemStack(org.bukkit.Material.DIAMOND_HOE);
+            var ring = new org.bukkit.inventory.ItemStack(org.bukkit.Material.GOLD_NUGGET);
+            var pearl = new org.bukkit.inventory.ItemStack(org.bukkit.Material.ENDER_PEARL, 3);
+            stow(aria, bodyOf(Map.of(0, hoe, 9, hoe, 10, ring, 11, hoe, 12, hoe), List.of(pearl)));
+            kit.world.participants.clear();
+            kit.world.participants.add(participant);
+            EstateRecord estate = kit.decided(aria, kira.characterId());
+            List<org.bukkit.inventory.ItemStack> collected = record(estate.deathId).body.stacks.stream()
+                    .map(stack -> org.bukkit.inventory.ItemStack.deserializeBytes(Base64.getDecoder().decode(stack))).toList();
+            assertEquals(List.of(hoe, ring, pearl), collected);
+            BodyRecord stripped = store.read(aria.ownerId(), aria.characterId()).orElseThrow();
+            var left = org.bukkit.inventory.ItemStack.deserializeItemsFromBytes(Base64.getDecoder().decode(
+                    com.google.gson.JsonParser.parseString(stripped.body().serialize()).getAsJsonObject().get("inventory").getAsString()));
+            assertEquals(hoe, left[9]);
+            assertEquals(hoe, left[11]);
+            assertEquals(hoe, left[12]);
+            assertTrue(left[0] == null || left[0].isEmpty());
+            assertTrue(left[10] == null || left[10].isEmpty());
+            assertTrue(stripped.body().possessions(kept).isEmpty());
+            BodyRecord previous = store.previous(aria.ownerId(), aria.characterId()).orElseThrow();
+            assertEquals(3, previous.body().possessions(kept).size());
+            assertEquals(6, previous.body().possessions(BodySnapshot.Kept.NONE).size());
+            BodySnapshot.Kept broken = (slot, item) -> { throw new IllegalStateException("checker"); };
+            assertThrows(IOException.class, () -> previous.body().possessions(broken));
+        }
     }
 
     @Test
@@ -228,7 +280,7 @@ class BodyEstateTest {
         EstateRecord estate = kit.decided(aria, kira.characterId());
         guard = true;
         BodyRecord before = stow(aria, body(List.of(GOLD), List.of(PEARL)));
-        store.write(aria.ownerId(), aria.characterId(), before.rev(), "estate:" + estate.deathId, before.body().stripped());
+        store.write(aria.ownerId(), aria.characterId(), before.rev(), "estate:" + estate.deathId, before.body().stripped(BodySnapshot.Kept.NONE));
         settle(estate.deathId);
         EstateRecord derived = record(estate.deathId);
         assertEquals("COLLECTABLE", derived.body.state);
@@ -286,7 +338,7 @@ class BodyEstateTest {
         participant.forcedRevive(uncommitted);
         assertEquals("DISCARDED", uncommitted.body.state);
 
-        store.write(aria.ownerId(), aria.characterId(), before.rev(), "estate:" + estate.deathId, before.body().stripped());
+        store.write(aria.ownerId(), aria.characterId(), before.rev(), "estate:" + estate.deathId, before.body().stripped(BodySnapshot.Kept.NONE));
         EstateRecord committed = stripping(estate.deathId, before.rev());
         participant.forcedRevive(committed);
         assertEquals("COLLECTABLE", committed.body.state);
