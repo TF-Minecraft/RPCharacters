@@ -201,8 +201,10 @@ class CreationManagerTest {
             message("You are on cooldown from switching characters");
             cooldowns.when(() -> PermissionGroupService.hasCharacterSwitchCooldown(player, data)).thenReturn(false);
             evil.when(() -> EvilRpService.blocksCharacterSwitch(player)).thenReturn(true);
+            evil.when(() -> EvilRpService.switchBlockedMessage(player)).thenReturn("Finish your roleplay situation first.");
             CreationManager.initiateCreation(player);
-            evil.verify(() -> EvilRpService.sendSwitchBlocked(player));
+            message("Finish your roleplay situation first.");
+            evil.verify(() -> EvilRpService.sendSwitchBlocked(player), never());
             assertTrue(created.constructed().isEmpty());
             permissions.when(() -> Permissions.isAdmin(player)).thenReturn(true);
             CreationManager.initiateCreation(player);

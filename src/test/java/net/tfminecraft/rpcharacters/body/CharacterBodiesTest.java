@@ -244,6 +244,45 @@ class CharacterBodiesTest {
         view.verify(()->CharacterSelectView.notice(player,"No free character slot"));
     }
 
+    @Test void aPendingStrikeRejectsCreationWithAVisibleNoticeRatherThanDelayedChat() {
+        ready();
+        when(presentation.available()).thenReturn(true);
+        var selector=mock(CharacterSelectView.Session.class);
+        view.when(()->CharacterSelectView.open(eq(player),eq(account),any())).thenAnswer(call->{
+            actions=call.getArgument(2);
+            view.when(()->CharacterSelectView.session(owner)).thenReturn(selector);
+            return null;
+        });
+        view.clearInvocations();
+        try (var pending=mockStatic(net.tfminecraft.rpcharacters.pvp.PvpStrikeService.class);
+             var slots=mockStatic(net.tfminecraft.rpcharacters.persona.CharacterSlotService.class);
+             var permissions=mockStatic(net.tfminecraft.rpcharacters.Permissions.class);
+             var ingest=mockStatic(net.tfminecraft.rpcharacters.ingest.CharacterIngestService.class)) {
+            pending.when(()->net.tfminecraft.rpcharacters.pvp.PvpStrikeService.hasPendingDecision(player)).thenReturn(true);
+            slots.when(()->net.tfminecraft.rpcharacters.persona.CharacterSlotService.hasFreeSlot(player,account)).thenReturn(true);
+            evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenCallRealMethod();
+            evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.switchBlockedMessage(player)).thenCallRealMethod();
+            actions.create();
+        }
+        assertFalse(CreationManager.activeCreators.containsKey(player));
+        view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()),times(1));
+        view.verify(()->CharacterSelectView.notice(player,"You can't switch characters while your killer decides whether to strike you."));
+        verify(player,never()).sendMessage(contains("killer decides"));
+        verify(presentation,never()).release(player);
+    }
+
+    @Test void loadingGuardFeedbackIsNotDelayedUntilAfterPlay() {
+        when(packs.ready(player)).thenReturn(false);
+        ready();
+        assertFalse(bodies.isReadyToChoose(player));
+        when(presentation.holds(player)).thenReturn(true);
+        bodies.feedback(player,"Choose a character before chatting.");
+        verify(player,never()).sendMessage("Choose a character before chatting.");
+        when(presentation.holds(player)).thenReturn(false);
+        bodies.feedback(player,"Choose a character before chatting.");
+        verify(player).sendMessage("Choose a character before chatting.");
+    }
+
     @Test void estatesReadTheStoreAndAskTheLeaseWhetherABodyIsStillInPlay() throws Exception {
         assertSame(store,bodies.store());
         when(leases.names(owner,first)).thenReturn(true);

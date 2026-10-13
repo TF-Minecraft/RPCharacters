@@ -428,7 +428,7 @@ public final class CharacterBodies {
             show(player);
             if (presentation.available()) CharacterSelectView.notice(player, net.tfminecraft.rpcharacters.utils.ClueFormatter.stripColor(message));
             else player.sendMessage(message);
-        } else {
+        } else if (!presentation.holds(player)) {
             player.sendMessage(message);
         }
     }

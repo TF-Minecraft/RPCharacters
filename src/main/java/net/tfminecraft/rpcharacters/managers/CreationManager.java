@@ -87,7 +87,7 @@ public class CreationManager implements Listener{
 			return;
 		}
 		if (!Permissions.isAdmin(p) && net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(p)) {
-			net.tfminecraft.rpcharacters.evilrp.EvilRpService.sendSwitchBlocked(p);
+			creationFeedback(p, RPTexts.ERROR + net.tfminecraft.rpcharacters.evilrp.EvilRpService.switchBlockedMessage(p));
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 			return;
 		}
