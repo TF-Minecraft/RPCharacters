@@ -232,6 +232,37 @@ class CharacterIdentityServiceTest {
     }
 
     @Test
+    void findByNameMatchesOnlyTheRealNamesOfLivingCharactersOnlineAndOffline() {
+        alice.setAlias("Public alias");
+        data.setTempAlias("Temporary alias");
+        masks.when(() -> MaskService.isMasked(player)).thenReturn(true);
+        masks.when(MaskService::getMaskedLabel).thenReturn("Masked stranger");
+        assertEquals("Masked stranger", service.displayName(player));
+        RPCharacter deceased = character("Alice", false);
+        deceased.setStatus(Status.DEAD);
+        data.addCharacter(deceased);
+        UUID offline = UUID.randomUUID();
+        RPCharacter namesake = character("ALICE", false);
+        CharacterIdentityService.saved(offline, namesake);
+
+        List<CharacterInfo> found = service.findByName("alice");
+        assertEquals(Set.of(UUID.fromString(alice.getId()), UUID.fromString(namesake.getId())),
+                Set.copyOf(found.stream().map(info -> info.ref().characterId()).toList()));
+        assertEquals(Set.of(player.getUniqueId(), offline),
+                Set.copyOf(found.stream().map(info -> info.ref().ownerId()).toList()));
+        assertEquals(List.of(), service.findByName("Public alias"));
+        assertEquals(List.of(), service.findByName("Temporary alias"));
+        assertEquals(List.of(), service.findByName("Masked stranger"));
+
+        // An unsaved rename on a loaded account counts at once, as it does for info.
+        alice.setName("Kira");
+        assertEquals(List.of(service.info(UUID.fromString(alice.getId())).orElseThrow()), service.findByName("kira"));
+        assertEquals(List.of(service.info(UUID.fromString(namesake.getId())).orElseThrow()), service.findByName("Alice"));
+        alice.setStatus(Status.DEAD);
+        assertEquals(List.of(), service.findByName("Kira"));
+    }
+
+    @Test
     void allProviderMethodsRequireMainThread() {
         CharacterSession session = join();
         UUID owner = player.getUniqueId();
@@ -244,6 +275,7 @@ class CharacterIdentityServiceTest {
             assertThrows(IllegalStateException.class, () -> service.deathId(id));
             assertThrows(IllegalStateException.class, () -> service.characters(owner));
             assertThrows(IllegalStateException.class, () -> service.lastPlayed(owner));
+            assertThrows(IllegalStateException.class, () -> service.findByName("Alice"));
             assertThrows(IllegalStateException.class, () -> service.displayName(player));
         }
         assertTrue(service.isCurrent(session));

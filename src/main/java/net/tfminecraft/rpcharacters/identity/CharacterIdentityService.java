@@ -90,6 +90,14 @@ public final class CharacterIdentityService implements CharacterIdentity {
         return directory.deathId(characterId);
     }
 
+    /** Overlays every loaded account first, as {@link #info(UUID)} does, so unsaved renames count. */
+    @Override
+    public List<CharacterInfo> findByName(String name) {
+        CharacterTransitions.requireMainThread();
+        for (PlayerData data : PlayerManager.getOnlineData()) refresh(data);
+        return directory.findByName(name);
+    }
+
     @Override
     public Optional<List<CharacterInfo>> characters(UUID ownerId) {
         refreshOwner(ownerId);
