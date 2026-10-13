@@ -197,6 +197,15 @@ class CommandManagerTest {
         run("cancel"); verify(creator).cancel();
     }
 
+    @Test void createCommandResumesTheExistingDialogDraft() {
+        CharacterCreation creator = creator(player);
+        var wizard = mock(net.tfminecraft.rpcharacters.creation.CreationWizard.class);
+        when(creator.getWizard()).thenReturn(wizard);
+        run("create");
+        verify(wizard).resume();
+        creators.verify(() -> CreationManager.initiateCreation(player), never());
+    }
+
     @Test void profileMenuRespectsOtherPlayerPermissionAndBusyState() {
         try (var inventories = mockConstruction(InventoryManager.class)) {
             run("menu"); verify(inventories.constructed().getLast()).profileView(player, player);

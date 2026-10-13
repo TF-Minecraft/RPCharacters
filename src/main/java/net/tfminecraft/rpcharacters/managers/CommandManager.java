@@ -219,7 +219,9 @@ public class CommandManager implements Listener, CommandExecutor{
 				return true;
 			} else if(cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("create") && args.length == 1) {
 				if(CreationManager.activeCreators.containsKey(p)) {
-					RPTexts.send(p, RPTexts.ERROR + "You are already creating a character");
+					var creation = CreationManager.activeCreators.get(p);
+					if (creation.getWizard() != null) creation.getWizard().resume();
+					else RPTexts.send(p, RPTexts.ERROR + "You are already creating a character");
 					return true;
 				}
 				PlayerData pd = PlayerManager.get(p);

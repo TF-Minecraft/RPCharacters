@@ -87,6 +87,21 @@ class RPCharactersStartupTest {
             assertNull(RPCharacters.getCharacterBodies());
         }
     }
+
+    @Test void shutdownClosesAnUnfinishedCreationScreen() {
+        plugin.startRuntime();
+        var player = server.addPlayer();
+        var creation = mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class);
+        var wizard = mock(net.tfminecraft.rpcharacters.creation.CreationWizard.class);
+        when(creation.getWizard()).thenReturn(wizard);
+        CreationManager.activeCreators.put(player, creation);
+        try {
+            plugin.stopRuntime();
+            verify(wizard).close();
+        } finally {
+            CreationManager.activeCreators.remove(player, creation);
+        }
+    }
     @Test void invalidBodySetupKeepsLoginGuardRegisteredRatherThanOpeningWithoutIsolation() throws Exception {
         plugin.createConfigs();
         Files.writeString(plugin.getDataFolder().toPath().resolve("config.yml"), "character-bodies:\n  enabled: true\n");

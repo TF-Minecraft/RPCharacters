@@ -337,6 +337,9 @@ public class RPCharacters extends JavaPlugin{
 	}
 	@Override
 	public void onDisable() {
+		for (var creation : CreationManager.activeCreators.values()) {
+			if (creation.getWizard() != null) creation.getWizard().close();
+		}
 		if (characterTransitions != null) characterTransitions.shutdown();
 		if (characterBodies != null) characterBodies.shutdown();
 		if (characterIdentity != null) getServer().getServicesManager().unregister(characterIdentity);

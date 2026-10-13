@@ -350,7 +350,8 @@ public class PlayerManager implements Listener{
 		MmoCorePlayerReady.cancel(p.getUniqueId());
 		CharacterCreation session = CreationManager.activeCreators.get(p);
 		net.tfminecraft.rpcharacters.paidchange.PaidChangeService.settle(session);
-		if (session != null && !session.isEditing() && RPCharacters.getCharacterBodies() != null) {
+		if (session != null && !session.isEditing()
+				&& (RPCharacters.getCharacterBodies() != null || session.getWizard() != null)) {
 			// Drafts retain this connection's Player; do not let them block selection after reconnect.
 			session.cancel();
 			CreationManager.activeCreators.remove(p, session);

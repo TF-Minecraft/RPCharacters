@@ -115,13 +115,21 @@ public final class CreationRules {
 	 * and account age.
 	 */
 	public static String traitsError(RPCharacter draft, PlayerData account, List<Stage> stages) {
+		return traitsError(draft, account, stages, false);
+	}
+
+	public static String traitsErrorInGame(RPCharacter draft, PlayerData account, List<Stage> stages) {
+		return traitsError(draft, account, stages, true);
+	}
+
+	private static String traitsError(RPCharacter draft, PlayerData account, List<Stage> stages, boolean inGame) {
 		Map<String, List<Trait>> byKey = new LinkedHashMap<>();
 		for (Trait trait : draft.getTraits()) {
 			byKey.computeIfAbsent(keyOf(trait), k -> new ArrayList<>()).add(trait);
 		}
 		Set<String> stageKeys = new HashSet<>();
 		for (Stage stage : stages) {
-			if (!stage.runsOnWeb()) {
+			if (!(inGame ? stage.runsInGame() : stage.runsOnWeb())) {
 				continue;
 			}
 			String error = null;
