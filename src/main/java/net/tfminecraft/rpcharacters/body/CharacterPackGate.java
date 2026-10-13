@@ -58,6 +58,18 @@ final class CharacterPackGate {
 
     boolean ready(Player player) { return !enabled || state(player).equals("ready"); }
 
+    void roomBlocked(Player player, BooleanSupplier current) {
+        player.showDialog(Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(Component.text("Entering character selection", CharacterSelectView.TEAL))
+                        .canCloseWithEscape(false).pause(false).afterAction(DialogBase.DialogAfterAction.NONE)
+                        .body(List.of(DialogBody.plainMessage(Component.text(
+                                "Another plugin is delaying room entry. Retrying automatically…", CharacterSelectView.PALE), 300))).build())
+                .type(DialogType.multiAction(List.of(ActionButton.builder(Component.text("Leave", CharacterSelectView.MUTED))
+                        .action(DialogAction.customClick((response, audience) -> {
+                            if (audience == player && player.isOnline() && current.getAsBoolean()) player.kickPlayer("See you next time.");
+                        }, CALLBACKS)).build()), null, 1))));
+    }
+
     private String state(Player player) {
         Plugin core = Bukkit.getPluginManager().getPlugin("TFMCCore");
         if (core == null || !core.isEnabled()) return "unavailable";

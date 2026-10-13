@@ -164,7 +164,7 @@ class CreationManagerTest {
             CreationManager.initiateCreation(player);
             assertTrue(created.constructed().isEmpty());
             assertFalse(CreationManager.activeCreators.containsKey(player));
-            message("Wait for character selection to finish loading.");
+            verify(bodies).feedback(eq(player), contains("Wait for character selection to finish loading."));
             when(bodies.isReadyToChoose(player)).thenReturn(true);
             CreationManager.initiateCreation(player);
             assertSame(created.constructed().getFirst(), CreationManager.activeCreators.get(player));
@@ -201,8 +201,10 @@ class CreationManagerTest {
             message("You are on cooldown from switching characters");
             cooldowns.when(() -> PermissionGroupService.hasCharacterSwitchCooldown(player, data)).thenReturn(false);
             evil.when(() -> EvilRpService.blocksCharacterSwitch(player)).thenReturn(true);
+            evil.when(() -> EvilRpService.switchBlockedMessage(player)).thenReturn("Finish your roleplay situation first.");
             CreationManager.initiateCreation(player);
-            evil.verify(() -> EvilRpService.sendSwitchBlocked(player));
+            message("Finish your roleplay situation first.");
+            evil.verify(() -> EvilRpService.sendSwitchBlocked(player), never());
             assertTrue(created.constructed().isEmpty());
             permissions.when(() -> Permissions.isAdmin(player)).thenReturn(true);
             CreationManager.initiateCreation(player);

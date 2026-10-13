@@ -92,8 +92,14 @@ class CharacterBodiesTest {
     CharacterSelectView.Actions actions;
     YamlConfiguration config;
     CharacterPackGate packs;
+    SelectionPresentation presentation;
     java.util.function.BooleanSupplier packCurrent;
     Runnable packResume;
+
+    @BeforeAll static void initializeIngestBeforeDatabaseConstructionIsMocked() throws ClassNotFoundException {
+        // The service's static database must not retain this fixture's constructor mock.
+        Class.forName("net.tfminecraft.rpcharacters.ingest.CharacterIngestService");
+    }
 
     @BeforeEach void setup() throws Exception {
         mocks = new ArrayList<>(); queued = new ArrayList<>();
@@ -155,6 +161,9 @@ class CharacterBodiesTest {
                     .when(gate).await(any(),any(),any());
         }); mocks.add(packGates);
         respawns=mockStatic(BodyRespawn.class); mocks.add(respawns);
+        presentation=mock(SelectionPresentation.class);
+        var presentationFactory=mockStatic(SelectionPresentation.class);mocks.add(presentationFactory);
+        presentationFactory.when(()->SelectionPresentation.create(eq(plugin),anyBoolean())).thenReturn(presentation);
         bodies=new CharacterBodies(plugin,config);rpc.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
         packs=packGates.constructed().getFirst();
         database=dbs.constructed().getFirst();store=stores.constructed().getFirst();migration=migrations.constructed().getFirst();progress=progresses.constructed().getFirst();
@@ -172,6 +181,112 @@ class CharacterBodiesTest {
     void drain(){for(int i=0;!queued.isEmpty()&&i<20;i++)queued.removeFirst().run();}
     void ready(){bodies.join(player);bodies.takeAccount(player);bodies.prepare(account);drain();}
     void play(){ready();bodies.select(account,a);drain();assertTrue(bodies.hasLiveBody(player));}
+
+    @Test void presentationStartsAtJoinAndReleasesBeforeTheSelectedSessionCanSendGameplayMessages() {
+        ready();
+        verify(presentation).begin(player);
+        verify(presentation, atLeastOnce()).mask(player);
+        when(presentation.available()).thenReturn(true);
+        bodies.feedback(player, "A visible selection error");
+        view.verify(()->CharacterSelectView.notice(player,"A visible selection error"));
+        bodies.refreshPresentation(player);
+        verify(presentation).refresh(player);
+        when(player.isDead()).thenReturn(true);
+        bodies.refreshPresentation(player);
+        verify(presentation,times(1)).refresh(player);
+        when(player.isDead()).thenReturn(false);
+        bodies.select(account,a);drain();
+        var order=inOrder(presentation,transitions);
+        order.verify(presentation).release(player);
+        order.verify(transitions).selected(account);
+        bodies.refreshPresentation(player);
+        verify(presentation,times(1)).refresh(player);
+        bodies.quit(player);
+        verify(presentation).quit(player);
+    }
+
+    @Test void discordLinkActionUsesAnExplicitReadableInteractionWithoutFlushingTheOrdinaryQueue() {
+        ready();
+        when(manager.isDiscordGate(owner)).thenReturn(true);
+        assertTrue(actions.needsDiscordLink());
+        actions.linkDiscord();
+        verify(presentation).interact(player);
+        verify(presentation,never()).release(player);
+        verify(player).closeDialog();
+        bukkit.verify(()->Bukkit.dispatchCommand(player,"tfmcweb:linkdiscord"));
+        when(player.hasPermission("rpchar.discord.bypass")).thenReturn(true);
+        when(manager.isDiscordGate(owner)).thenReturn(false);
+        assertFalse(actions.needsDiscordLink());
+    }
+
+    @Test void creationFeedbackStaysInTheWizardRatherThanBecomingDelayedChat() {
+        ready();
+        var creation=mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class);
+        var wizard=mock(net.tfminecraft.rpcharacters.creation.CreationWizard.class);
+        when(creation.getWizard()).thenReturn(wizard);
+        CreationManager.activeCreators.put(player,creation);
+        try {
+            bodies.feedback(player,"Creation needs attention");
+            verify(wizard).error("Creation needs attention");
+            verify(player,never()).sendMessage("Creation needs attention");
+        } finally { CreationManager.activeCreators.remove(player); }
+    }
+
+    @Test void aRejectedCreateKeepsItsVisibleErrorRatherThanImmediatelyReplacingTheForm() {
+        ready();
+        when(presentation.available()).thenReturn(true);
+        var selector=mock(CharacterSelectView.Session.class);
+        view.clearInvocations();
+        try (var creation=mockStatic(CreationManager.class)) {
+            creation.when(()->CreationManager.initiateCreation(player)).thenAnswer(call->{
+                bodies.feedback(player,"No free character slot");
+                view.when(()->CharacterSelectView.session(owner)).thenReturn(selector);
+                return null;
+            });
+            actions.create();
+        }
+        view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()),times(1));
+        view.verify(()->CharacterSelectView.notice(player,"No free character slot"));
+    }
+
+    @Test void aPendingStrikeRejectsCreationWithAVisibleNoticeRatherThanDelayedChat() {
+        ready();
+        when(presentation.available()).thenReturn(true);
+        var selector=mock(CharacterSelectView.Session.class);
+        view.when(()->CharacterSelectView.open(eq(player),eq(account),any())).thenAnswer(call->{
+            actions=call.getArgument(2);
+            view.when(()->CharacterSelectView.session(owner)).thenReturn(selector);
+            return null;
+        });
+        view.clearInvocations();
+        try (var pending=mockStatic(net.tfminecraft.rpcharacters.pvp.PvpStrikeService.class);
+             var slots=mockStatic(net.tfminecraft.rpcharacters.persona.CharacterSlotService.class);
+             var permissions=mockStatic(net.tfminecraft.rpcharacters.Permissions.class);
+             var ingest=mockStatic(net.tfminecraft.rpcharacters.ingest.CharacterIngestService.class)) {
+            pending.when(()->net.tfminecraft.rpcharacters.pvp.PvpStrikeService.hasPendingDecision(player)).thenReturn(true);
+            slots.when(()->net.tfminecraft.rpcharacters.persona.CharacterSlotService.hasFreeSlot(player,account)).thenReturn(true);
+            evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)).thenCallRealMethod();
+            evil.when(()->net.tfminecraft.rpcharacters.evilrp.EvilRpService.switchBlockedMessage(player)).thenCallRealMethod();
+            actions.create();
+        }
+        assertFalse(CreationManager.activeCreators.containsKey(player));
+        view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()),times(1));
+        view.verify(()->CharacterSelectView.notice(player,"You can't switch characters while your killer decides whether to strike you."));
+        verify(player,never()).sendMessage(contains("killer decides"));
+        verify(presentation,never()).release(player);
+    }
+
+    @Test void loadingGuardFeedbackIsNotDelayedUntilAfterPlay() {
+        when(packs.ready(player)).thenReturn(false);
+        ready();
+        assertFalse(bodies.isReadyToChoose(player));
+        when(presentation.holds(player)).thenReturn(true);
+        bodies.feedback(player,"Choose a character before chatting.");
+        verify(player,never()).sendMessage("Choose a character before chatting.");
+        when(presentation.holds(player)).thenReturn(false);
+        bodies.feedback(player,"Choose a character before chatting.");
+        verify(player).sendMessage("Choose a character before chatting.");
+    }
 
     @Test void estatesReadTheStoreAndAskTheLeaseWhetherABodyIsStillInPlay() throws Exception {
         assertSame(store,bodies.store());
@@ -290,7 +405,7 @@ class CharacterBodiesTest {
         when(player.teleport(room)).thenReturn(false,false,true);
         queued.removeFirst().run(); queued.removeFirst().run();
         verify(player,times(1)).leaveVehicle(); verifyNoInteractions(mount);
-        verify(player,times(1)).sendMessage(contains("Loading character selection"));
+        verify(packs,times(1)).roomBlocked(eq(player),any());
         verify(player,never()).kickPlayer(anyString()); assertNull(actions); verify(progress,never()).prepare(account);
         verify(leases,never()).begin(any(),any()); assertEquals(new BodyTag.Room(first),tag);
         assertTrue(bodies.isSelecting(player)); assertFalse(bodies.isApplying(player));

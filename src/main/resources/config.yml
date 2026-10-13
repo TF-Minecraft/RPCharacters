@@ -121,6 +121,8 @@ character-bodies:
   # Requires TFMCCore resource-pack.require-on-join. Missing or failed pack delivery blocks selection.
   require-resource-pack: false
   selection-world: character_selection
+  # Requires ProtocolLib. Hides the survival HUD and defers ordinary chat until Play.
+  hide-hud: true
   # /rpcharacter select from a playing character waits this long, standing still and unhurt.
   return-seconds: 5
   persistent-keys: []
