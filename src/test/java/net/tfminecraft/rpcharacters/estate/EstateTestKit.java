@@ -57,7 +57,7 @@ final class EstateTestKit {
     }
 
     /** A participant answering whatever the test sets, and remembering what it was asked. */
-    static final class Participant implements EstateParticipant {
+    static class Participant implements EstateParticipant {
         final String id;
         Function<EstateDecision, Outcome> answer = decision -> Outcome.done();
         final List<EstateDecision> asked = new ArrayList<>();
