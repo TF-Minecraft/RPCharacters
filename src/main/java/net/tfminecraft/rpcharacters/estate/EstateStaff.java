@@ -93,12 +93,14 @@ final class EstateStaff {
         return revise(record, d.revise(money, property, locks), staff, "assign " + which + " to " + to.ref().characterId());
     }
 
-    /** {@code assign <deathId> money guild <name>}: FROZEN money to a live guild's treasury. */
+    /** {@code assign <deathId> money guild <name|incarnation>}: FROZEN money to a live guild's treasury. */
     String assignMoneyToGuild(EstateRecord record, String guild, String staff) {
         if (!record.settling()) return "Only a decided estate can be assigned.";
         if (!record.decision.money().recipient().isFrozen()) return "Only FROZEN money can be sent to a guild.";
         GuildLookup lookup = world.guildByName(guild);
-        if (lookup instanceof GuildLookup.Unavailable) return "SimpleFactions has not answered; try again later.";
+        if (lookup instanceof GuildLookup.Unavailable) {
+            return "SimpleFactions has not answered, or more than one guild has that name; try again, or name the guild by its incarnation ID.";
+        }
         if (!(lookup instanceof GuildLookup.Live live)) return "No live guild is named " + guild + ".";
         Decision d = record.decision;
         Part money = Part.treasury(live.guild().treasuryAccount(), "GUILD", live.guild().name());
