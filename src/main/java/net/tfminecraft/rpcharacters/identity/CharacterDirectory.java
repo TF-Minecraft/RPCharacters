@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -70,6 +71,22 @@ public final class CharacterDirectory {
 		UUID ownerId = owners.get(Objects.requireNonNull(characterId, "characterId"));
 		if (ownerId == null || unavailable.contains(ownerId)) return Optional.empty();
 		return Optional.ofNullable(accounts.getOrDefault(ownerId, Map.of()).get(characterId));
+	}
+
+	/**
+	 * Living characters whose real name equals {@code name} ignoring case and surrounding spaces.
+	 * Quarantined accounts are skipped, as {@link #info(UUID)} skips them.
+	 */
+	public List<CharacterInfo> findByName(String name) {
+		String wanted = Objects.requireNonNull(name, "name").trim();
+		List<CharacterInfo> found = new ArrayList<>();
+		for (Map.Entry<UUID, Map<UUID, CharacterInfo>> account : accounts.entrySet()) {
+			if (unavailable.contains(account.getKey())) continue;
+			for (CharacterInfo info : account.getValue().values()) {
+				if (info.alive() && info.name().equalsIgnoreCase(wanted)) found.add(info);
+			}
+		}
+		return List.copyOf(found);
 	}
 
 	/** Most recent saved death, with a stable migration key for deaths predating death records. */

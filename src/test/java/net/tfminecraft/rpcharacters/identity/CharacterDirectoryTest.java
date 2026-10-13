@@ -418,6 +418,35 @@ class CharacterDirectoryTest {
 		assertTrue(load().deathId(id).isEmpty());
 	}
 
+	@Test
+	void findsEveryLivingCharacterByRealNameFromMemoryOnly() throws Exception {
+		UUID dead = UUID.randomUUID();
+		UUID missing = UUID.randomUUID();
+		UUID namesake = UUID.randomUUID();
+		UUID quarantinedOwner = UUID.randomUUID();
+		UUID quarantined = UUID.randomUUID();
+		save(owner, id + ".json", json(id, "&aKira", "ALIVE", "\"alias\":\"Hidden Alias\""));
+		save(owner, dead + ".json", json(dead, "Kira", "DEAD", ""));
+		save(owner, missing + ".json", json(missing, "Kira", "MISSING", ""));
+		save(other, namesake + ".json", json(namesake, "KIRA", "ALIVE", ""));
+		account(quarantinedOwner, "{broken");
+		save(quarantinedOwner, quarantined + ".json", json(quarantined, "Kira", "ALIVE", ""));
+		CharacterDirectory directory = load();
+		try (var files = mockStatic(Files.class, invocation -> {
+			throw new AssertionError("Query tried to read disk: " + invocation.getMethod().getName());
+		})) {
+			List<CharacterInfo> found = directory.findByName(" kira ");
+			assertEquals(Set.of(id, namesake), Set.copyOf(found.stream().map(info -> info.ref().characterId()).toList()));
+			assertThrows(UnsupportedOperationException.class, found::clear);
+			assertEquals(List.of(), directory.findByName("Hidden Alias"));
+			assertEquals(List.of(), directory.findByName("Kir"));
+			assertEquals(List.of(), directory.findByName(""));
+			directory.remove(other, namesake.toString());
+			assertEquals(List.of(directory.info(id).orElseThrow()), directory.findByName("Kira"));
+		}
+		assertThrows(NullPointerException.class, () -> directory.findByName(null));
+	}
+
 	private CharacterDirectory load() throws IOException {
 		return CharacterDirectory.load(root, warnings::add);
 	}
