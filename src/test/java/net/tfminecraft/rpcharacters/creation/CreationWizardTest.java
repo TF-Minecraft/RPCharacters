@@ -561,6 +561,31 @@ class CreationWizardTest {
 	}
 
 	@Test
+	void siblingPrerequisitePruningRechecksHydratedTicksWithoutAFieldCache() throws Exception {
+		Trait humanGift = trait("human_gift", "gift", 0), gated = trait("gated", "gift", 0);
+		trait("universal", "gift", 0);
+		YamlConfiguration config = new YamlConfiguration();
+		config.loadFromString("type: race\nmode: one-or-more\ndepends-on: [human]");
+		when(humanGift.getTraitData().hasDependency()).thenReturn(true);
+		when(humanGift.getTraitData().getDependency()).thenReturn(new Dependency(config));
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"),
+				stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 3"), summary());
+		choose("human"); click("Next");
+		choose("human_gift"); choose("gated"); choose("universal"); click("Next");
+		click("Back"); click("Back"); choose("elf");
+		playtime.when(() -> PlaytimeGate.canSelectTrait(player, gated)).thenReturn(false);
+		playtime.when(() -> PlaytimeGate.denialMessage(player, gated)).thenReturn("Need 2h playtime. 1h left.");
+		click("Next");
+		assertEquals(List.of("gated", "universal"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList(), "Revalidation leaves committed traits intact until Next");
+		assertTrue(CreationDialogCapture.text(optionRow("gated")).startsWith("☒"));
+		assertNull(optionRow("gated").clickEvent());
+		assertTrue(optionDetails().contains("Need 2h playtime. 1h left."));
+		assertTrue(CreationDialogCapture.text(optionRow("universal")).startsWith("☑"));
+		click("Next");
+		assertEquals(List.of("universal"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+	}
+
+	@Test
 	void questionsValidateAnswersAndAdvanceWithoutTimers() throws Exception {
 		start(stage("questions_stage", "type: questions\namount: 2\nquestions:\n  first:\n    question: First question\n    answers: ['yes']\n  second:\n    question: Second question\n    answers: ['yes']"), summary());
 		assertEquals(2, ((QuestionStage) creation.getActiveStage()).getQuestions().size());

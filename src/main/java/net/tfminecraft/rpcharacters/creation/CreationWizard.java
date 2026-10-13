@@ -288,7 +288,7 @@ public final class CreationWizard {
 	}
 
 	private void prunePendingTraits(SelectionStage stage) {
-		if (!"trait".equalsIgnoreCase(stage.getTarget()) || !fields.containsKey(stage)) return;
+		if (!"trait".equalsIgnoreCase(stage.getTarget())) return;
 		Set<String> selected = picked(stage);
 		boolean changed;
 		do {
@@ -298,7 +298,7 @@ public final class CreationWizard {
 				Set<String> others = new HashSet<>(selected);
 				others.remove(item.getId());
 				if (disabledReason(stage, item, others) != null) {
-					fields.get(stage).put("option_" + item.getId(), "false");
+					fields.computeIfAbsent(stage, ignored -> new HashMap<>()).put("option_" + item.getId(), "false");
 					selected.remove(item.getId());
 					changed = true;
 				}
