@@ -681,20 +681,21 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
-	void rosterStripShowsAWindowOfThreeAndArrowsWrap() {
+	void rosterStripShowsEveryCharacterInStableRowsAndArrowsWrap() {
 		roster("a", "b", "c", "d", "e", "f");
 		CharacterSelectView.open(player, data, actions);
-		assertEquals(List.of("‹", "a", "b", "c", "New character", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "›", "d", "e", "f", "New character"), tabs());
+		assertEquals("‹   a   b   c   ›\nd   e   f   New character", text(ui.last().strip()));
 		link("›");
-		assertEquals(List.of("‹", "a", "b", "c", "New character", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "›", "d", "e", "f", "New character"), tabs());
 		link("›");
-		assertEquals(List.of("‹", "b", "c", "d", "New character", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "›", "d", "e", "f", "New character"), tabs());
 		link("d");
-		assertEquals(List.of("‹", "c", "d", "e", "New character", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "›", "d", "e", "f", "New character"), tabs());
 		assertTrue(ui.last().bodyText().contains("\nd\n"));
 		link("›");
 		link("›");
-		assertEquals(List.of("‹", "d", "e", "f", "New character", "›"), tabs());
+		assertEquals(List.of("‹", "a", "b", "c", "›", "d", "e", "f", "New character"), tabs());
 		link("›");
 		assertTrue(CharacterSelectView.session(OWNER).creating);
 		assertEquals(List.of("Create character"), labels());
@@ -707,6 +708,27 @@ class CharacterSelectViewTest {
 		assertEquals(CharacterSelectView.TEAL, strip().get("f").color());
 		assertTrue(strip().get("f").hasDecoration(net.kyori.adventure.text.format.TextDecoration.UNDERLINED));
 		assertEquals(CharacterSelectView.MUTED, strip().get("e").color());
+	}
+
+	@Test
+	void duplicateNamesOnDifferentRowsRemainVisibleAndPlayTheirOwnCharacterIds() {
+		RPCharacter recent = character("wonder_2", "Wonder", Status.ALIVE);
+		when(recent.getLastPlayedAt()).thenReturn(Instant.now());
+		roster("Mr Tester", "Vaelthir");
+		RPCharacter older = character("wonder", "Wonder", Status.ALIVE);
+		when(older.getLastPlayedAt()).thenReturn(Instant.now().minusSeconds(300));
+		CharacterSelectView.open(player, data, actions);
+		assertEquals("‹   Wonder   Mr Tester   Vaelthir   ›\nWonder   New character", text(ui.last().strip()));
+		List<Component> wonders = ui.last().strip().children().stream().filter(c -> c.clickEvent() != null && text(c).equals("Wonder")).toList();
+		assertEquals(2, wonders.size());
+		links.get(wonders.get(1).clickEvent()).accept(player);
+		assertEquals("wonder", CharacterSelectView.session(OWNER).selected);
+		click("▶ Play"); verify(actions).play(older);
+		CharacterSelectView.open(player, data, actions);
+		Component first = ui.last().strip().children().stream().filter(c -> c.clickEvent() != null && text(c).equals("Wonder")).findFirst().orElseThrow();
+		links.get(first.clickEvent()).accept(player);
+		assertEquals("wonder_2", CharacterSelectView.session(OWNER).selected);
+		click("▶ Play"); verify(actions).play(recent);
 	}
 
 	@Test

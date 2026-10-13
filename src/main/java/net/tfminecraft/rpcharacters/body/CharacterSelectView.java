@@ -91,7 +91,7 @@ public final class CharacterSelectView {
 
 	/** Memorials per page. */
 	static final int PAGE_SIZE = 6;
-	/** Roster tabs shown around the focused character. */
+	/** Character tabs per row. The whole roster stays visible. */
 	static final int TABS = 3;
 	/** Skin rows in the bust: the head and upper chest. */
 	static final int BUST_ROWS = 14;
@@ -337,19 +337,24 @@ public final class CharacterSelectView {
 		return first;
 	}
 
-	/** Clickable roster line: arrows wrap round, tabs show a window around the focused character. */
+	/** Compact roster rows; arrows wrap around every character and the creation tab. */
 	private static Component strip(Session session, List<RPCharacter> alive, RPCharacter selected) {
-		int index = session.creating ? alive.size() : alive.indexOf(selected);
-		int from = Math.max(0, Math.min(index - 1, alive.size() - TABS));
 		TextComponent.Builder line = Component.text();
+		Component next = alive.isEmpty() ? Component.empty() : link(Component.text("›", PALE, TextDecoration.BOLD), "Next character", session, s -> step(s, 1));
 		if (!alive.isEmpty()) line.append(link(Component.text("‹", PALE, TextDecoration.BOLD), "Previous character", session, s -> step(s, -1)));
-		for (RPCharacter character : alive.subList(from, Math.min(from + TABS, alive.size()))) {
-			line.append(Component.text("   ")).append(tab(session, character, !session.creating && character == selected));
+		int index = 0;
+		for (RPCharacter character : alive) {
+			if (index > 0 && index % TABS == 0) {
+				if (index == TABS) line.append(Component.text("   ")).append(next);
+				line.append(Component.newline());
+			} else line.append(Component.text("   "));
+			line.append(tab(session, character, !session.creating && character == selected));
+			index++;
 		}
 		line.append(Component.text(alive.isEmpty() ? "" : "   ")).append(link(session.creating
 				? Component.text("New character", TEAL, TextDecoration.BOLD, TextDecoration.UNDERLINED)
 				: Component.text("New character", MUTED), "Create a new character", session, s -> navigate(s, v -> v.creating = true)));
-		if (!alive.isEmpty()) line.append(Component.text("   ")).append(link(Component.text("›", PALE, TextDecoration.BOLD), "Next character", session, s -> step(s, 1)));
+		if (!alive.isEmpty() && alive.size() <= TABS) line.append(Component.text("   ")).append(next);
 		return line.build();
 	}
 
