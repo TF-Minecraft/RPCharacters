@@ -8,6 +8,7 @@ import org.bukkit.scheduler.BukkitTask;
 import net.tfminecraft.tlibs.shaded.lang3.text.WordUtils;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
+import net.tfminecraft.rpcharacters.creation.CreationWizard;
 import net.tfminecraft.rpcharacters.creation.CreationRules;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -115,7 +116,7 @@ public class SetterStage extends Stage{
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}
-				RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "18+", 5, 50, 5);
+				if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "18+", 5, 50, 5);
 			} else if(n.equalsIgnoreCase("no")) {
 				if (!cc.isPreview()) {
 					PlayerManager.get(p).setEighteen(false);
@@ -123,9 +124,9 @@ public class SetterStage extends Stage{
 					RPCharacters.getPlayerManager().savePlayer(p);
 					net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 				}
-				RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "below 18", 5, 50, 5);
+				if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Real age set to " + RPTexts.WARN + "below 18", 5, 50, 5);
 			} else {
-				RPTexts.send(p, RPTexts.ERROR + "Write " + RPTexts.WARN + "yes " + RPTexts.MUTED + "or " + RPTexts.WARN + "no.");
+				if (!CreationWizard.reportError(cc, "Choose Yes or No.")) RPTexts.send(p, RPTexts.ERROR + "Write " + RPTexts.WARN + "yes " + RPTexts.MUTED + "or " + RPTexts.WARN + "no.");
 				return;
 			}
 			scheduleAdvance(p, cc);
@@ -133,7 +134,7 @@ public class SetterStage extends Stage{
 		}
 
 		if (!CreationRules.isNameText(n)) {
-			RPTexts.send(p, RPTexts.ERROR + "Letters, spaces, apostrophes, hyphens and full stops only.");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Letters, spaces, apostrophes, hyphens and full stops only.");
 			return;
 		}
 
@@ -141,12 +142,12 @@ public class SetterStage extends Stage{
 		if (target != null && target.equalsIgnoreCase("name")) {
 			String nameError = AliasValidator.validateCharacterName(n);
 			if (nameError != null) {
-				p.sendMessage(nameError);
+				if (!CreationWizard.reportError(cc, nameError)) p.sendMessage(nameError);
 				return;
 			}
 		}
-		RPTexts.title(p, " ", RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n, 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n);
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n, 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n);
 		cc.getCharacter().modify(target, n);
 		scheduleAdvance(p, cc);
 	}
@@ -155,35 +156,35 @@ public class SetterStage extends Stage{
 		String text = ClueFormatter.stripColor(input != null ? input.trim() : "");
 		String error = DescriptionValidator.validate(text);
 		if (error != null) {
-			p.sendMessage(error);
+			if (!CreationWizard.reportError(cc, error)) p.sendMessage(error);
 			return;
 		}
 		cc.getCharacter().setPersonaDescription(text);
-		RPTexts.title(p, " ", RPTexts.MUTED + "Description saved", 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + "Description saved (" + RPTexts.WARN + text.length() + RPTexts.MUTED + " characters).");
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Description saved", 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + "Description saved (" + RPTexts.WARN + text.length() + RPTexts.MUTED + " characters).");
 		scheduleAdvance(p, cc);
 	}
 
 	private void handleAge(String input, Player p, CharacterCreation cc) {
 		Integer age = parseAge(input);
 		if (age == null) {
-			RPTexts.send(p, RPTexts.ERROR + "Whole number only. e.g. " + RPTexts.WARN + "30" + RPTexts.ERROR + ".");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Whole number only. e.g. " + RPTexts.WARN + "30" + RPTexts.ERROR + ".");
 			return;
 		}
 		if (age <= 0) {
-			RPTexts.send(p, RPTexts.ERROR + "Age must be greater than 0.");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Age must be greater than 0.");
 			return;
 		}
 
 		Race race = cc.getCharacter().getRace();
 		if (race == null) {
-			RPTexts.send(p, RPTexts.ERROR + "Pick a race first.");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Pick a race first.");
 			return;
 		}
 
 		String ageError = CreationRules.ageError(age, race);
 		if (ageError != null) {
-			RPTexts.send(p, RPTexts.ERROR + ageError);
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + ageError);
 			return;
 		}
 
@@ -193,8 +194,8 @@ public class SetterStage extends Stage{
 		);
 		cc.getCharacter().setBirthday(birthday);
 		String formattedBirthday = FantasyCalendar.formatBirthday(birthday);
-		RPTexts.title(p, " ", RPTexts.MUTED + "Age set to " + RPTexts.WARN + age, 5, 50, 5);
-		RPTexts.send(p, RPTexts.MUTED + "Age set to " + RPTexts.WARN + age + RPTexts.MUTED + " (born "
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Age set to " + RPTexts.WARN + age, 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + "Age set to " + RPTexts.WARN + age + RPTexts.MUTED + " (born "
 				+ RPTexts.WARN + formattedBirthday + RPTexts.MUTED + ").");
 		scheduleAdvance(p, cc);
 	}
@@ -215,6 +216,10 @@ public class SetterStage extends Stage{
 	}
 
 	private void scheduleAdvance(Player p, CharacterCreation cc) {
+		if (cc.getWizard() != null) {
+			cc.getWizard().advance(this);
+			return;
+		}
 		submitted = true;
 		advanceTask = new BukkitRunnable()
 		{

@@ -124,6 +124,7 @@ class CreationManagerTest {
         players = staticMock(PlayerManager.class);
         players.when(() -> PlayerManager.get(player)).thenReturn(data);
         sessions = staticMock(CharacterCreation.class);
+        sessions.when(() -> CharacterCreation.startWizard(player)).thenCallRealMethod();
         sessions.when(() -> CharacterCreation.forEdit(player, character)).thenReturn(creation);
         slots = staticMock(CharacterSlotService.class);
         slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);

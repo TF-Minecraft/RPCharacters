@@ -34,6 +34,10 @@ public final class CreationStageHelp {
 
 	/** Sends the recap. Read-only: never re-runs the stage or touches inventories. */
 	public static void send(Player p, CharacterCreation cc) {
+		if (cc.getWizard() != null) {
+			cc.getWizard().resume();
+			return;
+		}
 		Stage stage = cc.getActiveStage();
 		if (stage == null) {
 			RPTexts.send(p, RPTexts.ERROR + "There is nothing to recap right now.");

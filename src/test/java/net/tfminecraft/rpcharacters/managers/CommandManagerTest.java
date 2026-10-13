@@ -187,14 +187,23 @@ class CommandManagerTest {
     }
 
     @Test void creationNavigationChecksActiveDraftAndStageBeforeDelegating() {
-        var slots = boundary(CharacterSlotService.class); run("create"); message("free character slot");
-        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true); run("create"); creators.verify(() -> CreationManager.initiateCreation(player));
+        run("create"); message("New character in the character menu");
+        creators.verify(() -> CreationManager.initiateCreation(player), never());
         for (String verb : List.of("next", "back", "help", "cancel")) { run(verb); message("active creator"); }
-        CharacterCreation creator = creator(player); run("create"); message("already creating"); run("next"); message("cannot use");
+        CharacterCreation creator = creator(player); run("create"); message("New character in the character menu"); run("next"); message("cannot use");
         when(creator.canNext()).thenReturn(true); run("next"); creators.verify(() -> CreationManager.next(player));
         run("back"); creators.verify(() -> CreationManager.back(player));
         var help = boundary(CreationStageHelp.class); run("help"); help.verify(() -> CreationStageHelp.send(player, creator));
         run("cancel"); verify(creator).cancel();
+    }
+
+    @Test void createCommandResumesTheExistingDialogDraft() {
+        CharacterCreation creator = creator(player);
+        var wizard = mock(net.tfminecraft.rpcharacters.creation.CreationWizard.class);
+        when(creator.getWizard()).thenReturn(wizard);
+        run("create");
+        verify(wizard).resume();
+        creators.verify(() -> CreationManager.initiateCreation(player), never());
     }
 
     @Test void profileMenuRespectsOtherPlayerPermissionAndBusyState() {

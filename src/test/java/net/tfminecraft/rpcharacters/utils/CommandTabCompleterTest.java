@@ -81,7 +81,7 @@ class CommandTabCompleterTest {
     }
 
     @Test void rootSuggestionsRespectPermissionsAndPrefixAndAreFreshCopies() {
-        List<String> basic = complete(""); assertTrue(basic.containsAll(List.of("create", "wardrobe", "party", "mail", "strikes")));
+        List<String> basic = complete(""); assertFalse(basic.contains("create")); assertFalse(basic.contains("next")); assertTrue(basic.containsAll(List.of("wardrobe", "party", "mail", "strikes")));
         assertFalse(basic.contains("admin")); assertFalse(basic.contains("tempalias")); assertFalse(basic.contains("sethidden"));
         basic.clear(); assertFalse(complete((String) null).isEmpty());
         grant("rpchar.class.reset", true); assertTrue(complete("").contains("admin")); assertFalse(complete("").contains("reload"));

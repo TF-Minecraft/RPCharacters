@@ -786,6 +786,20 @@ class CharacterBodiesTest {
         bodies.requestSwitch(account,b);drain();verify(progress).ensureFresh(account,b);
         actions.play(a);drain();assertEquals(first,bodies.liveCharacter(player));
     }
+    @Test void rosterRefreshCannotReplaceTheCreationFormAndBlockedCreationKeepsSelection() throws Exception {
+        ready(); view.clearInvocations();
+        var creator=mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class);
+        when(creator.getWizard()).thenReturn(mock(net.tfminecraft.rpcharacters.creation.CreationWizard.class));
+        CreationManager.activeCreators.put(player,creator);
+        try {
+            bodies.rosterChanged(account);drain();
+            view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()),never());
+        } finally { CreationManager.activeCreators.remove(player); }
+        try(var creators=mockStatic(CreationManager.class)) {
+            actions.create();
+            view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()));
+        }
+    }
     @Test void healthIsReappliedAfterEquipmentOnlyForThePublishedSession() throws Exception {
         var session=mock(net.tfminecraft.tlibs.character.CharacterSession.class);
         sessions.when(()->Characters.currentSession(player)).thenReturn(Optional.of(session));

@@ -57,7 +57,9 @@ public class CreationManager implements Listener{
 	
 	public static void initiateCreation(Player p) {
 		if (activeCreators.containsKey(p)) {
-			RPTexts.send(p, RPTexts.ERROR + "You already have an active character session.");
+			CharacterCreation session = activeCreators.get(p);
+			if (session.getWizard() != null) session.getWizard().resume();
+			else RPTexts.send(p, RPTexts.ERROR + "You already have an active character session.");
 			return;
 		}
 		PlayerData pd = PlayerManager.get(p);
@@ -89,7 +91,7 @@ public class CreationManager implements Listener{
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 			return;
 		}
-		CharacterCreation cc = new CharacterCreation(p);
+		CharacterCreation cc = CharacterCreation.startWizard(p);
 		cc.setCanNext(false);
 		activeCreators.put(p, cc);
 	}
@@ -200,6 +202,10 @@ public class CreationManager implements Listener{
 	}
 
 	public static void sendChatBlockedDuringCreationHint(Player player) {
+		CharacterCreation creation = activeCreators.get(player);
+		if (creation != null && creation.getWizard() != null) {
+			return;
+		}
 		RPTexts.send(player, RPTexts.ERROR + "Chat is blocked during character creation.");
 		RPTexts.send(player, RPTexts.MUTED + "Type " + RPTexts.COMMAND + "/rpcharacter help "
 				+ RPTexts.MUTED + "for guidance on this stage.");
@@ -210,6 +216,7 @@ public class CreationManager implements Listener{
 		if (cc == null) {
 			return false;
 		}
+		if (cc.getWizard() != null) return false;
 		Stage stage = cc.getActiveStage();
 		return stage instanceof QuestionStage
 				|| stage instanceof SetterStage
@@ -229,6 +236,10 @@ public class CreationManager implements Listener{
 			return;
 		}
 		event.setCancelled(true);
+		if (cc.getWizard() != null) {
+			sendChatBlockedDuringCreationHint(player);
+			return;
+		}
 		Stage activeStage = cc.getActiveStage();
 		String message = event.getMessage();
 		new BukkitRunnable() {
@@ -313,84 +324,14 @@ public class CreationManager implements Listener{
 		for(int i = 0; i<s.getSlots().size(); i++) {
 			if(s.getSlots().get(i) == e.getSlot()) {
 				SelectableItem item = s.getOptions().get(i);
-				Set<String> traitIds = conflictTraitIds(c, s, cc);
-				if(!item.isSelected()) {
-					for(SelectableItem stored : s.getSelection()) {
-						if(stored.isExclusive(item)) {
-							RPTexts.send(p, RPTexts.ERROR + "You have one or more incompatible traits");
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
-					}
-					for(String traitId : traitIds) {
-						Trait t = TraitLoader.getByString(traitId);
-						if(item.isExclusive(traitId) || (t != null && t.getTraitData() != null && t.getTraitData().isExclusive(item.getId()))) {
-							RPTexts.send(p, RPTexts.ERROR + "You have one or more incompatible traits");
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
-					}
-					boolean replaceClass = item.getType().equalsIgnoreCase("class") && s.getMaxSelections() == 1
-							&& s.getMaxSelections() <= s.getSelections();
-					if (s.getMaxSelections() <= s.getSelections() && !replaceClass) {
-						RPTexts.send(p, RPTexts.ERROR + "Cannot make any more selections");
-						p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-						return;
-					}
-					long availablePoints = s.getPoints();
-					if (replaceClass) {
-						for (SelectableItem chosen : s.getSelection()) availablePoints += chosen.getCost();
-					}
-					if(item.getCost() > availablePoints) {
-						RPTexts.send(p, RPTexts.ERROR + "Cannot afford this trait");
-						p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-						return;
-					}
-					if(item.hasDependency()) {
-						if(!dependencyMet(item.getDependency(), c, traitIds, cc, s)) {
-							RPTexts.send(p, RPTexts.ERROR + "Lacking requirements");
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
-					}
-					if (item.getType().equalsIgnoreCase("trait")) {
-						Trait trait = TraitLoader.getByString(item.getId());
-						if (trait != null && !PlaytimeGate.canSelectTrait(p, trait)) {
-							RPTexts.send(p, PlaytimeGate.denialMessage(p, trait));
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
-					}
-					if (replaceClass) {
-						for (SelectableItem chosen : new ArrayList<>(s.getSelection())) {
-							chosen.setSelected(false);
-							s.unSelect(chosen);
-						}
-					}
-					s.select(item);
-				} else {
-					for(String traitId : traitIds) {
-						Trait t = TraitLoader.getByString(traitId);
-						if(t == null || t.getTraitData() == null || !t.getTraitData().hasDependency()) {
-							continue;
-						}
-						Dependency dependency = t.getTraitData().getDependency();
-						if(dependency == null || dependency.getDependencies() == null || !dependency.getDependencies().contains(item.getId())) {
-							continue;
-						}
-						if(!dependencyStillMet(dependency, c, traitIds, item.getId(), cc, s)) {
-							RPTexts.send(p, dependency.toString());
-							RPTexts.send(p, RPTexts.ERROR + "Your trait " + t.getName() + RPTexts.ERROR + " is dependent on this trait, remove that first!");
-							p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-							return;
-						}
-					}
-					s.unSelect(item);
+				String error = toggleSelection(p, s, cc, item);
+				if (error != null) {
+					for (String line : error.split("\n")) RPTexts.send(p, line);
+					p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+					return;
 				}
 				p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
-				if(cc != null) item.click(cc);
-				else {
-					item.click(c);
+				if (cc == null) {
 					ProstheticTraitRules.stripReplacedInjuries(c);
 					c.update();
 					RPCharacters.getPlayerManager().savePlayer(p);
@@ -424,6 +365,75 @@ public class CreationManager implements Listener{
 			h.override();
 			s.confirm(p, cc);
 		}
+	}
+
+	/** Shared selection rules for inventory menus and the creation wizard. */
+	public static String toggleSelection(Player player, SelectionStage stage, CharacterCreation creation,
+			SelectableItem item) {
+		RPCharacter character = creation == null ? PlayerManager.get(player).getActiveCharacter() : creation.getCharacter();
+		Set<String> traitIds = conflictTraitIds(character, stage, creation);
+		boolean replace = !item.isSelected() && stage.getMaxSelections() == 1
+				&& stage.getSelections() >= 1 && ("class".equalsIgnoreCase(item.getType())
+						|| creation != null && creation.getWizard() != null);
+		Set<String> nextIds = new LinkedHashSet<>(traitIds);
+		if (replace) stage.getSelection().forEach(chosen -> nextIds.remove(chosen.getId()));
+		if (!item.isSelected()) {
+			for (SelectableItem stored : stage.getSelection()) {
+				if (!replace && stored.isExclusive(item)) return RPTexts.ERROR + "You have one or more incompatible traits";
+			}
+			for (String traitId : nextIds) {
+				Trait trait = TraitLoader.getByString(traitId);
+				if (item.isExclusive(traitId) || trait != null && trait.getTraitData() != null
+						&& trait.getTraitData().isExclusive(item.getId())) {
+					return RPTexts.ERROR + "You have one or more incompatible traits";
+				}
+			}
+			if (stage.getSelections() >= stage.getMaxSelections() && !replace) return RPTexts.ERROR + "Cannot make any more selections";
+			long available = stage.getPoints();
+			if (replace) for (SelectableItem chosen : stage.getSelection()) available += chosen.getCost();
+			if (item.getCost() > available) return RPTexts.ERROR + "Cannot afford this trait";
+			if (item.hasDependency() && !dependencyMet(item.getDependency(), character, nextIds, creation, stage)) {
+				return RPTexts.ERROR + "Lacking requirements";
+			}
+			if ("trait".equalsIgnoreCase(item.getType())) {
+				Trait trait = TraitLoader.getByString(item.getId());
+				if (trait != null && !PlaytimeGate.canSelectTrait(player, trait)) return PlaytimeGate.denialMessage(player, trait);
+			}
+		} else {
+			nextIds.remove(item.getId());
+		}
+		if (replace || item.isSelected()) {
+			// A replacement must preserve dependencies just like removing a pick.
+			Set<String> resultingIds = new LinkedHashSet<>(nextIds);
+			if (replace) resultingIds.add(item.getId());
+			for (String traitId : resultingIds) {
+				Trait trait = TraitLoader.getByString(traitId);
+				if (trait == null || trait.getTraitData() == null || !trait.getTraitData().hasDependency()) continue;
+				Dependency dependency = trait.getTraitData().getDependency();
+				if (dependency == null || dependency.getDependencies() == null) continue;
+				boolean removed = replace ? stage.getSelection().stream().anyMatch(chosen -> dependency.getDependencies().contains(chosen.getId()))
+						: dependency.getDependencies().contains(item.getId());
+				if (removed && !(replace
+						? dependencyMet(dependency, character, resultingIds, creation, stage)
+						: dependencyStillMet(dependency, character, traitIds, item.getId(), creation, stage))) {
+					String message = RPTexts.ERROR + "Your trait " + trait.getName()
+							+ RPTexts.ERROR + " is dependent on this trait, remove that first!";
+					return creation != null && creation.getWizard() != null ? message : dependency.toString() + "\n" + message;
+				}
+			}
+		}
+		if (replace) {
+			for (SelectableItem chosen : new ArrayList<>(stage.getSelection())) {
+				stage.unSelect(chosen);
+				chosen.setSelected(false);
+				if (creation != null) creation.getTempData().mergeFromReverse(chosen.getAttributeData());
+			}
+		}
+		if (item.isSelected()) stage.unSelect(item);
+		else stage.select(item);
+		if (creation != null) item.click(creation);
+		else item.click(character);
+		return null;
 	}
 
 	private static boolean usesDraftTraits(CharacterCreation cc, SelectionStage stage) {

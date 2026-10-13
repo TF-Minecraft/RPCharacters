@@ -41,14 +41,13 @@ public class CommandTabCompleter implements TabCompleter {
 
 		if (args.length == 1) {
 			List<String> completions = new ArrayList<>();
-			completions.add("create");
 			if (net.tfminecraft.rpcharacters.RPCharacters.getCharacterBodies() != null) completions.add("select");
 			completions.add("kit");
-			completions.add("next");
-			completions.add("back");
 			completions.add("menu");
-			completions.add("cancel");
-			completions.add("help");
+			if (sender instanceof Player player) {
+				var creation = net.tfminecraft.rpcharacters.managers.CreationManager.activeCreators.get(player);
+				if (creation != null && creation.getWizard() == null) completions.addAll(List.of("next", "back", "cancel", "help"));
+			}
 			completions.add("edit");
 			completions.add("class");
 			completions.add("subclass");

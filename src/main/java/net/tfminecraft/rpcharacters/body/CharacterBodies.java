@@ -387,13 +387,18 @@ public final class CharacterBodies {
     public void show(Player player) {
         PlayerData account = PlayerManager.get(player);
         if (!isReadyToChoose(player)) return;
+        var creation = CreationManager.activeCreators.get(player);
+        if (creation != null && creation.getWizard() != null) return;
         CharacterSelectView.open(player, account, new CharacterSelectView.Actions() {
             public boolean isCurrent(Player viewer, PlayerData data) {
                 return viewer == player && data == account && isReadyToChoose(player);
             }
             public String blockReason(RPCharacter character) { return CharacterBodies.this.blockReason(account, character); }
             public void play(RPCharacter character) { select(account, character); }
-            public void create() { CreationManager.initiateCreation(player); }
+            public void create() {
+                CreationManager.initiateCreation(player);
+                if (!CreationManager.activeCreators.containsKey(player)) show(player);
+            }
             public void leave() { player.kickPlayer("See you next time."); }
         });
     }

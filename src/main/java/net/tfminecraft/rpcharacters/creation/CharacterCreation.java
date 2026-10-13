@@ -63,6 +63,19 @@ import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 
 
 public class CharacterCreation {
+	private CreationWizard wizard;
+
+	public CreationWizard getWizard() {
+		return wizard;
+	}
+
+	public List<Stage> getStages() {
+		return java.util.Collections.unmodifiableList(stages);
+	}
+
+	public static CharacterCreation startWizard(Player player) {
+		return new CharacterCreation(player, true);
+	}
 
 	private RPCharacter character;
 
@@ -205,6 +218,10 @@ public class CharacterCreation {
 	
 
 	public CharacterCreation(Player p) {
+		this(p, false);
+	}
+
+	private CharacterCreation(Player p, boolean useWizard) {
 
 		this.p = p;
 
@@ -219,6 +236,7 @@ public class CharacterCreation {
 		currentStage = 0;
 
 		tempData = new AttributeData();
+		if (useWizard) wizard = new CreationWizard(this);
 
 		runStage();
 
@@ -424,6 +442,10 @@ public class CharacterCreation {
 
 
 	public void openSummary() {
+		if (wizard != null) {
+			wizard.show(findSummaryStage());
+			return;
+		}
 
 		if (isPreview()) {
 
@@ -486,6 +508,18 @@ public class CharacterCreation {
 
 
 	public void jumpToStageForEdit(String stageId) {
+		if (wizard != null) {
+			for (Stage stage : stages) {
+				if (stage.getId().equals(stageId) && wizard.isAvailable(stage)) {
+					editingFromSummary = true;
+					editStage = stage;
+					wizard.show(stage);
+					return;
+				}
+			}
+			wizard.error("That step is not available to this character.");
+			return;
+		}
 
 		if (stageId == null || stageId.isBlank()) {
 
@@ -710,6 +744,12 @@ public class CharacterCreation {
 			pendingCompletedStages.add(s);
 		}
 
+		if (wizard != null) {
+			currentStage++;
+			wizard.show(s);
+			return;
+		}
+
 		if(s instanceof InfoStage) {
 
 			InfoStage info = (InfoStage) s;
@@ -773,6 +813,7 @@ public class CharacterCreation {
 	}
 
 	public void finish() {
+		if (wizard != null && !wizard.validateComplete()) return;
 
 		if (isPreview()) {
 
@@ -844,11 +885,11 @@ public class CharacterCreation {
 
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
 
-			RPTexts.send(p, RPTexts.ERROR + "No free character slot. A web create may have taken it.");
-
-			cancel();
-
-			p.closeInventory();
+			CreationWizard.sendError(p, this, "No free character slot. A web create may have taken it.");
+			if (wizard == null) {
+				cancel();
+				p.closeInventory();
+			}
 
 			net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 
@@ -883,6 +924,7 @@ public class CharacterCreation {
 		RPCharacters.getPlayerManager().savePlayer(p);
 
 		CreationManager.activeCreators.remove(p);
+		if (wizard != null) wizard.close();
 
 		net.tfminecraft.rpcharacters.ingest.RosterSyncService.pushRosterForPlayer(p);
 
@@ -894,11 +936,11 @@ public class CharacterCreation {
 
 		net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(p);
 
-		p.closeInventory();
+		if (wizard == null) p.closeInventory();
 
-		RPTexts.title(p, RPTexts.SUCCESS + "Finished!", RPTexts.WARN + "Character " + RPTexts.MUTED + character.getName() + RPTexts.WARN + " created!", 5, 50, 5);
+		if (wizard == null) RPTexts.title(p, RPTexts.SUCCESS + "Finished!", RPTexts.WARN + "Character " + RPTexts.MUTED + character.getName() + RPTexts.WARN + " created!", 5, 50, 5);
 
-		RPTexts.send(p, RPTexts.MUTED + "Edit later with " + RPTexts.COMMAND + "/rpcharacter edit" + RPTexts.MUTED + ".");
+		if (wizard == null) RPTexts.send(p, RPTexts.MUTED + "Edit later with " + RPTexts.COMMAND + "/rpcharacter edit" + RPTexts.MUTED + ".");
 
 	}
 
@@ -988,7 +1030,7 @@ public class CharacterCreation {
 
 		if (targetIdx < 0) {
 
-			RPTexts.send(p, RPTexts.ERROR + "There is no previous stage.");
+			CreationWizard.sendError(p, this, RPTexts.ERROR + "There is no previous stage.");
 
 			return;
 
@@ -1034,7 +1076,7 @@ public class CharacterCreation {
 
 			}
 
-			if (stage.runsInGame()) {
+			if (stage.runsInGame() && (wizard == null || wizard.isAvailable(stage))) {
 
 				return i;
 
@@ -1052,11 +1094,15 @@ public class CharacterCreation {
 
 		canNext = false;
 
-		p.closeInventory();
+		if (wizard == null) p.closeInventory();
 
 		currentStage = index + 1;
 
 		Stage s = stages.get(index);
+		if (wizard != null) {
+			wizard.show(s);
+			return;
+		}
 
 		if (s instanceof InfoStage info) {
 
@@ -1117,10 +1163,11 @@ public class CharacterCreation {
 		CreationManager.activeCreators.remove(p);
 
 		Stage s = getCurrentStage();
+		if (wizard != null) wizard.close();
 
 		cancelled = true;
 
-		if(oldclass != null) {
+		if(wizard == null && oldclass != null) {
 
 			ClassService.applyClass(p, oldclass.getId());
 
@@ -1128,9 +1175,11 @@ public class CharacterCreation {
 
 		}
 
-		RPTexts.title(p, RPTexts.ERROR + "Cancelled!", RPTexts.WARN + "Character creation cancelled", 5, 50, 5);
+		if (wizard == null) RPTexts.title(p, RPTexts.ERROR + "Cancelled!", RPTexts.WARN + "Character creation cancelled", 5, 50, 5);
 
 		s.cancel();
+		if (wizard != null && p.isOnline() && RPCharacters.getCharacterBodies() != null
+				&& RPCharacters.getCharacterBodies().isSelecting(p)) RPCharacters.getCharacterBodies().requestSelection(p);
 
 	}
 

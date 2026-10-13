@@ -12,6 +12,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
+import net.tfminecraft.rpcharacters.creation.CreationWizard;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
@@ -248,24 +249,24 @@ public class SelectionStage extends Stage{
 
 	public void confirm(Player p, CharacterCreation cc) {
 		if(selections < minSelect) {
-			RPTexts.send(p, RPTexts.ERROR + "Need at least " + minSelect + ".");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Need at least " + minSelect + ".");
 			return;
 		}
 		if(hasPoints && points < 0) {
-			RPTexts.send(p, RPTexts.ERROR + "Cannot afford this trait");
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Cannot afford this trait");
 			return;
 		}
 		if (cc != null) {
 			for (SelectableItem item : options) {
 				if (item.isSelected() && ((item.getType().equalsIgnoreCase("race") && RaceLoader.getByString(item.getId()) == null)
 						|| (item.getType().equalsIgnoreCase("trait") && TraitLoader.getByString(item.getId()) == null))) {
-					RPTexts.send(p, RPTexts.ERROR + "Selection is no longer available; reopen this stage.");
+					CreationWizard.sendError(p, cc, RPTexts.ERROR + "Selection is no longer available; reopen this stage.");
 					return;
 				}
 			}
 		}
 		active = false;
-		p.closeInventory();
+		if (cc == null || cc.getWizard() == null) p.closeInventory();
 		if(cc != null) {
 			if (target.equalsIgnoreCase("trait") && key != null) {
 				List<Trait> toRemove = new ArrayList<>();
@@ -293,11 +294,11 @@ public class SelectionStage extends Stage{
 						} else {
 							cc.getCharacter().setRace(r);
 						}
-						RPTexts.send(p, RPTexts.SUCCESS + "Race set to " + r.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Race set to " + r.getName());
 					} else if(item.getType().equalsIgnoreCase("trait")) {
 						Trait t = TraitLoader.getByString(item.getId());
 						cc.getCharacter().addTrait(t);
-						RPTexts.send(p, RPTexts.SUCCESS + "Added trait " + t.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Added trait " + t.getName());
 					} else if(item.getType().equalsIgnoreCase("class")) {
 						if (cc.isEditing()) {
 							RPCharacter character = cc.getCharacter();
@@ -309,13 +310,17 @@ public class SelectionStage extends Stage{
 						} else {
 							cc.getCharacter().setMMOClass(item.getId());
 						}
-						RPTexts.send(p, RPTexts.SUCCESS + "Class set to " + item.getName());
+						if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Class set to " + item.getName());
 					}
 				}
 			}
 			if (target.equalsIgnoreCase("trait") && key != null
 					&& (key.equalsIgnoreCase("injury") || key.equalsIgnoreCase("prosthetic"))) {
 				ProstheticTraitRules.stripReplacedInjuries(cc.getCharacter());
+			}
+			if (cc.getWizard() != null) {
+				cc.getWizard().advance(this);
+				return;
 			}
 			new BukkitRunnable()
 			{

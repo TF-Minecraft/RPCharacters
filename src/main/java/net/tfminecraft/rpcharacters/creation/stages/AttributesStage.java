@@ -13,6 +13,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.creation.CharacterCreation;
+import net.tfminecraft.rpcharacters.creation.CreationWizard;
 import net.tfminecraft.rpcharacters.creation.Stage;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.InventoryManager;
@@ -322,7 +323,7 @@ public class AttributesStage extends Stage {
 
 	public void confirm(Player p, CharacterCreation cc) {
 		if (remaining != 0) {
-			RPTexts.send(p, RPTexts.ERROR + "Spend all " + pool + " attribute points ("
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Spend all " + pool + " attribute points ("
 				+ remaining + " left).");
 			return;
 		}
@@ -332,7 +333,7 @@ public class AttributesStage extends Stage {
 				for (int n = 1; n <= getRank(attr); n++) {
 					Trait trait = TraitLoader.getByString(traitId(attr, n));
 					if (trait == null) {
-						RPTexts.send(p, RPTexts.ERROR + "Missing attribute trait "
+						CreationWizard.sendError(p, cc, RPTexts.ERROR + "Missing attribute trait "
 								+ traitId(attr, n) + " — check attributes-traits.yml");
 						return;
 					}
@@ -341,7 +342,7 @@ public class AttributesStage extends Stage {
 			}
 		}
 		active = false;
-		p.closeInventory();
+		if (cc == null || cc.getWizard() == null) p.closeInventory();
 		if (cc == null) {
 			return;
 		}
@@ -362,7 +363,11 @@ public class AttributesStage extends Stage {
 			contribution.mergeFrom(trait.getTraitData().getAttributeData());
 		}
 		cc.setAttributeStageContribution(key, contribution);
-		RPTexts.send(p, RPTexts.SUCCESS + "Attributes set.");
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.SUCCESS + "Attributes set.");
+		if (cc.getWizard() != null) {
+			cc.getWizard().advance(this);
+			return;
+		}
 		new BukkitRunnable() {
 			@Override
 			public void run() {

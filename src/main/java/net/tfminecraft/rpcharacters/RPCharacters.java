@@ -341,6 +341,9 @@ public class RPCharacters extends JavaPlugin{
 	}
 	@Override
 	public void onDisable() {
+		for (var creation : CreationManager.activeCreators.values()) {
+			if (creation.getWizard() != null) creation.getWizard().close();
+		}
 		net.tfminecraft.rpcharacters.estate.EstateLink.stop();
 		net.tfminecraft.rpcharacters.will.WillQueue.stop();
 		if (characterTransitions != null) characterTransitions.shutdown();
