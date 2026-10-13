@@ -81,6 +81,10 @@ public final class CharacterSelectView {
 		void create();
 
 		void leave();
+
+		default boolean needsDiscordLink() { return false; }
+
+		default void linkDiscord() {}
 	}
 
 	/** Loads one character's 16x32 front view, completing with null when there is none. */
@@ -172,6 +176,11 @@ public final class CharacterSelectView {
 		if (session != null && session.player == player) end(session);
 	}
 
+	public static void notice(Player player, String message) {
+		Session session = SESSIONS.get(player.getUniqueId());
+		if (session != null && session.player == player && session.live()) notice(session, message);
+	}
+
 	/** Ends every selector, for plugin shutdown. */
 	public static void cleanupAll() {
 		for (Session session : SESSIONS.values()) {
@@ -243,6 +252,13 @@ public final class CharacterSelectView {
 
 		List<DialogBody> body = new ArrayList<>();
 		if (session.notice != null) body.add(text(Component.text(session.notice, WARN)));
+		if (session.actions.needsDiscordLink()) {
+			body.add(text(link(Component.text("Link Discord to play", TEAL), "Get your Discord link code", session, s -> {
+				end(s);
+				s.player.closeDialog();
+				s.actions.linkDiscord();
+			})));
+		}
 		body.add(DialogBody.plainMessage(strip(session, alive, selected), 360));
 		String reason = null;
 		if (session.creating) {

@@ -59,13 +59,13 @@ public class CreationManager implements Listener{
 		if (activeCreators.containsKey(p)) {
 			CharacterCreation session = activeCreators.get(p);
 			if (session.getWizard() != null) session.getWizard().resume();
-			else RPTexts.send(p, RPTexts.ERROR + "You already have an active character session.");
+			else creationFeedback(p, RPTexts.ERROR + "You already have an active character session.");
 			return;
 		}
 		PlayerData pd = PlayerManager.get(p);
 		var bodies = RPCharacters.getCharacterBodies();
         if (bodies != null && bodies.isSelecting(p) && !bodies.isReadyToChoose(p)) {
-            RPTexts.send(p, RPTexts.ERROR + "Wait for character selection to finish loading.");
+            creationFeedback(p, RPTexts.ERROR + "Wait for character selection to finish loading.");
             return;
         }
 		if (bodies != null && bodies.hasLiveBody(p)) {
@@ -73,7 +73,7 @@ public class CreationManager implements Listener{
 			return;
 		}
 		if (!CharacterSlotService.hasFreeSlot(p, pd)) {
-			RPTexts.send(p, RPTexts.ERROR + "You don't have a free character slot!");
+			creationFeedback(p, RPTexts.ERROR + "You don't have a free character slot!");
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 			return;
 		}
@@ -82,7 +82,7 @@ public class CreationManager implements Listener{
 			net.tfminecraft.rpcharacters.RPCharacters.plugin, p.getUniqueId()
 		);
 		if(PermissionGroupService.hasCharacterSwitchCooldown(p, pd) && pd.getCharacters(Status.ALIVE).size() > 0 && !p.hasPermission("rpcharacters.no_cooldown")) {
-			RPTexts.send(p, RPTexts.ERROR + "You are on cooldown from switching characters");
+			creationFeedback(p, RPTexts.ERROR + "You are on cooldown from switching characters");
 			p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
 			return;
 		}
@@ -94,6 +94,12 @@ public class CreationManager implements Listener{
 		CharacterCreation cc = CharacterCreation.startWizard(p);
 		cc.setCanNext(false);
 		activeCreators.put(p, cc);
+	}
+
+	private static void creationFeedback(Player player, String message) {
+		var bodies = RPCharacters.getCharacterBodies();
+		if (bodies != null && bodies.isSelecting(player)) bodies.feedback(player, message);
+		else RPTexts.send(player, message);
 	}
 
 	public static void initiateStagePreview(Player p, String stageId) {

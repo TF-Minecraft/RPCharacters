@@ -171,6 +171,34 @@ class CharacterSelectViewTest {
 			links.get(link.clickEvent()).accept(player);
 		}
 	}
+
+	@Test void noticesAndDiscordLinkingUseTheCurrentVisibleDialogAndGuardOldClicks() {
+		CharacterSelectView.notice(player, "No session yet");
+		when(actions.needsDiscordLink()).thenReturn(true);
+		CharacterSelectView.open(player, data, actions);
+		assertTrue(ui.last().bodyText().contains("Link Discord to play"));
+		CharacterSelectView.notice(player, "Selection error");
+		assertTrue(ui.last().bodyText().startsWith("Selection error\n"));
+		Player replacement = mock(Player.class);
+		when(replacement.getUniqueId()).thenReturn(OWNER);
+		CharacterSelectView.notice(replacement, "Wrong connection");
+		assertFalse(ui.last().bodyText().contains("Wrong connection"));
+		click("Link Discord to play");
+		verify(actions).linkDiscord();
+		assertNull(CharacterSelectView.session(OWNER));
+	}
+
+	@Test void defaultDiscordHooksDoNotRequireIntegrationFromExistingSelectorOwners() {
+		CharacterSelectView.Actions owner = new CharacterSelectView.Actions() {
+			public boolean isCurrent(Player player, PlayerData data) { return true; }
+			public String blockReason(RPCharacter character) { return null; }
+			public void play(RPCharacter character) {}
+			public void create() {}
+			public void leave() {}
+		};
+		assertFalse(owner.needsDiscordLink());
+		owner.linkDiscord();
+	}
 	private static java.util.stream.Stream<Component> components(Component c) {
 		return java.util.stream.Stream.concat(java.util.stream.Stream.of(c), c.children().stream().flatMap(CharacterSelectViewTest::components));
 	}

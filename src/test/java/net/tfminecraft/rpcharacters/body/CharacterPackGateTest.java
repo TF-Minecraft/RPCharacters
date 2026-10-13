@@ -67,6 +67,25 @@ class CharacterPackGateTest {
     @AfterEach void cleanup() { gate.close(); ui.close(); bukkit.close(); }
 
     void await() { gate.await(player, current::get, resume); }
+
+    @Test void blockedRoomFeedbackIsVisibleWithoutDependingOnChatOrThePack() {
+        gate.roomBlocked(player, current::get);
+        assertEquals("Entering character selection", title());
+        assertTrue(ui.last().bodyText().contains("Retrying automatically"));
+        var leave = ui.last().buttons().getFirst();
+        ui.click(leave, mock(Player.class));
+        verify(player, never()).kickPlayer(anyString());
+        when(player.isOnline()).thenReturn(false);
+        ui.click(leave, player);
+        verify(player, never()).kickPlayer(anyString());
+        when(player.isOnline()).thenReturn(true);
+        current.set(false);
+        ui.click(leave, player);
+        verify(player, never()).kickPlayer(anyString());
+        current.set(true);
+        ui.click(leave, player);
+        verify(player).kickPlayer("See you next time.");
+    }
     String title() { return PlainTextComponentSerializer.plainText().serialize(ui.last().base().title()); }
     List<String> buttons() { return ui.last().buttons().stream().map(b ->
             PlainTextComponentSerializer.plainText().serialize(b.label())).toList(); }

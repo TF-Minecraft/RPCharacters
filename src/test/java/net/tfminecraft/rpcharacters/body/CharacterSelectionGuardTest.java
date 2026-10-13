@@ -169,7 +169,7 @@ class CharacterSelectionGuardTest {
         guard.chat(chat); verify(chat, never()).setCancelled(anyBoolean());
         CreationManager.activeCreators.clear(); guard.chat(chat); verify(chat).setCancelled(true);
         assertNull(player.nextMessage()); server.getScheduler().performOneTick();
-        assertEquals("Choose a character before chatting.", player.nextMessage());
+        verify(bodies).feedback(player, "Choose a character before chatting.");
     }
 
     @Test void selectionAllowsOnlyLinkingAndCreationNavigationCommands() {
@@ -184,12 +184,29 @@ class CharacterSelectionGuardTest {
         for (String text : List.of("/give diamond", "/rpcharacter select extra", "/rpcharacter switch Bob", "/discord token", "/linkevil",
                 "/linkdiscord token", "/linkdiscordevil", "/tfmcweb:linkdiscord token", "/tfmcweb:unlinkdiscord", "/tfmcwebadmin")) {
             PlayerCommandPreprocessEvent denied = command(text); guard.command(denied); verify(denied).setCancelled(true);
-            assertTrue(player.nextMessage().contains("/rpcharacter select"));
+            verify(bodies, atLeastOnce()).feedback(eq(player), contains("/rpcharacter select"));
         }
     }
 
     private PlayerCommandPreprocessEvent command(String text) {
         PlayerCommandPreprocessEvent event = mock(PlayerCommandPreprocessEvent.class);
         when(event.getPlayer()).thenReturn(player); when(event.getMessage()).thenReturn(text); return event;
+    }
+
+    @Test void worldModeAndFlightChangesRefreshOnlyOnlineSelectionConnectionsAfterTheChange() {
+        guard.worldChanged(new PlayerChangedWorldEvent(player, player.getWorld()));
+        server.getScheduler().performOneTick();
+        verify(bodies, never()).refreshPresentation(player);
+        when(bodies.isSelecting(player)).thenReturn(true);
+        guard.worldChanged(new PlayerChangedWorldEvent(player, player.getWorld()));
+        guard.gameMode(new PlayerGameModeChangeEvent(player, org.bukkit.GameMode.CREATIVE));
+        guard.flight(new PlayerToggleFlightEvent(player, true));
+        verify(bodies, never()).refreshPresentation(player);
+        server.getScheduler().performOneTick();
+        verify(bodies, times(3)).refreshPresentation(player);
+        guard.worldChanged(new PlayerChangedWorldEvent(player, player.getWorld()));
+        player.disconnect();
+        server.getScheduler().performOneTick();
+        verify(bodies, times(3)).refreshPresentation(player);
     }
 }

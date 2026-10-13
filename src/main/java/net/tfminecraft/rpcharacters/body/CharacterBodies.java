@@ -51,6 +51,7 @@ public final class CharacterBodies {
     private final CharacterBodyMigration migration;
     private final CharacterProgressService progress;
     private final CharacterPackGate packs;
+    private final SelectionPresentation presentation;
     private final Location room;
     private final Set<NamespacedKey> bodyKeys;
     private final Map<UUID, Location> originalSpawns = new ConcurrentHashMap<>();
@@ -123,6 +124,7 @@ public final class CharacterBodies {
         progress = new CharacterProgressService(data.resolve("progress"));
         packs = new CharacterPackGate(plugin, config.getBoolean("require-resource-pack", false));
         returnSeconds = Math.max(1, config.getInt("return-seconds", 5));
+        presentation = SelectionPresentation.create(plugin, config.getBoolean("hide-hud", true));
         Bukkit.getPluginManager().registerEvents(new CharacterSelectionGuard(this, plugin), plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::checkpoint, CHECKPOINT_TICKS, CHECKPOINT_TICKS);
     }
@@ -155,6 +157,7 @@ public final class CharacterBodies {
     public void join(Player player) {
         UUID owner = player.getUniqueId();
         selecting.add(owner);
+        presentation.begin(player);
         failed.remove(owner);
         // Paper has not sent the player list yet, so this changes the profile without a refresh that
         // would interrupt the resource-pack prompt; they arrive as Steve.
@@ -223,13 +226,14 @@ public final class CharacterBodies {
                 try {
                     if (!player.teleport(room)) {
                         if (current(player, account)) {
+                            presentation.mask(player);
                             if (!packs.ready(player)) {
                                 packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account),
                                         () -> enterRoom(entry));
                                 return;
                             }
                             if (!entry.notified) {
-                                player.sendMessage("Loading character selection. Please wait for your resource pack to finish.");
+                                packs.roomBlocked(player, () -> enteringRoom.get(owner) == entry && current(player, account));
                                 entry.notified = true;
                             }
                             Bukkit.getScheduler().runTaskLater(plugin, () -> enterRoom(entry), 20L);
@@ -243,6 +247,7 @@ public final class CharacterBodies {
                 player.saveData();
                 entry.entered = true;
             }
+            if (!pendingRespawns.containsKey(owner) && !player.isDead()) presentation.mask(player);
             if (!packs.ready(player)) {
                 packs.await(player, () -> enteringRoom.get(owner) == entry && current(player, account), () -> enterRoom(entry));
                 return;
@@ -389,6 +394,7 @@ public final class CharacterBodies {
         if (!isReadyToChoose(player)) return;
         var creation = CreationManager.activeCreators.get(player);
         if (creation != null && creation.getWizard() != null) return;
+        presentation.mask(player);
         CharacterSelectView.open(player, account, new CharacterSelectView.Actions() {
             public boolean isCurrent(Player viewer, PlayerData data) {
                 return viewer == player && data == account && isReadyToChoose(player);
@@ -400,7 +406,43 @@ public final class CharacterBodies {
                 if (!CreationManager.activeCreators.containsKey(player)) show(player);
             }
             public void leave() { player.kickPlayer("See you next time."); }
+            public boolean needsDiscordLink() { return discordRequired(player); }
+            public void linkDiscord() {
+                interact(player);
+                Bukkit.dispatchCommand(player, "tfmcweb:linkdiscord");
+            }
         });
+    }
+
+    private static boolean discordRequired(Player player) {
+        return net.tfminecraft.rpcharacters.gate.DiscordGatePolicy.freezes(
+                RPCharacters.getPlayerManager().isDiscordGate(player.getUniqueId()),
+                player.hasPermission(net.tfminecraft.rpcharacters.gate.DiscordGatePolicy.BYPASS_PERMISSION));
+    }
+
+    /** Required feedback belongs in the visible form, rather than in the delayed chat queue. */
+    public void feedback(Player player, String message) {
+        var creation = CreationManager.activeCreators.get(player);
+        if (net.tfminecraft.rpcharacters.creation.CreationWizard.reportError(creation, message)) return;
+        if (isReadyToChoose(player)) {
+            show(player);
+            if (presentation.available()) CharacterSelectView.notice(player, net.tfminecraft.rpcharacters.utils.ClueFormatter.stripColor(message));
+            else player.sendMessage(message);
+        } else {
+            player.sendMessage(message);
+        }
+    }
+
+    /** Opens the explicit chat-based Discord/help exception; ordinary queued messages still wait for Play. */
+    public void interact(Player player) {
+        presentation.interact(player);
+        CharacterSelectView.close(player);
+        player.closeDialog();
+        player.sendMessage("Use /rpcharacter select to return when you have finished.");
+    }
+
+    public void refreshPresentation(Player player) {
+        if (isSelecting(player) && !isRespawning(player) && !player.isDead()) presentation.refresh(player);
     }
 
     private boolean current(Player player, PlayerData account) {
@@ -414,9 +456,7 @@ public final class CharacterBodies {
         if (!packs.ready(player)) return "The TFMC resource pack is still loading.";
         if (!account.getCharacters().contains(character) || character.getStatus() != Status.ALIVE) return "This character cannot be played.";
         if (CreationManager.activeCreators.containsKey(player)) return "Finish or cancel character creation first.";
-        if (net.tfminecraft.rpcharacters.gate.DiscordGatePolicy.freezes(
-                RPCharacters.getPlayerManager().isDiscordGate(account.getUniqueId()),
-                player.hasPermission(net.tfminecraft.rpcharacters.gate.DiscordGatePolicy.BYPASS_PERMISSION))) return "Link your Discord account before playing.";
+        if (discordRequired(player)) return "Link your Discord account before playing.";
         if (net.tfminecraft.rpcharacters.evilrp.EvilRpService.blocksCharacterSwitch(player)) return "Your current roleplay situation must finish first.";
         BodyTag currentTag;
         try { currentTag = BodyTag.read(player); }
@@ -437,7 +477,7 @@ public final class CharacterBodies {
     public void select(PlayerData account, RPCharacter character) {
         Player player = account.getPlayer();
         String blocked = blockReason(account, character);
-        if (blocked != null) { player.sendMessage(blocked); return; }
+        if (blocked != null) { feedback(player, blocked); return; }
         UUID owner = account.getUniqueId();
         Object request = new Object();
         requests.put(owner, request);
@@ -453,7 +493,7 @@ public final class CharacterBodies {
                         requests.remove(owner);
                         if (error != null) { fail(player, "loading the character location", error); return; }
                         String changed = blockReason(account, character);
-                        if (changed != null) { player.sendMessage(changed); return; }
+                        if (changed != null) { feedback(player, changed); return; }
                         activate(account, character, body, destination);
                     }));
         } catch (IOException | RuntimeException error) {
@@ -475,15 +515,13 @@ public final class CharacterBodies {
                 progress.preflight(account, character);
             } catch (IOException error) {
                 plugin.getLogger().warning("Character " + character.getId() + " cannot activate for " + owner + ": " + error.getMessage());
-                player.sendMessage("This character needs attention. Choose another character or contact staff.");
-                show(player);
+                feedback(player, "This character needs attention. Choose another character or contact staff.");
                 return;
             }
             var resources = progress.resources(account, character);
             if (!player.teleport(destination)) {
                 if (current(player, account)) {
-                    player.sendMessage("Your character could not be entered yet. If a resource pack is loading, wait for it to finish and try again.");
-                    show(player);
+                    feedback(player, "Your character could not be entered yet. If a resource pack is loading, wait for it to finish and try again.");
                 }
                 return;
             }
@@ -504,6 +542,7 @@ public final class CharacterBodies {
             BodyTag.live(player, body.characterId(), body.rev());
             live.put(owner, new BodyTag.Live(body.characterId(), body.rev()));
             selecting.remove(owner);
+            presentation.release(player);
             ready.remove(owner);
             player.saveData();
             RPCharacters.getCharacterTransitions().selected(account);
@@ -640,6 +679,7 @@ public final class CharacterBodies {
                 ArmourDonning.cancel(player);
                 account.clearTempAlias();
                 selecting.add(owner);
+                presentation.begin(player);
                 hide(player);
                 stow(account, "selection");
             });
@@ -656,8 +696,8 @@ public final class CharacterBodies {
     }
 
     /**
-     * Hides the room body in third person. Not spectator mode: it ignores inventory clicks,
-     * which creation menus in the room need. The body's own effects replace this on Play.
+     * Hides the room body in third person without changing its real game mode.
+     * The body's own effects replace this on Play.
      * The checkpoint renews it, so saved player data cannot keep it once this plugin is gone.
      */
     static void hideFromSelf(Player player) {
@@ -711,6 +751,7 @@ public final class CharacterBodies {
         PlayerData account = PlayerManager.get(player);
         if (account == null || !awaitingDeadBody(player)) return;
         selecting.add(player.getUniqueId());
+        presentation.begin(player);
         // Runs inside PlayerRespawnEvent, so the room entity never spawns visible to other selecting players.
         hide(player);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -759,6 +800,7 @@ public final class CharacterBodies {
         UUID owner = player.getUniqueId();
         stopReturn(owner);
         packs.quit(player);
+        presentation.quit(player);
         CharacterSelectView.close(player);
         RoomEntry entry = enteringRoom.get(owner);
         if (entry != null && entry.player == player && entry.recoveredFrom != null) {
@@ -787,7 +829,9 @@ public final class CharacterBodies {
     public void shutdown() {
         packs.close();
         CharacterSelectView.cleanupAll();
+        for (Player player : Bukkit.getOnlinePlayers()) if (isSelecting(player)) player.closeDialog();
         for (PlayerData account : PlayerManager.getOnlineData()) stow(account, "shutdown");
+        presentation.close();
         progress.close();
     }
 

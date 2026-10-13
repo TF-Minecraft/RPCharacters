@@ -19,6 +19,9 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -64,6 +67,21 @@ final class CharacterSelectionGuard implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void respawned(PlayerPostRespawnEvent event) { bodies.respawned(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void worldChanged(PlayerChangedWorldEvent event) { refresh(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void gameMode(PlayerGameModeChangeEvent event) { refresh(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void flight(PlayerToggleFlightEvent event) { refresh(event.getPlayer()); }
+
+    private void refresh(Player player) {
+        if (bodies.isSelecting(player)) Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) bodies.refreshPresentation(player);
+        });
+    }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void move(PlayerMoveEvent event) {
@@ -164,7 +182,7 @@ final class CharacterSelectionGuard implements Listener {
     public void chat(AsyncPlayerChatEvent event) {
         if (bodies.isSelecting(event.getPlayer()) && !CreationManager.activeCreators.containsKey(event.getPlayer())) {
             event.setCancelled(true);
-            Bukkit.getScheduler().runTask(plugin, () -> event.getPlayer().sendMessage("Choose a character before chatting."));
+            Bukkit.getScheduler().runTask(plugin, () -> bodies.feedback(event.getPlayer(), "Choose a character before chatting."));
         }
     }
 
@@ -173,11 +191,14 @@ final class CharacterSelectionGuard implements Listener {
         if (!bodies.isSelecting(event.getPlayer())) return;
         String command = event.getMessage().trim().toLowerCase(Locale.ROOT);
         if (command.equals("/discord") || command.startsWith("/link ") || command.equals("/link")
-                || command.equals("/linkdiscord") || command.equals("/tfmcweb:linkdiscord")) return;
+                || command.equals("/linkdiscord") || command.equals("/tfmcweb:linkdiscord")) {
+            bodies.interact(event.getPlayer());
+            return;
+        }
         String[] words = command.split("\\s+");
         if (words.length == 2 && (words[0].equals("/rpcharacter") || words[0].equals("/rpcharacters:rpcharacter"))
                 && java.util.Set.of("select", "cancel", "next", "back", "help").contains(words[1])) return;
         event.setCancelled(true);
-        event.getPlayer().sendMessage("Choose a character before using commands. Use /rpcharacter select to reopen selection.");
+        bodies.feedback(event.getPlayer(), "Choose a character before using commands. Use /rpcharacter select to reopen selection.");
     }
 }

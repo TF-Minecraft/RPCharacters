@@ -164,7 +164,7 @@ class CreationManagerTest {
             CreationManager.initiateCreation(player);
             assertTrue(created.constructed().isEmpty());
             assertFalse(CreationManager.activeCreators.containsKey(player));
-            message("Wait for character selection to finish loading.");
+            verify(bodies).feedback(eq(player), contains("Wait for character selection to finish loading."));
             when(bodies.isReadyToChoose(player)).thenReturn(true);
             CreationManager.initiateCreation(player);
             assertSame(created.constructed().getFirst(), CreationManager.activeCreators.get(player));
