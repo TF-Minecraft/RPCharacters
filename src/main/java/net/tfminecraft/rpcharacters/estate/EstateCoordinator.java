@@ -114,7 +114,14 @@ final class EstateCoordinator implements EstateService {
      * reopens a cancelled record whose testator is still dead with that death.
      */
     void reconcile() {
-        for (EstateWorld.Dead dead : world.dead()) {
+        List<EstateWorld.Dead> deaths;
+        try {
+            deaths = world.dead();
+        } catch (RuntimeException | LinkageError error) {
+            logger.log(Level.SEVERE, "Estate reconcile could not list dead characters; it runs again next hour", error);
+            return;
+        }
+        for (EstateWorld.Dead dead : deaths) {
             Optional<EstateRecord> existing = book.get(dead.deathId());
             try {
                 if (existing.isEmpty() && !book.unreadable(dead.deathId())) {
@@ -137,11 +144,53 @@ final class EstateCoordinator implements EstateService {
         }
     }
 
+    /**
+     * Closes estates whose testator is readable and no longer dead with that death: a revive whose estate
+     * update failed after the ALIVE save. Open or held estates are cancelled; decided ones are marked revived,
+     * so no participant acts for a living character (design E12).
+     */
+    void closeRevived() {
+        for (EstateRecord record : book.all()) {
+            boolean open = record.state == EstateState.OPEN || record.state == EstateState.HELD;
+            if (!open && !record.settling()) continue;
+            try {
+                if (!revivedBehindOurBack(record)) continue;
+                EstateRecord next = EstateBook.edit(record);
+                if (open) {
+                    next.state = EstateState.CANCELLED;
+                    next.cancelledAt = clock.instant();
+                } else {
+                    next.revivedAt = clock.instant();
+                    next.revivedNote = "The character was found alive; parts not yet moved stay with the character";
+                }
+                book.save(next);
+                book.log("audit.log", "closed " + record.deathId + ": the testator is no longer dead with this death");
+                rosterPush.accept(next.testator.ownerId());
+            } catch (IOException | RuntimeException | LinkageError error) {
+                logger.log(Level.SEVERE, "Could not close the estate of revived death " + record.deathId, error);
+            }
+        }
+    }
+
+    /** Readable, and no longer dead with this death. Unreadable testators are left alone. */
+    private boolean revivedBehindOurBack(EstateRecord record) {
+        UUID testator = record.testator.characterId();
+        if (world.unreadable(testator)) return false;
+        boolean dead = world.info(testator).map(info -> info.status() == net.tfminecraft.tlibs.character.CharacterStatus.DEAD)
+                .orElse(false);
+        return !dead || !world.deathId(testator).equals(Optional.of(record.deathId));
+    }
+
     /** Decides every open estate that is due. Runs every minute, at boot and when SimpleFactions starts. */
     void decideDue() {
         Instant now = clock.instant();
         for (EstateRecord record : book.all()) {
-            if (record.state == EstateState.OPEN && !now.isBefore(record.dueAt)) decide(record, now);
+            if (record.state != EstateState.OPEN || now.isBefore(record.dueAt)) continue;
+            try {
+                decide(record, now);
+            } catch (RuntimeException | LinkageError error) {
+                logger.log(Level.SEVERE, "Deciding estate " + record.deathId + " failed; it is tried again next minute", error);
+            }
         }
     }
 
@@ -195,8 +244,12 @@ final class EstateCoordinator implements EstateService {
     void recheckWaiting() {
         for (EstateRecord record : book.all()) {
             if (!record.settling() || !record.decision.anyWaiting()) continue;
-            if (EstateDecider.recheck(record, world) instanceof Recheck.Revised revised) {
-                revise(record, revised.decision(), "WAITING resolved");
+            try {
+                if (EstateDecider.recheck(record, world) instanceof Recheck.Revised revised) {
+                    revise(record, revised.decision(), "WAITING resolved");
+                }
+            } catch (RuntimeException | LinkageError error) {
+                logger.log(Level.SEVERE, "Re-checking estate " + record.deathId + " failed; it is tried again later", error);
             }
         }
     }
@@ -219,7 +272,15 @@ final class EstateCoordinator implements EstateService {
     private void published(EstateRecord record) {
         events.accept(new EstateDecidedEvent(record.toDecision()));
         rosterPush.accept(record.testator.ownerId());
-        settle(record.deathId, true);
+        settleLogged(record.deathId, true);
+    }
+
+    private void settleLogged(UUID deathId, boolean all) {
+        try {
+            settle(deathId, all);
+        } catch (RuntimeException | LinkageError error) {
+            logger.log(Level.SEVERE, "Settling estate " + deathId + " failed; it is tried again next hour", error);
+        }
     }
 
     /**
@@ -228,7 +289,7 @@ final class EstateCoordinator implements EstateService {
      */
     void settle(UUID deathId, boolean all) {
         EstateRecord record = book.get(deathId).orElse(null);
-        if (record == null || !record.settling()) return;
+        if (record == null || !record.settling() || revivedBehindOurBack(record)) return;
         EstateDecision decision = record.toDecision();
         for (EstateParticipant participant : world.participants()) {
             String id = participant.id();
@@ -248,8 +309,9 @@ final class EstateCoordinator implements EstateService {
     /** Hourly: reconcile, WAITING re-checks and participant retries. */
     void hourly() {
         reconcile();
+        closeRevived();
         recheckWaiting();
-        for (EstateRecord record : book.all()) settle(record.deathId, false);
+        for (EstateRecord record : book.all()) settleLogged(record.deathId, false);
     }
 
     @Override
@@ -276,9 +338,13 @@ final class EstateCoordinator implements EstateService {
     /** Stores a participant's answer unless it is older than the one held or changes nothing. */
     boolean record(UUID deathId, String participantId, long revision, Report report) {
         EstateRecord current = book.get(deathId).orElse(null);
-        if (current == null) return false;
+        if (current == null || current.decision == null || current.decision.revision() != revision) {
+            logger.warning("Ignored " + participantId + "'s answer for " + deathId + " at revision " + revision
+                    + ": it is not the estate's current revision");
+            return false;
+        }
         Report last = current.participants.get(participantId);
-        if (last != null && (last.revision() > revision || sameAnswer(last, report))) return false;
+        if (last != null && sameAnswer(last, report)) return false;
         try {
             EstateRecord next = EstateBook.edit(current);
             next.participants.put(participantId, report);
@@ -356,7 +422,7 @@ final class EstateCoordinator implements EstateService {
             rosterPush.accept(next.testator.ownerId());
         } catch (IOException error) {
             logger.log(Level.SEVERE, "Revive of " + deathId + " was saved but its estate was not updated; "
-                    + "reconcile and the decision step will cancel it", error);
+                    + "the hourly pass closes it", error);
         }
     }
 }

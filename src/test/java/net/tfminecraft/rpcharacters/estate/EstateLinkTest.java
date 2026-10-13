@@ -41,6 +41,10 @@ class EstateLinkTest {
             module.when(() -> EstateModule.start(plugin)).thenThrow(new IOException("unreadable"));
             EstateLink.start(plugin);
             assertNull(EstateLink.current());
+            module.when(() -> EstateModule.start(plugin)).thenThrow(new NoSuchMethodError("Estates.decided"));
+            EstateLink.start(plugin);
+            assertNull(EstateLink.current());
+            verify(logger).log(eq(java.util.logging.Level.SEVERE), contains("could not start"), any(NoSuchMethodError.class));
             EstateModule running = mock(EstateModule.class);
             module.when(() -> EstateModule.start(plugin)).thenReturn(running);
             EstateLink.start(plugin);

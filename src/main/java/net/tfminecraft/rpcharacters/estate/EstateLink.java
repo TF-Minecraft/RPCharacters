@@ -42,7 +42,7 @@ public final class EstateLink {
         }
         try {
             install(EstateModule.start(plugin));
-        } catch (java.io.IOException | RuntimeException error) {
+        } catch (java.io.IOException | RuntimeException | LinkageError error) {
             plugin.getLogger().log(Level.SEVERE, "Estates could not start; deaths still save and reconcile later", error);
         }
     }

@@ -185,6 +185,13 @@ class EstateModuleTest {
     }
 
     @Test
+    void aFailedEnableUnregistersWhatItRegisteredBeforeFailing() {
+        doReturn(null).when(plugin).getCommand("estate");
+        assertThrows(NullPointerException.class, () -> EstateModule.start(plugin));
+        assertNull(server.getServicesManager().load(EstateService.class));
+    }
+
+    @Test
     void withoutSimpleFactionsItReliesOnThePluginEnableEvent() throws Exception {
         EstateModule.readyEvent = "missing.ReadyEvent";
         EstateModule module = EstateModule.start(plugin);

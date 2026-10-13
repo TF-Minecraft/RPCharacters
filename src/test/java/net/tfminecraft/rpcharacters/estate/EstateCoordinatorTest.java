@@ -227,7 +227,7 @@ class EstateCoordinatorTest {
     }
 
     @Test
-    void reportsKeepTheNewestRevisionAndSurviveAParticipantReportingDuringItsOwnSettle() {
+    void reportsCountOnlyAtTheCurrentRevisionAndSurviveAParticipantReportingDuringItsOwnSettle() {
         money.answer = d -> {
             kit.coordinator.report(d.deathId(), "thievery", d.revision(), Outcome.AT_RESTART);
             return Outcome.done();
@@ -236,15 +236,99 @@ class EstateCoordinatorTest {
         assertEquals("AT_RESTART", record.participants.get("thievery").outcome());
         assertEquals("DONE", record.participants.get("denareconomy").outcome());
         int pushes = kit.pushes.size();
-        assertFalse(kit.coordinator.record(record.deathId, "thievery", 0,
-                kit.coordinator.report(Outcome.AT_RESTART, 0)));
+        assertFalse(kit.coordinator.record(record.deathId, "thievery", 0, kit.coordinator.report(Outcome.AT_RESTART, 0)));
         assertEquals(pushes, kit.pushes.size());
-        assertTrue(kit.coordinator.record(record.deathId, "thievery", 2, kit.coordinator.report(Outcome.done(), 2)));
-        assertFalse(kit.coordinator.record(record.deathId, "thievery", 1, kit.coordinator.report(Outcome.retry("old"), 1)));
+        assertFalse(kit.coordinator.record(record.deathId, "thievery", 1, kit.coordinator.report(Outcome.done(), 1)));
+        assertTrue(logged(Level.WARNING, "is not the estate's current revision"));
+        assertEquals("AT_RESTART", kit.book.get(record.deathId).orElseThrow().participants.get("thievery").outcome());
+        assertTrue(kit.coordinator.record(record.deathId, "thievery", 0, kit.coordinator.report(Outcome.done(), 0)));
         assertFalse(kit.coordinator.record(UUID.randomUUID(), "thievery", 0, kit.coordinator.report(Outcome.done(), 0)));
+        CharacterRef bran = kit.world.alive("Bran");
+        kit.world.kill(bran);
+        EstateRecord open = kit.died(bran, null);
+        assertFalse(kit.coordinator.record(open.deathId, "thievery", 0, kit.coordinator.report(Outcome.done(), 0)));
+        assertTrue(kit.book.get(open.deathId).orElseThrow().participants.isEmpty());
         files.failWrites = true;
-        assertFalse(kit.coordinator.record(record.deathId, "thievery", 3, kit.coordinator.report(Outcome.done(), 3)));
+        assertFalse(kit.coordinator.record(record.deathId, "thievery", 0, kit.coordinator.report(Outcome.retry("x"), 0)));
         assertTrue(logged(Level.SEVERE, "Could not save thievery's answer"));
+    }
+
+    @Test
+    void estatesOfCharactersFoundAliveAreClosedAndNoParticipantActsForThem() {
+        EstateRecord decided = kit.decided(aria, null);
+        CharacterRef bran = kit.world.alive("Bran");
+        kit.world.kill(bran);
+        EstateRecord open = kit.died(bran, null);
+        CharacterRef cai = kit.world.alive("Cai");
+        kit.world.kill(cai);
+        EstateRecord unreadable = kit.died(cai, null);
+        kit.world.unreadable.add(cai.characterId());
+        CharacterRef dag = kit.world.alive("Dag");
+        kit.world.kill(dag);
+        EstateRecord redied = kit.died(dag, null);
+        kit.world.deaths.put(dag.characterId(), UUID.randomUUID());
+        kit.world.status(aria, CharacterStatus.ALIVE);
+        kit.world.status(bran, CharacterStatus.ALIVE);
+        int asked = money.asked.size();
+        kit.coordinator.settle(decided.deathId, true);
+        assertEquals(asked, money.asked.size());
+        kit.coordinator.hourly();
+        EstateRecord closed = kit.book.get(decided.deathId).orElseThrow();
+        assertNotNull(closed.revivedAt);
+        assertTrue(closed.revivedNote.contains("found alive"));
+        assertTrue(kit.coordinator.decided().isEmpty());
+        assertEquals(EstateState.CANCELLED, kit.book.get(open.deathId).orElseThrow().state);
+        assertEquals(EstateState.OPEN, kit.book.get(unreadable.deathId).orElseThrow().state);
+        assertEquals(EstateState.CANCELLED, kit.book.get(redied.deathId).orElseThrow().state);
+        assertEquals(asked, money.asked.size());
+        Instant saved = closed.updatedAt;
+        kit.clock.advance(Duration.ofMinutes(1));
+        kit.coordinator.closeRevived();
+        assertEquals(saved, kit.book.get(decided.deathId).orElseThrow().updatedAt);
+        kit.world.unreadable.clear();
+        kit.world.status(cai, CharacterStatus.ALIVE);
+        files.failWrites = true;
+        kit.coordinator.closeRevived();
+        assertTrue(logged(Level.SEVERE, "Could not close the estate of revived death " + unreadable.deathId));
+    }
+
+    @Test
+    void oneEstateThatMakesALookupThrowDoesNotStopTheOthers() throws Exception {
+        CharacterRef bran = kit.world.alive("Bran");
+        kit.world.kill(bran);
+        EstateRecord poisoned = kit.died(aria, null);
+        EstateRecord fine = kit.died(bran, null);
+        EstateWorld throwing = new EstateWorld() {
+            @Override public List<Dead> dead() { throw new IllegalStateException("directory"); }
+            @Override public Optional<net.tfminecraft.tlibs.character.CharacterInfo> info(UUID id) { return kit.world.info(id); }
+            @Override public boolean unreadable(UUID id) { return kit.world.unreadable(id); }
+            @Override public List<net.tfminecraft.tlibs.character.CharacterInfo> findByName(String name) { return List.of(); }
+            @Override public Optional<UUID> deathId(UUID id) { return kit.world.deathId(id); }
+            @Override public DeathGuild deathGuild(UUID character, UUID death) {
+                if (character.equals(aria.characterId())) throw new IllegalStateException("corrupt journal");
+                return kit.world.deathGuild(character, death);
+            }
+            @Override public GuildLookup guild(UUID incarnation) { throw new NoSuchMethodError("guild"); }
+            @Override public GuildLookup guildByName(String name) { return GuildLookup.GONE; }
+            @Override public List<net.tfminecraft.tlibs.character.estate.EstateParticipant> participants() {
+                throw new IllegalStateException("services");
+            }
+        };
+        EstateCoordinator coordinator = new EstateCoordinator(kit.book, throwing, kit.clock, Duration.ofHours(24), kit.logger,
+                kit.pushes::add, kit.events::add);
+        kit.clock.advance(Duration.ofDays(1));
+        coordinator.decideDue();
+        assertEquals(EstateState.OPEN, kit.book.get(poisoned.deathId).orElseThrow().state);
+        assertEquals(EstateState.DECIDED, kit.book.get(fine.deathId).orElseThrow().state);
+        assertTrue(logged(Level.SEVERE, "Deciding estate " + poisoned.deathId + " failed"));
+        assertTrue(logged(Level.SEVERE, "Settling estate"));
+        EstateRecord waiting = EstateBook.edit(kit.book.get(fine.deathId).orElseThrow());
+        waiting.decision = waiting.decision.revise(waiting.decision.money(), EstateRecord.Part.WAITING, waiting.decision.guildLocks());
+        assertDoesNotThrow(() -> kit.book.save(waiting));
+        coordinator.hourly();
+        assertTrue(logged(Level.SEVERE, "could not list dead characters"));
+        assertTrue(logged(Level.SEVERE, "Re-checking estate " + fine.deathId + " failed"));
+        assertTrue(logged(Level.SEVERE, "Settling estate " + fine.deathId + " failed"));
     }
 
     @Test

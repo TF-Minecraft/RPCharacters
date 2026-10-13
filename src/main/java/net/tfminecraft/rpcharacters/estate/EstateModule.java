@@ -88,7 +88,12 @@ final class EstateModule implements EstateHooks, Listener {
                 RosterSyncService::pushRosterAsync, plugin.getLogger());
         EstateModule module = new EstateModule(plugin, coordinator, collections, body);
         book.load();
-        module.enable();
+        try {
+            module.enable();
+        } catch (RuntimeException | LinkageError error) {
+            module.stop();
+            throw error;
+        }
         return module;
     }
 
@@ -102,11 +107,12 @@ final class EstateModule implements EstateHooks, Listener {
                 player -> Characters.currentSession(player).map(session -> session.ref().characterId()));
         plugin.getCommand("estate").setExecutor(command);
         plugin.getCommand("estate").setTabCompleter(command);
-        coordinator.reconcile();
-        afterSimpleFactions();
         var scheduler = Bukkit.getScheduler();
         tasks.add(scheduler.runTaskTimer(plugin, coordinator::decideDue, MINUTE_TICKS, MINUTE_TICKS));
         tasks.add(scheduler.runTaskTimer(plugin, coordinator::hourly, HOUR_TICKS, HOUR_TICKS));
+        coordinator.reconcile();
+        coordinator.closeRevived();
+        afterSimpleFactions();
     }
 
     /** Decisions postponed for want of SimpleFactions run again once it is up (design N2, P2). */
