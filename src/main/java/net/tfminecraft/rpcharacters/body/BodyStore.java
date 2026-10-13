@@ -63,6 +63,20 @@ public final class BodyStore {
             }
             return Optional.empty();
         }
+        return Optional.of(record(file, ownerId, characterId));
+    }
+
+    /**
+     * The revision kept as {@code .body.prev} by the last write, checked like {@link #read}. Empty when
+     * there is none; a previous file naming another character is corrupt.
+     */
+    public synchronized Optional<BodyRecord> previous(UUID ownerId, UUID characterId) throws IOException {
+        Path file = previous(bodyFile(ownerId, characterId));
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
+        return Optional.of(record(file, ownerId, characterId));
+    }
+
+    private BodyRecord record(Path file, UUID ownerId, UUID characterId) throws IOException {
         JsonObject payload = open(file);
         try {
             BodyJson.keys(payload, "body record", BODY_KEYS);
@@ -70,8 +84,8 @@ public final class BodyStore {
             if (!BodyJson.uuid(payload, "owner").equals(ownerId) || !BodyJson.uuid(payload, "character").equals(characterId)) {
                 throw new IOException("Character body belongs to another character");
             }
-            return Optional.of(new BodyRecord(ownerId, characterId, BodyJson.integer(payload, "rev", 1, Long.MAX_VALUE - 1),
-                    version(payload), instant(payload), reason(payload), BodySnapshot.fromJson(BodyJson.object(payload, "body"))));
+            return new BodyRecord(ownerId, characterId, BodyJson.integer(payload, "rev", 1, Long.MAX_VALUE - 1),
+                    version(payload), instant(payload), reason(payload), BodySnapshot.fromJson(BodyJson.object(payload, "body")));
         } catch (IOException error) {
             throw new BodyCorruptException(file, error.getMessage(), error);
         }

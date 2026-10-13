@@ -415,6 +415,7 @@ public class Database {
 			CharacterEvilRpFields.load(c, json);
 			CharacterStageChangeFields.load(c, json);
 			CharacterClassPickFields.load(c, json);
+			CharacterWillFields.load(c, json);
 			loadNutritionFields(c, json);
 			c.ensureTraitStateDefaults();
 			if (!Boolean.TRUE.equals(c.isActive()) && c.removeExpiredDurationTraits(System.currentTimeMillis())) {
@@ -597,6 +598,7 @@ public class Database {
 			CharacterEvilRpFields.save(defaults, c);
 			CharacterStageChangeFields.save(defaults, c);
 			CharacterClassPickFields.save(defaults, c);
+			CharacterWillFields.save(defaults, c);
 			saveNutritionFields(defaults, c);
 			if (!(durable ? save(file, defaults, true) : save(file, defaults))) return false;
 			net.tfminecraft.rpcharacters.identity.CharacterIdentityService.saved(pd.getUniqueId(), c);

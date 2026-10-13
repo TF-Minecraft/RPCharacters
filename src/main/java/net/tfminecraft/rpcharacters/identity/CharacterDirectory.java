@@ -89,6 +89,29 @@ public final class CharacterDirectory {
 		return List.copyOf(found);
 	}
 
+	/** True when the character belongs to an account that is quarantined or unreadable. */
+	public boolean unreadable(UUID characterId) {
+		UUID ownerId = owners.get(Objects.requireNonNull(characterId, "characterId"));
+		return ownerId != null && unavailable.contains(ownerId);
+	}
+
+	/** One dead character in a readable account, with its latest death. */
+	public record Death(CharacterInfo info, UUID deathId) {}
+
+	/** Every dead character in a readable account, ordered by character ID. */
+	public List<Death> deaths() {
+		List<Death> found = new ArrayList<>();
+		for (Map.Entry<UUID, Map<UUID, CharacterInfo>> account : accounts.entrySet()) {
+			if (unavailable.contains(account.getKey())) continue;
+			for (CharacterInfo info : account.getValue().values()) {
+				UUID death = deaths.get(info.ref().characterId());
+				if (info.status() == CharacterStatus.DEAD && death != null) found.add(new Death(info, death));
+			}
+		}
+		found.sort(Comparator.comparing(death -> death.info().ref().characterId()));
+		return List.copyOf(found);
+	}
+
 	/** Most recent saved death, with a stable migration key for deaths predating death records. */
 	public Optional<UUID> deathId(UUID characterId) {
 		return info(characterId).flatMap(info -> Optional.ofNullable(deaths.get(characterId)));
@@ -97,8 +120,12 @@ public final class CharacterDirectory {
 	private void rememberDeath(CharacterInfo info, UUID recorded) {
 		if (recorded != null) deaths.put(info.ref().characterId(), recorded);
 		else if (info.status() == CharacterStatus.DEAD) deaths.putIfAbsent(info.ref().characterId(),
-				UUID.nameUUIDFromBytes(("rpcharacters:legacy-death:" + info.ref().characterId())
-						.getBytes(StandardCharsets.UTF_8)));
+				legacyDeathId(info.ref().characterId()));
+	}
+
+	/** The stable death ID of a character that died before deaths were recorded. */
+	public static UUID legacyDeathId(UUID characterId) {
+		return UUID.nameUUIDFromBytes(("rpcharacters:legacy-death:" + characterId).getBytes(StandardCharsets.UTF_8));
 	}
 
 	/**

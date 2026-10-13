@@ -103,6 +103,11 @@ public class RPCharacter {
 	public java.time.Instant getDiedAt() { return diedAt; }
 	public void setDeathRecord(UUID id, java.time.Instant at) { deathId = id; diedAt = at; }
 
+	private net.tfminecraft.rpcharacters.will.CharacterWill will = net.tfminecraft.rpcharacters.will.CharacterWill.NONE;
+
+	public net.tfminecraft.rpcharacters.will.CharacterWill getWill() { return will; }
+	public void setWill(net.tfminecraft.rpcharacters.will.CharacterWill will) { this.will = java.util.Objects.requireNonNull(will, "will"); }
+
 	/** Default lethal (vanilla death). Missing JSON key loads as true. */
 	private boolean pvpLethal = true;
 

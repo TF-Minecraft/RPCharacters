@@ -67,6 +67,7 @@ public class InventoryManager {
 	private static final String SUMMARY_ACTION_KEY = "summary_action";
 	public static final String OPEN_CLASS_PICK_KEY = "open_class_pick";
 	public static final int CLASS_PICK_SLOT = 22;
+	public static final int WILL_SLOT = 2;
 
 	private static String t(String raw) {
 		return RPTexts.formatGui(raw);
@@ -95,6 +96,9 @@ public class InventoryManager {
 		}
 		if(c.getStatus().equals(Status.ALIVE) && !c.isActive() && (!PermissionGroupService.hasCharacterSwitchCooldown(p, pd) || Permissions.isAdmin(p)) && c.getOwner().equals(p)) {
 			i.setItem(6, getSwitchItem());
+		}
+		if (c.getStatus().equals(Status.ALIVE) && c.isActive() && c.getOwner().equals(p)) {
+			i.setItem(WILL_SLOT, getWillItem(c));
 		}
 		if (c.getStatus().equals(Status.ALIVE) && c.isActive() && c.getOwner().equals(p) && ClassPickService.isEnabled()) {
 			i.setItem(CLASS_PICK_SLOT, getClassPickItem(c));
@@ -973,6 +977,20 @@ public class InventoryManager {
 		meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
 		item.setItemMeta(meta);
 		return item;
+	}
+
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
+	public ItemStack getWillItem(RPCharacter c) {
+		ItemStack i = new ItemStack(Material.PAPER, 1);
+		ItemMeta meta = i.getItemMeta();
+		meta.setDisplayName(t(RPTexts.GUI_WARN + "Will"));
+		List<String> lore = new ArrayList<String>();
+		lore.add(t(RPTexts.MUTED + (c.getWill().named() ? "An heir is named" : "No heir is named")));
+		lore.add(t(RPTexts.MUTED + "Click to name or change your heir"));
+		meta.setLore(lore);
+		i.setItemMeta(meta);
+		return i;
 	}
 
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.

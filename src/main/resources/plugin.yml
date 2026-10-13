@@ -47,6 +47,12 @@ commands:
   players:
     usage: /<command>
     description: Open the online player list
+  will:
+    usage: /<command>
+    description: Name or revoke your character's heir
+  estate:
+    usage: /<command> collect | list | show | hold | release | decide | assign | retry | waive | revert
+    description: Collect an inheritance; staff estate tools
 permissions:
   rpchar.focus.admin:
     description: Restore character focus and reload focus configuration
@@ -66,6 +72,9 @@ permissions:
   rpchar.grave.protect:
     default: true
   rpchar.grave.admin:
+    default: op
+  rpchar.estate.admin:
+    description: Staff estate tools (/estate list, show, hold, assign and the rest)
     default: op
   rpchar.class.reset:
     description: Reset class picks for every character (class-selection.reset-permission)

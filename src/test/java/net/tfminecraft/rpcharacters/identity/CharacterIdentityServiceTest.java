@@ -142,6 +142,17 @@ class CharacterIdentityServiceTest {
     }
 
     @Test
+    void estateLookupsSeeLiveDeathsAndReadableAccounts() {
+        RPCharacter deceased = character("Deceased", false);
+        data.addCharacter(deceased);
+        deceased.setStatus(Status.DEAD);
+        UUID death = UUID.randomUUID();
+        deceased.setDeathRecord(death, Instant.ofEpochMilli(3000));
+        assertEquals(List.of(death), service.deaths().stream().map(CharacterDirectory.Death::deathId).toList());
+        assertFalse(service.unreadable(UUID.fromString(deceased.getId())));
+    }
+
+    @Test
     void currentSessionAndIsCurrentDelegateOnlyForReadableOwners() {
         assertTrue(service.currentSession(player).isEmpty());
         CharacterSession session = join();

@@ -102,25 +102,23 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
     }
 
     @Test
-    void revivalRequiresLoadedOwnerAndFreeSlotThenSavesAndActivates() {
-        tracked.clear();
-        manager.confirmClick(player, character, ConfirmType.REVIVE);
-        message("Could not find that player's data.");
-        tracked.add(data);
-        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(false);
-        manager.confirmClick(player, character, ConfirmType.REVIVE);
-        verify(character, never()).setStatus(any());
-        slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
-        active.set(null);
-        manager.confirmClick(player, character, ConfirmType.REVIVE);
-        verify(character).setStatus(Status.ALIVE);
-        assertSame(character, active.get());
-        verify(database).savePlayer(data);
-        verify(clueVisuals).refreshViewer(player);
-        wardrobe.verify(() -> WardrobeService.refreshActiveAsync(player));
-        verify(lastInventory()).characterView(player, character);
-        manager.confirmClick(player, character, ConfirmType.REVIVE);
-        verify(data, times(1)).setActiveCharacter(character);
+    void revivalConfirmationHandsOverToTheStaffRevive() {
+        try (var revive = mockStatic(StaffRevive.class)) {
+            manager.confirmClick(player, character, ConfirmType.REVIVE);
+            revive.verify(() -> StaffRevive.run(manager, player, character, false));
+        }
+    }
+
+    @Test
+    void willButtonOpensTheWillMenuOnlyForItsOwner() {
+        try (var wills = mockStatic(net.tfminecraft.rpcharacters.will.WillMenu.class)) {
+            manager.selectionClick(menu("Character Info", InventoryManager.WILL_SLOT, new ItemStack(Material.PAPER), server.addPlayer("Other")));
+            manager.selectionClick(menu("Character Info", InventoryManager.WILL_SLOT, new ItemStack(Material.STONE), player));
+            manager.selectionClick(menu("Character Info", InventoryManager.WILL_SLOT, null, player));
+            wills.verifyNoInteractions();
+            manager.selectionClick(menu("Character Info", InventoryManager.WILL_SLOT, new ItemStack(Material.PAPER), player));
+            wills.verify(() -> net.tfminecraft.rpcharacters.will.WillMenu.open(player));
+        }
     }
 
     @Test
@@ -289,8 +287,10 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
         manager.selectionClick(info(4, Material.TOTEM_OF_UNDYING, "character", player));
         assertEquals(ConfirmType.REVIVE, confirmations().get(player));
         verify(lastInventory()).confirmView(player);
-        manager.selectionClick(menu("Confirm Action", 11, null, player));
-        verify(character).setStatus(Status.ALIVE);
+        try (var revive = mockStatic(StaffRevive.class)) {
+            manager.selectionClick(menu("Confirm Action", 11, null, player));
+            revive.verify(() -> StaffRevive.run(manager, player, character, false));
+        }
     }
 
     @Test

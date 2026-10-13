@@ -136,6 +136,17 @@ public final class ProvinceSystemClient {
 		return request("POST", "/characters/plugin/applied", jsonBody);
 	}
 
+	/** GET /characters/plugin/wills/pending, scoped to an explicit realm. */
+	public static SimpleResult fetchPendingWills(String realm) {
+		return request("GET", "/characters/plugin/wills/pending?realm_id="
+			+ java.net.URLEncoder.encode(realm, StandardCharsets.UTF_8), null);
+	}
+
+	/** POST /characters/plugin/wills/applied; the body carries its realm_id. */
+	public static SimpleResult ackWills(String jsonBody) {
+		return request("POST", "/characters/plugin/wills/applied", jsonBody);
+	}
+
 	/** GET /characters/plugin/lore-items/pending */
 	public static SimpleResult fetchPendingLoreItems() {
 		return request("GET", "/characters/plugin/lore-items/pending", null);

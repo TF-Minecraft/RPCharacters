@@ -327,6 +327,33 @@ class BodyStoreTest {
         assertThrows(IllegalArgumentException.class, () -> new BodyQuarantine(owner, 0, now, "r", body));
     }
 
+    @Test
+    void thePreviousRevisionIsReadWithTheSameIdentityChecks() throws Exception {
+        assertEquals(Optional.empty(), store.previous(owner, character));
+        BodyRecord one = store.write(owner, character, 0, "new-character", body(1));
+        assertEquals(Optional.empty(), store.previous(owner, character));
+        store.write(owner, character, 1, "quit", body(2));
+        assertEquals(Optional.of(one), store.previous(owner, character));
+        UUID other = UUID.randomUUID();
+        Files.copy(previousFile(), root.resolve(owner.toString()).resolve(other + ".body.prev"));
+        assertThrows(BodyCorruptException.class, () -> store.previous(owner, other));
+    }
+
+    @Test
+    void aStrippedBodyKeepsEverythingButItsPossessionsWhichAreReadAsSingleItems() throws Exception {
+        player.getEnderChest().setItem(3, new ItemStack(Material.ENDER_PEARL, 2));
+        BodySnapshot full = body(5);
+        var stacks = full.possessions(BodySnapshot.Kept.NONE);
+        assertEquals(2, stacks.size());
+        assertEquals(new ItemStack(Material.DIAMOND, 5), ItemStack.deserializeBytes(stacks.get(0)));
+        assertEquals(new ItemStack(Material.ENDER_PEARL, 2), ItemStack.deserializeBytes(stacks.get(1)));
+        BodySnapshot stripped = full.stripped(BodySnapshot.Kept.NONE);
+        assertTrue(stripped.possessions(BodySnapshot.Kept.NONE).isEmpty());
+        assertEquals(full.worldName(), stripped.worldName());
+        assertNotEquals(full, stripped);
+        assertEquals(stripped, stripped.stripped(BodySnapshot.Kept.NONE));
+    }
+
     private BodySnapshot body(int diamonds) throws IOException {
         player.getInventory().clear();
         player.getInventory().setItem(0, new ItemStack(Material.DIAMOND, diamonds));

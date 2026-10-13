@@ -550,37 +550,7 @@ public class PlayerManager implements Listener{
 			InventoryManager inv = new InventoryManager();
 			inv.characterView(p, c);
 		} else if (t.equals(ConfirmType.REVIVE)) {
-			Player owner = c.getOwner();
-			PlayerData ownerData = get(owner);
-			if (ownerData == null) {
-				RPTexts.send(p, RPTexts.ERROR + "Could not find that player's data.");
-				return;
-			}
-			if (!CharacterSlotService.hasFreeSlot(owner, ownerData)) {
-				int alive = ownerData.getCharacters(Status.ALIVE).size();
-				int max = CharacterSlotService.getMaxAliveCharacters(owner);
-				RPTexts.send(p, RPTexts.ERROR + owner.getName() + " has no free character slots ("
-						+ RPTexts.WARN + alive + RPTexts.ERROR + "/" + RPTexts.WARN + max + RPTexts.ERROR + ").");
-				p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-				return;
-			}
-			c.setStatus(Status.ALIVE);
-			if (!ownerData.hasActiveCharacter()) {
-				ownerData.setActiveCharacter(c);
-				if (owner.isOnline()) {
-					net.tfminecraft.rpcharacters.clues.discovery.ClueDiscoveryVisualManager.get()
-							.refreshViewer(owner);
-					net.tfminecraft.rpcharacters.wardrobe.WardrobeService.refreshActiveAsync(owner);
-				}
-			}
-			savePlayer(owner);
-			reevaluateFreeze(owner);
-			RPTexts.send(p, RPTexts.SUCCESS + "Revived character " + RPTexts.MUTED + c.getName()
-					+ RPTexts.SUCCESS + " for " + RPTexts.MUTED + owner.getName() + RPTexts.SUCCESS + ".");
-			RPTexts.send(owner, RPTexts.SUCCESS + "Your character " + RPTexts.MUTED + c.getName()
-					+ " " + RPTexts.SUCCESS + "was revived by staff.");
-			InventoryManager inv = new InventoryManager();
-			inv.characterView(p, c);
+			StaffRevive.run(this, p, c, false);
 		}
 	}
 
@@ -684,6 +654,10 @@ public class PlayerManager implements Listener{
 				InventoryManager inv = new InventoryManager();
 				inv.profileView(p, o);
 				p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
+			} else if (e.getSlot() == InventoryManager.WILL_SLOT) {
+				if (e.getCurrentItem() == null || !e.getCurrentItem().getType().equals(Material.PAPER) || !p.equals(o)) return;
+				p.closeInventory();
+				net.tfminecraft.rpcharacters.will.WillMenu.open(p);
 			} else if(e.getSlot() == 8) {
 				ItemStack i = e.getInventory().getItem(10);
 				if (i == null || i.getItemMeta() == null || e.getCurrentItem() == null) return;

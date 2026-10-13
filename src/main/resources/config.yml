@@ -124,3 +124,8 @@ character-bodies:
   # /rpcharacter select from a playing character waits this long, standing still and unhurt.
   return-seconds: 5
   persistent-keys: []
+
+estates:
+  # Hours between a death and its estate passing; a revive inside the window cancels the estate.
+  # Fractions are allowed for rehearsals (0.05 is three minutes). Read at startup.
+  wait-hours: 24
