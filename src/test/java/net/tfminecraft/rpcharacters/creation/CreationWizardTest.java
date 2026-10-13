@@ -756,6 +756,20 @@ class CreationWizardTest {
 	}
 
 	@Test
+	void optionalOnePickTraitsCanBeUntickedInTheDraftAndWhenEditingReview() throws Exception {
+		trait("arm", "prosthetic", 1);
+		start(stage("prosthetic_stage", "type: selection\ntarget: trait\nkey: prosthetic\nmin-select: 0\nmax-select: 1\npoints: 1"), summary());
+		choose("arm"); choose("arm"); click("Next");
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		assertTrue(body().contains("Prosthetic: None"));
+		click("Edit Prosthetic"); choose("arm"); click("Save and review");
+		assertEquals(List.of("arm"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		click("Edit Prosthetic"); choose("arm"); click("Save and review");
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		assertTrue(body().contains("Prosthetic: None"));
+	}
+
+	@Test
 	void disabledOptionsStayVisibleWithExactConflictAndPlaytimeReasonsAndCannotBeForged() throws Exception {
 		var existing = trait("existing", "previous", 0);
 		trait("allowed", "virtue", 0);

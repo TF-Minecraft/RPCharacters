@@ -268,7 +268,7 @@ public final class CreationWizard {
 
 	private void togglePick(SelectionStage stage, SelectableItem item) {
 		Set<String> selected = picked(stage);
-		if (stage.getMaxSelections() == 1 && selected.contains(item.getId())) return;
+		if (stage.getMaxSelections() == 1 && stage.getMinSelections() > 0 && selected.contains(item.getId())) return;
 		String disabled = disabledReason(stage, item);
 		if (disabled != null) { error(disabled); return; }
 		Map<String, String> values = fields.computeIfAbsent(displayed, ignored -> new HashMap<>());
