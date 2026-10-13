@@ -519,8 +519,9 @@ class CreationWizardTest {
 		when(base.getTraitData().getExclusive()).thenReturn(List.of("future_choice"));
 		base.getTraitData().getAttributeData().getModifiers().getFirst().add(2);
 		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
+		assertTrue(optionDetails().contains("Strength: 0 → 2 (+2)"));
 		choose("base");
-		assertTrue(optionDetails().contains("Strength: +2"));
+		assertTrue(optionDetails().contains("Strength: 2 → 0 (-2)"));
 		assertTrue(optionDetails().contains("Incompatible with: Future choice"));
 		choose("dependent");
 		assertTrue(optionDetails().contains("Requires all: base"));
@@ -767,6 +768,93 @@ class CreationWizardTest {
 		click("Edit Prosthetic"); choose("arm"); click("Save and review");
 		assertTrue(creation.getCharacter().getTraits().isEmpty());
 		assertTrue(body().contains("Prosthetic: None"));
+	}
+
+	private void modifier(Trait trait, String attribute, int amount) {
+		trait.getTraitData().getAttributeData().addModifier(new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier(attribute, amount));
+	}
+	private String hover(String id) {
+		return CreationDialogCapture.text((net.kyori.adventure.text.Component) optionRow(id).hoverEvent().value());
+	}
+
+	@Test
+	void traitHoverShowsRaceAndPendingChoicesWithCompactPositiveAndNegativeResults() throws Exception {
+		Cache.attributes = new ArrayList<>(List.of("dexterity", "strength"));
+		var boost = trait("boost", "gift", 0); modifier(boost, "DEXTERITY", 1);
+		var loss = trait("loss", "gift", 0); modifier(loss, "dexterity", -2);
+		trait("zero", "gift", 0);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 0\nmax-select: 2"), summary());
+		AttributeData race = new AttributeData(); race.addModifier(new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier("dexterity", 2));
+		when(human.getRaceData().getAttributeData()).thenReturn(race); creation.getCharacter().setRace(human); creation.getWizard().resume();
+		assertTrue(hover("boost").contains("Dexterity: 2 → 3 (+1)"));
+		assertEquals(1, hover("boost").lines().filter(l -> l.startsWith("Dexterity:")).count());
+		assertFalse(hover("boost").contains("Strength:"));
+		assertFalse(hover("zero").contains("Dexterity:"));
+		choose("boost");
+		assertTrue(hover("loss").contains("Dexterity: 3 → 1 (-2)"));
+		assertTrue(hover("boost").startsWith("Remove boost"));
+		assertTrue(hover("boost").contains("Dexterity: 3 → 2 (-1)"));
+		choose("loss"); assertTrue(hover("loss").contains("Dexterity: 1 → 3 (+2)"));
+		assertTrue(creation.getCharacter().getTraits().isEmpty());
+		assertEquals(0, creation.getTempData().getAmount(new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier("dexterity", 0)));
+	}
+
+	@Test
+	void hoverPreviewReplacesSavedSingleChoicesWithoutDoubleCountingOrChangingDraftData() throws Exception {
+		Cache.attributes = new ArrayList<>(List.of("dexterity", "strength"));
+		var old = trait("old", "gift", 0); modifier(old, "strength", 2);
+		var next = trait("next", "gift", 0); modifier(next, "dexterity", 1);
+		var background = trait("background", "previous", 0); modifier(background, "strength", 3);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 1\nmax-select: 1"), summary());
+		creation.getCharacter().addTrait(old); creation.getCharacter().addTrait(background);
+		((SelectionStage) creation.getActiveStage()).hydrateFromCharacter(creation.getCharacter());
+		creation.getTempData().addModifier(new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier("strength", 9));
+		creation.getWizard().resume();
+		assertTrue(hover("old").contains("Strength: 5")); assertFalse(hover("old").contains("→"));
+		assertTrue(hover("next").contains("Strength: 5 → 3 (-2)"));
+		assertTrue(hover("next").contains("Dexterity: 0 → 1 (+1)"));
+		choose("next"); assertTrue(hover("old").contains("Strength: 3 → 5 (+2)"));
+		assertTrue(hover("old").contains("Dexterity: 1 → 0 (-1)"));
+		assertEquals(List.of(old, background), creation.getCharacter().getTraits());
+		assertEquals(9, creation.getTempData().getAmount(new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier("strength", 0)));
+		assertEquals(0, creation.getCharacter().getCreationBaseAmount("strength"));
+	}
+
+	@Test
+	void hoverUsesStartingFuelForNewTraitsAndPreservesExistingFuelAndHealingState() throws Exception {
+		var arm = trait("arm", "prosthetic", 0);
+		when(arm.hasFuelTemplate()).thenReturn(true); when(arm.getFuelCapacity()).thenReturn(10D);
+		var powered = mock(net.tfminecraft.rpcharacters.objects.trait.TraitVariant.class);
+		var depowered = mock(net.tfminecraft.rpcharacters.objects.trait.TraitVariant.class);
+		AttributeData gain = new AttributeData(), loss = new AttributeData();
+		gain.getModifiers().getFirst().add(2); loss.getModifiers().getFirst().add(-1);
+		when(powered.getAttributeData()).thenReturn(gain); when(depowered.getAttributeData()).thenReturn(loss);
+		when(powered.getDescription()).thenReturn(List.of("Powered arm")); when(depowered.getDescription()).thenReturn(List.of("Empty arm"));
+		when(arm.getPoweredVariant()).thenReturn(powered); when(arm.getDepoweredVariant()).thenReturn(depowered);
+		var healing = trait("healing", "previous", 0); modifier(healing, "strength", 2);
+		when(healing.hasDuration()).thenReturn(true); when(healing.getDurationMs()).thenReturn(1_000_000L);
+		start(stage("prosthetic_stage", "type: selection\ntarget: trait\nkey: prosthetic\nmin-select: 0\nmax-select: 1"), summary());
+		creation.getCharacter().addTrait(healing);
+		long expiry = System.currentTimeMillis() + 500_000L;
+		creation.getCharacter().setDurationExpiresAtMs("healing", expiry); creation.getWizard().resume();
+		assertTrue(hover("arm").contains("Strength: 1 → 3 (+2)")); assertTrue(hover("arm").contains("Powered arm"));
+		assertNull(creation.getCharacter().getTraitState("arm"));
+		choose("arm"); assertTrue(hover("arm").contains("Strength: 3 → 1 (-2)"));
+		assertNull(creation.getCharacter().getTraitState("arm"));
+		click("Next"); creation.getCharacter().setFuel("arm", 0D);
+		click("Edit Prosthetic");
+		assertTrue(hover("arm").contains("Strength: 0 → 1 (+1)")); assertTrue(hover("arm").contains("Empty arm"));
+		assertEquals(0D, creation.getCharacter().getFuel("arm"));
+		assertEquals(expiry, creation.getCharacter().getTraitState("healing").getExpiresAtMs());
+		assertEquals(List.of(healing, arm), creation.getCharacter().getTraits());
+	}
+
+	@Test
+	void raceHoverKeepsItsExistingAttributeModifierDescription() throws Exception {
+		AttributeData race = new AttributeData(); race.getModifiers().getFirst().add(2);
+		when(human.getRaceData().getAttributeData()).thenReturn(race);
+		start(stage("race_stage", "type: selection\ntarget: race\nkey: race\nmin-select: 1\nmax-select: 1"));
+		assertTrue(hover("human").contains("Strength: +2"));
 	}
 
 	@Test

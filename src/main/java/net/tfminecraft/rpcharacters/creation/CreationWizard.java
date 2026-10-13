@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -763,19 +764,23 @@ public final class CreationWizard {
 
 	private String details(SelectableItem item) {
 		List<String> lines = new ArrayList<>();
-		lines.add(item.getName());
+		RPCharacter context = creation.getCharacter();
+		if (displayed instanceof SelectionStage selection && "trait".equalsIgnoreCase(item.getType())) context = previewContext(selection);
+		boolean removing = displayed instanceof SelectionStage selection && "trait".equalsIgnoreCase(item.getType())
+				&& picked(selection).contains(item.getId()) && (selection.getMaxSelections() > 1 || selection.getMinSelections() == 0);
+		lines.add((removing ? "Remove " : "") + item.getName());
 		if (item.getType().equalsIgnoreCase("race")) {
 			var race = RaceLoader.getByString(item.getId());
 			if (race != null) { lines.addAll(race.getDesc()); lines.add("Maximum age: " + race.getAgeMax()); }
 		} else if (item.getType().equalsIgnoreCase("trait")) {
-			lines.addAll(TraitEffectResolver.resolveDescription(creation.getCharacter(), TraitLoader.getByString(item.getId())));
+			lines.addAll(TraitEffectResolver.resolveDescription(context, TraitLoader.getByString(item.getId())));
 		} else {
 			ClassPickService.baseClasses().stream().filter(klass -> klass.getId().equalsIgnoreCase(item.getId()))
 					.findFirst().ifPresent(klass -> lines.addAll(klass.getDescription()));
 		}
-		for (var modifier : item.getAttributeData().getModifiers()) {
-			if (modifier.getAmount() != 0) lines.add(pretty(modifier.getType()) + ": "
-					+ (modifier.getAmount() > 0 ? "+" : "") + modifier.getAmount());
+		if (item.getType().equalsIgnoreCase("trait") && displayed instanceof SelectionStage selection) lines.addAll(attributePreview(context, selection, item));
+		else for (var modifier : item.getAttributeData().getModifiers()) {
+			if (modifier.getAmount() != 0) lines.add(pretty(modifier.getType()) + ": " + (modifier.getAmount() > 0 ? "+" : "") + modifier.getAmount());
 		}
 		if (item.hasDependency()) {
 			var dependency = item.getDependency();
@@ -784,6 +789,57 @@ public final class CreationWizard {
 		}
 		if (item.hasExclusives()) lines.add("Incompatible with: " + String.join(", ", item.getExclusives().stream().map(this::optionName).toList()));
 		return String.join("\n", lines);
+	}
+
+	private RPCharacter previewContext(SelectionStage stage) {
+		RPCharacter character = creation.getCharacter(), context = new RPCharacter(player);
+		character.getTraitStateMap().forEach((id, state) -> {
+			if (state.hasFuel()) context.setFuel(id, state.getFuel());
+			if (state.hasDuration()) context.setDurationExpiresAtMs(id, state.getExpiresAtMs());
+		});
+		for (SelectableItem option : stage.getOptions()) {
+			var trait = TraitLoader.getByString(option.getId());
+			if (!character.getTraits().contains(trait)) context.initializeTraitState(trait);
+		}
+		return context;
+	}
+
+	private List<String> attributePreview(RPCharacter context, SelectionStage stage, SelectableItem hovered) {
+		Set<String> selected = picked(stage);
+		AttributeData before = draftAttributes(context, stage, selected);
+		Set<String> next = new HashSet<>(selected);
+		if (next.contains(hovered.getId())) {
+			if (stage.getMaxSelections() > 1 || stage.getMinSelections() == 0) next.remove(hovered.getId());
+		} else {
+			if (stage.getMaxSelections() == 1) next.clear();
+			next.add(hovered.getId());
+		}
+		AttributeData after = draftAttributes(context, stage, next);
+		Set<String> affected = new LinkedHashSet<>();
+		for (var modifier : TraitEffectResolver.resolveAttributeData(context, TraitLoader.getByString(hovered.getId())).getModifiers())
+			if (modifier.getAmount() != 0) affected.add(modifier.getType().toLowerCase(Locale.ROOT));
+		for (var modifier : before.getModifiers()) if (before.getAmount(modifier) != after.getAmount(modifier)) affected.add(modifier.getType().toLowerCase(Locale.ROOT));
+		for (var modifier : after.getModifiers()) if (before.getAmount(modifier) != after.getAmount(modifier)) affected.add(modifier.getType().toLowerCase(Locale.ROOT));
+		List<String> lines = new ArrayList<>();
+		for (String attribute : affected) {
+			var key = new net.tfminecraft.rpcharacters.objects.attributes.AttributeModifier(attribute, 0);
+			int current = before.getAmount(key), result = after.getAmount(key), delta = result - current;
+			String tint = delta > 0 ? "§a" : "§c";
+			lines.add("§b" + pretty(attribute) + "§8: §f" + current + (delta == 0 ? "" : " §8→ " + tint + result + " §8(" + tint + (delta > 0 ? "+" : "") + delta + "§8)"));
+		}
+		return lines;
+	}
+
+	private AttributeData draftAttributes(RPCharacter context, SelectionStage stage, Set<String> selected) {
+		RPCharacter character = creation.getCharacter();
+		AttributeData total = new AttributeData(character.getRace() == null ? null : character.getRace().getRaceData().getAttributeData());
+		for (var trait : character.getTraits()) {
+			String key = trait.getTraitData().getKey();
+			if (key == null || !key.equalsIgnoreCase(stage.getKey())) total.mergeFrom(TraitEffectResolver.resolveAttributeData(context, trait));
+		}
+		for (SelectableItem option : stage.getOptions()) if (selected.contains(option.getId()))
+			total.mergeFrom(TraitEffectResolver.resolveAttributeData(context, TraitLoader.getByString(option.getId())));
+		return total;
 	}
 
 	private String optionName(String id) {
