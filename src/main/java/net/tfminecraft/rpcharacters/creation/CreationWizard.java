@@ -93,6 +93,7 @@ public final class CreationWizard {
 		displayed = stage;
 		colourStyle = null;
 		error = null;
+		if (stage instanceof SelectionStage selection) prunePendingTraits(selection);
 		render();
 	}
 
@@ -283,6 +284,29 @@ public final class CreationWizard {
 	private String disabledReason(SelectionStage stage, SelectableItem item) {
 		Set<String> selected = picked(stage);
 		if (selected.contains(item.getId())) return null;
+		return disabledReason(stage, item, selected);
+	}
+
+	private void prunePendingTraits(SelectionStage stage) {
+		if (!"trait".equalsIgnoreCase(stage.getTarget()) || !fields.containsKey(stage)) return;
+		Set<String> selected = picked(stage);
+		boolean changed;
+		do {
+			changed = false;
+			for (SelectableItem item : stage.getOptions()) {
+				if (!selected.contains(item.getId())) continue;
+				Set<String> others = new HashSet<>(selected);
+				others.remove(item.getId());
+				if (disabledReason(stage, item, others) != null) {
+					fields.get(stage).put("option_" + item.getId(), "false");
+					selected.remove(item.getId());
+					changed = true;
+				}
+			}
+		} while (changed);
+	}
+
+	private String disabledReason(SelectionStage stage, SelectableItem item, Set<String> selected) {
 		if ("trait".equalsIgnoreCase(item.getType())) {
 			var trait = TraitLoader.getByString(item.getId());
 			if (trait == null) return "Disabled because this trait is unavailable.";
@@ -332,12 +356,13 @@ public final class CreationWizard {
 
 	private void attributes(List<DialogBody> body, List<ActionButton> actions, AttributesStage stage, int seen) {
 		long remaining = attributeRemaining(stage);
-		body.add(message(remaining == 0 ? "All points assigned" : points(remaining) + " left", remaining == 0 ? NamedTextColor.GREEN : NamedTextColor.GOLD));
+		body.add(message(remaining == 0 ? "All points assigned" : remaining < 0 ? points(-remaining) + " over budget" : points(remaining) + " left",
+				remaining == 0 ? NamedTextColor.GREEN : remaining < 0 ? NamedTextColor.RED : NamedTextColor.GOLD));
 		int labelWidth = stage.getAttributes().stream().mapToInt(attr -> GuiText.width(pretty(attr))).max().orElse(0) + 16;
 		for (String attr : stage.getAttributes()) {
 			int rank = attributeRank(stage, attr);
 			long cost = AttributesStage.costForRank(rank + 1);
-			String increase = rank >= stage.getMaxRank() ? "Maximum rank reached." : cost > remaining ? "Disabled because it costs " + points(cost) + "; " + points(remaining) + " remain." : null;
+			String increase = rank >= stage.getMaxRank() ? "Maximum rank reached." : cost > remaining ? "Disabled because it costs " + points(cost) + "; " + points(Math.max(0, remaining)) + " available." : null;
 			Component row = GuiText.padded("§b" + pretty(attr), labelWidth)
 					.append(attributeControl(stage, attr, -1, rank == 0 ? "Already at rank 0." : null, seen))
 					.append(Component.text("   "))

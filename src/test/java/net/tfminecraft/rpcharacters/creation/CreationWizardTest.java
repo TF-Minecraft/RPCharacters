@@ -512,6 +512,55 @@ class CreationWizardTest {
 	}
 
 	@Test
+	void replacingAGiftClearsAnIncompatibleUnconfirmedVirtueOnReturn() throws Exception {
+		trait("strength", "gift", 0); trait("intelligence", "gift", 0); trait("dexterity", "gift", 0);
+		Trait elegance = trait("elegance", "virtue", 0); trait("tenacity", "virtue", 0);
+		when(elegance.getTraitData().hasExclusives()).thenReturn(true);
+		when(elegance.getTraitData().getExclusive()).thenReturn(List.of("dexterity"));
+		when(elegance.getTraitData().isExclusive("dexterity")).thenReturn(true);
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 2\nmax-select: 2"),
+				stage("virtue_stage", "type: selection\ntarget: trait\nkey: virtue\nmin-select: 1\nmax-select: 1"), summary());
+		choose("strength"); choose("intelligence"); click("Next"); choose("elegance");
+		assertTrue(CreationDialogCapture.text(optionRow("elegance")).startsWith("☑"));
+		click("Back"); choose("intelligence"); choose("dexterity"); click("Next");
+		assertTrue(CreationDialogCapture.text(optionRow("elegance")).startsWith("☒"));
+		assertNull(optionRow("elegance").clickEvent());
+		assertTrue(optionDetails().contains("Disabled because it conflicts with dexterity."));
+		assertFalse(body().contains("incompatible"));
+		assertEquals(List.of("strength", "dexterity"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+		choose("tenacity"); click("Next");
+		assertTrue(body().contains("Virtue: tenacity"));
+		click("Edit Gift"); choose("dexterity"); choose("intelligence"); click("Save and review");
+		click("Edit Virtue");
+		assertTrue(CreationDialogCapture.text(optionRow("elegance")).startsWith("☐"), "Cleared tick stays cleared when its conflict disappears");
+	}
+
+	@Test
+	void clearingAPendingConflictAlsoClearsItsDependentsAndKeepsValidTicks() throws Exception {
+		trait("strength", "gift", 0); trait("intelligence", "gift", 0); trait("dexterity", "gift", 0);
+		Trait dependent = trait("dependent", "virtue", 0), elegance = trait("elegance", "virtue", 0);
+		trait("universal", "virtue", 0);
+		when(elegance.getTraitData().hasExclusives()).thenReturn(true);
+		when(elegance.getTraitData().getExclusive()).thenReturn(List.of("dexterity"));
+		when(elegance.getTraitData().isExclusive("dexterity")).thenReturn(true);
+		YamlConfiguration config = new YamlConfiguration();
+		config.loadFromString("type: trait\nmode: all\ndepends-on: [elegance]");
+		when(dependent.getTraitData().hasDependency()).thenReturn(true);
+		when(dependent.getTraitData().getDependency()).thenReturn(new Dependency(config));
+		start(stage("gift_stage", "type: selection\ntarget: trait\nkey: gift\nmin-select: 2\nmax-select: 2"),
+				stage("virtue_stage", "type: selection\ntarget: trait\nkey: virtue\nmin-select: 1\nmax-select: 3"), summary());
+		choose("strength"); choose("intelligence"); click("Next");
+		choose("elegance"); choose("dependent"); choose("universal");
+		click("Back"); choose("intelligence"); choose("dexterity"); click("Next");
+		assertTrue(CreationDialogCapture.text(optionRow("elegance")).startsWith("☒"));
+		assertTrue(CreationDialogCapture.text(optionRow("dependent")).startsWith("☒"));
+		assertTrue(optionDetails().contains("requires elegance"));
+		assertTrue(CreationDialogCapture.text(optionRow("universal")).startsWith("☑"));
+		click("Next"); assertTrue(body().contains("Virtue: universal"));
+		assertEquals(List.of("strength", "dexterity", "universal"), creation.getCharacter().getTraits().stream().map(Trait::getId).toList());
+	}
+
+	@Test
 	void questionsValidateAnswersAndAdvanceWithoutTimers() throws Exception {
 		start(stage("questions_stage", "type: questions\namount: 2\nquestions:\n  first:\n    question: First question\n    answers: ['yes']\n  second:\n    question: Second question\n    answers: ['yes']"), summary());
 		assertEquals(2, ((QuestionStage) creation.getActiveStage()).getQuestions().size());
@@ -995,7 +1044,7 @@ class CreationWizardTest {
 		adjust("Strength", "[+]"); assertTrue(body().contains("9 points left"));
 		adjust("Strength", "[+]"); assertTrue(body().contains("5 points left"));
 		assertNull(attributeControl("Strength", "[+]").clickEvent());
-		assertTrue(optionDetails().contains("costs 8 points; 5 points remain"));
+		assertTrue(optionDetails().contains("costs 8 points; 5 points available"));
 		assertTrue(optionDetails().contains("Refunds 4 points"));
 		adjust("Strength", "[-]"); assertTrue(body().contains("9 points left"));
 		assertNotNull(attributeControl("Strength", "[+]").clickEvent());
@@ -1049,6 +1098,8 @@ class CreationWizardTest {
 		creation.getCharacter().addTrait(one); creation.getCharacter().addTrait(two);
 		((AttributesStage) creation.getActiveStage()).hydrateFromCharacter(creation.getCharacter());
 		creation.getWizard().resume();
+		assertTrue(body().contains("2 points over budget"));
+		assertFalse(body().contains("-2 points"));
 		click("Next"); assertTrue(body().contains("2 points over budget"));
 		assertEquals(2, creation.getCharacter().getTraits().size());
 		adjust("Strength", "[-]"); assertTrue(body().contains("All points assigned"));
