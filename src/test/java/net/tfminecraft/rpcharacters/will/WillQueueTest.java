@@ -219,6 +219,50 @@ class WillQueueTest {
     }
 
     @Test
+    void aSiteRequestAppliedBeforeAnInGameChangeStillReplaysAsApplied() {
+        assertEquals("applied", WillQueue.apply(request("site", kira.ref().characterId().toString(), 0), "main").get("result"));
+        WillService.change(data, aria, data.getUniqueId(), null, null);
+        JSONObject replay = WillQueue.apply(request("site", kira.ref().characterId().toString(), 0), "main");
+        assertEquals("applied", replay.get("result"));
+        assertEquals(2L, replay.get("will_revision"));
+    }
+
+    @Test
+    void anyFailureClearsThePullSoTheQueueKeepsWorking() {
+        Plugin plugin = MockBukkit.createMockPlugin("RPCharacters");
+        gateway.when(GatewayClient::realmId).thenReturn("main");
+        site.when(() -> ProvinceSystemClient.fetchPendingWills("main")).thenThrow(new IllegalStateException("gateway"));
+        WillQueue.pull(plugin);
+        now += 20_000;
+        String pending = "{\"requests\":[" + request("poison", null, 0).toJSONString() + ","
+                + request("good", null, 0).toJSONString() + "]}";
+        site.when(() -> ProvinceSystemClient.fetchPendingWills("main")).thenReturn(ProvinceSystemClient.SimpleResult.success(pending));
+        List<String> acks = new ArrayList<>();
+        site.when(() -> ProvinceSystemClient.ackWills(anyString())).thenAnswer(call -> {
+            acks.add(call.getArgument(0));
+            throw new IllegalStateException("ack exploded");
+        });
+        players.when(() -> PlayerManager.exists(any())).thenReturn(false);
+        RPCharacter poison = spy(aria);
+        when(poison.getWill()).thenThrow(new IllegalStateException("poison")).thenCallRealMethod();
+        data.getCharacters().set(0, poison);
+        WillQueue.pull(plugin);
+        server.getScheduler().performOneTick();
+        assertEquals(1, acks.size());
+        assertTrue(acks.getFirst().contains("\"good\""));
+        assertFalse(acks.getFirst().contains("\"poison\""));
+        now += 40_000;
+        WillQueue.async = (owner, task) -> { throw new IllegalStateException("scheduler closed"); };
+        WillQueue.pull(plugin);
+        server.getScheduler().performOneTick();
+        now += 80_000;
+        WillQueue.async = (owner, task) -> task.run();
+        WillQueue.pull(plugin);
+        server.getScheduler().performOneTick();
+        assertEquals(2, acks.size());
+    }
+
+    @Test
     void theTimerPullsEveryFifteenSecondsUntilStoppedAndAcksOffTheMainThread() {
         Plugin plugin = MockBukkit.createMockPlugin("RPCharacters");
         var scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class);

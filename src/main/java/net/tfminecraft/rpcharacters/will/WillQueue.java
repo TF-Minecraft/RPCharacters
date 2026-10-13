@@ -55,28 +55,40 @@ public final class WillQueue {
         backoffMs = 0;
     }
 
-    /** One pull, off the main thread. Skipped while backing off, while another runs, or without a realm. */
+    /**
+     * One pull, off the main thread. Skipped while backing off, while another runs, or without a realm.
+     * Every way out clears the running flag, so one failure cannot stop later pulls.
+     */
     static void pull(Plugin plugin) {
         if (clock.getAsLong() < retryAtMs || !running.compareAndSet(false, true)) return;
-        String realm = GatewayClient.realmId();
-        if (realm == null) {
-            running.set(false);
-            return;
+        Logger logger = plugin.getLogger();
+        try {
+            String realm = GatewayClient.realmId();
+            if (realm == null) {
+                running.set(false);
+                return;
+            }
+            ProvinceSystemClient.SimpleResult pending = ProvinceSystemClient.fetchPendingWills(realm);
+            if (!pending.ok) {
+                failed(logger, "pull", pending.error);
+                return;
+            }
+            List<JSONObject> requests = parse(pending.body);
+            if (requests.isEmpty()) {
+                succeeded();
+                return;
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                try {
+                    List<JSONObject> results = applyAll(requests, realm, logger);
+                    async.accept(plugin, () -> ack(logger, realm, results));
+                } catch (RuntimeException | LinkageError error) {
+                    failed(logger, "apply", String.valueOf(error));
+                }
+            });
+        } catch (RuntimeException | LinkageError error) {
+            failed(logger, "pull", String.valueOf(error));
         }
-        ProvinceSystemClient.SimpleResult pending = ProvinceSystemClient.fetchPendingWills(realm);
-        if (!pending.ok) {
-            failed(plugin.getLogger(), "pull", pending.error);
-            return;
-        }
-        List<JSONObject> requests = parse(pending.body);
-        if (requests.isEmpty()) {
-            succeeded();
-            return;
-        }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            List<JSONObject> results = applyAll(requests, realm);
-            async.accept(plugin, () -> ack(plugin.getLogger(), realm, results));
-        });
     }
 
     @SuppressWarnings("unchecked")
@@ -90,9 +102,14 @@ public final class WillQueue {
         JSONArray array = new JSONArray();
         array.addAll(results);
         body.put("results", array);
-        ProvinceSystemClient.SimpleResult ack = ProvinceSystemClient.ackWills(body.toJSONString());
-        if (!ack.ok) {
-            failed(logger, "acknowledgement", ack.error);
+        try {
+            ProvinceSystemClient.SimpleResult ack = ProvinceSystemClient.ackWills(body.toJSONString());
+            if (!ack.ok) {
+                failed(logger, "acknowledgement", ack.error);
+                return;
+            }
+        } catch (RuntimeException | LinkageError error) {
+            failed(logger, "acknowledgement", String.valueOf(error));
             return;
         }
         logger.info("[wills] applied " + results.size() + " website request(s)");
@@ -124,12 +141,16 @@ public final class WillQueue {
         return out;
     }
 
-    /** Main thread. One ack row per request that has an answer now. */
-    static List<JSONObject> applyAll(List<JSONObject> requests, String realm) {
+    /** Main thread. One ack row per request that has an answer now; a request that fails waits for the next pull. */
+    static List<JSONObject> applyAll(List<JSONObject> requests, String realm, Logger logger) {
         List<JSONObject> results = new ArrayList<>();
         for (JSONObject request : requests) {
-            JSONObject result = apply(request, realm);
-            if (result != null) results.add(result);
+            try {
+                JSONObject result = apply(request, realm);
+                if (result != null) results.add(result);
+            } catch (RuntimeException | LinkageError error) {
+                logger.log(java.util.logging.Level.WARNING, "[wills] request " + request.get("id") + " failed; it stays pending", error);
+            }
         }
         return results;
     }

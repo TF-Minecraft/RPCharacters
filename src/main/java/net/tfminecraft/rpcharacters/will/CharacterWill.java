@@ -17,8 +17,11 @@ public record CharacterWill(UUID heir, long revision, Long updatedAtMs, String l
         return heir != null;
     }
 
-    /** The next revision naming {@code next} (null revokes), stamped at {@code atMs}. */
+    /**
+     * The next revision naming {@code next} (null revokes), stamped at {@code atMs}. An in-game change
+     * ({@code request} null) keeps the last website request, so its lost acknowledgement still replays as applied.
+     */
     public CharacterWill change(UUID next, long atMs, String request) {
-        return new CharacterWill(next, revision + 1, atMs, request);
+        return new CharacterWill(next, revision + 1, atMs, request == null ? lastRequest : request);
     }
 }

@@ -111,7 +111,7 @@ class WillServiceTest {
         assertEquals("Kira", WillService.heirName(aria.getWill()));
         roster.verify(() -> RosterSyncService.pushRosterAsync(data.getUniqueId()));
         WillService.Change revoked = WillService.change(data, aria, data.getUniqueId(), null, null);
-        assertEquals(new CharacterWill(null, 2, 1234L, null), revoked.will());
+        assertEquals(new CharacterWill(null, 2, 1234L, "req-1"), revoked.will());
         assertNull(WillService.heirName(revoked.will()));
     }
 
