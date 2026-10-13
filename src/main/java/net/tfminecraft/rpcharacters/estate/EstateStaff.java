@@ -59,7 +59,7 @@ final class EstateStaff {
         if (record.state != EstateState.HELD) return "Only a held estate can be released; this one is " + record.state + ".";
         return change(record, staff, "released", next -> {
             next.state = EstateState.OPEN;
-            next.dueAt = estates.now().plusMillis(record.heldLeftMs);
+            next.dueAt = estates.now().plusMillis(record.heldLeftMs == null ? 0 : record.heldLeftMs);
             next.heldLeftMs = null;
         });
     }
@@ -69,7 +69,11 @@ final class EstateStaff {
         if (estates.now().isBefore(record.dueAt)) return "This estate is not due until " + record.dueAt + ".";
         String saved = change(record, staff, "decide --no-guild", next -> next.noGuild = true);
         if (!saved.startsWith("Done")) return saved;
-        return "Decision without the guild: " + estates.decide(book.get(record.deathId).orElseThrow(), estates.now()) + ".";
+        String result = estates.decide(book.get(record.deathId).orElseThrow(), estates.now());
+        if (result.equals("decided")) return "Decision without the guild: decided.";
+        // The override is for this attempt only; a later automatic decision asks SimpleFactions again.
+        change(book.get(record.deathId).orElseThrow(), staff, "decide --no-guild withdrawn", next -> next.noGuild = false);
+        return "Decision without the guild: " + result + ". The override was withdrawn; run it again once that is resolved.";
     }
 
     /** {@code assign <deathId> <money|property|guildlocks|all> <character>}: WAITING or FROZEN parts only. */
@@ -98,7 +102,7 @@ final class EstateStaff {
         if (!record.settling()) return "Only a decided estate can be assigned.";
         if (!record.decision.money().recipient().isFrozen()) return "Only FROZEN money can be sent to a guild.";
         GuildLookup lookup = world.guildByName(guild);
-        if (lookup instanceof GuildLookup.Unavailable) {
+        if (!(lookup instanceof GuildLookup.Live) && !(lookup instanceof GuildLookup.Gone)) {
             return "SimpleFactions has not answered, or more than one guild has that name; try again, or name the guild by its incarnation ID.";
         }
         if (!(lookup instanceof GuildLookup.Live live)) return "No live guild is named " + guild + ".";
@@ -157,6 +161,19 @@ final class EstateStaff {
         book.log("audit.log", "staff " + staff + " " + what + " on " + record.deathId);
         logger.info("[estate] " + staff + " " + what + " on " + record.deathId);
         return "Done.";
+    }
+
+    /**
+     * The collection's recipient is not alive (or no longer exists) and its latest estate is not one that will
+     * re-address the collection, so only staff can take it.
+     */
+    boolean stranded(EstateRecord record) {
+        if (record.body == null || record.body.addressedTo == null) return false;
+        UUID recipient = record.body.addressedTo.ref().characterId();
+        if (world.unreadable(recipient)) return false;
+        if (world.info(recipient).map(info -> info.status() == CharacterStatus.ALIVE).orElse(false)) return false;
+        return world.deathId(recipient).flatMap(book::get).map(estate -> !estate.settling()
+                && estate.state != EstateState.OPEN && estate.state != EstateState.HELD).orElse(true);
     }
 
     private static boolean open(Part part) {
@@ -264,9 +281,9 @@ final class EstateStaff {
                 + "); cause " + r.cause + "; was active " + r.wasActive + "; killer "
                 + (r.killer == null ? r.killerAccount : r.killer.characterId()));
         if (r.postponeReason != null) lines.add("Postponed since " + r.postponedSince + ": " + r.postponeReason);
-        if (r.decision == null) {
-            holdings(r).forEach((id, held) -> lines.add("Holds (" + id + "): " + held.counts() + " " + held.labels()));
-        } else {
+        holdings(r).forEach((id, held) -> lines.add((r.decision == null ? "Holds (" : "Still holds (") + id + "): "
+                + held.counts() + " " + held.labels()));
+        if (r.decision != null) {
             Decision d = r.decision;
             lines.add("Decided " + d.decidedAt() + ", revision " + d.revision() + (r.noGuild ? ", without the guild" : "")
                     + "; heir " + (d.heir() == null ? "none" : d.heir().name()) + "; death guild " + d.deathGuild()

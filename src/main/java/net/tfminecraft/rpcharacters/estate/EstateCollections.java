@@ -51,12 +51,15 @@ final class EstateCollections {
         return deliver(player, waiting.getFirst(), "recipient " + characterId);
     }
 
-    /** {@code /estate collect <deathId>} by staff, for a collection no character can collect. */
-    String collectAsStaff(Player staff, EstateRecord record) {
+    /**
+     * {@code /estate collect <deathId>} by staff, for a collection no character can collect: parked for staff,
+     * or {@code stranded} with a recipient who is not alive and whose own estate will never re-address it.
+     */
+    String collectAsStaff(Player staff, EstateRecord record, boolean stranded) {
         if (record.body == null || !record.body.collectable() || record.body.stacks.isEmpty()) {
             return "That estate has nothing to collect.";
         }
-        if (record.body.addressedTo != null) {
+        if (record.body.addressedTo != null && !stranded) {
             return "That collection belongs to " + record.body.addressedTo.name() + "; they collect it themselves.";
         }
         return deliver(staff, record, "staff " + staff.getName());

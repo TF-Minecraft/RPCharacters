@@ -121,16 +121,18 @@ class EstateCollectionsTest {
     @Test
     void staffCollectOnlyCollectionsNoCharacterCanCollect() throws Exception {
         EstateRecord addressed = collection(new Named(kira, "Kira"), 0);
-        assertEquals("That collection belongs to Kira; they collect it themselves.", collections.collectAsStaff(player, addressed));
+        assertEquals("That collection belongs to Kira; they collect it themselves.", collections.collectAsStaff(player, addressed, false));
         EstateRecord parked = collection(null, 1);
-        assertEquals("You collected 1 stack from the estate of Aria.", collections.collectAsStaff(player, parked));
+        assertEquals("You collected 1 stack from the estate of Aria.", collections.collectAsStaff(player, parked, false));
         assertTrue(Files.readString(root.resolve("estates/collections.log")).contains("staff Kira"));
-        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, kit.book.get(parked.deathId).orElseThrow()));
+        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, kit.book.get(parked.deathId).orElseThrow(), false));
         EstateRecord bare = new EstateRecord(UUID.randomUUID(), kira);
-        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, bare));
+        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, bare, false));
         bare.body = new Body();
         bare.body.state = "STRIPPING";
-        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, bare));
+        assertEquals("That estate has nothing to collect.", collections.collectAsStaff(player, bare, false));
         assertTrue(collections.waitingFor(UUID.randomUUID()).isEmpty());
+        player.getInventory().clear();
+        assertEquals("You collected 1 stack from the estate of Aria.", collections.collectAsStaff(player, addressed, true));
     }
 }

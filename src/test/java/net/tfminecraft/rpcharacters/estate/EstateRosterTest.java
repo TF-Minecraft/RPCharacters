@@ -11,7 +11,7 @@ import net.tfminecraft.tlibs.character.estate.EstateState;
 
 class EstateRosterTest {
     @Test
-    void decidedEstatesCarryRecipientsMoneyAndCountsWithoutCentsAmongTheCounts() {
+    void decidedEstatesCarryRecipientsMoneyAndCountsButNoMoneyCountsForTheMemorial() {
         EstateRecord record = EstateBookTest.full();
         JSONObject estate = EstateRoster.estate(record);
         assertEquals(record.deathId.toString(), estate.get("death_id"));
@@ -27,7 +27,11 @@ class EstateRosterTest {
         assertEquals("CHARACTER", ((JSONObject) recipients.get("letters")).get("kind"));
         assertEquals(5L, estate.get("money_moved_cents"));
         JSONObject money = (JSONObject) ((JSONObject) estate.get("participants")).get("denareconomy");
-        assertEquals(Map.of("postings", 1L), money.get("counts"));
+        assertEquals(Map.of(), money.get("counts"));
+        record.participants.put("thievery", new EstateRecord.Report("DONE", 2, null, Map.of("locks", 297), java.util.List.of(),
+                EstateTestKit.T0));
+        JSONObject locks = (JSONObject) ((JSONObject) EstateRoster.estate(record).get("participants")).get("thievery");
+        assertEquals(Map.of("locks", 297L), locks.get("counts"));
         assertEquals("DONE", money.get("outcome"));
     }
 

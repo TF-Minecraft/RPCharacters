@@ -37,10 +37,11 @@ final class EstateRoster {
             one.put("outcome", entry.getValue().outcome());
             one.put("revision", entry.getValue().revision());
             JSONObject counts = new JSONObject();
-            // Money goes only in money_moved_cents; the site shows other counts as "297 locks".
-            entry.getValue().counts().forEach((label, count) -> {
-                if (!label.equals("cents")) counts.put(label, (long) count);
-            });
+            // Money goes only in money_moved_cents; the site shows other counts as "297 locks", so
+            // DenarEconomy's counts (cents, postings) are not sent.
+            if (!entry.getKey().equals("denareconomy")) {
+                entry.getValue().counts().forEach((label, count) -> counts.put(label, (long) count));
+            }
             one.put("counts", counts);
             participants.put(entry.getKey(), one);
         }

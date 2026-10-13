@@ -44,12 +44,14 @@ final class EstateCommand implements TabExecutor {
             return true;
         }
         if (args.length < 2) return reply(sender, "Name the estate: a death ID, character ID or dead character's name.");
-        Optional<EstateRecord> found = staff.find(String.join(" ", Arrays.copyOfRange(args, 1,
-                sub.equals("show") || sub.equals("hold") || sub.equals("release") ? args.length : 2)));
+        // The longest run of words naming an estate wins, so two-word names work before further arguments.
+        int end = args.length;
+        Optional<EstateRecord> found = Optional.empty();
+        while (end > 1 && (found = staff.find(String.join(" ", Arrays.copyOfRange(args, 1, end)))).isEmpty()) end--;
         if (found.isEmpty()) return reply(sender, "No estate matches " + args[1] + ".");
         EstateRecord record = found.get();
         String by = sender.getName();
-        String rest = args.length > 2 ? String.join(" ", Arrays.copyOfRange(args, 2, args.length)) : "";
+        String[] rest = Arrays.copyOfRange(args, end, args.length);
         return switch (sub) {
             case "show" -> {
                 staff.show(record).forEach(sender::sendMessage);
@@ -57,26 +59,26 @@ final class EstateCommand implements TabExecutor {
             }
             case "hold" -> reply(sender, staff.hold(record, by));
             case "release" -> reply(sender, staff.release(record, by));
-            case "decide" -> reply(sender, rest.equals("--no-guild") ? staff.decideWithoutGuild(record, by)
-                    : "Usage: /estate decide <deathId> --no-guild");
-            case "assign" -> reply(sender, assign(record, args, by));
-            case "collect" -> reply(sender, sender instanceof Player player ? collections.collectAsStaff(player, record)
-                    : "Only a player can collect.");
-            case "retry" -> reply(sender, args.length == 3 ? staff.retry(record, args[2], by)
+            case "decide" -> reply(sender, rest.length == 1 && rest[0].equals("--no-guild")
+                    ? staff.decideWithoutGuild(record, by) : "Usage: /estate decide <deathId> --no-guild");
+            case "assign" -> reply(sender, assign(record, rest, by));
+            case "collect" -> reply(sender, sender instanceof Player player
+                    ? collections.collectAsStaff(player, record, staff.stranded(record)) : "Only a player can collect.");
+            case "retry" -> reply(sender, rest.length == 1 ? staff.retry(record, rest[0], by)
                     : "Usage: /estate retry <deathId> <participant>");
-            case "waive" -> reply(sender, args.length > 3
-                    ? staff.waive(record, args[2], String.join(" ", Arrays.copyOfRange(args, 3, args.length)), by)
+            case "waive" -> reply(sender, rest.length > 1
+                    ? staff.waive(record, rest[0], String.join(" ", Arrays.copyOfRange(rest, 1, rest.length)), by)
                     : "Usage: /estate waive <deathId> <participant> <note>");
             default -> reply(sender, staff.revert(record, by));
         };
     }
 
-    private String assign(EstateRecord record, String[] args, String by) {
-        if (args.length > 4 && args[2].equalsIgnoreCase("money") && args[3].equalsIgnoreCase("guild")) {
-            return staff.assignMoneyToGuild(record, String.join(" ", Arrays.copyOfRange(args, 4, args.length)), by);
+    private String assign(EstateRecord record, String[] rest, String by) {
+        if (rest.length > 2 && rest[0].equalsIgnoreCase("money") && rest[1].equalsIgnoreCase("guild")) {
+            return staff.assignMoneyToGuild(record, String.join(" ", Arrays.copyOfRange(rest, 2, rest.length)), by);
         }
-        if (args.length < 4) return "Usage: /estate assign <deathId> <money|property|guildlocks|all> <character>";
-        return staff.assign(record, args[2], String.join(" ", Arrays.copyOfRange(args, 3, args.length)), by);
+        if (rest.length < 2) return "Usage: /estate assign <deathId> <money|property|guildlocks|all> <character>";
+        return staff.assign(record, rest[0], String.join(" ", Arrays.copyOfRange(rest, 1, rest.length)), by);
     }
 
     private static boolean reply(CommandSender sender, String message) {

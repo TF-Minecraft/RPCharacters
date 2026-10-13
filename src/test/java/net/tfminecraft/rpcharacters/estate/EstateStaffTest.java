@@ -142,6 +142,8 @@ class EstateStaffTest {
         UUID guild = kit.world.liveGuild("Ironhand", null, null);
         kit.world.guildNames.put("Shared", GuildLookup.UNAVAILABLE);
         assertTrue(staff.assignMoneyToGuild(record, "Shared", "Mod").contains("incarnation ID"));
+        kit.world.guildNames.put("Silent", null);
+        assertTrue(staff.assignMoneyToGuild(record, "Silent", "Mod").contains("incarnation ID"));
         assertEquals("No live guild is named Gone.", staff.assignMoneyToGuild(record, "Gone", "Mod"));
         assertEquals("Done: revision 1. Participants were called again.", staff.assignMoneyToGuild(record, "Ironhand", "Mod"));
         assertEquals(Recipient.account("guild:" + guild), fresh(record).decision.money().recipient());
@@ -169,6 +171,63 @@ class EstateStaffTest {
         assertTrue(kit.coordinator.reviveBlockers(record.deathId).isEmpty());
         kit.coordinator.hourly();
         assertEquals(3, money.asked.size());
+    }
+
+    @Test
+    void theNoGuildOverrideIsWithdrawnWhenTheDecisionStillWaits() {
+        kit.world.defaultDeathGuild = DeathGuild.UNAVAILABLE;
+        EstateRecord record = kit.died(aria, kira.characterId());
+        kit.world.unreadable.add(kira.characterId());
+        kit.clock.advance(Duration.ofDays(1));
+        String answer = staff.decideWithoutGuild(record, "Mod");
+        assertTrue(answer.contains("postponed: the will heir's account cannot be read"), answer);
+        assertTrue(answer.contains("override was withdrawn"), answer);
+        assertFalse(fresh(record).noGuild);
+        kit.world.unreadable.clear();
+        kit.world.defaultDeathGuild = DeathGuild.NONE;
+        UUID guild = kit.world.liveGuild("Ironhand", kira, null);
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(guild, true, Optional.of(kira.characterId()), Optional.empty()));
+        kit.coordinator.decideDue();
+        assertEquals(guild, fresh(record).decision.deathGuild());
+    }
+
+    @Test
+    void aReleasedHoldWithoutTimeLeftFallsDueAtOnce() throws Exception {
+        EstateRecord record = kit.died(aria, null);
+        staff.hold(record, "Mod");
+        EstateRecord repaired = EstateBook.edit(fresh(record));
+        repaired.heldLeftMs = null;
+        kit.book.save(repaired);
+        assertEquals("Done.", staff.release(fresh(record), "Mod"));
+        assertEquals(kit.clock.instant(), fresh(record).dueAt);
+    }
+
+    @Test
+    void aCollectionIsStrandedOnlyWhenItsRecipientIsDeadAndItsEstateWillNotReaddressIt() throws Exception {
+        EstateRecord record = kit.died(aria, null);
+        assertFalse(staff.stranded(record));
+        EstateRecord parked = EstateBook.edit(record);
+        parked.body = new EstateRecord.Body();
+        assertFalse(staff.stranded(parked));
+        parked.body.addressedTo = new EstateRecord.Named(kira, "Kira");
+        assertFalse(staff.stranded(parked));
+        kit.world.unreadable.add(kira.characterId());
+        assertFalse(staff.stranded(parked));
+        kit.world.unreadable.clear();
+        kit.world.kill(kira);
+        assertTrue(staff.stranded(parked));
+        EstateRecord kiraEstate = kit.died(kira, null);
+        assertFalse(staff.stranded(parked));
+        staff.hold(kiraEstate, "Mod");
+        assertFalse(staff.stranded(parked));
+        staff.release(fresh(kiraEstate), "Mod");
+        kit.clock.advance(Duration.ofDays(1));
+        kit.coordinator.decideDue();
+        assertFalse(staff.stranded(parked));
+        staff.revert(fresh(kiraEstate), "Mod");
+        assertTrue(staff.stranded(parked));
+        kit.world.infos.remove(kira.characterId());
+        assertTrue(staff.stranded(parked));
     }
 
     @Test
@@ -276,6 +335,7 @@ class EstateStaffTest {
         decided.killer = kira;
         String shown = String.join("\n", staff.show(decided));
         assertTrue(shown.contains("heir Kira"), shown);
+        assertTrue(shown.contains("Still holds (denareconomy)"), shown);
         assertTrue(shown.contains("thievery: awaiting restart at revision 0"), shown);
         assertTrue(shown.contains("denareconomy: DONE at revision 0 {cents=34025} moved [estate:x:1]"), shown);
         assertTrue(shown.contains("research: no answer"), shown);

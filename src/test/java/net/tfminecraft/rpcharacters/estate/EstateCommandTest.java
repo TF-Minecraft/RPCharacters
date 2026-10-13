@@ -35,7 +35,8 @@ class EstateCommandTest {
         console = mock(CommandSender.class);
         when(console.getName()).thenReturn("CONSOLE");
         when(console.hasPermission(EstateCommand.PERMISSION)).thenReturn(true);
-        when(staff.find(anyString())).thenReturn(Optional.of(record));
+        when(staff.find(anyString())).thenReturn(Optional.empty());
+        for (String key : List.of("d", "Aria", "Ilvaran Thorne")) when(staff.find(key)).thenReturn(Optional.of(record));
     }
 
     private void run(CommandSender sender, String... args) {
@@ -75,6 +76,9 @@ class EstateCommandTest {
         when(staff.show(record)).thenReturn(List.of("shown"));
         run(console, "show", "Ilvaran", "Thorne");
         verify(staff).find("Ilvaran Thorne");
+        when(staff.assign(record, "property", "Lio", "CONSOLE")).thenReturn("assigned by name");
+        run(console, "assign", "Ilvaran", "Thorne", "property", "Lio");
+        verify(console).sendMessage("assigned by name");
         verify(console).sendMessage("shown");
         when(staff.hold(record, "CONSOLE")).thenReturn("held");
         run(console, "hold", "Aria");
@@ -104,7 +108,8 @@ class EstateCommandTest {
             verify(console).sendMessage(reply);
         }
         when(player.hasPermission(EstateCommand.PERMISSION)).thenReturn(true);
-        when(collections.collectAsStaff(player, record)).thenReturn("collected for staff");
+        when(staff.stranded(record)).thenReturn(true);
+        when(collections.collectAsStaff(player, record, true)).thenReturn("collected for staff");
         run(player, "collect", "d");
         verify(player).sendMessage("collected for staff");
         when(staff.find("missing")).thenReturn(Optional.empty());
