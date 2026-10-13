@@ -154,4 +154,34 @@ class MountedSkinTest extends WardrobeFixture {
         verify(retryTask).cancel();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void respawnRecomputesSkinFromTheSurvivingHelmet(boolean keptMask) {
+        var slots = new java.util.LinkedHashMap<>(snapshot().getSlots());
+        slots.put("masked", slot("masked", true, true, "Masked"));
+        cache(new WardrobeSnapshot("alpha", "base", 3, slots));
+        mount();
+        masks.when(() -> MaskService.isMasked(player)).thenReturn(true);
+        WardrobeService.applyFor(player);
+        player.setHealth(0);
+        retry.run();
+        assertEquals("account-value", SkinApplyHelper.readTextures(player).getValue());
+        player.leaveVehicle();
+        masks.when(() -> MaskService.isMasked(player)).thenReturn(keptMask);
+        server.getPluginManager().registerEvents(new WardrobeListener(), org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin());
+        player.respawn();
+        drain();
+        assertEquals(keptMask ? "masked-value" : "base-value", SkinApplyHelper.readTextures(player).getValue());
+    }
+
+    @Test void logoutBeforeTheRespawnCallbackDoesNotApplyASkin() {
+        cache(snapshot());
+        server.getPluginManager().registerEvents(new WardrobeListener(), org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin());
+        player.setHealth(0);
+        player.respawn();
+        player.disconnect();
+        drain();
+        assertEquals("account-value", SkinApplyHelper.readTextures(player).getValue());
+    }
+
 }
