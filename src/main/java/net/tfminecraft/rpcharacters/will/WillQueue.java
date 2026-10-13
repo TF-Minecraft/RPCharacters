@@ -33,6 +33,8 @@ public final class WillQueue {
     static final long MAX_BACKOFF_MS = 10L * 60_000L;
 
     static LongSupplier clock = System::currentTimeMillis;
+    static java.util.function.BiConsumer<Plugin, Runnable> async =
+            (plugin, task) -> Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
     private static BukkitTask task;
     private static final AtomicBoolean running = new AtomicBoolean();
     private static volatile long retryAtMs;
@@ -73,7 +75,7 @@ public final class WillQueue {
         }
         Bukkit.getScheduler().runTask(plugin, () -> {
             List<JSONObject> results = applyAll(requests, realm);
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> ack(plugin.getLogger(), realm, results));
+            async.accept(plugin, () -> ack(plugin.getLogger(), realm, results));
         });
     }
 
