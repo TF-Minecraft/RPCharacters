@@ -46,8 +46,9 @@ final class EstateDecider {
             heir = living(world, estate.willHeir, testator);
         }
         DeathGuild guild = estate.noGuild ? DeathGuild.NONE : world.deathGuild(testator, estate.deathId);
-        if (guild instanceof DeathGuild.Unavailable) return new Verdict.Postpone("SimpleFactions has not answered");
-        if (!(guild instanceof DeathGuild.Guild g)) return guildless(now, heir);
+        if (guild instanceof DeathGuild.None) return guildless(now, heir);
+        // UNAVAILABLE, and a missing answer, postpone: no answer is never read as "no guild" (design N2).
+        if (!(guild instanceof DeathGuild.Guild g)) return new Verdict.Postpone("SimpleFactions has not answered");
         String guildName = name(world.guild(g.incarnation()));
         if (g.live()) {
             Part leader = g.leader().map(id -> living(world, id, testator)).map(Part::character).orElse(Part.WAITING);
@@ -62,9 +63,10 @@ final class EstateDecider {
         }
         if (g.realm().isEmpty()) return decided(now, null, g, Part.FROZEN, Part.FROZEN, Part.FROZEN, Part.SENDER);
         GuildLookup realm = world.guild(g.realm().get());
-        if (realm instanceof GuildLookup.Unavailable) return new Verdict.Postpone("SimpleFactions cannot find the realm");
-        Part money = realm instanceof GuildLookup.Live live
-                ? Part.treasury(live.guild().treasuryAccount(), "REALM", live.guild().name()) : Part.FROZEN;
+        Part money;
+        if (realm instanceof GuildLookup.Live live) money = Part.treasury(live.guild().treasuryAccount(), "REALM", live.guild().name());
+        else if (realm instanceof GuildLookup.Gone) money = Part.FROZEN;
+        else return new Verdict.Postpone("SimpleFactions cannot find the realm");
         return decided(now, null, g, money, Part.FROZEN, Part.FROZEN, Part.SENDER);
     }
 
@@ -72,7 +74,9 @@ final class EstateDecider {
     static Recheck recheck(EstateRecord estate, EstateWorld world) {
         Decision d = estate.decision;
         GuildLookup guild = world.guild(d.deathGuild());
-        if (guild instanceof GuildLookup.Unavailable) return new Recheck.Unchanged("SimpleFactions has not answered");
+        if (!(guild instanceof GuildLookup.Live) && !(guild instanceof GuildLookup.Gone)) {
+            return new Recheck.Unchanged("SimpleFactions has not answered");
+        }
         Part property = d.property();
         Part locks = d.guildLocks();
         if (guild instanceof GuildLookup.Live live) {

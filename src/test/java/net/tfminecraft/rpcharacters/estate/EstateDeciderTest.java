@@ -197,6 +197,25 @@ class EstateDeciderTest {
     }
 
     @Test
+    void aMissingAnswerFromTheFallbackPostponesInsteadOfRouting() {
+        setUp();
+        EstateRecord record = estate(null);
+        kit.world.deathGuilds.put(testator.characterId(), null);
+        assertInstanceOf(Verdict.Postpone.class, EstateDecider.decide(record, kit.world, EstateTestKit.T0));
+        setUp();
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, null);
+        guild(false, null, realm);
+        assertInstanceOf(Verdict.Postpone.class, EstateDecider.decide(estate(null), kit.world, EstateTestKit.T0));
+        setUp();
+        guild(true, null, null);
+        EstateRecord waiting = estate(null);
+        waiting.decision = decide(waiting);
+        kit.world.guilds.put(waiting.decision.deathGuild(), null);
+        assertInstanceOf(Recheck.Unchanged.class, EstateDecider.recheck(waiting, kit.world));
+    }
+
+    @Test
     void aTestatorWhoIsNoLongerDeadWithThisDeathCancels() {
         setUp();
         EstateRecord record = estate(null);
