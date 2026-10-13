@@ -403,7 +403,7 @@ public final class CharacterBodies {
             public void play(RPCharacter character) { select(account, character); }
             public void create() {
                 CreationManager.initiateCreation(player);
-                if (!CreationManager.activeCreators.containsKey(player)) show(player);
+                if (!CreationManager.activeCreators.containsKey(player) && CharacterSelectView.session(player.getUniqueId()) == null) show(player);
             }
             public void leave() { player.kickPlayer("See you next time."); }
             public boolean needsDiscordLink() { return discordRequired(player); }

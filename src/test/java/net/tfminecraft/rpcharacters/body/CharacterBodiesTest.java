@@ -227,6 +227,23 @@ class CharacterBodiesTest {
         } finally { CreationManager.activeCreators.remove(player); }
     }
 
+    @Test void aRejectedCreateKeepsItsVisibleErrorRatherThanImmediatelyReplacingTheForm() {
+        ready();
+        when(presentation.available()).thenReturn(true);
+        var selector=mock(CharacterSelectView.Session.class);
+        view.clearInvocations();
+        try (var creation=mockStatic(CreationManager.class)) {
+            creation.when(()->CreationManager.initiateCreation(player)).thenAnswer(call->{
+                bodies.feedback(player,"No free character slot");
+                view.when(()->CharacterSelectView.session(owner)).thenReturn(selector);
+                return null;
+            });
+            actions.create();
+        }
+        view.verify(()->CharacterSelectView.open(eq(player),eq(account),any()),times(1));
+        view.verify(()->CharacterSelectView.notice(player,"No free character slot"));
+    }
+
     @Test void estatesReadTheStoreAndAskTheLeaseWhetherABodyIsStillInPlay() throws Exception {
         assertSame(store,bodies.store());
         when(leases.names(owner,first)).thenReturn(true);
