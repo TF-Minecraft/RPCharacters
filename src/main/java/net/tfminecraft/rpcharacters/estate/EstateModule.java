@@ -45,7 +45,7 @@ import net.tfminecraft.tlibs.character.estate.Holdings;
 final class EstateModule implements EstateHooks, Listener {
     static final long MINUTE_TICKS = 20L * 60L;
     static final long HOUR_TICKS = MINUTE_TICKS * 60L;
-    static final String READY_EVENT = "net.tfminecraft.simplefactions.events.SimpleFactionsReadyEvent";
+    static String readyEvent = "net.tfminecraft.simplefactions.events.SimpleFactionsReadyEvent";
 
     private final RPCharacters plugin;
     private final EstateCoordinator coordinator;
@@ -117,7 +117,7 @@ final class EstateModule implements EstateHooks, Listener {
 
     private void listenForSimpleFactions() {
         try {
-            Class<? extends Event> ready = Class.forName(READY_EVENT).asSubclass(Event.class);
+            Class<? extends Event> ready = Class.forName(readyEvent).asSubclass(Event.class);
             Bukkit.getPluginManager().registerEvent(ready, this, EventPriority.MONITOR,
                     (listener, event) -> afterSimpleFactions(), plugin);
         } catch (ReflectiveOperationException | LinkageError | ClassCastException absent) {
