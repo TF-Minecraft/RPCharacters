@@ -119,13 +119,14 @@ class WillMenuTest {
     @Test
     void namingAnHeirByNameConfirmsAndSaves() {
         EstateHooks hooks = mock(EstateHooks.class);
-        when(hooks.holdings(UUID.fromString(aria.getId()))).thenReturn(List.of("340.25 in pouch and bank"));
+        when(hooks.holdings(UUID.fromString(aria.getId()))).thenReturn(List.of("340.25 in pouch and bank", "2 pets", "1 animal"));
         estates.when(EstateLink::current).thenReturn(hooks);
         WillMenu.open(player);
         assertEquals("Will of Aria", last().title());
         assertTrue(last().lines().contains("No heir is named."));
         assertTrue(last().lines().contains("• 340.25 in pouch and bank"));
-        assertTrue(last().lines().contains("Pets and animals are not included yet."));
+        assertTrue(last().lines().contains("• 2 pets"));
+        assertTrue(last().lines().contains("• 1 animal"));
         assertEquals(List.of("Name an heir", "Close"), last().buttons().stream().map(Button::label).toList());
         click("Name an heir");
         assertEquals("heir", last().input().key());
