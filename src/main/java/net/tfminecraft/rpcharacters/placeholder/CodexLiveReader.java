@@ -14,8 +14,9 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 
 /**
- * Online Codex accounts, read from Codex's own player map. Codex drops a player
- * from that map on quit, so this is only the live overlay on top of the saved files.
+ * Open Codex journals, read from Codex's own player map and keyed like the saved files: by
+ * character for TFMC Codex, by account for upstream Codex. Codex drops a journal when its
+ * session ends, so this is only the live overlay on top of the saved files.
  */
 final class CodexLiveReader {
 	private CodexLiveReader() {}
@@ -50,13 +51,21 @@ final class CodexLiveReader {
 			if (value == null) {
 				continue;
 			}
-			Object uuidRaw = value.getClass().getMethod("getUuid").invoke(value);
+			Object uuidRaw = journalId(value);
 			if (!(uuidRaw instanceof UUID uuid)) {
 				continue;
 			}
 			result.put(uuid, categoriesOf(value));
 		}
 		return result;
+	}
+
+	private static Object journalId(Object player) throws ReflectiveOperationException {
+		try {
+			return player.getClass().getMethod("getCharacterId").invoke(player);
+		} catch (NoSuchMethodException upstream) {
+			return player.getClass().getMethod("getUuid").invoke(player);
+		}
 	}
 
 	private static Map<String, Set<String>> categoriesOf(Object player) throws ReflectiveOperationException {

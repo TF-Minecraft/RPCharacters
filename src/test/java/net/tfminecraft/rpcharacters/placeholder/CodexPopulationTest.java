@@ -98,6 +98,41 @@ class CodexPopulationTest {
 		assertEquals(2, snapshot.players());
 	}
 
+	@Test void tfmcCodexCountsCharacterJournalsInsteadOfAccounts() throws Exception {
+		Path codex = temp.resolve("Codex");
+		Files.createDirectories(codex.resolve("categories"));
+		write(codex.resolve("categories/poi.yml"),
+				"discoveries:",
+				"  aurea:",
+				"    name: Aurea");
+		UUID account = UUID.randomUUID();
+		write(codex.resolve("players/" + account + ".yml"),
+				"categories:",
+				"  poi:",
+				"    discoveries:",
+				"    - aurea;01/10/2026;0");
+		UUID first = UUID.randomUUID();
+		UUID second = UUID.randomUUID();
+		write(codex.resolve("characters/" + first + ".yml"),
+				"owner: " + account,
+				"name: Steve",
+				"categories:",
+				"  poi:",
+				"    completed: false",
+				"    discoveries:",
+				"    - aurea;01/10/2026;0");
+		write(codex.resolve("characters/" + second + ".yml"),
+				"owner: " + account,
+				"name: Steve");
+
+		CodexPopulation.Census census = CodexPopulation.read(codex);
+
+		assertEquals(Set.of(first, second), census.players().keySet());
+		CodexPopulation.Snapshot snapshot = CodexPopulation.combine(census, Map.of());
+		assertEquals("1", CodexPopulation.answer(snapshot, "codex_holders_poi:aurea"));
+		assertEquals("50", CodexPopulation.answer(snapshot, "codex_percent_poi:aurea"));
+	}
+
 	@Test void onlinePlayersReplaceTheirSavedFiles() {
 		UUID saved = UUID.randomUUID();
 		UUID online = UUID.randomUUID();

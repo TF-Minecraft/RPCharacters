@@ -16,9 +16,10 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Counts how many Codex accounts have each discovery.
- * Codex 2.9 stores that in {@code plugins/Codex}: category ids are the category
- * file names, and each player file lists discoveries as {@code id;date;millis}.
+ * Counts how many Codex journals have each discovery. Category ids are the file names in
+ * {@code plugins/Codex/categories}, and each journal lists discoveries as {@code id;date;millis}.
+ * TFMC Codex keeps one journal per character in {@code characters/}; upstream Codex keeps one per
+ * account in {@code players/}.
  */
 final class CodexPopulation {
 	static final int MAX_FILE_BYTES = 1024 * 1024;
@@ -112,7 +113,11 @@ final class CodexPopulation {
 			defined.addAll(categoryDiscoveries(name, stripBom(lines)));
 		});
 		Map<UUID, Map<String, Set<String>>> players = new HashMap<>();
-		eachYaml(codexFolder.resolve("players"), lister, skipped, path -> {
+		Path journals = codexFolder.resolve("characters");
+		if (!Files.isDirectory(journals)) {
+			journals = codexFolder.resolve("players");
+		}
+		eachYaml(journals, lister, skipped, path -> {
 			UUID uuid = playerId(path);
 			if (uuid == null) {
 				return;

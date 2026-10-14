@@ -72,6 +72,22 @@ class CodexLiveReaderTest {
 		assertThrows(ReflectiveOperationException.class, () -> CodexLiveReader.read(new Object()));
 	}
 
+	@Test void tfmcCodexJournalsAreKeyedByCharacter() throws Exception {
+		UUID account = UUID.randomUUID();
+		UUID character = UUID.randomUUID();
+		MemoryCodex codex = new MemoryCodex();
+		MemoryCodex.MemoryJournal journal = new MemoryCodex.MemoryJournal();
+		journal.uuid = account;
+		journal.characterId = character;
+		journal.categories = List.of(category("poi", List.of(discovery("Aurea"))));
+		codex.manager.players.put(account, journal);
+
+		Map<UUID, Map<String, Set<String>>> live = CodexLiveReader.read(codex);
+
+		assertEquals(Set.of(character), live.keySet());
+		assertEquals(set("aurea"), live.get(character).get("poi"));
+	}
+
 	@Test void utilityConstructorCanBeInvoked() throws Exception {
 		var ctor = CodexLiveReader.class.getDeclaredConstructor();
 		ctor.setAccessible(true);
@@ -161,7 +177,7 @@ class CodexLiveReaderTest {
 			}
 		}
 
-		static final class MemoryPlayer {
+		static class MemoryPlayer {
 			Object uuid;
 			Object categories;
 
@@ -171,6 +187,14 @@ class CodexLiveReaderTest {
 
 			public Object getCategories() {
 				return categories;
+			}
+		}
+
+		static class MemoryJournal extends MemoryPlayer {
+			Object characterId;
+
+			public Object getCharacterId() {
+				return characterId;
 			}
 		}
 
