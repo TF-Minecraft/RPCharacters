@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters.placeholder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -86,6 +88,25 @@ class CodexLiveReaderTest {
 
 		assertEquals(Set.of(character), live.keySet());
 		assertEquals(set("aurea"), live.get(character).get("poi"));
+	}
+
+	@Test void tellsWhichCodexIsRunning() {
+		assertTrue(CodexLiveReader.perCharacter(new net.tfminecraft.rpcharacters.placeholder.codexfixture.CodexFixture()));
+		assertFalse(CodexLiveReader.perCharacter(new net.tfminecraft.rpcharacters.placeholder.codexupstream.CodexUpstream()));
+		assertFalse(CodexLiveReader.perCharacter(new Object()));
+
+		PluginManager manager = mock(PluginManager.class);
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::getPluginManager).thenReturn(null);
+			assertNull(CodexLiveReader.perCharacter());
+			bukkit.when(Bukkit::getPluginManager).thenReturn(manager);
+			assertNull(CodexLiveReader.perCharacter());
+			Plugin codex = mock(Plugin.class);
+			when(manager.getPlugin("Codex")).thenReturn(codex);
+			assertNull(CodexLiveReader.perCharacter());
+			when(codex.isEnabled()).thenReturn(true);
+			assertFalse(CodexLiveReader.perCharacter());
+		}
 	}
 
 	@Test void utilityConstructorCanBeInvoked() throws Exception {

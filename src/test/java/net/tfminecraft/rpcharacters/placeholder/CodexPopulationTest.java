@@ -128,6 +128,11 @@ class CodexPopulationTest {
 		CodexPopulation.Census census = CodexPopulation.read(codex);
 
 		assertEquals(Set.of(first, second), census.players().keySet());
+		assertEquals(Set.of(first, second), CodexPopulation.read(codex, true,
+				CodexPopulation::defaultLines, CodexPopulation::defaultList).players().keySet());
+		// After a rollback to upstream Codex the old characters/ folder is ignored.
+		assertEquals(Set.of(account), CodexPopulation.read(codex, false,
+				CodexPopulation::defaultLines, CodexPopulation::defaultList).players().keySet());
 		CodexPopulation.Snapshot snapshot = CodexPopulation.combine(census, Map.of());
 		assertEquals("1", CodexPopulation.answer(snapshot, "codex_holders_poi:aurea"));
 		assertEquals("50", CodexPopulation.answer(snapshot, "codex_percent_poi:aurea"));

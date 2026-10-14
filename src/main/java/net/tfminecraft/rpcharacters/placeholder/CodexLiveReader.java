@@ -33,6 +33,30 @@ final class CodexLiveReader {
 		return read(plugin);
 	}
 
+	/**
+	 * Whether the running Codex keeps a journal per character, judged by its own {@code PlayerData}
+	 * class, or null when Codex is not running. A folder left behind by another Codex build is no guide.
+	 */
+	static Boolean perCharacter() {
+		PluginManager plugins = Bukkit.getPluginManager();
+		Plugin plugin = plugins == null ? null : plugins.getPlugin("Codex");
+		if (plugin == null || !plugin.isEnabled()) {
+			return null;
+		}
+		return perCharacter(plugin);
+	}
+
+	static boolean perCharacter(Object plugin) {
+		Class<?> main = plugin.getClass();
+		try {
+			Class<?> data = Class.forName(main.getPackageName() + ".model.data.PlayerData", false, main.getClassLoader());
+			data.getMethod("getCharacterId");
+			return true;
+		} catch (ClassNotFoundException | NoSuchMethodException upstream) {
+			return false;
+		}
+	}
+
 	static Map<UUID, Map<String, Set<String>>> read(Object plugin) throws ReflectiveOperationException {
 		Object manager = plugin.getClass().getMethod("getPlayerDataManager").invoke(plugin);
 		if (manager == null) {

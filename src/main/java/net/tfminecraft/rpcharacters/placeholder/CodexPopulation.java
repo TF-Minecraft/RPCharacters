@@ -92,10 +92,19 @@ final class CodexPopulation {
 	}
 
 	static Census read(Path codexFolder) {
-		return read(codexFolder, CodexPopulation::defaultLines, CodexPopulation::defaultList);
+		return read(codexFolder, null);
+	}
+
+	static Census read(Path codexFolder, Boolean perCharacter) {
+		return read(codexFolder, perCharacter, CodexPopulation::defaultLines, CodexPopulation::defaultList);
 	}
 
 	static Census read(Path codexFolder, LineReader reader, DirectoryLister lister) {
+		return read(codexFolder, null, reader, lister);
+	}
+
+	/** {@code perCharacter} comes from the running Codex; when it is null, the folders decide. */
+	static Census read(Path codexFolder, Boolean perCharacter, LineReader reader, DirectoryLister lister) {
 		if (codexFolder == null || !Files.isDirectory(codexFolder)) {
 			return Census.EMPTY;
 		}
@@ -113,10 +122,9 @@ final class CodexPopulation {
 			defined.addAll(categoryDiscoveries(name, stripBom(lines)));
 		});
 		Map<UUID, Map<String, Set<String>>> players = new HashMap<>();
-		Path journals = codexFolder.resolve("characters");
-		if (!Files.isDirectory(journals)) {
-			journals = codexFolder.resolve("players");
-		}
+		Path characters = codexFolder.resolve("characters");
+		boolean byCharacter = perCharacter != null ? perCharacter : Files.isDirectory(characters);
+		Path journals = byCharacter ? characters : codexFolder.resolve("players");
 		eachYaml(journals, lister, skipped, path -> {
 			UUID uuid = playerId(path);
 			if (uuid == null) {
