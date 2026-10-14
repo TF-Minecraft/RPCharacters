@@ -63,13 +63,16 @@ final class EstateModule implements EstateHooks, Listener {
     /** Builds estates on the live server, then runs boot reconcile, due decisions and WAITING re-checks. */
     static EstateModule start(RPCharacters plugin) throws IOException {
         Path data = plugin.getDataFolder().toPath().resolve("data");
-        double hours = YamlConfiguration.loadConfiguration(plugin.getDataFolder().toPath().resolve("config.yml").toFile())
-                .getDouble("estates.wait-hours", 24);
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(
+                plugin.getDataFolder().toPath().resolve("config.yml").toFile());
+        double hours = config.getDouble("estates.wait-hours", 24);
+        double guildlessHours = Math.max(hours, config.getDouble("estates.guildless-wait-hours", 168));
         Clock clock = Clock.systemUTC();
         EstateBook book = new EstateBook(data.resolve("estates"), DurableFiles.DISK, clock, plugin.getLogger());
         EstateCoordinator coordinator = new EstateCoordinator(book,
                 new ServerWorld(RPCharacters::getCharacterIdentity, data.resolve("characterdata")), clock,
-                Duration.ofMillis((long) (hours * 3_600_000L)), plugin.getLogger(), RosterSyncService::pushRosterAsync,
+                Duration.ofMillis((long) (hours * 3_600_000L)), Duration.ofMillis((long) (guildlessHours * 3_600_000L)),
+                plugin.getLogger(), RosterSyncService::pushRosterAsync,
                 Bukkit.getPluginManager()::callEvent);
         CharacterBodies bodies = RPCharacters.getCharacterBodies();
         BodyEstate body = bodies == null ? null : new BodyEstate(book, new BodyEstate.Bodies() {

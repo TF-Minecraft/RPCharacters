@@ -131,3 +131,5 @@ estates:
   # Hours between a death and its estate passing; a revive inside the window cancels the estate.
   # Fractions are allowed for rehearsals (0.05 is three minutes). Read at startup.
   wait-hours: 24
+  # Hours a death with no living will heir and no guild waits instead, before it freezes for staff.
+  guildless-wait-hours: 168

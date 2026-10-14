@@ -314,8 +314,8 @@ class EstateCoordinatorTest {
                 throw new IllegalStateException("services");
             }
         };
-        EstateCoordinator coordinator = new EstateCoordinator(kit.book, throwing, kit.clock, Duration.ofHours(24), kit.logger,
-                kit.pushes::add, kit.events::add);
+        EstateCoordinator coordinator = new EstateCoordinator(kit.book, throwing, kit.clock, Duration.ofHours(24),
+                Duration.ofHours(24), kit.logger, kit.pushes::add, kit.events::add);
         kit.clock.advance(Duration.ofDays(1));
         coordinator.decideDue();
         assertEquals(EstateState.OPEN, kit.book.get(poisoned.deathId).orElseThrow().state);
