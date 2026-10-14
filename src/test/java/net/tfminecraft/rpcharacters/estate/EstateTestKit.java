@@ -187,8 +187,14 @@ final class EstateTestKit {
     }
 
     EstateTestKit(Path root, DurableFiles files) {
+        this(root, files, Duration.ofHours(24));
+    }
+
+    /** A kit whose deaths with no heir and no guild wait {@code guildlessWait} instead of a day. */
+    EstateTestKit(Path root, DurableFiles files, Duration guildlessWait) {
         book = new EstateBook(root.resolve("estates"), files, clock, logger);
-        coordinator = new EstateCoordinator(book, world, clock, Duration.ofHours(24), logger, pushes::add, events::add);
+        coordinator = new EstateCoordinator(book, world, clock, Duration.ofHours(24), guildlessWait, logger, pushes::add,
+                events::add);
     }
 
     /** Opens an estate at death for {@code ref}, which must already be dead in the world. */

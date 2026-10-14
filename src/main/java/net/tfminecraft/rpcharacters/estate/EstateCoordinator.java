@@ -45,18 +45,20 @@ final class EstateCoordinator implements EstateService {
     private final EstateWorld world;
     private final Clock clock;
     private final Duration wait;
+    private final Duration guildlessWait;
     private final Logger logger;
     private final Consumer<UUID> rosterPush;
     private final Consumer<Event> events;
     private final Set<UUID> warnedPostponed = new HashSet<>();
     private BodyRevival bodies;
 
-    EstateCoordinator(EstateBook book, EstateWorld world, Clock clock, Duration wait, Logger logger,
-            Consumer<UUID> rosterPush, Consumer<Event> events) {
+    EstateCoordinator(EstateBook book, EstateWorld world, Clock clock, Duration wait, Duration guildlessWait,
+            Logger logger, Consumer<UUID> rosterPush, Consumer<Event> events) {
         this.book = book;
         this.world = world;
         this.clock = clock;
         this.wait = wait;
+        this.guildlessWait = guildlessWait;
         this.logger = logger;
         this.rosterPush = rosterPush;
         this.events = events;
@@ -200,6 +202,16 @@ final class EstateCoordinator implements EstateService {
         try {
             EstateRecord next = EstateBook.edit(record);
             switch (verdict) {
+                case Verdict.Decided decided when holdsLonger(record, decided.decision()) -> {
+                    next.dueAt = record.dueAt.plus(guildlessWait.minus(wait));
+                    next.guildlessHeld = true;
+                    next.postponedSince = null;
+                    next.postponeReason = null;
+                    book.save(next);
+                    book.log("audit.log", "held " + next.deathId + " until " + next.dueAt + ": no heir and no guild");
+                    rosterPush.accept(next.testator.ownerId());
+                    return "held until " + next.dueAt + ": no heir and no guild";
+                }
                 case Verdict.Decided decided -> {
                     next.state = EstateState.DECIDED;
                     next.decision = decided.decision();
@@ -232,6 +244,15 @@ final class EstateCoordinator implements EstateService {
             logger.log(Level.SEVERE, "Could not save the decision for death " + record.deathId, error);
             return "not saved: " + error.getMessage();
         }
+    }
+
+    /**
+     * A death with no living heir and no guild would freeze; it stays open for the longer guildless wait
+     * first, once. Staff deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
+     */
+    private boolean holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
+        return !record.guildlessHeld && !record.noGuild && decision.heir() == null && decision.deathGuild() == null
+                && guildlessWait.compareTo(wait) > 0;
     }
 
     private void warnLong(EstateRecord record, Instant now) {
