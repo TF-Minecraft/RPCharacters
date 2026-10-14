@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import net.tfminecraft.simplefactions.Cache;
 import net.tfminecraft.simplefactions.loaders.RegionLoader;
 import net.tfminecraft.simplefactions.map.MapRegion;
 import net.tfminecraft.simplefactions.map.ProvinceGrid;
@@ -79,6 +80,10 @@ public final class SimpleFactionsRegionBridge {
 			}
 		}
 		if (location == null || location.getWorld() == null) {
+			return ProvincePresenceService.UNKNOWN_PROVINCE;
+		}
+		// The grid has no world; other worlds (such as the character selection room) reuse its coordinates.
+		if (!location.getWorld().getName().equals(Cache.worldName)) {
 			return ProvincePresenceService.UNKNOWN_PROVINCE;
 		}
 		SimpleFactions plugin = SimpleFactions.getInstance();
