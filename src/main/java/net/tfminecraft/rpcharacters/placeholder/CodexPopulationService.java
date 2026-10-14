@@ -37,7 +37,7 @@ public final class CodexPopulationService {
 	private int reportedUnreadable = -1;
 	private boolean liveFailureLogged;
 
-	Scanner scanner = CodexPopulation::read;
+	Scanner scanner = folder -> CodexPopulation.read(folder, CodexLiveReader.perCharacter());
 	LiveReader liveReader = CodexLiveReader::current;
 
 	@FunctionalInterface

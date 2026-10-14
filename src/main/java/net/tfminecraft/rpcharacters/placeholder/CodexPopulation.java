@@ -16,9 +16,10 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Counts how many Codex accounts have each discovery.
- * Codex 2.9 stores that in {@code plugins/Codex}: category ids are the category
- * file names, and each player file lists discoveries as {@code id;date;millis}.
+ * Counts how many Codex journals have each discovery. Category ids are the file names in
+ * {@code plugins/Codex/categories}, and each journal lists discoveries as {@code id;date;millis}.
+ * TFMC Codex keeps one journal per character in {@code characters/}; upstream Codex keeps one per
+ * account in {@code players/}.
  */
 final class CodexPopulation {
 	static final int MAX_FILE_BYTES = 1024 * 1024;
@@ -91,10 +92,19 @@ final class CodexPopulation {
 	}
 
 	static Census read(Path codexFolder) {
-		return read(codexFolder, CodexPopulation::defaultLines, CodexPopulation::defaultList);
+		return read(codexFolder, null);
+	}
+
+	static Census read(Path codexFolder, Boolean perCharacter) {
+		return read(codexFolder, perCharacter, CodexPopulation::defaultLines, CodexPopulation::defaultList);
 	}
 
 	static Census read(Path codexFolder, LineReader reader, DirectoryLister lister) {
+		return read(codexFolder, null, reader, lister);
+	}
+
+	/** {@code perCharacter} comes from the running Codex; when it is null, the folders decide. */
+	static Census read(Path codexFolder, Boolean perCharacter, LineReader reader, DirectoryLister lister) {
 		if (codexFolder == null || !Files.isDirectory(codexFolder)) {
 			return Census.EMPTY;
 		}
@@ -112,7 +122,10 @@ final class CodexPopulation {
 			defined.addAll(categoryDiscoveries(name, stripBom(lines)));
 		});
 		Map<UUID, Map<String, Set<String>>> players = new HashMap<>();
-		eachYaml(codexFolder.resolve("players"), lister, skipped, path -> {
+		Path characters = codexFolder.resolve("characters");
+		boolean byCharacter = perCharacter != null ? perCharacter : Files.isDirectory(characters);
+		Path journals = byCharacter ? characters : codexFolder.resolve("players");
+		eachYaml(journals, lister, skipped, path -> {
 			UUID uuid = playerId(path);
 			if (uuid == null) {
 				return;
