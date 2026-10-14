@@ -129,4 +129,71 @@ class GuildlessHoldTest {
         assertEquals(EstateState.OPEN, held.state);
         assertEquals(EstateTestKit.T0.plus(WEEK), held.dueAt);
     }
+
+    @Test
+    void aStaffHoldLongerThanTheWeekStillAddsTheWeekOnce() {
+        EstateStaff staff = new EstateStaff(kit.coordinator, kit.logger);
+        EstateRecord record = kit.died(aria, null);
+        assertEquals("Done.", staff.hold(record, "Mod"));
+        kit.clock.advance(Duration.ofDays(8));
+        assertEquals("Done.", staff.release(now(record), "Mod"));
+        kit.clock.advance(Duration.ofHours(24));
+        kit.coordinator.decideDue();
+        EstateRecord held = now(record);
+        assertEquals(EstateState.OPEN, held.state);
+        assertTrue(held.guildlessHeld);
+        assertEquals(kit.clock.instant().plus(Duration.ofDays(6)), held.dueAt);
+        kit.clock.advance(Duration.ofDays(6));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.DECIDED, now(record).state);
+    }
+
+    @Test
+    void aWaitChangedAtARestartAddsTheDifferenceOnceThenDecides() {
+        EstateRecord record = kit.died(aria, null);
+        EstateCoordinator restarted = new EstateCoordinator(kit.book, kit.world, kit.clock, Duration.ofHours(48), WEEK,
+                kit.logger, kit.pushes::add, kit.events::add);
+        kit.clock.advance(Duration.ofHours(24));
+        restarted.decideDue();
+        assertEquals(EstateTestKit.T0.plus(Duration.ofHours(24 + 120)), now(record).dueAt);
+        kit.clock.advance(Duration.ofHours(120));
+        restarted.decideDue();
+        assertEquals(EstateState.DECIDED, now(record).state);
+    }
+
+    @Test
+    void equalWaitsDecideAtTheFirstDueTime() {
+        EstateRecord record = kit.died(aria, null);
+        EstateCoordinator equal = new EstateCoordinator(kit.book, kit.world, kit.clock, WEEK, WEEK, kit.logger,
+                kit.pushes::add, kit.events::add);
+        kit.clock.advance(Duration.ofHours(24));
+        equal.decideDue();
+        EstateRecord decided = now(record);
+        assertEquals(EstateState.DECIDED, decided.state);
+        assertFalse(decided.guildlessHeld);
+    }
+
+    @Test
+    void aPostponedEstateThatTurnsOutGuildlessLosesItsPostponeReason() {
+        EstateRecord record = kit.died(aria, null);
+        kit.world.defaultDeathGuild = DeathGuild.UNAVAILABLE;
+        kit.clock.advance(Duration.ofHours(24));
+        kit.coordinator.decideDue();
+        assertNotNull(now(record).postponeReason);
+        kit.world.defaultDeathGuild = DeathGuild.NONE;
+        kit.clock.advance(Duration.ofMinutes(1));
+        kit.coordinator.decideDue();
+        EstateRecord held = now(record);
+        assertEquals(EstateState.OPEN, held.state);
+        assertNull(held.postponedSince);
+        assertNull(held.postponeReason);
+    }
+
+    @Test
+    void recordsWrittenBeforeTheMarkerReadAsNotHeld() throws Exception {
+        EstateRecord record = kit.died(aria, null);
+        String old = EstateJson.write(record).replace("  \"guildlessHeld\": false,\n", "");
+        assertFalse(old.contains("guildlessHeld"));
+        assertFalse(EstateJson.read(old).guildlessHeld);
+    }
 }

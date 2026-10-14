@@ -54,6 +54,7 @@ final class EstateJson {
         o.add("postponedSince", time(r.postponedSince));
         o.addProperty("postponeReason", r.postponeReason);
         o.addProperty("noGuild", r.noGuild);
+        o.addProperty("guildlessHeld", r.guildlessHeld);
         o.add("decision", r.decision == null ? JsonNull.INSTANCE : decision(r.decision));
         JsonObject participants = new JsonObject();
         r.participants.forEach((id, report) -> participants.add(id, report(report)));
@@ -88,6 +89,7 @@ final class EstateJson {
             r.postponedSince = time(o, "postponedSince");
             r.postponeReason = string(o.get("postponeReason"));
             r.noGuild = o.get("noGuild").getAsBoolean();
+            r.guildlessHeld = o.has("guildlessHeld") && o.get("guildlessHeld").getAsBoolean();
             r.decision = o.get("decision").isJsonNull() ? null : decision(o.getAsJsonObject("decision"));
             for (Map.Entry<String, JsonElement> entry : o.getAsJsonObject("participants").entrySet()) {
                 r.participants.put(entry.getKey(), report(entry.getValue().getAsJsonObject()));

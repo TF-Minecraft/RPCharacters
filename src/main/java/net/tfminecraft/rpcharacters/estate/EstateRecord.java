@@ -107,6 +107,8 @@ final class EstateRecord {
     Instant postponedSince;
     String postponeReason;
     boolean noGuild;
+    /** The guildless wait was added to {@code dueAt}; it is added once. */
+    boolean guildlessHeld;
     Decision decision;
     final Map<String, Report> participants = new TreeMap<>();
     Body body;

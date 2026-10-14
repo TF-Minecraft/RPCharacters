@@ -204,6 +204,9 @@ final class EstateCoordinator implements EstateService {
             switch (verdict) {
                 case Verdict.Decided decided when holdsLonger(record, decided.decision()) -> {
                     next.dueAt = record.dueAt.plus(guildlessWait.minus(wait));
+                    next.guildlessHeld = true;
+                    next.postponedSince = null;
+                    next.postponeReason = null;
                     book.save(next);
                     book.log("audit.log", "held " + next.deathId + " until " + next.dueAt + ": no heir and no guild");
                     rosterPush.accept(next.testator.ownerId());
@@ -245,12 +248,11 @@ final class EstateCoordinator implements EstateService {
 
     /**
      * A death with no living heir and no guild would freeze; it stays open for the longer guildless wait
-     * first. Staff deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
+     * first, once. Staff deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
      */
     private boolean holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
-        if (record.noGuild || decision.heir() != null || decision.deathGuild() != null) return false;
-        Instant start = record.diedAt == null ? record.createdAt : record.diedAt;
-        return start != null && Duration.between(start, record.dueAt).compareTo(guildlessWait) < 0;
+        return !record.guildlessHeld && !record.noGuild && decision.heir() == null && decision.deathGuild() == null
+                && guildlessWait.compareTo(wait) > 0;
     }
 
     private void warnLong(EstateRecord record, Instant now) {
