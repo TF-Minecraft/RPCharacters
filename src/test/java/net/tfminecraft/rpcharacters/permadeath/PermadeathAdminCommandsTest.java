@@ -33,4 +33,28 @@ class PermadeathAdminCommandsTest extends PermadeathRuntimeFixture {
     @Test void customArgumentOffsetsWorkForAnInjuryAndPermakill() throws Exception {pool(healing);assertTrue(PermadeathAdminCommands.handleInjure(sender,new String[]{"admin","injure","Aria"},2,"custom"));assertEquals(List.of(healing),character.getTraits());assertTrue(PermadeathAdminCommands.handlePermakill(sender,new String[]{"admin","kill","Aria"},2,"kill"));assertEquals(Status.DEAD,character.getStatus());assertTrue(reply().contains("Permanently killed Aria (Aria)"));assertEquals(PermakillCause.COMMAND,events.getFirst().getCause());}
     @Test void explicitPermakillUsesTheRequestedInactiveCharacter(){RPCharacter other=character("Bryn",false);data.addCharacter(other);kill("permakill","Aria",other.getId());assertEquals(Status.DEAD,other.getStatus());assertEquals(Status.ALIVE,character.getStatus());assertTrue(reply().contains("Permanently killed Bryn (Aria)"));assertTrue(tasks.isEmpty());}
     @Test void eventCancellationIsReportedAndLeavesTheCharacterAlive(){cancelEvents=true;kill("permakill","Aria");assertTrue(reply().contains("Permakill was cancelled"));assertEquals(Status.ALIVE,character.getStatus());assertTrue(character.isActive());}
+    @Test void completedMultiwordCharacterIdentifiersReachTheIntendedSameAccountCharacter() throws Exception {
+        pool(healing);
+        RPCharacter shorter = character("Bryn", false), intended = character("Bryn Stone", false);
+        data.addCharacter(shorter); data.addCharacter(intended);
+        when(sender.hasPermission(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        var command = mock(org.bukkit.command.Command.class); when(command.getName()).thenReturn("rpcharacter");
+        var tabs = new net.tfminecraft.rpcharacters.utils.CommandTabCompleter();
+        String slug = intended.getSlug();
+        assertEquals(List.of(slug), tabs.onTabComplete(sender, command, "rpcharacter",
+                new String[]{"admin", "injure", "Aria", "bRyN_"}));
+        assertEquals(List.of(slug), tabs.onTabComplete(sender, command, "rpcharacter",
+                new String[]{"injure", "Aria", "bRyN_"}));
+        assertTrue(PermadeathAdminCommands.handleInjure(sender, new String[]{"admin", "injure", "Aria", slug}, 2, "usage"));
+        assertEquals(List.of(healing), intended.getTraits());
+        assertTrue(shorter.getTraits().isEmpty()); assertTrue(character.getTraits().isEmpty());
+        intended.setSlug(null);
+        assertEquals(List.of(intended.getId()), tabs.onTabComplete(sender, command, "rpcharacter",
+                new String[]{"admin", "permakill", "Aria", intended.getId().substring(0, 8)}));
+        assertTrue(PermadeathAdminCommands.handlePermakill(sender,
+                new String[]{"admin", "permakill", "Aria", intended.getId()}, 2, "permakill"));
+        assertEquals(Status.DEAD, intended.getStatus()); assertEquals(Status.ALIVE, shorter.getStatus());
+        assertEquals(Status.ALIVE, character.getStatus());
+    }
+
 }

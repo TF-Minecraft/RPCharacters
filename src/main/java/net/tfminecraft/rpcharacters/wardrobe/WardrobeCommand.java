@@ -149,8 +149,8 @@ public final class WardrobeCommand {
 					String name = slot.getDisplayName();
 					if (name != null && !name.isBlank()) {
 						String cleaned = name.trim().replace(' ', '_');
-						if (!cleaned.equalsIgnoreCase(id)
-							&& !options.contains(cleaned)) {
+						if (id.equals(resolveSlotArg(snapshot, cleaned))
+							&& !cleaned.equalsIgnoreCase(id) && !options.contains(cleaned)) {
 							options.add(cleaned);
 						}
 					}

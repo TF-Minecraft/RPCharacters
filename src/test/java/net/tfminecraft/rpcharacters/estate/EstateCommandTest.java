@@ -5,6 +5,12 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
+import java.util.Map;
+import java.time.Instant;
+import net.tfminecraft.tlibs.character.estate.EstateState;
+import net.tfminecraft.rpcharacters.estate.EstateRecord.Part;
+import net.tfminecraft.rpcharacters.estate.EstateRecord.Decision;
+import net.tfminecraft.rpcharacters.estate.EstateRecord.Report;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +41,8 @@ class EstateCommandTest {
         console = mock(CommandSender.class);
         when(console.getName()).thenReturn("CONSOLE");
         when(console.hasPermission(EstateCommand.PERMISSION)).thenReturn(true);
+        record.name = "Ilvaran Thorne";
+        when(staff.records()).thenReturn(List.of(record));
         when(staff.find(anyString())).thenReturn(Optional.empty());
         for (String key : List.of("d", "Aria", "Ilvaran Thorne")) when(staff.find(key)).thenReturn(Optional.of(record));
     }
@@ -121,9 +129,99 @@ class EstateCommandTest {
     void staffTabCompletionOffersSubcommandsFiltersAndParts() {
         assertEquals(List.of("hold"), command.onTabComplete(console, null, "estate", new String[] {"ho"}));
         assertEquals(7, command.onTabComplete(console, null, "estate", new String[] {"list", ""}).size());
+        record.state = EstateState.DECIDED;
+        record.decision = new Decision(Instant.EPOCH, 3, null, null, null, Part.FROZEN, Part.WAITING, Part.FROZEN, Part.SENDER);
         assertEquals(List.of("money", "property", "guildlocks", "all"),
-                command.onTabComplete(console, null, "estate", new String[] {"assign", "d", ""}));
-        assertEquals(List.of("--no-guild"), command.onTabComplete(console, null, "estate", new String[] {"decide", "d", ""}));
+                command.onTabComplete(console, null, "estate", new String[] {"assign", record.deathId.toString(), ""}));
+        record.state = EstateState.OPEN;
+        assertEquals(List.of("--no-guild"), command.onTabComplete(console, null, "estate", new String[] {"decide", record.deathId.toString(), ""}));
         assertEquals(List.of(), command.onTabComplete(console, null, "estate", new String[] {"show", "d"}));
     }
+    private List<String> tab(String... args) {
+        return command.onTabComplete(console, null, "estate", args);
+    }
+
+    @Test void rootsFiltersAndEveryArgumentRespectCaseAndCurrentTokenPrefixes() {
+        assertEquals(List.of(), tab()); assertEquals(List.of(), tab("unknown", ""));
+        assertEquals(List.of(), command.onTabComplete(player, null, "estate", new String[]{"x"}));
+        assertEquals(List.of("collect"), command.onTabComplete(player, null, "estate", new String[]{"Co"}));
+        assertEquals(List.of("frozen"), tab("LiSt", "Fr"));
+        assertEquals(List.of(), tab("list", "frozen", ""));
+        assertEquals(List.of(), tab("decide", "Ilvaran", "Thorne", "x"));
+        assertEquals(List.of("--no-guild"), tab("decide", "Ilvaran", "Thorne", "--n"));
+        assertEquals(List.of(), tab("decide", "Ilvaran", "Thorne", "--no-guild", ""));
+        assertEquals(List.of(), tab("show", "missing", ""));
+    }
+
+    @Test void estateIdsAndMultiwordNameSuffixesAreUsableAtTheirActualBoundary() {
+        String id = record.deathId.toString();
+        for (String verb : List.of("show", "hold", "release", "decide", "assign", "collect", "retry", "waive", "revert")) {
+            assertTrue(tab(verb, "").contains(id), verb);
+            assertEquals(List.of(id), tab(verb, id.substring(0, 8).toUpperCase(java.util.Locale.ROOT)), verb);
+        }
+        assertEquals(List.of("Ilvaran Thorne"), tab("assign", "ILv"));
+        assertEquals(List.of("Ilvaran Thorne"), tab("assign", "Ilvaran"));
+        assertEquals(List.of("Thorne"), tab("assign", "Ilvaran", ""));
+        assertEquals(List.of("Thorne"), tab("assign", "iLvArAn", "tH"));
+        assertEquals(List.of("Thorne"), tab("assign", "Ilvaran", "Thorne"));
+        assertEquals(List.of("--no-guild"), tab("decide", "Ilvaran", "Thorne", ""));
+        assertEquals(List.of("--no-guild"), tab("decide", record.testator.characterId().toString(), ""));
+        assertEquals(List.of(), tab("assign", "Ilvaran", "Thorne", ""));
+        verify(staff, never()).find(anyString()); verifyNoInteractions(collections);
+    }
+
+    @Test void longestEstateNameWinsBeforePartsEvenWhenItsFirstWordIsAnEstate() {
+        var shortName = new EstateRecord(UUID.randomUUID(), new CharacterRef(UUID.randomUUID(), UUID.randomUUID()));
+        shortName.name = "Ilvaran";
+        when(staff.records()).thenReturn(List.of(shortName, record));
+        record.state = EstateState.DECIDED;
+        record.decision = new Decision(Instant.EPOCH, 3, null, null, null, Part.FROZEN, Part.WAITING, Part.SENDER, Part.SENDER);
+        assertEquals(List.of("Thorne"), tab("assign", "Ilvaran", ""));
+        assertEquals(List.of("property"), tab("assign", "Ilvaran", "Thorne", "Pr"));
+        assertEquals(List.of("money", "property", "all"), tab("assign", "Ilvaran", "Thorne", ""));
+        assertEquals(List.of("guild"), tab("assign", "Ilvaran", "Thorne", "MoNeY", "Gu"));
+        assertEquals(List.of(), tab("assign", "Ilvaran", "Thorne", "property", ""));
+        assertEquals(List.of(), tab("assign", "Ilvaran", "Thorne", "money", "guild", ""));
+        assertEquals(List.of(), tab("decide", "Ilvaran", "Thorne", ""));
+        assertEquals(List.of(), tab("show", "Ilvaran", "Thorne", ""));
+        when(staff.assign(record, "property", "Kira", "CONSOLE")).thenReturn("assigned");
+        run(console, "assign", "Ilvaran", "Thorne", "property", "Kira");
+        verify(staff).assign(record, "property", "Kira", "CONSOLE");
+    }
+
+    @Test void onlyAssignablePartsAndApplicableBlockedParticipantsAreSuggested() {
+        record.state = EstateState.DECIDED;
+        record.decision = new Decision(Instant.EPOCH, 3, null, null, null, Part.SENDER, Part.WAITING, Part.FROZEN, Part.SENDER);
+        record.participants.put("thievery", new Report("BLOCKED", 3, "blocked", Map.of(), List.of(), Instant.EPOCH));
+        record.participants.put("old", new Report("BLOCKED", 2, "old", Map.of(), List.of(), Instant.EPOCH));
+        record.participants.put("done", new Report("DONE", 3, null, Map.of(), List.of(), Instant.EPOCH));
+        String id = record.deathId.toString();
+        assertEquals(List.of("property", "guildlocks", "all"), tab("assign", id, ""));
+        assertEquals(List.of(), tab("assign", id, "money", ""));
+        assertEquals(List.of("old", "thievery"), tab("retry", id, ""));
+        assertEquals(List.of("thievery"), tab("retry", "Ilvaran", "Thorne", "Th"));
+        assertEquals(List.of("thievery"), tab("waive", id, ""));
+        assertEquals(List.of(), tab("waive", id, "thievery", ""));
+        record.decision = new Decision(Instant.EPOCH, 3, null, null, null, Part.SENDER, Part.SENDER, Part.SENDER, Part.SENDER);
+        assertEquals(List.of(), tab("assign", id, ""));
+        record.state = EstateState.REVERTED;
+        assertEquals(List.of(), tab("retry", id, ""));
+        assertEquals(List.of(), tab("waive", id, ""));
+    }
+
+    @Test void realStaffCompletionUsesOnlyLoadedRecordsWithoutWorldOrPersistenceCalls() throws Exception {
+        EstateCoordinator coordinator = mock(EstateCoordinator.class); EstateBook book = mock(EstateBook.class);
+        EstateWorld world = mock(EstateWorld.class);
+        when(coordinator.book()).thenReturn(book); when(coordinator.world()).thenReturn(world);
+        when(book.all()).thenReturn(List.of(record));
+        EstateStaff realStaff = new EstateStaff(coordinator, java.util.logging.Logger.getAnonymousLogger());
+        command = new EstateCommand(realStaff, collections, p -> session);
+        assertTrue(tab("show", "").contains(record.deathId.toString()));
+        assertEquals(List.of("Thorne"), tab("assign", "Ilvaran", "Th"));
+        assertEquals(List.of("--no-guild"), tab("decide", "Ilvaran", "Thorne", ""));
+        assertEquals(List.of(), tab("decide", record.testator.characterId().toString(), "x"));
+        verifyNoInteractions(world, collections);
+        verify(book, never()).save(any()); verify(book, never()).log(anyString(), anyString());
+    }
+
 }

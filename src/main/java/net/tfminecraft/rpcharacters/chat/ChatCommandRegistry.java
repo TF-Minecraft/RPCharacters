@@ -27,6 +27,8 @@ public final class ChatCommandRegistry {
 		for (String label : labels) {
 			registerCommand(plugin, label);
 		}
+		// Config reload also changes permissions on existing labels in clients' command trees.
+		Bukkit.getOnlinePlayers().forEach(org.bukkit.entity.Player::updateCommands);
 	}
 
 	private static void registerCommand(Plugin plugin, String label) {
@@ -40,6 +42,10 @@ public final class ChatCommandRegistry {
 			PluginCommand command = constructor.newInstance(normalized, plugin);
 			command.setExecutor(EXECUTOR);
 			command.setDescription("RP chat channel");
+			ChatChannel channel = ChatLoader.getChannel(ChatLoader.resolveChannelFromCommand(normalized));
+			if (channel != null && !channel.getUsePermission().isBlank()) {
+				command.setPermission(channel.getUsePermission());
+			}
 			Bukkit.getCommandMap().register(plugin.getName().toLowerCase(Locale.ROOT), command);
 			registered.add(command);
 		} catch (ReflectiveOperationException | RuntimeException e) {

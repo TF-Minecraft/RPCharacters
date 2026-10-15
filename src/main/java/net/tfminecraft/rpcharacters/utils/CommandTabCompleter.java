@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
+import net.Indyuce.mmocore.MMOCore;
+import net.Indyuce.mmocore.api.player.profess.PlayerClass;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -54,8 +57,8 @@ public class CommandTabCompleter implements TabCompleter {
 			completions.add("clues");
 			completions.add("wardrobe");
 			completions.add("party");
-			completions.add("injure");
-			completions.addAll(PERSONA_SUBCOMMANDS);
+			if (Permissions.isAdmin(sender) || sender.hasPermission("rpchar.injure")) completions.add("injure");
+			PERSONA_SUBCOMMANDS.stream().filter(sub -> canUsePersona(sender, sub)).forEach(completions::add);
 			if (Permissions.isAdmin(sender)) {
 				completions.add("admin");
 				completions.add("reload");
@@ -89,6 +92,11 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 
 		String sub = args[0].toLowerCase(Locale.ROOT);
+		if (List.of("setclass", "seteighteen", "skipcooldown", "addtrait", "removetrait", "permakill")
+				.contains(sub) && !Permissions.isAdmin(sender)) return Collections.emptyList();
+		if (sub.equals("menu") && !Permissions.isAdmin(sender)) return Collections.emptyList();
+		if (sub.equals("injure") && !Permissions.isAdmin(sender)
+				&& !sender.hasPermission("rpchar.injure")) return Collections.emptyList();
 		if (CharCommand.isPersonaSubcommand(sub)) {
 			return completePersona(sender, sub, args);
 		}
@@ -165,7 +173,7 @@ public class CommandTabCompleter implements TabCompleter {
 					completions.add(ClassPickReset.SUBCOMMAND);
 				}
 			} else if (args[0].equalsIgnoreCase("addtrait") || args[0].equalsIgnoreCase("removetrait")
-					|| args[0].equalsIgnoreCase("injure")) {
+					|| args[0].equalsIgnoreCase("injure") || sub.equals("permakill")) {
 				for (Player online : Bukkit.getOnlinePlayers()) {
 					completions.add(online.getName());
 				}
@@ -217,7 +225,11 @@ public class CommandTabCompleter implements TabCompleter {
 			} else if (args[0].equalsIgnoreCase("sethidden") && sender.hasPermission(Cache.personaCharacterHiddenPermission)) {
 				completions.addAll(CLEAR);
 			} else if (args[0].equalsIgnoreCase("setclass")) {
-				completions.add("className");
+				if (MMOCore.plugin != null && MMOCore.plugin.classManager != null) {
+					for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
+						completions.add(playerClass.getId());
+					}
+				}
 			} else if (args[0].equalsIgnoreCase("seteighteen") && Permissions.isAdmin(sender)) {
 				completions.add("true");
 				completions.add("false");
@@ -238,54 +250,36 @@ public class CommandTabCompleter implements TabCompleter {
 					}
 				}
 			} else if (args[0].equalsIgnoreCase("addtrait") || args[0].equalsIgnoreCase("removetrait")) {
-				for (Trait trait : TraitLoader.get()) {
-					completions.add(trait.getId());
+				Player target = Bukkit.getPlayerExact(args[1]);
+				PlayerData data = target == null ? null : PlayerManager.get(target);
+				if (data != null && data.hasActiveCharacter()) {
+					List<Trait> owned = data.getActiveCharacter().getTraits();
+					for (Trait trait : sub.equals("removetrait") ? owned : TraitLoader.get()) {
+						if (sub.equals("removetrait") || owned.stream()
+								.noneMatch(current -> current.getId().equalsIgnoreCase(trait.getId()))) {
+							completions.add(trait.getId());
+						}
+					}
 				}
 			} else if (args[0].equalsIgnoreCase("admin") && Permissions.isAdmin(sender)
 					&& (args[1].equalsIgnoreCase("injure") || args[1].equalsIgnoreCase("permakill"))) {
 				for (Player online : Bukkit.getOnlinePlayers()) {
 					completions.add(online.getName());
 				}
-			} else if (args[0].equalsIgnoreCase("injure") && Permissions.isAdmin(sender)) {
-				Player target = Bukkit.getPlayerExact(args[1]);
-				if (target != null) {
-					PlayerData pd = PlayerManager.get(target);
-					if (pd != null) {
-						for (RPCharacter character : pd.getCharacters()) {
-							if (character.getSlug() != null) {
-								completions.add(character.getSlug());
-							}
-							if (character.getName() != null) {
-								completions.add(character.getName());
-							}
-						}
-					}
-				}
-				completions.add("permanent");
+			} else if ((sub.equals("injure") || sub.equals("permakill")) && Permissions.isAdmin(sender)) {
+				completions.addAll(characterIds(args[1]));
+				if (sub.equals("injure")) completions.add("permanent");
 			}
 
 			return filter(completions, args[2]);
 		}
 
 		if (args.length == 4
-				&& args[0].equalsIgnoreCase("admin")
-				&& args[1].equalsIgnoreCase("injure")
+				&& sub.equals("admin")
+				&& (args[1].equalsIgnoreCase("injure") || args[1].equalsIgnoreCase("permakill"))
 				&& Permissions.isAdmin(sender)) {
-			Player target = Bukkit.getPlayerExact(args[2]);
-			if (target != null) {
-				PlayerData pd = PlayerManager.get(target);
-				if (pd != null) {
-					for (RPCharacter character : pd.getCharacters()) {
-						if (character.getSlug() != null) {
-							completions.add(character.getSlug());
-						}
-						if (character.getName() != null) {
-							completions.add(character.getName());
-						}
-					}
-				}
-			}
-			completions.add("permanent");
+			completions.addAll(characterIds(args[2]));
+			if (args[1].equalsIgnoreCase("injure")) completions.add("permanent");
 			return filter(completions, args[3]);
 		}
 
@@ -358,7 +352,34 @@ public class CommandTabCompleter implements TabCompleter {
 		return names;
 	}
 
+	/** Slugs are unique within the account; IDs cover characters without a usable slug. */
+	private static List<String> characterIds(String playerName) {
+		Player target = Bukkit.getPlayerExact(playerName);
+		PlayerData data = target == null ? null : PlayerManager.get(target);
+		if (data == null) return Collections.emptyList();
+		List<String> ids = new ArrayList<>();
+		for (RPCharacter character : data.getCharacters()) {
+			String slug = character.getSlug();
+			String id = slug != null && !slug.isBlank() && slug.chars().noneMatch(Character::isWhitespace)
+					&& !slug.equalsIgnoreCase("permanent") ? slug : character.getId();
+			if (id != null && !id.isBlank()) ids.add(id);
+		}
+		return ids;
+	}
+
+	private static boolean canUsePersona(CommandSender sender, String sub) {
+		if (sub.equals("override")) return sender.hasPermission(Cache.personaOverridePermission);
+		if (!(sender instanceof Player player)) return false;
+		return switch (sub) {
+			case "profile" -> sender.hasPermission(Cache.profilePermission);
+			case "namecolour" -> PermissionGroupService.canUseNameColour(player);
+			case "alias", "gender", "description", "birthday" -> sender.hasPermission(Cache.personaSetPermission);
+			default -> true;
+		};
+	}
+
 	private List<String> completePersona(CommandSender sender, String sub, String[] args) {
+		if (!canUsePersona(sender, sub)) return Collections.emptyList();
 		if (sub.equals("override")) {
 			return completeOverride(sender, args);
 		}
@@ -372,10 +393,6 @@ public class CommandTabCompleter implements TabCompleter {
 			}
 			return Collections.emptyList();
 		}
-		if (!(sender instanceof Player)) {
-			return Collections.emptyList();
-		}
-
 		switch (sub) {
 			case "mail":
 				return args.length == 2 ? filter(List.of("on", "off"), args[1]) : Collections.emptyList();
@@ -414,9 +431,6 @@ public class CommandTabCompleter implements TabCompleter {
 	}
 
 	private List<String> completeOverride(CommandSender sender, String[] args) {
-		if (!sender.hasPermission(Cache.personaOverridePermission)) {
-			return Collections.emptyList();
-		}
 		if (args.length == 2) {
 			return Bukkit.getOnlinePlayers().stream()
 					.map(Player::getName)

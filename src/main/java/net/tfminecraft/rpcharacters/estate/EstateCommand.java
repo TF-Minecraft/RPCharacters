@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters.estate;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,13 +47,11 @@ final class EstateCommand implements TabExecutor {
         }
         if (args.length < 2) return reply(sender, "Name the estate: a death ID, character ID or dead character's name.");
         // The longest run of words naming an estate wins, so two-word names work before further arguments.
-        int end = args.length;
-        Optional<EstateRecord> found = Optional.empty();
-        while (end > 1 && (found = staff.find(String.join(" ", Arrays.copyOfRange(args, 1, end)))).isEmpty()) end--;
-        if (found.isEmpty()) return reply(sender, "No estate matches " + args[1] + ".");
-        EstateRecord record = found.get();
+        Resolved resolved = resolve(args, args.length, staff::find);
+        if (resolved == null) return reply(sender, "No estate matches " + args[1] + ".");
+        EstateRecord record = resolved.record();
         String by = sender.getName();
-        String[] rest = Arrays.copyOfRange(args, end, args.length);
+        String[] rest = Arrays.copyOfRange(args, resolved.end(), args.length);
         return switch (sub) {
             case "show" -> {
                 staff.show(record).forEach(sender::sendMessage);
@@ -86,13 +86,75 @@ final class EstateCommand implements TabExecutor {
         return true;
     }
 
+    private record Resolved(EstateRecord record, int end) {}
+
+    private static Resolved resolve(String[] args, int end, Function<String, Optional<EstateRecord>> lookup) {
+        while (end > 1) {
+            Optional<EstateRecord> found = lookup.apply(String.join(" ", Arrays.copyOfRange(args, 1, end)));
+            if (found.isPresent()) return new Resolved(found.get(), end);
+            end--;
+        }
+        return null;
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (!sender.hasPermission(PERMISSION)) return args.length == 1 ? List.of("collect") : List.of();
-        if (args.length == 1) return STAFF.stream().filter(s -> s.startsWith(args[0].toLowerCase(java.util.Locale.ROOT))).toList();
-        if (args.length == 2 && args[0].equalsIgnoreCase("list")) return FILTERS;
-        if (args.length == 3 && args[0].equalsIgnoreCase("assign")) return List.of("money", "property", "guildlocks", "all");
-        if (args.length == 3 && args[0].equalsIgnoreCase("decide")) return List.of("--no-guild");
-        return List.of();
+        if (args.length == 0) return List.of();
+        String prefix = args[args.length - 1];
+        if (!sender.hasPermission(PERMISSION)) return args.length == 1 ? filter(List.of("collect"), prefix) : List.of();
+        if (args.length == 1) return filter(STAFF, prefix);
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        if (sub.equals("list")) return args.length == 2 ? filter(FILTERS, prefix) : List.of();
+        if (!STAFF.contains(sub)) return List.of();
+
+        List<EstateRecord> records = staff.records();
+        List<String> names = new ArrayList<>();
+        if (args.length == 2) records.forEach(record -> names.add(record.deathId.toString()));
+        String preceding = args.length == 2 ? "" : String.join(" ", Arrays.copyOfRange(args, 1, args.length - 1)) + " ";
+        String typed = (preceding + prefix).toLowerCase(Locale.ROOT);
+        for (EstateRecord record : records) {
+            if (record.name.toLowerCase(Locale.ROOT).startsWith(typed)) names.add(record.name.substring(preceding.length()));
+        }
+        if (!names.isEmpty()) return filter(names, prefix);
+
+        // The current token is still being replaced; only completed words can consume the estate key.
+        Resolved resolved = resolve(args, args.length - 1, key -> records.stream()
+                .filter(record -> record.deathId.toString().equalsIgnoreCase(key)
+                        || record.testator.characterId().toString().equalsIgnoreCase(key)
+                        || record.name.equalsIgnoreCase(key))
+                .reduce((older, newer) -> newer));
+        if (resolved == null) return List.of();
+        EstateRecord record = resolved.record();
+        int position = args.length - 1 - resolved.end();
+        List<String> options = new ArrayList<>();
+        if (position == 0) {
+            if (sub.equals("decide") && record.state == net.tfminecraft.tlibs.character.estate.EstateState.OPEN) {
+                options.add("--no-guild");
+            } else if (sub.equals("assign") && record.settling()) {
+                var decision = record.decision;
+                if (assignable(decision.money())) options.add("money");
+                if (assignable(decision.property())) options.add("property");
+                if (assignable(decision.guildLocks())) options.add("guildlocks");
+                if (!options.isEmpty()) options.add("all");
+            } else if ((sub.equals("retry") || sub.equals("waive")) && record.settling()) {
+                record.participants.forEach((id, report) -> {
+                    if (report.outcome().equals("BLOCKED")
+                            && (!sub.equals("waive") || report.revision() == record.decision.revision())) options.add(id);
+                });
+            }
+        } else if (position == 1 && sub.equals("assign") && record.settling()
+                && args[resolved.end()].equalsIgnoreCase("money") && record.decision.money().recipient().isFrozen()) {
+            options.add("guild");
+        }
+        return filter(options, prefix);
+    }
+
+    private static boolean assignable(EstateRecord.Part part) {
+        return part.recipient().isWaiting() || part.recipient().isFrozen();
+    }
+
+    private static List<String> filter(List<String> options, String prefix) {
+        String lower = prefix.toLowerCase(Locale.ROOT);
+        return options.stream().filter(option -> option.toLowerCase(Locale.ROOT).startsWith(lower)).distinct().toList();
     }
 }

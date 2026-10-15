@@ -29,6 +29,7 @@ class CommandTabCompleterTest {
     PlayerMock player, iris;
     Plugin plugin;
     RuntimeTestState state;
+    net.Indyuce.mmocore.MMOCore previousMmo;
     Command command;
     CommandTabCompleter tabs;
     PlayerData data;
@@ -40,10 +41,13 @@ class CommandTabCompleterTest {
     <T> MockedStatic<T> boundary(Class<T> type) { var mocked = mockStatic(type); mocks.add(mocked); return mocked; }
 
     @BeforeEach void setup() {
+        previousMmo = net.Indyuce.mmocore.MMOCore.plugin;
         server = MockBukkit.mock(); state = new RuntimeTestState(StageLoader.class, TraitLoader.class);
         plugin = MockBukkit.createMockPlugin(); player = server.addPlayer("Alex"); iris = server.addPlayer("Iris");
         command = mock(Command.class); when(command.getName()).thenReturn("rpcharacter"); tabs = new CommandTabCompleter();
         Cache.personaGenders = List.of("Female", "Male", "Other");
+        grant(Cache.personaSetPermission, true); grant(Cache.profilePermission, true);
+        grant("rpchar.injure", false);
         for (String permission : List.of(Permissions.Permission_Admin, Cache.personaOverridePermission,
                 Cache.personaTempaliasPermission, Cache.personaCharacterHiddenPermission)) grant(permission, false);
         data = mock(PlayerData.class); List<RPCharacter> characters = List.of(character("hero", "Hero"), character(null, null));
@@ -53,12 +57,13 @@ class CommandTabCompleterTest {
         boundary(SummaryEditSupport.class).when(SummaryEditSupport::getEditEntryKeys).thenReturn(List.of("name", "race"));
         boundary(TutorialLoader.class).when(TutorialLoader::getIds).thenReturn(List.of("permadeath-zone", "strikes"));
         groups = boundary(PermissionGroupService.class); groups.when(() -> PermissionGroupService.getNameColourStops(player)).thenReturn(4);
+        groups.when(() -> PermissionGroupService.canUseNameColour(player)).thenReturn(true);
         party = boundary(PartyCommand.class); wardrobe = boundary(WardrobeCommand.class);
         StageLoader.oList = new ArrayList<>(); TraitLoader.oList = new ArrayList<>();
     }
     @AfterEach void restore() {
         for (int i = mocks.size() - 1; i >= 0; i--) mocks.get(i).close();
-        state.close(); MockBukkit.unmock();
+        net.Indyuce.mmocore.MMOCore.plugin = previousMmo; state.close(); MockBukkit.unmock();
     }
     void grant(String permission, boolean value) { player.addAttachment(plugin, permission, value); }
     void admin() { grant(Permissions.Permission_Admin, true); }
@@ -116,7 +121,7 @@ class CommandTabCompleterTest {
     }
 
     @Test void adminSuggestionsDisappearWithoutPermission() {
-        for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate"))
+        for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate", "setclass", "skipcooldown", "addtrait", "removetrait", "menu", "injure", "permakill"))
             assertEquals(List.of(), complete(verb, ""), verb);
         assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", ""));
         grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses"), complete("admin", ""));
@@ -133,7 +138,7 @@ class CommandTabCompleterTest {
         assertEquals(List.of("intro"), complete("stage", "preview", ""));
         assertEquals(List.of("confirm"), complete("wipe", "website", "")); assertEquals(List.of("on", "off"), complete("discordgate", "Iris", ""));
         grant(Cache.personaCharacterHiddenPermission, true); assertEquals(List.of("clear"), complete("sethidden", "hero", ""));
-        assertEquals(List.of("className"), complete("setclass", "Iris", "")); assertEquals(List.of("true", "false"), complete("seteighteen", "Iris", ""));
+        assertEquals(List.of("true", "false"), complete("seteighteen", "Iris", ""));
         List<RPCharacter> characters = Arrays.asList(null, character(null, null), character(" ", null), character("hero", "Hero"));
         when(data.getCharacters()).thenReturn(characters);
         for (String verb : List.of("resetkit", "reclaimkit")) assertEquals(List.of("hero"), complete(verb, "Iris", ""));
@@ -141,15 +146,18 @@ class CommandTabCompleterTest {
         players.when(() -> PlayerManager.get(iris)).thenReturn(null); assertEquals(List.of(), complete("reclaimkit", "Iris", ""));
         players.when(() -> PlayerManager.get(iris)).thenReturn(data);
         Trait trait = mock(Trait.class); when(trait.getId()).thenReturn("brave"); TraitLoader.oList.add(trait);
-        for (String verb : List.of("addtrait", "removetrait")) assertEquals(List.of("brave"), complete(verb, "Iris", ""));
+        RPCharacter active = character("hero", "Hero"); when(active.getTraits()).thenReturn(List.of());
+        when(data.hasActiveCharacter()).thenReturn(true); when(data.getActiveCharacter()).thenReturn(active);
+        assertEquals(List.of("brave"), complete("addtrait", "Iris", ""));
+        assertEquals(List.of(), complete("removetrait", "Iris", ""));
         for (String verb : List.of("injure", "permakill")) assertEquals(List.of("Iris"), complete("admin", verb, "I"));
         assertEquals(List.of(), complete("unknown", "x", ""));
     }
 
     @Test void injuryAndKitCompletionAtLaterPositionsUsesTargetCharacters() {
         admin();
-        assertEquals(List.of("hero", "Hero", "permanent"), complete("injure", "Iris", ""));
-        assertEquals(List.of("hero", "Hero", "permanent"), complete("admin", "injure", "Iris", ""));
+        assertEquals(List.of("hero", "permanent"), complete("injure", "Iris", ""));
+        assertEquals(List.of("hero", "permanent"), complete("admin", "injure", "Iris", ""));
         assertEquals(List.of("permanent"), complete("injure", "offline", ""));
         assertEquals(List.of("permanent"), complete("admin", "injure", "offline", ""));
         players.when(() -> PlayerManager.get(iris)).thenReturn(null); assertEquals(List.of("permanent"), complete("injure", "Iris", ""));
@@ -158,6 +166,77 @@ class CommandTabCompleterTest {
         assertEquals(List.of("permanent"), complete("admin", "injure", "Iris", "hero", ""));
         for (String verb : List.of("resetkit", "reclaimkit")) assertEquals(List.of("starter", "tools"), complete(verb, "Iris", "hero", ""));
         assertEquals(List.of(), complete("unknown", "a", "b", "c", "d", "e"));
+    }
+
+    @Test void setclassUsesRegisteredIdsAndHandlesAnUnavailableRegistry() throws Exception {
+        admin(); net.Indyuce.mmocore.MMOCore.plugin = null;
+        assertEquals(List.of(), complete("setclass", "Iris", ""));
+        var core = mock(net.Indyuce.mmocore.MMOCore.class); net.Indyuce.mmocore.MMOCore.plugin = core;
+        assertEquals(List.of(), complete("setclass", "Iris", ""));
+        var classes = mock(net.Indyuce.mmocore.manager.ClassManager.class);
+        var field = net.Indyuce.mmocore.MMOCore.class.getField("classManager"); field.setAccessible(true); field.set(core, classes);
+        var warrior = mock(net.Indyuce.mmocore.api.player.profess.PlayerClass.class);
+        var mage = mock(net.Indyuce.mmocore.api.player.profess.PlayerClass.class);
+        when(warrior.getId()).thenReturn("WARRIOR"); when(mage.getId()).thenReturn("MAGE");
+        when(classes.getAll()).thenReturn(List.of(warrior, mage));
+        assertEquals(List.of("WARRIOR", "MAGE"), complete("setclass", "Iris", ""));
+        assertEquals(List.of("WARRIOR"), complete("setclass", "Iris", "wA"));
+        assertEquals(List.of(), complete("setclass", "Iris", "className"));
+        assertEquals(List.of(), complete("setclass", "Iris", "WARRIOR", ""));
+        grant(Permissions.Permission_Admin, false);
+        assertEquals(List.of(), complete("setclass", "Iris", ""));
+    }
+
+    @Test void traitSuggestionsReflectTheSelectedActiveCharactersAssignments() {
+        admin(); Trait brave = mock(Trait.class), shy = mock(Trait.class), retired = mock(Trait.class);
+        when(brave.getId()).thenReturn("brave"); when(shy.getId()).thenReturn("shy"); when(retired.getId()).thenReturn("retired");
+        TraitLoader.oList.addAll(List.of(brave, shy));
+        RPCharacter active = character("hero", "Hero"); when(active.getTraits()).thenReturn(List.of(brave, retired));
+        when(data.hasActiveCharacter()).thenReturn(true); when(data.getActiveCharacter()).thenReturn(active);
+        assertEquals(List.of("shy"), complete("addtrait", "Iris", ""));
+        assertEquals(List.of("brave"), complete("removetrait", "Iris", "Br"));
+        assertEquals(List.of("brave", "retired"), complete("removetrait", "Iris", ""));
+        assertEquals(List.of(), complete("addtrait", "offline", ""));
+        when(data.hasActiveCharacter()).thenReturn(false);
+        assertEquals(List.of(), complete("removetrait", "Iris", ""));
+        players.when(() -> PlayerManager.get(iris)).thenReturn(null);
+        assertEquals(List.of(), complete("addtrait", "Iris", ""));
+    }
+
+    @Test void injuryAndPermakillOfferSafeIdentifiersWithoutPermakillFlags() {
+        admin(); RPCharacter spaced = character("ilvaran_thorne", "Ilvaran Thorne");
+        RPCharacter reserved = character("permanent", "Permanent"), noSlug = character(null, "No Slug");
+        RPCharacter badSlug = character("two words", "Two Words"), blankSlug = character(" ", "Blank");
+        when(reserved.getId()).thenReturn("id-reserved"); when(noSlug.getId()).thenReturn("id-no-slug");
+        when(badSlug.getId()).thenReturn("id-two-words"); when(blankSlug.getId()).thenReturn("id-blank");
+        when(data.getCharacters()).thenReturn(List.of(spaced, reserved, noSlug, badSlug, blankSlug));
+        assertEquals(List.of("ilvaran_thorne"), complete("admin", "injure", "Iris", "IlV"));
+        assertEquals(List.of("ilvaran_thorne", "id-reserved", "id-no-slug", "id-two-words", "id-blank"),
+                complete("admin", "permakill", "Iris", ""));
+        assertEquals(List.of("ilvaran_thorne"), complete("permakill", "Iris", "IL"));
+        assertEquals(List.of("Iris"), complete("permakill", "I"));
+        assertEquals(List.of(), complete("admin", "permakill", "Iris", "ilvaran_thorne", ""));
+        assertEquals(List.of(), complete("admin", "permakill", "offline", ""));
+        grant(Permissions.Permission_Admin, false); grant("rpchar.injure", true);
+        assertEquals(List.of("Iris"), complete("injure", "I"));
+        assertEquals(List.of(), complete("injure", "Iris", ""));
+        assertEquals(List.of(), complete("admin", "permakill", "Iris", ""));
+    }
+
+    @Test void personaRootsAndNestedArgumentsUseTheExecutionPermissions() {
+        grant(Cache.personaSetPermission, false); grant(Cache.profilePermission, false);
+        groups.when(() -> PermissionGroupService.canUseNameColour(player)).thenReturn(false);
+        assertEquals(List.of(), complete("over"));
+        for (String verb : List.of("alias", "gender", "description", "birthday", "profile", "namecolour")) {
+            assertFalse(complete("").contains(verb), verb);
+            assertEquals(List.of(), complete(verb, ""), verb);
+        }
+        assertTrue(complete("").containsAll(List.of("menu", "mail")));
+        grant(Cache.personaSetPermission, true); grant(Cache.profilePermission, true);
+        groups.when(() -> PermissionGroupService.canUseNameColour(player)).thenReturn(true);
+        assertTrue(complete("").containsAll(List.of("alias", "gender", "description", "birthday", "profile", "namecolour")));
+        grant(Cache.personaOverridePermission, true); assertEquals(List.of("override"), complete("Ov"));
+        assertEquals(List.of(), tabs.onTabComplete(server.getConsoleSender(), command, "rpcharacter", new String[]{"profile", ""}));
     }
 
     @Test void adminStrikesAndTutorialCompletionsTrackActionArity() {

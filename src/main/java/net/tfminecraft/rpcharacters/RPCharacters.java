@@ -400,6 +400,9 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(classPickListener, this);
 		getCommand("class").setExecutor(classPickListener);
 		getCommand("subclass").setExecutor(classPickListener);
+		for (String root : java.util.List.of("class", "subclass", "players", "will")) {
+			getCommand(root).setTabCompleter((sender, command, label, args) -> java.util.List.of());
+		}
 		getServer().getPluginManager().registerEvents(clueInputManager, this);
 		getServer().getPluginManager().registerEvents(placeClueManager, this);
 		getServer().getPluginManager().registerEvents(magnifyingGlassListener, this);
