@@ -118,7 +118,7 @@ public final class WillMenu {
         later.accept(() -> first(ctx), PORTRAIT_WAIT_TICKS);
     }
 
-    /** Shows the first screen once, unless a newer /will replaced this one or the player moved on. */
+    /** Shows the first screen once, unless a newer /will, another will screen or a click replaced this one. */
     private static void first(Context ctx) {
         if (OPENING.get(ctx.player.getUniqueId()) != ctx) return;
         OPENING.remove(ctx.player.getUniqueId());
@@ -248,26 +248,30 @@ public final class WillMenu {
         if (!(guild instanceof Guild.Member member)) {
             return "Money goes to your guild and property to its leader. Without a guild, staff hold it after 7 days.";
         }
-        if (member.youLead()) return "You lead " + member.name() + ", so its next leader would take it. " + alts;
+        if (member.youLead()) {
+            return "You lead " + member.name() + ", so its next leader would take it; with nobody to take over, it waits until one is appointed. " + alts;
+        }
         return member.leader().map(leader -> leader.name() + " leads " + member.name() + ". " + alts)
                 .orElse(member.name() + " has no leader, so property waits until one is appointed. " + alts);
     }
 
+    /** Property waits while the guild has no living leader, so a successor is never promised. */
     private static Component propertyTo(Context ctx, Guild.Member member) {
-        if (member.youLead() || member.leader().isEmpty()) return Component.text(member.name() + "'s next leader", WillView.TEXT);
-        return WillView.named(member.leader().get(), ctx.data, WillView.TEXT);
+        if (member.youLead()) return Component.text(member.name() + "'s next leader (waits if none)", WillView.TEXT);
+        return member.leader().map(leader -> WillView.named(leader, ctx.data, WillView.TEXT))
+                .orElse(Component.text("waits for " + member.name() + "'s next leader", WillView.TEXT));
     }
 
     /** The guild's leader, else the realm's; a leader's successor is not known until the death. */
     private static Component locksTo(Context ctx, Guild.Member member) {
         if (member.youLead()) {
-            Component next = Component.text(member.name() + "'s next leader", WillView.TEXT);
-            return member.realmLeader().map(realm -> next.append(Component.text(", else ", WillView.TEXT))
-                    .append(WillView.named(realm, ctx.data, WillView.TEXT))).orElse(next);
+            return member.realmLeader().map(realm -> Component.text(member.name() + "'s next leader, else ", WillView.TEXT)
+                    .append(WillView.named(realm, ctx.data, WillView.TEXT)))
+                    .orElse(Component.text(member.name() + "'s next leader (waits if none)", WillView.TEXT));
         }
         Optional<CharacterInfo> to = member.leader().or(member::realmLeader);
         return to.map(info -> WillView.named(info, ctx.data, WillView.TEXT))
-                .orElse(Component.text(member.name() + "'s next leader", WillView.TEXT));
+                .orElse(Component.text("waits for " + member.name() + "'s next leader", WillView.TEXT));
     }
 
     private static Component arrow() {
@@ -413,10 +417,13 @@ public final class WillMenu {
     }
 
     private static void show(Context ctx, Screen screen) {
+        OPENING.remove(ctx.player.getUniqueId());
         screens.accept(ctx.player, screen);
     }
 
     private static boolean current(Context ctx) {
+        // A click on any will screen means the player moved on: a waiting open must not appear over it.
+        OPENING.remove(ctx.player.getUniqueId());
         if (Characters.isCurrent(ctx.session)) return true;
         ctx.player.closeDialog();
         ctx.player.sendMessage("Your character changed. Open /will again.");

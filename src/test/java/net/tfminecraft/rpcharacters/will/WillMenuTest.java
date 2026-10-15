@@ -337,6 +337,18 @@ class WillMenuTest {
             assertEquals(before, shown.size());
             waits.removeFirst().run();
             assertEquals(before + 1, shown.size());
+            // A click on an older will screen, or another screen shown, cancels a waiting open.
+            WillMenu.clearPortraits();
+            CompletableFuture<BufferedImage> third = new CompletableFuture<>();
+            WillMenu.portraits = (owner, id, fallback) -> third;
+            WillMenu.open(player);
+            link("How wills work");
+            assertEquals("How wills work", last().title());
+            before = shown.size();
+            waits.removeFirst().run();
+            third.complete(null);
+            later.removeFirst().run();
+            assertEquals(before, shown.size());
             // A player gone or playing another character by then sees nothing.
             for (int step = 0; step < 2; step++) {
                 WillMenu.clearPortraits();
@@ -425,16 +437,16 @@ class WillMenuTest {
         WillMenu.open(player);
         String body = body();
         assertTrue(body.contains("⚠ Your heir, Kira, has died"), body);
-        assertTrue(body.contains("2 vehicles → Ironhold's next leader"), body);
-        assertTrue(body.contains("1 guild or faction lock → Ironhold's next leader"), body);
-        assertTrue(body.contains("You lead Ironhold, so its next leader would take it."), body);
+        assertTrue(body.contains("2 vehicles → Ironhold's next leader (waits if none)"), body);
+        assertTrue(body.contains("1 guild or faction lock → Ironhold's next leader, else Bob"), body);
+        assertTrue(body.contains("You lead Ironhold, so its next leader would take it; with nobody to take over, it waits until one is appointed."), body);
         aria.setWill(new CharacterWill(UUID.randomUUID(), 2, now, null));
         WillForecast.guilds = id -> ironhold(Optional.empty(), false, Optional.empty());
         WillMenu.open(player);
         body = body();
         assertTrue(body.contains("⚠ Your heir can't be found now"), body);
-        assertTrue(body.contains("2 vehicles → Ironhold's next leader"), body);
-        assertTrue(body.contains("1 guild or faction lock → Ironhold's next leader"), body);
+        assertTrue(body.contains("2 vehicles → waits for Ironhold's next leader"), body);
+        assertTrue(body.contains("1 guild or faction lock → waits for Ironhold's next leader"), body);
         assertTrue(body.contains("Ironhold has no leader, so property waits until one is appointed."), body);
         WillForecast.guilds = id -> WillForecast.NONE;
         WillMenu.open(player);
@@ -456,10 +468,10 @@ class WillMenuTest {
         assertFalse(body().contains("Goes elsewhere"), body());
         WillForecast.guilds = id -> ironhold(Optional.empty(), true, Optional.empty());
         WillMenu.open(player);
-        assertTrue(body().contains("Goes elsewhere\n1 guild or faction lock → Ironhold's next leader"), body());
+        assertTrue(body().contains("Goes elsewhere\n1 guild or faction lock → Ironhold's next leader (waits if none)"), body());
         WillForecast.guilds = id -> ironhold(Optional.empty(), false, Optional.empty());
         WillMenu.open(player);
-        assertTrue(body().contains("1 guild or faction lock → Ironhold's next leader"), body());
+        assertTrue(body().contains("1 guild or faction lock → waits for Ironhold's next leader"), body());
         holdings(held("simplefactions-vehicles", Map.of("vehicles", 2), "A", "B"));
         WillMenu.open(player);
         assertFalse(body().contains("Goes elsewhere"), body());
