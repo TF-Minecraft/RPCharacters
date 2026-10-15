@@ -813,12 +813,12 @@ class CharacterSelectViewTest {
 		CharacterSelectView.open(player, data, actions);
 		Component row = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
 				.filter(c -> text(c).endsWith("End character")).findFirst().orElseThrow();
-		assertEquals("Background   Traits   Clues 1/3   End character", text(row));
+		assertEquals("Background • Traits • Clues • End character", text(row));
 		Map<String, String> hovers = components(row).filter(c -> c.hoverEvent() != null && c.children().isEmpty())
 				.collect(Collectors.toMap(CharacterSelectViewTest::text, c -> text((Component) c.hoverEvent().value())));
 		assertEquals("Read Wren's background", hovers.get("Background"));
 		assertEquals("Brave (Personality)", hovers.get("Traits"));
-		assertEquals("Knows the old roads", hovers.get("Clues 1/3"));
+		assertEquals("Knows the old roads\n2 more needed.", hovers.get("Clues"));
 		assertEquals("Kill this character for good", hovers.get("End character"));
 
 		click("Background");
@@ -845,7 +845,10 @@ class CharacterSelectViewTest {
 		when(wren.getCluesNeeded()).thenReturn(2);
 		link("‹");
 		link("›");
-		assertTrue(ui.last().bodyText().contains("\nClues 0/2   End character"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().contains("\nClues • End character"), ui.last().bodyText());
+		Component clues = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
+				.flatMap(CharacterSelectViewTest::components).filter(c -> text(c).equals("Clues")).findFirst().orElseThrow();
+		assertEquals("No clues yet.\n2 more needed.", text((Component) clues.hoverEvent().value()));
 	}
 
 	@Test

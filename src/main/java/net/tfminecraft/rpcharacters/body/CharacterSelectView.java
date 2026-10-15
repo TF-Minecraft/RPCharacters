@@ -611,12 +611,14 @@ public final class CharacterSelectView {
 		hover(parts, "Traits", traits.apply(character));
 		List<String> clues = character.getPlayerClues() == null ? List.of() : character.getPlayerClues();
 		if (character.getCluesNeeded() > 0 || !clues.isEmpty()) {
-			Component label = Component.text("Clues " + clues.size() + "/" + character.getCluesNeeded(), MUTED);
-			parts.add(label.hoverEvent(HoverEvent.showText(Component.text(clues.isEmpty() ? "No clues yet." : plain(clues)))));
+			String text = clues.isEmpty() ? "No clues yet." : plain(clues);
+			int missing = character.getCluesNeeded() - clues.size();
+			if (missing > 0) text += "\n" + missing + " more needed.";
+			parts.add(Component.text("Clues", MUTED).hoverEvent(HoverEvent.showText(Component.text(text))));
 		}
 		parts.add(link(Component.text("End character", WARN), "Kill this character for good", session,
 				s -> navigate(s, v -> { v.ending = id; v.sure = false; })));
-		return Component.join(JoinConfiguration.separator(Component.text("   ")), parts);
+		return Component.join(JoinConfiguration.separator(Component.text(" • ", DIM)), parts);
 	}
 
 	private static void hover(List<Component> parts, String label, List<String> lines) {
