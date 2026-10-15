@@ -68,6 +68,8 @@ public final class CharacterBodies {
     private final Map<UUID, PendingRespawn> pendingRespawns = new HashMap<>();
     private final Map<UUID, Countdown> returning = new HashMap<>();
     private final int returnSeconds;
+    /** Turning on the spot or a small shuffle keeps a return going. */
+    static final double RETURN_STILL_RADIUS = 0.25;
     private static final long CHECKPOINT_TICKS = 6000L;
     static final int ROOM_INVISIBILITY_TICKS = (int) CHECKPOINT_TICKS * 2;
 
@@ -614,6 +616,16 @@ public final class CharacterBodies {
         if (stopReturn(player.getUniqueId())) player.sendMessage(message);
     }
 
+    /** Interrupts a return once the player leaves the spot where it started. */
+    public void interruptReturnIfMoved(Player player, Location to) {
+        Countdown countdown = returning.get(player.getUniqueId());
+        if (countdown != null && leftSpot(countdown.start, to)) interruptReturn(player, CharacterSelectionGuard.MOVED);
+    }
+
+    private static boolean leftSpot(Location start, Location now) {
+        return !now.getWorld().equals(start.getWorld()) || now.distanceSquared(start) > RETURN_STILL_RADIUS * RETURN_STILL_RADIUS;
+    }
+
     private boolean stopReturn(UUID owner) {
         Countdown countdown = returning.remove(owner);
         if (countdown == null) return false;
@@ -631,7 +643,7 @@ public final class CharacterBodies {
             return;
         }
         Location now = player.getLocation();
-        if (!now.getWorld().equals(countdown.start.getWorld()) || now.distanceSquared(countdown.start) > 0.04) {
+        if (leftSpot(countdown.start, now)) {
             interruptReturn(player, CharacterSelectionGuard.MOVED);
             return;
         }
