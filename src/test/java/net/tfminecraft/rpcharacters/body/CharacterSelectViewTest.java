@@ -911,6 +911,28 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void anEndThatThrowsSaysToCheckMemorialsRatherThanClaimingTheCharacterLived() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.endCharacter(wren)).thenThrow(new IllegalStateException("estate hook failed"));
+		CharacterSelectView.open(player, data, actions);
+		click("End character");
+		click("End character");
+		click("End for good");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Something went wrong. Check Memorials before trying again.\n"));
+
+		doAnswer(call -> {
+			when(actions.isCurrent(player, data)).thenReturn(false);
+			throw new IllegalStateException("late failure");
+		}).when(actions).endCharacter(wren);
+		click("End character");
+		click("End character");
+		int shown = ui.opened.size();
+		click("End for good");
+		assertEquals(shown, ui.opened.size());
+	}
+
+	@Test
 	void anEndThatReplacesTheSelectorLeavesTheNewOneAlone() {
 		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
 		when(actions.endCharacter(wren)).thenAnswer(call -> {

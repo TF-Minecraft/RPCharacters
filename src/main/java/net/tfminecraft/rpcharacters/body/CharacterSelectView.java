@@ -735,7 +735,16 @@ public final class CharacterSelectView {
 			notice(session, "That character has already gone.");
 			return;
 		}
-		boolean ended = session.actions.endCharacter(character);
+		boolean ended;
+		try {
+			ended = session.actions.endCharacter(character);
+		} catch (RuntimeException failure) {
+			// The death may already be saved, so this must not claim the character survived.
+			Logger.getLogger(CharacterSelectView.class.getName()).log(Level.WARNING,
+					"Could not end character " + characterId + " for " + session.player.getUniqueId(), failure);
+			if (session.live()) notice(session, "Something went wrong. Check Memorials before trying again.");
+			return;
+		}
 		if (!session.live()) return;
 		if (ended) session.selected = null;
 		notice(session, ended ? name(character) + " has died. You can find them in Memorials."
