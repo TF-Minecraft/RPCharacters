@@ -99,11 +99,12 @@ class WillScreensTest {
         try {
             Player player = mock(Player.class);
             List<String> heard = new ArrayList<>();
-            WillScreens.show(player, new Screen("Name an heir", List.of("Type a name."), new Input("heir", "Name", List.of()),
+            WillScreens.show(player, new Screen("Name an heir", Component.text("portrait"), List.of(Component.text("Type a name.")),
+                    new Input("heir", "Name", List.of()),
                     List.of(new Button("Find", values -> heard.add(values.apply("heir"))))));
-            WillScreens.show(player, new Screen("Several", List.of(), new Input("pick", "Character",
+            WillScreens.show(player, new Screen("Several", null, List.of(), new Input("pick", "Character",
                     List.<String[]>of(new String[] {"a", "Kira"}, new String[] {"b", "Kira"})), List.of()));
-            WillScreens.show(player, new Screen("Plain", List.of(), null, List.of()));
+            WillScreens.show(player, new Screen("Plain", null, List.of(), null, List.of()));
             verify(player, times(3)).showDialog(any(Dialog.class));
             assertEquals(2, inputs.size());
             assertInstanceOf(TextDialogInput.class, inputs.get(0));

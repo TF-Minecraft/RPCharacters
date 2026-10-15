@@ -24,6 +24,7 @@ import net.tfminecraft.tlibs.character.estate.Holdings;
 
 /** The staff side of {@code /estate}: every change is audit-logged with the staff member's name. */
 final class EstateStaff {
+    static final int LABELS = 10;
     private final EstateCoordinator estates;
     private final EstateBook book;
     private final EstateWorld world;
@@ -270,6 +271,12 @@ final class EstateStaff {
         return answers.isEmpty() ? "no participants" : String.join(", ", answers);
     }
 
+    /** At most {@link #LABELS} labels, so a character with hundreds of locks does not flood the chat. */
+    static String labels(List<String> labels) {
+        if (labels.size() <= LABELS) return labels.toString();
+        return labels.subList(0, LABELS) + " and " + (labels.size() - LABELS) + " more";
+    }
+
     /** {@code /estate show}: one estate in full. */
     List<String> show(EstateRecord r) {
         List<String> lines = new ArrayList<>();
@@ -282,7 +289,7 @@ final class EstateStaff {
                 + (r.killer == null ? r.killerAccount : r.killer.characterId()));
         if (r.postponeReason != null) lines.add("Postponed since " + r.postponedSince + ": " + r.postponeReason);
         holdings(r).forEach((id, held) -> lines.add((r.decision == null ? "Holds (" : "Still holds (") + id + "): "
-                + held.counts() + " " + held.labels()));
+                + held.counts() + " " + labels(held.labels())));
         if (r.decision != null) {
             Decision d = r.decision;
             lines.add("Decided " + d.decidedAt() + ", revision " + d.revision() + (r.noGuild ? ", without the guild" : "")

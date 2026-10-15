@@ -16,12 +16,12 @@ import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
 import net.tfminecraft.rpcharacters.playerlist.SkinPortrait.SkinTexture;
 
 /** Read-only skin previews. No wardrobe cache, player profile or character state is changed. */
-final class SelectPortraits {
+public final class SelectPortraits {
 
 	private SelectPortraits() {}
 
 	/** Immutable inputs only: Bukkit/player state must be captured before calling. */
-	static CompletableFuture<BufferedImage> load(UUID owner, String characterId, SkinTexture accountFallback) {
+	public static CompletableFuture<BufferedImage> load(UUID owner, String characterId, SkinTexture accountFallback) {
 		return load(owner, characterId, accountFallback,
 				command -> Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, command));
 	}

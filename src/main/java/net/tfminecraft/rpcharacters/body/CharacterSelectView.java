@@ -94,7 +94,7 @@ public final class CharacterSelectView {
 
 	/** Loads one character's 16x32 front view, completing with null when there is none. */
 	@FunctionalInterface
-	interface PortraitLoader {
+	public interface PortraitLoader {
 		CompletableFuture<BufferedImage> load(UUID owner, String characterId, SkinTexture accountFallback);
 	}
 
@@ -106,13 +106,13 @@ public final class CharacterSelectView {
 	static final int BUST_ROWS = 14;
 	static final int TAB_NAME = 11;
 	static final String NO_COOLDOWN_PERMISSION = "rpcharacters.no_cooldown";
-	static final String LOADING = "Loading portrait…";
-	static final String NO_PORTRAIT = "No portrait";
-	static final TextColor TEAL = TextColor.color(0x66F0E2);
-	static final TextColor PALE = TextColor.color(0xFFFFFF);
-	static final TextColor MUTED = TextColor.color(0xD0DCDD);
-	static final TextColor DIM = TextColor.color(0xA4B0B1);
-	static final TextColor WARN = TextColor.color(0xFF8F7D);
+	public static final String LOADING = "Loading portrait…";
+	public static final String NO_PORTRAIT = "No portrait";
+	public static final TextColor TEAL = TextColor.color(0x66F0E2);
+	public static final TextColor PALE = TextColor.color(0xFFFFFF);
+	public static final TextColor MUTED = TextColor.color(0xD0DCDD);
+	public static final TextColor DIM = TextColor.color(0xA4B0B1);
+	public static final TextColor WARN = TextColor.color(0xFF8F7D);
 	private static final int WIDTH = 300;
 	private static final ClickCallback.Options CALLBACKS = ClickCallback.Options.builder()
 			.uses(1).lifetime(Duration.ofMinutes(10)).build();
@@ -231,7 +231,7 @@ public final class CharacterSelectView {
 	}
 
 	/** The room dresses everyone as Steve; portraits fall back to the skin worn before it. */
-	static SkinTexture accountSkin(Player player) {
+	public static SkinTexture accountSkin(Player player) {
 		var saved = net.tfminecraft.rpcharacters.wardrobe.WardrobeCache.getAccountSkin(player);
 		return saved == null ? SkinPortrait.texture(player) : SkinPortrait.parseTextures(saved.getValue());
 	}
@@ -497,12 +497,12 @@ public final class CharacterSelectView {
 		if (!session.painting && !session.memorials && !session.creating && Objects.equals(id, session.selected)) render(session);
 	}
 
-	static Component bust(BufferedImage front) {
+	public static Component bust(BufferedImage front) {
 		return Component.join(JoinConfiguration.newlines(), SkinPortrait.rows(front).subList(0, BUST_ROWS));
 	}
 
 	/** A neutral figure with a caption on the last row, the same height as a bust. */
-	static Component placeholder(String caption) {
+	public static Component placeholder(String caption) {
 		List<Component> rows = new ArrayList<>(SkinPortrait.rows(silhouette()).subList(0, BUST_ROWS - 1));
 		rows.add(Component.text(caption, DIM));
 		return Component.join(JoinConfiguration.newlines(), rows);
