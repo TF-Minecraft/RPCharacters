@@ -109,13 +109,38 @@ class GuildlessHoldTest {
         assertTrue(Files.readString(root.resolve("estates/audit.log"))
                 .contains("held " + record.deathId + " until " + held.dueAt + ": the realm has no leader"));
 
+        kit.clock.advance(Duration.ofDays(6));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.OPEN, now(record).state);
+        assertEquals("the realm has no leader", now(record).postponeReason);
+
         kit.world.guilds.put(realm, GuildLookup.GONE);
         kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(realm, false, Optional.empty(), Optional.of(realm)));
-        kit.clock.advance(Duration.ofDays(6));
+        kit.clock.advance(Duration.ofHours(1));
         kit.coordinator.decideDue();
         EstateRecord decided = now(record);
         assertEquals(EstateState.DECIDED, decided.state);
         assertEquals(Recipient.character(kira), decided.decision.guildLocks().recipient());
+    }
+
+    @Test
+    void aRealmStillWithoutALeaderAWeekLaterNoLongerHoldsTheEstate() {
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, GuildLookup.live(new GuildRef(realm, "Riverwatch", Optional.of(realm),
+                Optional.empty(), "guild:" + realm)));
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(realm, true, Optional.empty(), Optional.of(realm)));
+        EstateRecord record = kit.died(aria, null);
+        kit.clock.advance(Duration.ofHours(24));
+        kit.coordinator.decideDue();
+        kit.clock.advance(Duration.ofDays(12));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.OPEN, now(record).state);
+        kit.clock.advance(Duration.ofDays(1));
+        kit.coordinator.decideDue();
+        EstateRecord decided = now(record);
+        assertEquals(EstateState.DECIDED, decided.state);
+        assertEquals(Recipient.account("guild:" + realm), decided.decision.money().recipient());
+        assertTrue(decided.decision.guildLocks().recipient().isWaiting());
     }
 
     @Test

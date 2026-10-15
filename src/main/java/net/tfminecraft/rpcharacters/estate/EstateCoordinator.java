@@ -200,6 +200,11 @@ final class EstateCoordinator implements EstateService {
     String decide(EstateRecord record, Instant now) {
         Verdict verdict = EstateDecider.decide(record, world, now);
         String longer = verdict instanceof Verdict.Decided decided ? holdsLonger(record, decided.decision()) : null;
+        // SimpleFactions may count a held realm's week from a little after the death; wait for it to close.
+        if (longer == null && verdict instanceof Verdict.Decided decided && record.guildlessHeld
+                && leaderlessRealm(decided.decision()) && now.isBefore(record.dueAt.plus(guildlessWait))) {
+            verdict = new Verdict.Postpone("the realm has no leader");
+        }
         try {
             EstateRecord next = EstateBook.edit(record);
             switch (verdict) {
@@ -250,14 +255,20 @@ final class EstateCoordinator implements EstateService {
     /**
      * Why the estate stays open for the longer guildless wait first, once, or null. A death with no living
      * heir and no guild would freeze; a death in a realm's own guild while the realm has no living leader
-     * (its last member died, or the seat is vacant) waits for the realm to be taken on or closed. Staff
+     * (its last member died, or the seat is vacant) waits for the realm to be taken on or closed, and after
+     * that wait keeps waiting, for at most one more, while the realm still has no leader. Staff
      * deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
      */
     private String holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
         if (record.guildlessHeld || record.noGuild || guildlessWait.compareTo(wait) <= 0) return null;
         if (decision.heir() == null && decision.deathGuild() == null) return "no heir and no guild";
-        boolean ownRealm = decision.deathGuild() != null && decision.deathGuild().equals(decision.deathRealm());
-        return ownRealm && decision.guildLocks().recipient().isWaiting() ? "the realm has no leader" : null;
+        return leaderlessRealm(decision) ? "the realm has no leader" : null;
+    }
+
+    /** A death in a realm's own guild while the realm has no living leader to take its guild locks. */
+    private static boolean leaderlessRealm(EstateRecord.Decision decision) {
+        return decision.deathGuild() != null && decision.deathGuild().equals(decision.deathRealm())
+                && decision.guildLocks().recipient().isWaiting();
     }
 
     private void warnLong(EstateRecord record, Instant now) {
