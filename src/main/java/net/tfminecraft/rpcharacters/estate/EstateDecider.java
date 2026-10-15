@@ -53,8 +53,14 @@ final class EstateDecider {
         if (g.live()) {
             Part leader = g.leader().map(id -> living(world, id, testator)).map(Part::character).orElse(Part.WAITING);
             // Guild locks follow the guild leader, else the realm leader; property waits for a guild leader.
-            Part locks = leader.recipient().isWaiting() ? realmLeader(realmOf(g, world), world, testator)
-                    .map(Part::character).orElse(Part.WAITING) : leader;
+            Part locks = leader;
+            if (leader.recipient().isWaiting()) {
+                GuildLookup realm = realmOf(g, world);
+                if (!(realm instanceof GuildLookup.Live) && !(realm instanceof GuildLookup.Gone)) {
+                    return new Verdict.Postpone("SimpleFactions cannot find the realm");
+                }
+                locks = realmLeader(realm, world, testator).map(Part::character).orElse(Part.WAITING);
+            }
             if (heir != null) {
                 return decided(now, heir, g, Part.bank(heir), Part.character(heir), locks, Part.character(heir));
             }

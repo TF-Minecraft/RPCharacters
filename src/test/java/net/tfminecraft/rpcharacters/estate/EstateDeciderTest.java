@@ -174,6 +174,23 @@ class EstateDeciderTest {
     }
 
     @Test
+    void anUnansweredRealmPostponesALeaderlessLiveGuild() {
+        for (GuildLookup unanswered : java.util.Arrays.asList(GuildLookup.UNAVAILABLE, null)) {
+            setUp();
+            UUID realm = UUID.randomUUID();
+            kit.world.guilds.put(realm, unanswered);
+            guild(true, null, realm);
+            assertEquals("SimpleFactions cannot find the realm", assertInstanceOf(Verdict.Postpone.class,
+                    EstateDecider.decide(estate(heir.characterId()), kit.world, EstateTestKit.T0)).reason());
+        }
+        setUp();
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, GuildLookup.UNAVAILABLE);
+        guild(true, leader, realm);
+        assertEquals(Recipient.character(leader), decide(estate(null)).guildLocks().recipient());
+    }
+
+    @Test
     void anUnansweredRealmPostponesAGoneGuildWithAnHeir() {
         setUp();
         UUID realm = UUID.randomUUID();
