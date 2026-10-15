@@ -109,12 +109,12 @@ final class CharacterSelectionGuard implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void moved(PlayerMoveEvent event) {
-        if (event.hasChangedPosition()) bodies.interruptReturn(event.getPlayer(), MOVED);
+        if (event.hasChangedPosition()) bodies.interruptReturnIfMoved(event.getPlayer(), event.getTo());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void teleported(PlayerTeleportEvent event) {
-        bodies.interruptReturn(event.getPlayer(), MOVED);
+        bodies.interruptReturnIfMoved(event.getPlayer(), event.getTo());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

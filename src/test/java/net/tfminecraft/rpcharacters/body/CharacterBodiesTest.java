@@ -826,6 +826,16 @@ class CharacterBodiesTest {
         countdown(5); verify(transitions,never()).leave(any(),any(),any()); assertTrue(bodies.hasLiveBody(player));
     }
 
+    @Test void turningOrShufflingOnTheSpotKeepsTheReturnGoing() throws Exception {
+        play(); leaveRunsOutgoing(); bodies.requestSelection(player);
+        Location turned=spawn.clone(); turned.setYaw(spawn.getYaw()+170); turned.setPitch(40);
+        bodies.interruptReturnIfMoved(player,turned); bodies.interruptReturnIfMoved(player,spawn.clone().add(.2,0,0));
+        when(player.getLocation()).thenReturn(spawn.clone().add(0,0,.2)); timer.run();
+        verify(player,never()).sendMessage(contains("You moved")); verify(timerTask,never()).cancel();
+        bodies.interruptReturnIfMoved(player,spawn.clone().add(.3,0,0)); verify(player).sendMessage(contains("You moved"));
+        bodies.interruptReturnIfMoved(player,spawn.clone().add(5,0,0)); verify(player).sendMessage(contains("You moved"));
+    }
+
     @Test void countdownEndsQuietlyAfterQuitOrAnotherConnection() throws Exception {
         play(); bodies.requestSelection(player); bodies.quit(player); verify(timerTask).cancel(); timer.run();
         var reconnected=new PlayerData(player); play(); bodies.requestSelection(player); players.when(()->PlayerManager.get(player)).thenReturn(reconnected);
