@@ -132,7 +132,9 @@ class GuildlessHoldTest {
         EstateRecord record = kit.died(aria, null);
         kit.clock.advance(Duration.ofHours(24));
         kit.coordinator.decideDue();
-        kit.clock.advance(Duration.ofDays(12));
+        kit.clock.advance(Duration.ofDays(6));
+        kit.coordinator.decideDue();
+        kit.clock.advance(Duration.ofDays(6));
         kit.coordinator.decideDue();
         assertEquals(EstateState.OPEN, now(record).state);
         kit.clock.advance(Duration.ofDays(1));
@@ -141,6 +143,30 @@ class GuildlessHoldTest {
         assertEquals(EstateState.DECIDED, decided.state);
         assertEquals(Recipient.account("guild:" + realm), decided.decision.money().recipient());
         assertTrue(decided.decision.guildLocks().recipient().isWaiting());
+    }
+
+    @Test
+    void aDeathSimpleFactionsRecordsLateWaitsAWeekFromWhenItDid() {
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, GuildLookup.live(new GuildRef(realm, "Riverwatch", Optional.of(realm),
+                Optional.empty(), "guild:" + realm)));
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.UNAVAILABLE);
+        EstateRecord record = kit.died(aria, null);
+        kit.clock.advance(Duration.ofDays(15));
+        kit.coordinator.decideDue();
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(realm, true, Optional.empty(), Optional.of(realm)));
+        kit.clock.advance(Duration.ofMinutes(1));
+        kit.coordinator.decideDue();
+        assertTrue(now(record).guildlessHeld);
+        kit.clock.advance(Duration.ofMinutes(1));
+        kit.coordinator.decideDue();
+        kit.clock.advance(Duration.ofDays(6));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.OPEN, now(record).state);
+        assertEquals("the realm has no leader", now(record).postponeReason);
+        kit.clock.advance(Duration.ofDays(1));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.DECIDED, now(record).state);
     }
 
     @Test

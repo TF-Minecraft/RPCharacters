@@ -200,9 +200,11 @@ final class EstateCoordinator implements EstateService {
     String decide(EstateRecord record, Instant now) {
         Verdict verdict = EstateDecider.decide(record, world, now);
         String longer = verdict instanceof Verdict.Decided decided ? holdsLonger(record, decided.decision()) : null;
-        // SimpleFactions may count a held realm's week from a little after the death; wait for it to close.
+        // SimpleFactions counts a held realm's week from when it recorded the death, which can be later;
+        // wait for the realm to be taken on or closed, for at most one more wait from when this began.
+        Instant waitingSince = record.postponedSince == null ? now : record.postponedSince;
         if (longer == null && verdict instanceof Verdict.Decided decided && record.guildlessHeld
-                && leaderlessRealm(decided.decision()) && now.isBefore(record.dueAt.plus(guildlessWait))) {
+                && leaderlessRealm(decided.decision()) && now.isBefore(waitingSince.plus(guildlessWait))) {
             verdict = new Verdict.Postpone("the realm has no leader");
         }
         try {
@@ -256,7 +258,7 @@ final class EstateCoordinator implements EstateService {
      * Why the estate stays open for the longer guildless wait first, once, or null. A death with no living
      * heir and no guild would freeze; a death in a realm's own guild while the realm has no living leader
      * (its last member died, or the seat is vacant) waits for the realm to be taken on or closed, and after
-     * that wait keeps waiting, for at most one more, while the realm still has no leader. Staff
+     * that wait keeps waiting while the realm still has no leader, for at most one more wait. Staff
      * deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
      */
     private String holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
