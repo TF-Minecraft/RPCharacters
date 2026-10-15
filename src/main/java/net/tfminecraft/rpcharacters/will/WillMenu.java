@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.will;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +55,8 @@ import net.tfminecraft.tlibs.character.Characters;
  */
 public final class WillMenu {
     static final double NEARBY_BLOCKS = 16;
-    /** A portrait arriving later than this after the screen opened is kept for next time, not painted. */
-    static final long REPAINT_MS = 5_000;
+    /** How long the first open waits for an uncached portrait; a later one is kept for the next open. */
+    static final long PORTRAIT_WAIT_TICKS = 30;
     static final int PORTRAIT_CACHE = 64;
     static BiConsumer<Player, Screen> screens = WillScreens::show;
     static DenarWallet wallet = new DenarEconomyWallet();
@@ -63,6 +64,7 @@ public final class WillMenu {
     static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
     static Executor mainThread = task -> Bukkit.getScheduler().runTask(RPCharacters.plugin, task);
     static LongSupplier clock = System::currentTimeMillis;
+    static BiConsumer<Runnable, Long> later = (task, ticks) -> Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, task, ticks);
 
     /** Painted busts by heir character, so a second open shows the portrait at once. Main thread. */
     private static final Map<UUID, Component> PORTRAITS = new LinkedHashMap<>(16, 0.75f, true) {
@@ -72,15 +74,15 @@ public final class WillMenu {
         }
     };
 
-    /** One open will menu. {@code shown} counts screens, so a late portrait repaints only the screen it was for. */
+    /** Opens still waiting for their heir's portrait, by player; a newer open replaces an older one. Main thread. */
+    private static final Map<UUID, Context> OPENING = new HashMap<>();
+
+    /** One open will menu. */
     private static final class Context {
         final Player player;
         final CharacterSession session;
         final PlayerData data;
         final RPCharacter character;
-        int shown;
-        int mainAt = -1;
-        long mainSince;
 
         Context(Player player, CharacterSession session, PlayerData data, RPCharacter character) {
             this.player = player;
@@ -101,7 +103,26 @@ public final class WillMenu {
             player.sendMessage("Play a character to make its will.");
             return;
         }
-        main(new Context(player, session.get(), data, character));
+        Context ctx = new Context(player, session.get(), data, character);
+        CharacterWill will = character.getWill();
+        Optional<CharacterInfo> heir = will.named() ? WillService.lookup().info(will.heir())
+                .filter(info -> info.status() == CharacterStatus.ALIVE) : Optional.empty();
+        if (heir.isEmpty() || PORTRAITS.containsKey(heir.get().ref().characterId())) {
+            OPENING.remove(player.getUniqueId());
+            main(ctx);
+            return;
+        }
+        // The first screen waits briefly for the portrait, so nothing repaints a screen the player has moved on from.
+        OPENING.put(player.getUniqueId(), ctx);
+        load(ctx, heir.get());
+        later.accept(() -> first(ctx), PORTRAIT_WAIT_TICKS);
+    }
+
+    /** Shows the first screen once, unless a newer /will replaced this one or the player moved on. */
+    private static void first(Context ctx) {
+        if (OPENING.get(ctx.player.getUniqueId()) != ctx) return;
+        OPENING.remove(ctx.player.getUniqueId());
+        if (ctx.player.isOnline() && Characters.isCurrent(ctx.session)) main(ctx);
     }
 
     static void clearPortraits() {
@@ -114,17 +135,22 @@ public final class WillMenu {
         UUID self = UUID.fromString(ctx.character.getId());
         Optional<CharacterInfo> heir = will.named() ? WillService.lookup().info(will.heir()) : Optional.empty();
         boolean living = heir.map(info -> info.status() == CharacterStatus.ALIVE).orElse(false);
+        boolean unreadable = will.named() && WillService.lookup().unreadable(will.heir());
         Guild guild = WillForecast.guild(self);
         Estate estate = WillView.estate(holdings(self), money(ctx));
         List<Component> lines = new ArrayList<>();
         Component portrait = null;
-        if (living) {
+        if (unreadable) {
+            lines.add(WillView.lines(List.of(Component.text("⚠ Your heir can't be checked right now", WillView.WARN, TextDecoration.BOLD),
+                    Component.text("If " + name + " died now, the estate would wait until the heir can be read.", WillView.TEXT))));
+            if (!estate.isEmpty()) lines.add(heirGets("Your estate today", estate, true));
+        } else if (living) {
             CharacterInfo info = heir.get();
-            portrait = portrait(ctx, info);
+            portrait = PORTRAITS.getOrDefault(info.ref().characterId(), CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT));
             lines.add(WillView.lines(List.of(Component.text(info.name(), WillView.HEIR, TextDecoration.BOLD),
                     Component.text(about(ctx, info, will), WillView.MUTED))));
             lines.add(Component.text("— ✦ —", WillView.MUTED));
-            lines.add(heirGets(info, estate));
+            lines.add(heirGets(info.name() + " would get", estate, !(guild instanceof Guild.Member) && !(guild instanceof Guild.Unknown)));
             Component elsewhere = elsewhere(ctx, estate, guild);
             if (elsewhere != null) lines.add(elsewhere);
         } else {
@@ -145,8 +171,6 @@ public final class WillMenu {
         if (will.named()) buttons.add(button(ctx, "Revoke", values -> confirm(ctx, null, "Revoke your will? Nobody will be named.")));
         buttons.add(button(ctx, "Close", values -> ctx.player.closeDialog()));
         show(ctx, new Screen("Will of " + name, portrait, lines, null, buttons));
-        ctx.mainAt = ctx.shown;
-        ctx.mainSince = clock.getAsLong();
     }
 
     private static List<EstateHooks.Held> holdings(UUID self) {
@@ -179,23 +203,25 @@ public final class WillMenu {
         return String.join(" · ", parts);
     }
 
-    private static Component heirGets(CharacterInfo heir, Estate estate) {
+    /** {@code guildLocks}: guild and faction locks go with the rest, as they do to an heir without a guild. */
+    private static Component heirGets(String heading, Estate estate, boolean guildLocks) {
         List<Component> lines = new ArrayList<>();
-        lines.add(WillView.heading(heir.name() + " would get"));
+        lines.add(WillView.heading(heading));
         if (estate.isEmpty()) lines.add(Component.text("Nothing recorded today.", WillView.MUTED));
         if (estate.money() != null) lines.add(WillView.money(estate.money()));
         for (Row row : estate.rows()) {
-            if (!WillView.GUILD_LOCKS.equals(row.key())) lines.add(WillView.row(row));
+            if (guildLocks || !WillView.GUILD_LOCKS.equals(row.key())) lines.add(WillView.row(row));
         }
         return WillView.lines(lines);
     }
 
-    /** With an heir, only guild and faction locks go elsewhere: to the guild's leader, else the realm's. */
+    /** With an heir and a guild, guild and faction locks go to the guild's leader, else the realm's. */
     private static Component elsewhere(Context ctx, Estate estate, Guild guild) {
         Row locks = estate.rows().stream().filter(row -> WillView.GUILD_LOCKS.equals(row.key())).findFirst().orElse(null);
-        if (locks == null || !(guild instanceof Guild.Member member)) return null;
-        return WillView.lines(List.of(WillView.heading("Goes elsewhere"),
-                WillView.row(locks).append(arrow()).append(locksTo(ctx, member))));
+        if (locks == null || guild instanceof Guild.None) return null;
+        Component to = guild instanceof Guild.Member member ? locksTo(ctx, member)
+                : Component.text("your guild's leader, else your realm's", WillView.TEXT);
+        return WillView.lines(List.of(WillView.heading("Goes elsewhere"), WillView.row(locks).append(arrow()).append(to)));
     }
 
     private static Component noHeir(Context ctx, Estate estate, Guild guild) {
@@ -232,8 +258,13 @@ public final class WillMenu {
         return WillView.named(member.leader().get(), ctx.data, WillView.TEXT);
     }
 
+    /** The guild's leader, else the realm's; a leader's successor is not known until the death. */
     private static Component locksTo(Context ctx, Guild.Member member) {
-        if (member.youLead()) return Component.text(member.name() + "'s next leader", WillView.TEXT);
+        if (member.youLead()) {
+            Component next = Component.text(member.name() + "'s next leader", WillView.TEXT);
+            return member.realmLeader().map(realm -> next.append(Component.text(", else ", WillView.TEXT))
+                    .append(WillView.named(realm, ctx.data, WillView.TEXT))).orElse(next);
+        }
         Optional<CharacterInfo> to = member.leader().or(member::realmLeader);
         return to.map(info -> WillView.named(info, ctx.data, WillView.TEXT))
                 .orElse(Component.text(member.name() + "'s next leader", WillView.TEXT));
@@ -243,11 +274,9 @@ public final class WillMenu {
         return Component.text(" → ", WillView.MUTED);
     }
 
-    /** The heir's bust: cached, else a placeholder while it loads, painted when it arrives. */
-    private static Component portrait(Context ctx, CharacterInfo heir) {
+    /** Loads the heir's bust into the cache, then shows the first screen if it is still waiting. */
+    private static void load(Context ctx, CharacterInfo heir) {
         UUID id = heir.ref().characterId();
-        Component cached = PORTRAITS.get(id);
-        if (cached != null) return cached;
         CompletableFuture<BufferedImage> future;
         try {
             Player owner = WillView.online.apply(heir.ref().ownerId());
@@ -257,10 +286,12 @@ public final class WillMenu {
             future = null;
         }
         if (future == null) future = CompletableFuture.completedFuture(null);
-        int screen = ctx.shown + 1;
-        future.whenComplete((front, error) -> dispatch(() -> arrived(ctx, id, error == null ? front : null, screen)));
-        Component painted = PORTRAITS.get(id);
-        return painted != null ? painted : CharacterSelectView.placeholder(CharacterSelectView.LOADING);
+        future.whenComplete((front, error) -> dispatch(() -> {
+            BufferedImage image = error == null ? front : null;
+            PORTRAITS.put(id, image == null ? CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT)
+                    : CharacterSelectView.bust(image));
+            first(ctx);
+        }));
     }
 
     private static void dispatch(Runnable task) {
@@ -268,16 +299,6 @@ public final class WillMenu {
             mainThread.execute(task);
         } catch (RuntimeException disabled) {
             // The plugin is shutting down; the menu goes with it.
-        }
-    }
-
-    private static void arrived(Context ctx, UUID id, BufferedImage front, int screen) {
-        PORTRAITS.put(id, front == null ? CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT)
-                : CharacterSelectView.bust(front));
-        boolean showing = ctx.shown == screen && ctx.mainAt == screen;
-        if (showing && clock.getAsLong() - ctx.mainSince <= REPAINT_MS && ctx.player.isOnline()
-                && Characters.isCurrent(ctx.session)) {
-            main(ctx);
         }
     }
 
@@ -392,7 +413,6 @@ public final class WillMenu {
     }
 
     private static void show(Context ctx, Screen screen) {
-        ctx.shown++;
         screens.accept(ctx.player, screen);
     }
 

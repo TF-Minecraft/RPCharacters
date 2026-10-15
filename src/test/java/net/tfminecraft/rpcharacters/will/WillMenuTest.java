@@ -90,6 +90,10 @@ class WillMenuTest {
             return event;
         };
         WillMenu.mainThread = later::add;
+        WillMenu.later = (task, ticks) -> {
+            assertEquals(WillMenu.PORTRAIT_WAIT_TICKS, ticks);
+            task.run();
+        };
         WillMenu.clock = () -> now;
         WillMenu.portraits = (owner, id, fallback) -> new CompletableFuture<>();
         wallet = mock(DenarWallet.class);
@@ -254,6 +258,15 @@ class WillMenuTest {
         assertEquals(branInfo.ref().characterId(), aria.getWill().heir());
     }
 
+    private CompletableFuture<BufferedImage> pending(MockedStatic<CharacterSelectView> select, List<Runnable> waits) {
+        select.when(() -> CharacterSelectView.placeholder(anyString())).thenAnswer(call -> Component.text("[" + call.getArgument(0) + "]"));
+        select.when(() -> CharacterSelectView.bust(any())).thenReturn(Component.text("[bust]"));
+        WillMenu.later = (task, ticks) -> waits.add(task);
+        CompletableFuture<BufferedImage> skin = new CompletableFuture<>();
+        WillMenu.portraits = (owner, id, fallback) -> skin;
+        return skin;
+    }
+
     @Test
     void aLivingHeirGetsAPortraitAndGuildLocksGoElsewhere() {
         standardEstate();
@@ -262,12 +275,11 @@ class WillMenuTest {
         when(wallet.balance(session.ref(), DenarWallet.Account.BANK)).thenReturn(0L);
         WillForecast.guilds = id -> ironhold(Optional.empty(), false, Optional.of(bob));
         aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now - 3 * DAY, null));
-        CompletableFuture<BufferedImage> skin = new CompletableFuture<>();
         Player kiraOwner = player(0);
         WillView.online = id -> id.equals(kira.ref().ownerId()) ? kiraOwner : null;
+        List<Runnable> waits = new ArrayList<>();
         try (var select = mockStatic(CharacterSelectView.class)) {
-            select.when(() -> CharacterSelectView.placeholder(anyString())).thenAnswer(call -> Component.text("[" + call.getArgument(0) + "]"));
-            select.when(() -> CharacterSelectView.bust(any())).thenReturn(Component.text("[bust]"));
+            CompletableFuture<BufferedImage> skin = pending(select, waits);
             select.when(() -> CharacterSelectView.accountSkin(kiraOwner)).thenReturn(null);
             WillMenu.portraits = (owner, id, fallback) -> {
                 assertEquals(kira.ref().ownerId(), owner);
@@ -275,61 +287,64 @@ class WillMenuTest {
                 return skin;
             };
             WillMenu.open(player);
-            assertEquals("[Loading portrait…]", plain(last().portrait()));
+            assertTrue(shown.isEmpty());
+            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
+            later.removeFirst().run();
+            assertEquals("[bust]", plain(last().portrait()));
             String body = body();
             assertTrue(body.contains("Kira\nElf · named 3 days ago"), body);
             assertTrue(body.contains("Kira would get\n163.40 denars carried, 0 denars banked\n1 vehicle\n1 lock\n1 letter"), body);
             assertTrue(body.contains("Goes elsewhere\n1 guild or faction lock → Bob"), body);
             assertEquals(List.of("Change heir", "Revoke", "Close"), buttons());
+            // The wait ends with the screen already shown: nothing more.
             int before = shown.size();
-            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
-            later.removeFirst().run();
+            waits.removeFirst().run();
+            assertEquals(before, shown.size());
+            // Opening again uses the cached bust at once.
+            WillMenu.open(player);
             assertEquals(before + 1, shown.size());
             assertEquals("[bust]", plain(last().portrait()));
-            // Opening again uses the painted bust at once.
-            WillMenu.open(player);
-            assertEquals("[bust]", plain(last().portrait()));
-            assertTrue(later.isEmpty());
+            assertTrue(later.isEmpty() && waits.isEmpty());
         }
     }
 
     @Test
-    void aLatePortraitIsKeptButNotPaintedOverAnotherScreen() {
+    void aSlowPortraitIsCachedButNeverReopensOrReplacesAScreen() {
         aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now, null));
-        CompletableFuture<BufferedImage> skin = new CompletableFuture<>();
-        WillMenu.portraits = (owner, id, fallback) -> skin;
+        List<Runnable> waits = new ArrayList<>();
         try (var select = mockStatic(CharacterSelectView.class)) {
-            select.when(() -> CharacterSelectView.placeholder(anyString())).thenAnswer(call -> Component.text("[" + call.getArgument(0) + "]"));
+            CompletableFuture<BufferedImage> skin = pending(select, waits);
             WillMenu.open(player);
+            waits.removeFirst().run();
+            assertEquals("[No portrait]", plain(last().portrait()));
             assertTrue(body().contains("Kira\nElf · named today"), body());
             assertTrue(body().contains("Kira would get\nNothing recorded today."), body());
-            click("Change heir");
-            skin.complete(null);
+            click("Close");
+            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
             int before = shown.size();
             later.removeFirst().run();
             assertEquals(before, shown.size());
             WillMenu.open(player);
-            assertEquals("[No portrait]", plain(last().portrait()));
-            // A slow portrait, the player gone, or another character: not painted.
+            assertEquals("[bust]", plain(last().portrait()));
+            // A newer /will replaces a waiting one; the older one never shows.
             WillMenu.clearPortraits();
-            CompletableFuture<BufferedImage> slow = new CompletableFuture<>();
-            WillMenu.portraits = (owner, id, fallback) -> slow;
+            CompletableFuture<BufferedImage> second = new CompletableFuture<>();
+            WillMenu.portraits = (owner, id, fallback) -> second;
             WillMenu.open(player);
-            now += WillMenu.REPAINT_MS + 1;
-            slow.complete(null);
+            WillMenu.open(player);
             before = shown.size();
-            later.removeFirst().run();
+            waits.removeFirst().run();
             assertEquals(before, shown.size());
+            waits.removeFirst().run();
+            assertEquals(before + 1, shown.size());
+            // A player gone or playing another character by then sees nothing.
             for (int step = 0; step < 2; step++) {
                 WillMenu.clearPortraits();
-                CompletableFuture<BufferedImage> next = new CompletableFuture<>();
-                WillMenu.portraits = (owner, id, fallback) -> next;
                 WillMenu.open(player);
                 if (step == 0) when(player.isOnline()).thenReturn(false);
                 else identity.when(() -> Characters.isCurrent(session)).thenReturn(false);
-                next.complete(null);
                 before = shown.size();
-                later.removeFirst().run();
+                waits.removeFirst().run();
                 assertEquals(before, shown.size());
                 when(player.isOnline()).thenReturn(true);
                 identity.when(() -> Characters.isCurrent(session)).thenReturn(true);
@@ -340,8 +355,9 @@ class WillMenuTest {
     @Test
     void portraitFailuresShowNoPortraitAndAStoppedSchedulerIsIgnored() {
         aria.setWill(new CharacterWill(kira.ref().characterId(), 1, null, null));
+        List<Runnable> waits = new ArrayList<>();
         try (var select = mockStatic(CharacterSelectView.class)) {
-            select.when(() -> CharacterSelectView.placeholder(anyString())).thenAnswer(call -> Component.text("[" + call.getArgument(0) + "]"));
+            pending(select, waits);
             WillMenu.mainThread = Runnable::run;
             WillMenu.portraits = (owner, id, fallback) -> { throw new IllegalStateException("no site"); };
             WillMenu.open(player);
@@ -358,9 +374,43 @@ class WillMenuTest {
             WillMenu.clearPortraits();
             WillMenu.mainThread = task -> { throw new IllegalStateException("disabled"); };
             WillMenu.portraits = (owner, id, fallback) -> CompletableFuture.completedFuture(null);
+            int before = shown.size();
             WillMenu.open(player);
-            assertEquals("[Loading portrait…]", plain(last().portrait()));
+            assertEquals(before, shown.size());
+            waits.getLast().run();
+            assertEquals("[No portrait]", plain(last().portrait()));
         }
+    }
+
+    @Test
+    void anUnreadableHeirWaitsAndGuildLocksFollowTheRules() {
+        standardEstate();
+        aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now, null));
+        characters.unreadable.add(kira.ref().characterId());
+        WillForecast.guilds = id -> ironhold(Optional.of(bob), false, Optional.empty());
+        WillMenu.open(player);
+        String body = body();
+        assertTrue(body.contains("⚠ Your heir can't be checked right now\nIf Aria died now, the estate would wait until the heir can be read."), body);
+        assertTrue(body.contains("Your estate today\n163.40 in the pouch, 0.00 in the bank\n1 vehicle\n1 lock\n1 letter\n1 guild or faction lock"), body);
+        assertFalse(body.contains("→"), body);
+        holdings();
+        WillMenu.open(player);
+        assertFalse(body().contains("Your estate today"), body());
+        characters.unreadable.clear();
+        standardEstate();
+        // A living heir without a guild takes the guild locks too.
+        WillForecast.guilds = id -> WillForecast.NONE;
+        WillMenu.open(player);
+        assertTrue(body().contains("1 letter\n1 guild or faction lock\nHow wills work"), body());
+        assertFalse(body().contains("Goes elsewhere"), body());
+        // Unknown guild: the rule without names.
+        WillForecast.guilds = id -> null;
+        WillMenu.open(player);
+        assertTrue(body().contains("Goes elsewhere\n1 guild or faction lock → your guild's leader, else your realm's"), body());
+        // Leading the guild: its next leader, else the realm's leader.
+        WillForecast.guilds = id -> ironhold(Optional.empty(), true, Optional.of(bob));
+        WillMenu.open(player);
+        assertTrue(body().contains("1 guild or faction lock → Ironhold's next leader, else Bob"), body());
     }
 
     @Test
