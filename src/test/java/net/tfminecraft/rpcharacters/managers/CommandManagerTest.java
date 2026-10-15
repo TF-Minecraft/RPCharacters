@@ -110,12 +110,23 @@ class CommandManagerTest {
         PlayerClass value = mock(PlayerClass.class); when(value.getName()).thenReturn("Warrior"); when(manager.get(id)).thenReturn(value); return value;
     }
 
-    @Test void selectAsksCharacterBodiesWithoutDisconnecting() {
+    @Test void menuAsksCharacterBodiesWithoutDisconnecting() {
         var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
         globals.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
-        assertTrue(run("select")); assertTrue(run("SELECT"));
+        assertTrue(run("menu")); assertTrue(run("MENU"));
         verify(bodies, times(2)).requestSelection(player);
         assertTrue(player.isOnline());
+        assertTrue(run("select")); message("Error with command format");
+    }
+
+    @Test void menuWithAPlayerKeepsTheChestForStaffOnly() {
+        var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
+        globals.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
+        try (var inventories = mockConstruction(InventoryManager.class)) {
+            run("menu", "Iris"); verify(bodies).requestSelection(player); assertTrue(inventories.constructed().isEmpty());
+            admin(); run("menu", "Iris"); verify(inventories.constructed().getLast()).profileView(player, target);
+            run("menu"); verify(bodies, times(2)).requestSelection(player); assertEquals(1, inventories.constructed().size());
+        }
     }
 
     @Test void unknownCommandsEmptyInputConsoleAndBadArityAreHandled() {

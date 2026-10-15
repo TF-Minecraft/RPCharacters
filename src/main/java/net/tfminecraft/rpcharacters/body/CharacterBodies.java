@@ -405,6 +405,7 @@ public final class CharacterBodies {
                 CreationManager.initiateCreation(player);
                 if (!CreationManager.activeCreators.containsKey(player) && CharacterSelectView.session(player.getUniqueId()) == null) show(player);
             }
+            public boolean endCharacter(RPCharacter character) { return CharacterBodies.this.endCharacter(account, character); }
             public void leave() { player.kickPlayer("See you next time."); }
             public boolean needsDiscordLink() { return discordRequired(player); }
             public void linkDiscord() {
@@ -438,7 +439,7 @@ public final class CharacterBodies {
         presentation.interact(player);
         CharacterSelectView.close(player);
         player.closeDialog();
-        player.sendMessage("Use /rpcharacter select to return when you have finished.");
+        player.sendMessage("Use /rpcharacter menu to return when you have finished.");
     }
 
     public void refreshPresentation(Player player) {
@@ -448,6 +449,16 @@ public final class CharacterBodies {
     private boolean current(Player player, PlayerData account) {
         return player != null && player.isOnline() && account != null && PlayerManager.get(player) == account
                 && isSelecting(player) && !failed.contains(player.getUniqueId());
+    }
+
+    /** Selection's End character, the same permanent death the old character menu gave. */
+    boolean endCharacter(PlayerData account, RPCharacter character) {
+        Player player = account.getPlayer();
+        if (!current(player, account) || !ready.contains(account.getUniqueId())) return false;
+        if (!account.getCharacters().contains(character) || character.getStatus() != Status.ALIVE) return false;
+        if (CreationManager.activeCreators.containsKey(player)) return false;
+        return net.tfminecraft.rpcharacters.permadeath.PermadeathService.killCharacter(player, character,
+                net.tfminecraft.rpcharacters.permadeath.PermakillCause.CHARACTER_MENU);
     }
 
     public String blockReason(PlayerData account, RPCharacter character) {

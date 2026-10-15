@@ -219,6 +219,21 @@ class CharacterBodiesTest {
         assertFalse(actions.needsDiscordLink());
     }
 
+    @Test void endCharacterKillsOnlyALivingRosterCharacterWhileChoosing() {
+        try (var permadeath=mockStatic(net.tfminecraft.rpcharacters.permadeath.PermadeathService.class)) {
+            permadeath.when(()->net.tfminecraft.rpcharacters.permadeath.PermadeathService.killCharacter(player,a,
+                    net.tfminecraft.rpcharacters.permadeath.PermakillCause.CHARACTER_MENU)).thenReturn(true);
+            assertFalse(bodies.endCharacter(account,a));
+            ready();
+            assertTrue(actions.endCharacter(a));
+            assertFalse(actions.endCharacter(character(UUID.randomUUID())));
+            when(b.getStatus()).thenReturn(Status.DEAD); assertFalse(actions.endCharacter(b));
+            CreationManager.activeCreators.put(player,mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class));
+            try { assertFalse(actions.endCharacter(a)); } finally { CreationManager.activeCreators.remove(player); }
+            permadeath.verify(()->net.tfminecraft.rpcharacters.permadeath.PermadeathService.killCharacter(any(),any(),any()),times(1));
+        }
+    }
+
     @Test void creationFeedbackStaysInTheWizardRatherThanBecomingDelayedChat() {
         ready();
         var creation=mock(net.tfminecraft.rpcharacters.creation.CharacterCreation.class);

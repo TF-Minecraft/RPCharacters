@@ -197,8 +197,8 @@ final class CharacterSelectionGuard implements Listener {
         }
         String[] words = command.split("\\s+");
         if (words.length == 2 && (words[0].equals("/rpcharacter") || words[0].equals("/rpcharacters:rpcharacter"))
-                && java.util.Set.of("select", "cancel", "next", "back", "help").contains(words[1])) return;
+                && java.util.Set.of("menu", "cancel", "next", "back", "help").contains(words[1])) return;
         event.setCancelled(true);
-        bodies.feedback(event.getPlayer(), "Choose a character before using commands. Use /rpcharacter select to reopen selection.");
+        bodies.feedback(event.getPlayer(), "Choose a character before using commands. Use /rpcharacter menu to reopen selection.");
     }
 }

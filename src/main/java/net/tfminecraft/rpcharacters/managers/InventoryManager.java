@@ -1024,15 +1024,10 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
+	/** Shown traits as legacy text: name, time left and type, without background traits. */
 	@SuppressWarnings("deprecation")
-	public ItemStack getTraitsItem(RPCharacter c) {
-		ItemStack i = new ItemStack(Material.GOLDEN_APPLE, 1);
-		ItemMeta meta = i.getItemMeta();
-		meta.setDisplayName(t(RPTexts.MUTED + "Character Traits"));
-		List<String> lore = new ArrayList<String>();
-		lore.add(t(RPTexts.MUTED + "------------------------"));
-		lore.add(t(RPTexts.WARN + "Traits:"));
-		lore.add(RPTexts.spacer());
+	public static List<String> traitLines(RPCharacter c) {
+		List<String> lines = new ArrayList<>();
 		for(Trait trait : c.getTraits()) {
 			if(Cache.backgroundTraitTypes.contains(trait.getTraitData().getKey())) continue;
 			String key = trait.getTraitData().getKey();
@@ -1049,8 +1044,21 @@ public class InventoryManager {
 				}
 				remaining = RPTexts.mutedParenthetical(TraitStateFormat.formatHoursRemaining(remainingMs));
 			}
-			lore.add(displayName + remaining + RPTexts.mutedParenthetical(WordUtils.capitalize(key)));
+			lines.add(displayName + remaining + RPTexts.mutedParenthetical(WordUtils.capitalize(key)));
 		}
+		return lines;
+	}
+
+	@SuppressWarnings("deprecation")
+	public ItemStack getTraitsItem(RPCharacter c) {
+		ItemStack i = new ItemStack(Material.GOLDEN_APPLE, 1);
+		ItemMeta meta = i.getItemMeta();
+		meta.setDisplayName(t(RPTexts.MUTED + "Character Traits"));
+		List<String> lore = new ArrayList<String>();
+		lore.add(t(RPTexts.MUTED + "------------------------"));
+		lore.add(t(RPTexts.WARN + "Traits:"));
+		lore.add(RPTexts.spacer());
+		lore.addAll(traitLines(c));
 		if (c.getStatus().equals(Status.ALIVE)) {
 			lore.addAll(PermadeathService.computeRisk(c).toLoreLines());
 		}
