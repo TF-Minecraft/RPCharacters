@@ -816,10 +816,24 @@ class CharacterSelectViewTest {
 		assertEquals("Background   Traits   Clues 1/3   End character", text(row));
 		Map<String, String> hovers = components(row).filter(c -> c.hoverEvent() != null && c.children().isEmpty())
 				.collect(Collectors.toMap(CharacterSelectViewTest::text, c -> text((Component) c.hoverEvent().value())));
-		assertEquals("Raised by wolves\nin the north.", hovers.get("Background"));
+		assertEquals("Read Wren's background", hovers.get("Background"));
 		assertEquals("Brave (Personality)", hovers.get("Traits"));
 		assertEquals("Knows the old roads", hovers.get("Clues 1/3"));
 		assertEquals("Kill this character for good", hovers.get("End character"));
+
+		click("Background");
+		assertEquals("Wren's background", text(ui.last().base().title()));
+		assertEquals("Raised by wolves\nin the north.", ui.last().bodyText());
+		assertEquals(List.of("Back"), labels());
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		click("Background");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		CharacterSelectView.notice(player, "Gone");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.notice(player, "Back again");
+		link("Wren");
 
 		when(wren.getDescription()).thenReturn(List.of());
 		when(wren.getPlayerClues()).thenReturn(List.of());

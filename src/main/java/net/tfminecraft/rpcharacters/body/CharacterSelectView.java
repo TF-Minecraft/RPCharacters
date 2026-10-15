@@ -63,8 +63,8 @@ import net.tfminecraft.tlibs.character.CharacterRef;
 
 /**
  * Join-time character picker, shown while the player has no active body. It
- * focuses one living character at a time with a skin bust, a roster strip, a
- * two-step page for ending a character and a separate memorials page. Every
+ * focuses one living character at a time with a skin bust, a roster strip,
+ * background and end-character pages and a separate memorials page. Every
  * button rechecks that the click came from the same connection, the same
  * selector session and the current view, and that the owner still considers
  * this selector current. Previews only read skins.
@@ -145,6 +145,8 @@ public final class CharacterSelectView {
 		boolean creating;
 		int memorialPage;
 		String selected;
+		/** The character whose background is open, or null. */
+		String reading;
 		/** The character on the end page, or null. */
 		String ending;
 		boolean sure;
@@ -246,6 +248,7 @@ public final class CharacterSelectView {
 		session.painting = true;
 		try {
 			if (session.ending != null) renderEnding(session);
+			else if (session.reading != null) renderBackground(session);
 			else if (session.memorials) renderMemorials(session);
 			else renderRoster(session);
 		} finally {
@@ -333,6 +336,20 @@ public final class CharacterSelectView {
 				s -> navigate(s, v -> v.memorials = false)));
 		show(session, Component.text("Memorials", PALE, TextDecoration.BOLD), body, buttons, leave(session),
 				buttons.size());
+	}
+
+	/** Backgrounds run taller than a tooltip, so they get the dialog's scrolling body. */
+	private static void renderBackground(Session session) {
+		RPCharacter character = session.data.getCharacterById(session.reading);
+		if (character == null || character.getStatus() != Status.ALIVE) {
+			session.reading = null;
+			renderRoster(session);
+			return;
+		}
+		List<DialogBody> body = List.of(text(Component.text(background(character), MUTED)));
+		List<ActionButton> buttons = List.of(button(Component.text("Back", TEAL, TextDecoration.BOLD),
+				"Back to your characters", 100, session, s -> navigate(s, v -> v.reading = null)));
+		show(session, Component.text(name(character) + "'s background", PALE, TextDecoration.BOLD), body, buttons, null, 1);
 	}
 
 	/** Confirms twice; the second step does the deed. */
@@ -583,17 +600,20 @@ public final class CharacterSelectView {
 		return card.build();
 	}
 
-	/** Background, traits and clues on hover, then the way to end the character. */
+	/** Background page, traits and clues on hover, then the way to end the character. */
 	static Component extras(Session session, RPCharacter character) {
 		List<Component> parts = new ArrayList<>();
-		hover(parts, "Background", character.getDescription());
+		String id = character.getId();
+		if (!background(character).isBlank()) {
+			parts.add(link(Component.text("Background", MUTED), "Read " + name(character) + "'s background", session,
+					s -> navigate(s, v -> v.reading = id)));
+		}
 		hover(parts, "Traits", traits.apply(character));
 		List<String> clues = character.getPlayerClues() == null ? List.of() : character.getPlayerClues();
 		if (character.getCluesNeeded() > 0 || !clues.isEmpty()) {
 			Component label = Component.text("Clues " + clues.size() + "/" + character.getCluesNeeded(), MUTED);
 			parts.add(label.hoverEvent(HoverEvent.showText(Component.text(clues.isEmpty() ? "No clues yet." : plain(clues)))));
 		}
-		String id = character.getId();
 		parts.add(link(Component.text("End character", WARN), "Kill this character for good", session,
 				s -> navigate(s, v -> { v.ending = id; v.sure = false; })));
 		return Component.join(JoinConfiguration.separator(Component.text("   ")), parts);
@@ -602,6 +622,10 @@ public final class CharacterSelectView {
 	private static void hover(List<Component> parts, String label, List<String> lines) {
 		String contents = lines == null ? "" : plain(lines);
 		if (!contents.isBlank()) parts.add(Component.text(label, MUTED).hoverEvent(HoverEvent.showText(Component.text(contents))));
+	}
+
+	private static String background(RPCharacter character) {
+		return character.getDescription() == null ? "" : plain(character.getDescription());
 	}
 
 	private static String plain(List<String> lines) {
