@@ -111,8 +111,16 @@ class WillViewTest {
         Component text = locks.children().get(1);
         HoverEvent<?> hover = text.hoverEvent();
         String shown = plain((Component) hover.value());
-        assertTrue(shown.startsWith("Your locks\nDoor 0\n"), shown);
-        assertTrue(shown.endsWith("Door 11\nand 2 more"), shown);
+        assertEquals("Your locks, by kind\nDoor 0 \u00d71\nDoor 1 \u00d71\nDoor 2 \u00d71\nDoor 3 \u00d71\nDoor 4 \u00d71\n"
+                + "Door 5 \u00d71\nDoor 6 \u00d71\nDoor 7 \u00d71\nDoor 8 \u00d71\nDoor 9 \u00d71\nDoor 10 \u00d71\n"
+                + "Door 11 \u00d71\nand 2 more", shown);
+        List<String> chests = new ArrayList<>();
+        for (int i = 0; i < 300; i++) chests.add((i % 3 == 0 ? "Barrel" : "Chest") + " at " + i + " 64 0" + (i == 1 ? " (guild)" : ""));
+        assertEquals(List.of("Chest \u00d7200", "Barrel \u00d7100"), WillView.byKind(chests));
+        Component hundreds = WillView.row(WillView.estate(List.of(new Held("thievery", Map.of("locks", 300), chests)), null)
+                .rows().getFirst());
+        assertEquals("Your locks, by kind\nChest \u00d7200\nBarrel \u00d7100",
+                plain((Component) hundreds.children().get(1).hoverEvent().value()));
         assertInstanceOf(ObjectComponent.class, locks);
         Component one = WillView.row(WillView.estate(List.of(held("simplefactions-vehicles", Map.of("vehicles", 1), "Cart")), null)
                 .rows().getFirst());

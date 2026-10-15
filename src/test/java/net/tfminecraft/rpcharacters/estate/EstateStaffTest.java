@@ -356,4 +356,12 @@ class EstateStaffTest {
         assertTrue(parked.contains("(intent)"), parked);
         assertEquals(1, kit.world.participants.stream().filter(p -> p.id().equals("research")).count());
     }
+
+    @Test
+    void longLabelListsAreCutForChat() {
+        assertEquals("[a, b]", EstateStaff.labels(List.of("a", "b")));
+        List<String> many = new java.util.ArrayList<>();
+        for (int i = 0; i < EstateStaff.LABELS + 3; i++) many.add("l" + i);
+        assertEquals(many.subList(0, EstateStaff.LABELS) + " and 3 more", EstateStaff.labels(many));
+    }
 }

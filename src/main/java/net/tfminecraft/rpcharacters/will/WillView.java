@@ -144,16 +144,30 @@ final class WillView {
     static Component row(Row row) {
         Component text = row.text();
         if (row.kind().listed() && !row.labels().isEmpty()) {
+            boolean many = row.labels().size() > HOVER_LINES;
+            List<String> shown = many ? byKind(row.labels()) : row.labels();
             List<Component> lines = new ArrayList<>();
-            lines.add(Component.text("Your " + row.kind().many(), TEXT));
-            row.labels().stream().limit(HOVER_LINES).forEach(label -> lines.add(Component.text(label, NamedTextColor.GRAY)));
-            if (row.labels().size() > HOVER_LINES) {
-                lines.add(Component.text("and " + (row.labels().size() - HOVER_LINES) + " more", NamedTextColor.DARK_GRAY));
+            lines.add(Component.text("Your " + row.kind().many() + (many ? ", by kind" : ""), TEXT));
+            shown.stream().limit(HOVER_LINES).forEach(label -> lines.add(Component.text(label, NamedTextColor.GRAY)));
+            if (shown.size() > HOVER_LINES) {
+                lines.add(Component.text("and " + (shown.size() - HOVER_LINES) + " more", NamedTextColor.DARK_GRAY));
             }
             text = text.decorate(TextDecoration.UNDERLINED)
                     .hoverEvent(HoverEvent.showText(Component.join(JoinConfiguration.newlines(), lines)));
         }
         return icon(row.kind().sprite()).append(Component.space()).append(text);
+    }
+
+    /** Long lists as "Chest ×212": labels grouped by the words before " at ", most first. */
+    static List<String> byKind(List<String> labels) {
+        Map<String, Integer> kinds = new LinkedHashMap<>();
+        for (String label : labels) {
+            int at = label.indexOf(" at ");
+            kinds.merge(at < 0 ? label : label.substring(0, at), 1, Integer::sum);
+        }
+        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(kinds.entrySet());
+        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        return sorted.stream().map(kind -> kind.getKey() + " \u00d7" + kind.getValue()).toList();
     }
 
     static Component money(String line) {
