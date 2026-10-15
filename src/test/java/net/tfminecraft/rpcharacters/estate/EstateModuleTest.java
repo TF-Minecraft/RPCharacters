@@ -231,23 +231,26 @@ class EstateModuleTest {
     }
 
     @Test
-    void holdingsListEachParticipantsLabelsOrCounts() throws Exception {
+    void holdingsListWhatEachParticipantDescribes() throws Exception {
         EstateModule module = EstateModule.start(plugin);
         EstateTestKit.Participant labelled = new EstateTestKit.Participant("denareconomy");
         labelled.holdings = new Holdings(Map.of("cents", 34025), List.of("340.25 in pouch and bank"));
         EstateTestKit.Participant counted = new EstateTestKit.Participant("thievery");
         counted.holdings = new Holdings(Map.of("locks", 2, "doors", 0), List.of());
+        EstateTestKit.Participant empty = new EstateTestKit.Participant("empty");
         EstateTestKit.Participant broken = new EstateTestKit.Participant("broken") {
             @Override
             public Holdings describe(UUID characterId) {
                 throw new IllegalStateException("cannot");
             }
         };
-        for (var participant : List.of(labelled, counted, broken)) {
+        for (var participant : List.of(labelled, counted, empty, broken)) {
             server.getServicesManager().register(EstateParticipant.class, participant, plugin,
                     org.bukkit.plugin.ServicePriority.Normal);
         }
-        assertEquals(Set.of("340.25 in pouch and bank", "2 locks"), Set.copyOf(module.holdings(aria.characterId())));
+        assertEquals(Set.of(new EstateHooks.Held("denareconomy", Map.of("cents", 34025), List.of("340.25 in pouch and bank")),
+                new EstateHooks.Held("thievery", Map.of("locks", 2, "doors", 0), List.of())),
+                Set.copyOf(module.holdings(aria.characterId())));
         module.stop();
     }
 

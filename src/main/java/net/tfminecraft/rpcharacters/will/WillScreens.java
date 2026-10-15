@@ -18,6 +18,9 @@ import io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
 
 /** The will screens as plain data, and their Paper dialog rendering. Callbacks are one-use for ten minutes. */
 public final class WillScreens {
@@ -31,13 +34,15 @@ public final class WillScreens {
     /** A text field ({@code options} empty) or a single-option list of id and label pairs. */
     record Input(String key, String label, List<String[]> options) {}
 
-    record Screen(String title, List<String> lines, Input input, List<Button> buttons) {}
+    /** A screen; {@code portrait}, when set, is drawn above the lines at its own width. */
+    record Screen(String title, Component portrait, List<Component> lines, Input input, List<Button> buttons) {}
 
     private WillScreens() {}
 
     static void show(Player player, Screen screen) {
         List<DialogBody> body = new ArrayList<>();
-        for (String line : screen.lines()) body.add(DialogBody.plainMessage(Component.text(line), WIDTH));
+        if (screen.portrait() != null) body.add(DialogBody.plainMessage(screen.portrait(), SkinPortrait.ROW_WIDTH));
+        for (Component line : screen.lines()) body.add(DialogBody.plainMessage(line, WIDTH));
         List<DialogInput> inputs = new ArrayList<>();
         Input input = screen.input();
         if (input != null && input.options().isEmpty()) {
@@ -57,7 +62,8 @@ public final class WillScreens {
                     }, ONCE)).build());
         }
         player.showDialog(Dialog.create(builder -> builder.empty()
-                .base(DialogBase.builder(Component.text(screen.title())).body(body).inputs(inputs).build())
+                .base(DialogBase.builder(Component.text(screen.title(), NamedTextColor.WHITE, TextDecoration.BOLD))
+                        .body(body).inputs(inputs).build())
                 .type(DialogType.multiAction(buttons, null, 2))));
     }
 }

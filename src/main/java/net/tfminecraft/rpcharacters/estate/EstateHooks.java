@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.estate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.json.simple.JSONObject;
@@ -25,8 +26,11 @@ public interface EstateHooks {
     /** Adds the {@code estate} object for this death to a roster row, when there is a record. */
     void appendRoster(JSONObject row, UUID deathId);
 
-    /** Lines for the will screen: what each participant says the character holds today. */
-    List<String> holdings(UUID characterId);
+    /** What one participant says a character holds today: counts by kind, and readable labels. */
+    record Held(String participant, Map<String, Integer> counts, List<String> labels) {}
+
+    /** For the will screen: what each participant says the character holds today. */
+    List<Held> holdings(UUID characterId);
 
     /** Unregisters services and stops the clocks. */
     void stop();

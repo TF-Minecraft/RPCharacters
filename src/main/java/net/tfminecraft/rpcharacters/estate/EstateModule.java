@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -183,20 +182,17 @@ final class EstateModule implements EstateHooks, Listener {
     }
 
     @Override
-    public List<String> holdings(UUID characterId) {
-        List<String> lines = new ArrayList<>();
+    public List<Held> holdings(UUID characterId) {
+        List<Held> held = new ArrayList<>();
         for (EstateParticipant participant : coordinator.world().participants()) {
             try {
-                Holdings held = participant.describe(characterId);
-                if (!held.labels().isEmpty()) lines.addAll(held.labels());
-                else for (Map.Entry<String, Integer> count : held.counts().entrySet()) {
-                    if (count.getValue() > 0) lines.add(count.getValue() + " " + count.getKey());
-                }
+                Holdings described = participant.describe(characterId);
+                if (!described.isEmpty()) held.add(new Held(participant.id(), described.counts(), described.labels()));
             } catch (RuntimeException | LinkageError error) {
                 plugin.getLogger().log(Level.WARNING, "Estate participant " + participant.id() + " could not describe", error);
             }
         }
-        return lines;
+        return held;
     }
 
     @Override
