@@ -336,6 +336,7 @@ public class RPCharacters extends JavaPlugin{
 		registerPlaceholderApi();
 		var will = new net.tfminecraft.rpcharacters.will.WillCommand();
 		getCommand("will").setExecutor(will);
+		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.will.WillPortraitListener(), this);
 		net.tfminecraft.rpcharacters.will.WillQueue.start(this);
 		if (!characterBodiesFailed) net.tfminecraft.rpcharacters.estate.EstateLink.start(this);
 	}

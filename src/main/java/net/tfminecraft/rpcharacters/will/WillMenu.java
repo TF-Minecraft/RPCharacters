@@ -2,11 +2,12 @@ package net.tfminecraft.rpcharacters.will;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -55,8 +56,6 @@ import net.tfminecraft.tlibs.character.Characters;
  */
 public final class WillMenu {
     static final double NEARBY_BLOCKS = 16;
-    /** How long the first open waits for an uncached portrait; a later one is kept for the next open. */
-    static final long PORTRAIT_WAIT_TICKS = 30;
     static final int PORTRAIT_CACHE = 64;
     static BiConsumer<Player, Screen> screens = WillScreens::show;
     static DenarWallet wallet = new DenarEconomyWallet();
@@ -64,7 +63,6 @@ public final class WillMenu {
     static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
     static Executor mainThread = task -> Bukkit.getScheduler().runTask(RPCharacters.plugin, task);
     static LongSupplier clock = System::currentTimeMillis;
-    static BiConsumer<Runnable, Long> later = (task, ticks) -> Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, task, ticks);
 
     /** Painted busts by heir character, so a second open shows the portrait at once. Main thread. */
     private static final Map<UUID, Component> PORTRAITS = new LinkedHashMap<>(16, 0.75f, true) {
@@ -74,8 +72,8 @@ public final class WillMenu {
         }
     };
 
-    /** Opens still waiting for their heir's portrait, by player; a newer open replaces an older one. Main thread. */
-    private static final Map<UUID, Context> OPENING = new HashMap<>();
+    /** Heirs whose bust is loading. Main thread. */
+    private static final Set<UUID> LOADING = new HashSet<>();
 
     /** One open will menu. */
     private static final class Context {
@@ -103,30 +101,20 @@ public final class WillMenu {
             player.sendMessage("Play a character to make its will.");
             return;
         }
-        Context ctx = new Context(player, session.get(), data, character);
-        CharacterWill will = character.getWill();
-        Optional<CharacterInfo> heir = will.named() ? WillService.lookup().info(will.heir())
-                .filter(info -> info.status() == CharacterStatus.ALIVE) : Optional.empty();
-        if (heir.isEmpty() || PORTRAITS.containsKey(heir.get().ref().characterId())) {
-            OPENING.remove(player.getUniqueId());
-            main(ctx);
-            return;
-        }
-        // The first screen waits briefly for the portrait, so nothing repaints a screen the player has moved on from.
-        OPENING.put(player.getUniqueId(), ctx);
-        load(ctx, heir.get());
-        later.accept(() -> first(ctx), PORTRAIT_WAIT_TICKS);
+        heir(character).ifPresent(WillMenu::prefetch);
+        main(new Context(player, session.get(), data, character));
     }
 
-    /** Shows the first screen once, unless a newer /will, another will screen or a click replaced this one. */
-    private static void first(Context ctx) {
-        if (OPENING.get(ctx.player.getUniqueId()) != ctx) return;
-        OPENING.remove(ctx.player.getUniqueId());
-        if (ctx.player.isOnline() && Characters.isCurrent(ctx.session)) main(ctx);
+    /** The character's living heir, if one is named. */
+    static Optional<CharacterInfo> heir(RPCharacter character) {
+        CharacterWill will = character.getWill();
+        return will.named() ? WillService.lookup().info(will.heir()).filter(info -> info.status() == CharacterStatus.ALIVE)
+                : Optional.empty();
     }
 
     static void clearPortraits() {
         PORTRAITS.clear();
+        LOADING.clear();
     }
 
     private static void main(Context ctx) {
@@ -146,7 +134,8 @@ public final class WillMenu {
             if (!estate.isEmpty()) lines.add(heirGets("Your estate today", estate, true));
         } else if (living) {
             CharacterInfo info = heir.get();
-            portrait = PORTRAITS.getOrDefault(info.ref().characterId(), CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT));
+            portrait = PORTRAITS.getOrDefault(info.ref().characterId(), CharacterSelectView.placeholder(
+                    LOADING.contains(info.ref().characterId()) ? CharacterSelectView.LOADING : CharacterSelectView.NO_PORTRAIT));
             lines.add(WillView.lines(List.of(Component.text(info.name(), WillView.HEIR, TextDecoration.BOLD),
                     Component.text(about(ctx, info, will), WillView.MUTED))));
             lines.add(Component.text("— ✦ —", WillView.MUTED));
@@ -278,9 +267,14 @@ public final class WillMenu {
         return Component.text(" → ", WillView.MUTED);
     }
 
-    /** Loads the heir's bust into the cache, then shows the first screen if it is still waiting. */
-    private static void load(Context ctx, CharacterInfo heir) {
+    /**
+     * Loads the heir's bust into the cache. It is only ever cached, never shown when it arrives, so a late portrait
+     * cannot appear over another screen; it is fetched when a character starts playing and when an heir is named,
+     * so it is usually ready when /will opens.
+     */
+    static void prefetch(CharacterInfo heir) {
         UUID id = heir.ref().characterId();
+        if (PORTRAITS.containsKey(id) || !LOADING.add(id)) return;
         CompletableFuture<BufferedImage> future;
         try {
             Player owner = WillView.online.apply(heir.ref().ownerId());
@@ -292,9 +286,9 @@ public final class WillMenu {
         if (future == null) future = CompletableFuture.completedFuture(null);
         future.whenComplete((front, error) -> dispatch(() -> {
             BufferedImage image = error == null ? front : null;
+            LOADING.remove(id);
             PORTRAITS.put(id, image == null ? CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT)
                     : CharacterSelectView.bust(image));
-            first(ctx);
         }));
     }
 
@@ -407,6 +401,7 @@ public final class WillMenu {
         ctx.player.closeDialog();
         if (change.applied()) {
             ctx.player.sendMessage(heir == null ? "Your will is revoked." : "Your heir is named.");
+            heir(ctx.character).ifPresent(WillMenu::prefetch);
             return;
         }
         ctx.player.sendMessage(switch (change.verdict()) {
@@ -417,13 +412,10 @@ public final class WillMenu {
     }
 
     private static void show(Context ctx, Screen screen) {
-        OPENING.remove(ctx.player.getUniqueId());
         screens.accept(ctx.player, screen);
     }
 
     private static boolean current(Context ctx) {
-        // A click on any will screen means the player moved on: a waiting open must not appear over it.
-        OPENING.remove(ctx.player.getUniqueId());
         if (Characters.isCurrent(ctx.session)) return true;
         ctx.player.closeDialog();
         ctx.player.sendMessage("Your character changed. Open /will again.");

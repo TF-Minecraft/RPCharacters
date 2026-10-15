@@ -90,10 +90,6 @@ class WillMenuTest {
             return event;
         };
         WillMenu.mainThread = later::add;
-        WillMenu.later = (task, ticks) -> {
-            assertEquals(WillMenu.PORTRAIT_WAIT_TICKS, ticks);
-            task.run();
-        };
         WillMenu.clock = () -> now;
         WillMenu.portraits = (owner, id, fallback) -> new CompletableFuture<>();
         wallet = mock(DenarWallet.class);
@@ -258,10 +254,9 @@ class WillMenuTest {
         assertEquals(branInfo.ref().characterId(), aria.getWill().heir());
     }
 
-    private CompletableFuture<BufferedImage> pending(MockedStatic<CharacterSelectView> select, List<Runnable> waits) {
+    private CompletableFuture<BufferedImage> pending(MockedStatic<CharacterSelectView> select) {
         select.when(() -> CharacterSelectView.placeholder(anyString())).thenAnswer(call -> Component.text("[" + call.getArgument(0) + "]"));
         select.when(() -> CharacterSelectView.bust(any())).thenReturn(Component.text("[bust]"));
-        WillMenu.later = (task, ticks) -> waits.add(task);
         CompletableFuture<BufferedImage> skin = new CompletableFuture<>();
         WillMenu.portraits = (owner, id, fallback) -> skin;
         return skin;
@@ -277,99 +272,80 @@ class WillMenuTest {
         aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now - 3 * DAY, null));
         Player kiraOwner = player(0);
         WillView.online = id -> id.equals(kira.ref().ownerId()) ? kiraOwner : null;
-        List<Runnable> waits = new ArrayList<>();
         try (var select = mockStatic(CharacterSelectView.class)) {
-            CompletableFuture<BufferedImage> skin = pending(select, waits);
+            CompletableFuture<BufferedImage> skin = pending(select);
             select.when(() -> CharacterSelectView.accountSkin(kiraOwner)).thenReturn(null);
+            List<String> loads = new ArrayList<>();
             WillMenu.portraits = (owner, id, fallback) -> {
                 assertEquals(kira.ref().ownerId(), owner);
-                assertEquals(kira.ref().characterId().toString(), id);
+                loads.add(id);
                 return skin;
             };
             WillMenu.open(player);
-            assertTrue(shown.isEmpty());
-            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
-            later.removeFirst().run();
-            assertEquals("[bust]", plain(last().portrait()));
+            assertEquals("[Loading portrait…]", plain(last().portrait()));
             String body = body();
             assertTrue(body.contains("Kira\nElf · named 3 days ago"), body);
             assertTrue(body.contains("Kira would get\n163.40 denars carried, 0 denars banked\n1 vehicle\n1 lock\n1 letter"), body);
             assertTrue(body.contains("Goes elsewhere\n1 guild or faction lock → Bob"), body);
             assertEquals(List.of("Change heir", "Revoke", "Close"), buttons());
-            // The wait ends with the screen already shown: nothing more.
-            int before = shown.size();
-            waits.removeFirst().run();
-            assertEquals(before, shown.size());
-            // Opening again uses the cached bust at once.
+            // A second open while loading starts no second load.
             WillMenu.open(player);
-            assertEquals(before + 1, shown.size());
+            assertEquals(List.of(kira.ref().characterId().toString()), loads);
+            // The arrival is only cached: it never shows a screen itself.
+            int before = shown.size();
+            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
+            later.removeFirst().run();
+            assertEquals(before, shown.size());
+            WillMenu.open(player);
             assertEquals("[bust]", plain(last().portrait()));
-            assertTrue(later.isEmpty() && waits.isEmpty());
+            assertEquals(1, loads.size());
         }
     }
 
     @Test
-    void aSlowPortraitIsCachedButNeverReopensOrReplacesAScreen() {
-        aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now, null));
-        List<Runnable> waits = new ArrayList<>();
+    void portraitsArePrefetchedAtSessionStartAndWhenAnHeirIsNamed() {
         try (var select = mockStatic(CharacterSelectView.class)) {
-            CompletableFuture<BufferedImage> skin = pending(select, waits);
-            WillMenu.open(player);
-            waits.removeFirst().run();
-            assertEquals("[No portrait]", plain(last().portrait()));
-            assertTrue(body().contains("Kira\nElf · named today"), body());
-            assertTrue(body().contains("Kira would get\nNothing recorded today."), body());
-            click("Close");
-            skin.complete(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
-            int before = shown.size();
-            later.removeFirst().run();
-            assertEquals(before, shown.size());
+            pending(select);
+            List<String> loads = new ArrayList<>();
+            WillMenu.portraits = (owner, id, fallback) -> {
+                loads.add(id);
+                return CompletableFuture.completedFuture(new BufferedImage(16, 32, BufferedImage.TYPE_INT_ARGB));
+            };
+            WillMenu.mainThread = Runnable::run;
+            WillPortraitListener listener = new WillPortraitListener();
+            listener.onSessionStart(new net.tfminecraft.tlibs.character.CharacterSessionStartEvent(player, session));
+            assertTrue(loads.isEmpty());
+            aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now, null));
+            listener.onSessionStart(new net.tfminecraft.tlibs.character.CharacterSessionStartEvent(player,
+                    new CharacterSession(new CharacterRef(data.getUniqueId(), UUID.randomUUID()), 2)));
+            assertTrue(loads.isEmpty());
+            listener.onSessionStart(new net.tfminecraft.tlibs.character.CharacterSessionStartEvent(player, session));
+            assertEquals(List.of(kira.ref().characterId().toString()), loads);
+            Player stranger = player(0);
+            listener.onSessionStart(new net.tfminecraft.tlibs.character.CharacterSessionStartEvent(stranger, session));
+            assertEquals(1, loads.size());
             WillMenu.open(player);
             assertEquals("[bust]", plain(last().portrait()));
-            // A newer /will replaces a waiting one; the older one never shows.
+            // Naming a new heir fetches theirs.
             WillMenu.clearPortraits();
-            CompletableFuture<BufferedImage> second = new CompletableFuture<>();
-            WillMenu.portraits = (owner, id, fallback) -> second;
+            loads.clear();
+            click("Change heir");
+            click("Find", Map.of("heir", "Kira"));
+            click("Confirm");
+            assertEquals(List.of(kira.ref().characterId().toString()), loads);
+            aria.setWill(new CharacterWill(kira.ref().characterId(), 3, now, null));
             WillMenu.open(player);
-            WillMenu.open(player);
-            before = shown.size();
-            waits.removeFirst().run();
-            assertEquals(before, shown.size());
-            waits.removeFirst().run();
-            assertEquals(before + 1, shown.size());
-            // A click on an older will screen, or another screen shown, cancels a waiting open.
-            WillMenu.clearPortraits();
-            CompletableFuture<BufferedImage> third = new CompletableFuture<>();
-            WillMenu.portraits = (owner, id, fallback) -> third;
-            WillMenu.open(player);
-            link("How wills work");
-            assertEquals("How wills work", last().title());
-            before = shown.size();
-            waits.removeFirst().run();
-            third.complete(null);
-            later.removeFirst().run();
-            assertEquals(before, shown.size());
-            // A player gone or playing another character by then sees nothing.
-            for (int step = 0; step < 2; step++) {
-                WillMenu.clearPortraits();
-                WillMenu.open(player);
-                if (step == 0) when(player.isOnline()).thenReturn(false);
-                else identity.when(() -> Characters.isCurrent(session)).thenReturn(false);
-                before = shown.size();
-                waits.removeFirst().run();
-                assertEquals(before, shown.size());
-                when(player.isOnline()).thenReturn(true);
-                identity.when(() -> Characters.isCurrent(session)).thenReturn(true);
-            }
+            click("Revoke");
+            click("Confirm");
+            assertEquals(1, loads.size());
         }
     }
 
     @Test
     void portraitFailuresShowNoPortraitAndAStoppedSchedulerIsIgnored() {
         aria.setWill(new CharacterWill(kira.ref().characterId(), 1, null, null));
-        List<Runnable> waits = new ArrayList<>();
         try (var select = mockStatic(CharacterSelectView.class)) {
-            pending(select, waits);
+            pending(select);
             WillMenu.mainThread = Runnable::run;
             WillMenu.portraits = (owner, id, fallback) -> { throw new IllegalStateException("no site"); };
             WillMenu.open(player);
@@ -386,11 +362,8 @@ class WillMenuTest {
             WillMenu.clearPortraits();
             WillMenu.mainThread = task -> { throw new IllegalStateException("disabled"); };
             WillMenu.portraits = (owner, id, fallback) -> CompletableFuture.completedFuture(null);
-            int before = shown.size();
             WillMenu.open(player);
-            assertEquals(before, shown.size());
-            waits.getLast().run();
-            assertEquals("[No portrait]", plain(last().portrait()));
+            assertEquals("[Loading portrait…]", plain(last().portrait()));
         }
     }
 
