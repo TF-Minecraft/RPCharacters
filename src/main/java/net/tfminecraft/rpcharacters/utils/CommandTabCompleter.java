@@ -41,7 +41,6 @@ public class CommandTabCompleter implements TabCompleter {
 
 		if (args.length == 1) {
 			List<String> completions = new ArrayList<>();
-			if (net.tfminecraft.rpcharacters.RPCharacters.getCharacterBodies() != null) completions.add("select");
 			completions.add("kit");
 			completions.add("menu");
 			if (sender instanceof Player player) {
@@ -124,7 +123,7 @@ public class CommandTabCompleter implements TabCompleter {
 			if (args[0].equalsIgnoreCase("stage") && Permissions.isAdmin(sender)) {
 				return filter(List.of("preview"), args[1]);
 			}
-			if (args[0].equalsIgnoreCase("menu")) {
+			if (args[0].equalsIgnoreCase("menu") && Permissions.isAdmin(sender)) {
 				for (Player online : Bukkit.getOnlinePlayers()) {
 					completions.add(online.getName());
 				}

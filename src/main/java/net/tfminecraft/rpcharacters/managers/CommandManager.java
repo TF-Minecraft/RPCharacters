@@ -58,12 +58,13 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (sender instanceof Player player && args.length == 1) {
 			var creation = CreationManager.activeCreators.get(player);
 			if (creation != null && creation.getWizard() != null
-					&& java.util.Set.of("select", "create", "next", "back", "help", "cancel").contains(args[0].toLowerCase(java.util.Locale.ROOT))) {
+					&& java.util.Set.of("menu", "create", "next", "back", "help", "cancel").contains(args[0].toLowerCase(java.util.Locale.ROOT))) {
 				creation.getWizard().resume();
 				return true;
 			}
 		}
-		if (args.length == 1 && args[0].equalsIgnoreCase("select")
+		// Staff keep the chest view for another player's characters with /rpcharacter menu <player>.
+		if (args.length >= 1 && args[0].equalsIgnoreCase("menu") && (args.length == 1 || !Permissions.isAdmin(sender))
 				&& sender instanceof Player player && RPCharacters.getCharacterBodies() != null) {
 			RPCharacters.getCharacterBodies().requestSelection(player);
 			return true;

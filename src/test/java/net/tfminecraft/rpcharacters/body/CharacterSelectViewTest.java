@@ -194,6 +194,7 @@ class CharacterSelectViewTest {
 			public String blockReason(RPCharacter character) { return null; }
 			public void play(RPCharacter character) {}
 			public void create() {}
+			public boolean endCharacter(RPCharacter character) { return false; }
 			public void leave() {}
 		};
 		assertFalse(owner.needsDiscordLink());
@@ -286,7 +287,7 @@ class CharacterSelectViewTest {
 		assertEquals(CharacterSelectView.placeholder(CharacterSelectView.LOADING), ui.last().portrait());
 		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
 		assertEquals("‹   Lady Wren   Rowan   New character   ›\nLady Wren\nHuman • Sword master • Age 27\n"
-				+ "Ironhand • Last played 2d 2h ago\nMemorials (2)", ui.last().bodyText());
+				+ "Ironhand • Last played 2d 2h ago\nEnd character\nMemorials (2)", ui.last().bodyText());
 		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
 			if (part != ui.last().portraitPart()) assertEquals(text(part.contents()).startsWith("‹") ? 360 : 300, part.width());
@@ -799,7 +800,151 @@ class CharacterSelectViewTest {
 		assertEquals("Bartholomew the Unyielding of Greywater",
 				text((Component) strip().get("Bartholome…").hoverEvent().value()));
 		link("Bartholome…");
-		assertTrue(ui.last().bodyText().endsWith("\nBartholomew the Unyielding of Greywater"));
+		assertTrue(ui.last().bodyText().endsWith("\nBartholomew the Unyielding of Greywater\nEnd character"));
+	}
+
+	@Test
+	void backgroundTraitsAndCluesShowOnHoverBesideEndCharacter() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(wren.getDescription()).thenReturn(List.of("&6Raised by wolves", "in the north."));
+		when(wren.getPlayerClues()).thenReturn(List.of("&aKnows the old roads"));
+		when(wren.getCluesNeeded()).thenReturn(3);
+		CharacterSelectView.traits = c -> c == wren ? List.of("§aBrave§7 (Personality)") : List.of();
+		CharacterSelectView.open(player, data, actions);
+		Component row = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
+				.filter(c -> text(c).endsWith("End character")).findFirst().orElseThrow();
+		assertEquals("Background • Traits • Clues • End character", text(row));
+		Map<String, String> hovers = components(row).filter(c -> c.hoverEvent() != null && c.children().isEmpty())
+				.collect(Collectors.toMap(CharacterSelectViewTest::text, c -> text((Component) c.hoverEvent().value())));
+		assertEquals("Read Wren's background", hovers.get("Background"));
+		assertEquals("Brave (Personality)", hovers.get("Traits"));
+		assertEquals("Knows the old roads\n2 more needed.", hovers.get("Clues"));
+		assertEquals("Kill this character for good", hovers.get("End character"));
+
+		click("Background");
+		assertEquals("Wren's background", text(ui.last().base().title()));
+		assertEquals("Raised by wolves\nin the north.", ui.last().bodyText());
+		assertEquals(List.of("Back"), labels());
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		click("Background");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		CharacterSelectView.notice(player, "Gone");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.notice(player, "Back again");
+		link("Wren");
+
+		when(wren.getDescription()).thenReturn(List.of());
+		when(wren.getPlayerClues()).thenReturn(List.of());
+		when(wren.getCluesNeeded()).thenReturn(0);
+		CharacterSelectView.traits = c -> List.of();
+		link("‹");
+		link("›");
+		assertTrue(ui.last().bodyText().endsWith("\nWren\nEnd character"), ui.last().bodyText());
+		when(wren.getCluesNeeded()).thenReturn(2);
+		link("‹");
+		link("›");
+		assertTrue(ui.last().bodyText().contains("\nClues • End character"), ui.last().bodyText());
+		Component clues = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
+				.flatMap(CharacterSelectViewTest::components).filter(c -> text(c).equals("Clues")).findFirst().orElseThrow();
+		assertEquals("No clues yet.\n2 more needed.", text((Component) clues.hoverEvent().value()));
+	}
+
+	@Test
+	void endingACharacterTakesTwoConfirmationsAndMovesThemToMemorials() {
+		roster("rowan");
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(wren.getLastPlayedAt()).thenReturn(Instant.now());
+		var dead = new java.util.concurrent.atomic.AtomicBoolean();
+		when(wren.getStatus()).thenAnswer(call -> dead.get() ? Status.DEAD : Status.ALIVE);
+		when(actions.endCharacter(wren)).thenAnswer(call -> { dead.set(true); return true; });
+		CharacterSelectView.open(player, data, actions);
+
+		click("End character");
+		assertEquals("End Wren?", text(ui.last().base().title()));
+		assertEquals("Wren will die and move to Memorials. Only staff can bring them back.", ui.last().bodyText());
+		assertEquals(List.of("End character", "Back"), labels());
+		assertEquals(2, columns());
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		click("End character");
+		click("End character");
+		assertEquals("Are you sure? This cannot be undone.", ui.last().bodyText());
+		assertEquals("Kill Wren now", text(button("End for good").tooltip()));
+		verify(actions, never()).endCharacter(any());
+		click("End for good");
+
+		verify(actions).endCharacter(wren);
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Wren has died. You can find them in Memorials.\n"));
+		assertEquals(List.of("‹", "rowan", "New character", "›"), tabs());
+		assertTrue(ui.last().bodyText().endsWith("Memorials (1)"));
+		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void aRefusedOrStaleEndLeavesTheCharacterAndSaysWhy() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		CharacterSelectView.open(player, data, actions);
+		click("End character");
+		click("End character");
+		click("End for good");
+		verify(actions).endCharacter(wren);
+		assertTrue(ui.last().bodyText().startsWith("That character could not be ended.\n"));
+		assertEquals(List.of("‹", "Wren", "New character", "›"), tabs());
+
+		click("End character");
+		click("End character");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		click("End for good");
+		verify(actions).endCharacter(wren);
+		assertTrue(ui.last().bodyText().startsWith("That character has already gone.\n"));
+
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.notice(player, "Back again");
+		link("Wren");
+		click("End character");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		CharacterSelectView.notice(player, "Refreshed");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+	}
+
+	@Test
+	void anEndThatThrowsSaysToCheckMemorialsRatherThanClaimingTheCharacterLived() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.endCharacter(wren)).thenThrow(new IllegalStateException("estate hook failed"));
+		CharacterSelectView.open(player, data, actions);
+		click("End character");
+		click("End character");
+		click("End for good");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Something went wrong. Check Memorials before trying again.\n"));
+
+		doAnswer(call -> {
+			when(actions.isCurrent(player, data)).thenReturn(false);
+			throw new IllegalStateException("late failure");
+		}).when(actions).endCharacter(wren);
+		click("End character");
+		click("End character");
+		int shown = ui.opened.size();
+		click("End for good");
+		assertEquals(shown, ui.opened.size());
+	}
+
+	@Test
+	void anEndThatReplacesTheSelectorLeavesTheNewOneAlone() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.endCharacter(wren)).thenAnswer(call -> {
+			when(actions.isCurrent(player, data)).thenReturn(false);
+			return true;
+		});
+		CharacterSelectView.open(player, data, actions);
+		click("End character");
+		click("End character");
+		int shown = ui.opened.size();
+		click("End for good");
+		assertEquals(shown, ui.opened.size());
 	}
 
 	@Test
@@ -890,7 +1035,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.guilds = p -> null;
 		assertNull(CharacterSelectView.guild(cora));
 		CharacterSelectView.open(player, data, actions);
-		assertTrue(ui.last().bodyText().endsWith("\nCora"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().endsWith("\nCora\nEnd character"), ui.last().bodyText());
 		assertTrue(text(button("▶ Play").tooltip()).endsWith("\nPouch and bank: unavailable"));
 		CharacterSelectView.guilds = p -> "";
 		assertNull(CharacterSelectView.guild(cora));

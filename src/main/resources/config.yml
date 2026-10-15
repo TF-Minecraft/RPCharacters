@@ -123,7 +123,7 @@ character-bodies:
   selection-world: character_selection
   # Requires ProtocolLib. Hides the survival HUD and defers ordinary chat until Play.
   hide-hud: true
-  # /rpcharacter select from a playing character waits this long, standing still and unhurt.
+  # /rpcharacter menu from a playing character waits this long, standing still and unhurt.
   return-seconds: 5
   persistent-keys: []
 

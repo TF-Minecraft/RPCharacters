@@ -67,12 +67,14 @@ class CommandTabCompleterTest {
         RPCharacter character = mock(RPCharacter.class); when(character.getSlug()).thenReturn(slug); when(character.getName()).thenReturn(name); return character;
     }
 
-    @Test void selectIsSuggestedOnlyWhileCharacterBodiesAreEnabled() {
+    @Test void menuReplacesSelectAndOnlyStaffGetPlayerNames() {
         var root = boundary(net.tfminecraft.rpcharacters.RPCharacters.class);
-        assertFalse(complete("").contains("select"));
         root.when(net.tfminecraft.rpcharacters.RPCharacters::getCharacterBodies)
                 .thenReturn(mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class));
-        assertEquals(List.of("select"), complete("sel"));
+        assertEquals(List.of(), complete("sel"));
+        assertEquals(List.of("menu"), complete("men"));
+        assertEquals(List.of(), complete("menu", "IR"));
+        admin(); assertEquals(List.of("Iris"), complete("menu", "IR"));
     }
 
     @Test void unrelatedCommandsAndEmptyArgumentArraysHaveNoSuggestions() {

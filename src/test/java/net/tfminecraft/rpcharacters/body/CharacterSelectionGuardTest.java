@@ -178,14 +178,14 @@ class CharacterSelectionGuardTest {
         guard.command(gameplay); verify(gameplay, never()).setCancelled(anyBoolean());
         when(bodies.isSelecting(player)).thenReturn(true);
         for (String text : List.of("/discord", "/link", "/link token", "/linkdiscord", "/tfmcweb:linkdiscord",
-                " /TFMCWEB:LINKDISCORD ", "/rpcharacter select", "/rpcharacters:rpcharacter select",
+                " /TFMCWEB:LINKDISCORD ", "/rpcharacter menu", "/rpcharacters:rpcharacter menu",
                 " /RPCHARACTER   NEXT ", "/rpcharacter cancel", "/rpcharacter back", "/rpcharacter help")) {
             PlayerCommandPreprocessEvent allowed = command(text); guard.command(allowed); verify(allowed, never()).setCancelled(anyBoolean());
         }
-        for (String text : List.of("/give diamond", "/rpcharacter select extra", "/rpcharacter switch Bob", "/discord token", "/linkevil",
+        for (String text : List.of("/give diamond", "/rpcharacter menu extra", "/rpcharacter switch Bob", "/discord token", "/linkevil",
                 "/linkdiscord token", "/linkdiscordevil", "/tfmcweb:linkdiscord token", "/tfmcweb:unlinkdiscord", "/tfmcwebadmin")) {
             PlayerCommandPreprocessEvent denied = command(text); guard.command(denied); verify(denied).setCancelled(true);
-            verify(bodies, atLeastOnce()).feedback(eq(player), contains("/rpcharacter select"));
+            verify(bodies, atLeastOnce()).feedback(eq(player), contains("/rpcharacter menu"));
         }
     }
 
