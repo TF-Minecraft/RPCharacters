@@ -199,18 +199,19 @@ final class EstateCoordinator implements EstateService {
     /** One decision attempt; staff use it directly for {@code --no-guild}. Returns the outcome in words. */
     String decide(EstateRecord record, Instant now) {
         Verdict verdict = EstateDecider.decide(record, world, now);
+        String longer = verdict instanceof Verdict.Decided decided ? holdsLonger(record, decided.decision()) : null;
         try {
             EstateRecord next = EstateBook.edit(record);
             switch (verdict) {
-                case Verdict.Decided decided when holdsLonger(record, decided.decision()) -> {
+                case Verdict.Decided decided when longer != null -> {
                     next.dueAt = record.dueAt.plus(guildlessWait.minus(wait));
                     next.guildlessHeld = true;
                     next.postponedSince = null;
                     next.postponeReason = null;
                     book.save(next);
-                    book.log("audit.log", "held " + next.deathId + " until " + next.dueAt + ": no heir and no guild");
+                    book.log("audit.log", "held " + next.deathId + " until " + next.dueAt + ": " + longer);
                     rosterPush.accept(next.testator.ownerId());
-                    return "held until " + next.dueAt + ": no heir and no guild";
+                    return "held until " + next.dueAt + ": " + longer;
                 }
                 case Verdict.Decided decided -> {
                     next.state = EstateState.DECIDED;
@@ -247,12 +248,16 @@ final class EstateCoordinator implements EstateService {
     }
 
     /**
-     * A death with no living heir and no guild would freeze; it stays open for the longer guildless wait
-     * first, once. Staff deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
+     * Why the estate stays open for the longer guildless wait first, once, or null. A death with no living
+     * heir and no guild would freeze; a death in a realm's own guild while the realm has no living leader
+     * (its last member died, or the seat is vacant) waits for the realm to be taken on or closed. Staff
+     * deciding with {@code --no-guild} are not held. Time spent on staff hold counts on top.
      */
-    private boolean holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
-        return !record.guildlessHeld && !record.noGuild && decision.heir() == null && decision.deathGuild() == null
-                && guildlessWait.compareTo(wait) > 0;
+    private String holdsLonger(EstateRecord record, EstateRecord.Decision decision) {
+        if (record.guildlessHeld || record.noGuild || guildlessWait.compareTo(wait) <= 0) return null;
+        if (decision.heir() == null && decision.deathGuild() == null) return "no heir and no guild";
+        boolean ownRealm = decision.deathGuild() != null && decision.deathGuild().equals(decision.deathRealm());
+        return ownRealm && decision.guildLocks().recipient().isWaiting() ? "the realm has no leader" : null;
     }
 
     private void warnLong(EstateRecord record, Instant now) {

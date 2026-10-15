@@ -17,9 +17,11 @@ import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.tlibs.character.CharacterStatus;
 import net.tfminecraft.tlibs.character.estate.DeathGuild;
 import net.tfminecraft.tlibs.character.estate.EstateState;
+import net.tfminecraft.tlibs.character.estate.GuildLookup;
+import net.tfminecraft.tlibs.character.estate.GuildRef;
 import net.tfminecraft.tlibs.character.estate.Recipient;
 
-/** A death with no living heir and no guild stays open for the guildless wait before it freezes. */
+/** A death with no living heir and no guild, or in a realm with no leader, stays open for the guildless wait. */
 class GuildlessHoldTest {
     private static final Duration WEEK = Duration.ofDays(7);
 
@@ -90,6 +92,47 @@ class GuildlessHoldTest {
         kit.coordinator.decideDue();
         assertEquals(EstateState.DECIDED, now(withHeir).state);
         assertEquals(EstateState.DECIDED, now(inGuild).state);
+    }
+
+    @Test
+    void aDeathInARealmWithNoLeaderWaitsTheWeekEvenWithAnHeir() throws Exception {
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, GuildLookup.live(new GuildRef(realm, "Riverwatch", Optional.of(realm),
+                Optional.empty(), "guild:" + realm)));
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(realm, true, Optional.empty(), Optional.of(realm)));
+        EstateRecord record = kit.died(aria, kira.characterId());
+        kit.clock.advance(Duration.ofHours(24));
+        kit.coordinator.decideDue();
+        EstateRecord held = now(record);
+        assertEquals(EstateState.OPEN, held.state);
+        assertEquals(EstateTestKit.T0.plus(WEEK), held.dueAt);
+        assertTrue(Files.readString(root.resolve("estates/audit.log"))
+                .contains("held " + record.deathId + " until " + held.dueAt + ": the realm has no leader"));
+
+        kit.world.guilds.put(realm, GuildLookup.GONE);
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(realm, false, Optional.empty(), Optional.of(realm)));
+        kit.clock.advance(Duration.ofDays(6));
+        kit.coordinator.decideDue();
+        EstateRecord decided = now(record);
+        assertEquals(EstateState.DECIDED, decided.state);
+        assertEquals(Recipient.character(kira), decided.decision.guildLocks().recipient());
+    }
+
+    @Test
+    void aGuildWithNoLeaderInALedRealmOrARealmWithALeaderDecidesAfterADay() {
+        UUID realm = kit.world.liveGuild("Crown", kira, null);
+        UUID guild = kit.world.liveGuild("Smiths", null, realm);
+        kit.world.deathGuilds.put(aria.characterId(), DeathGuild.guild(guild, true, Optional.empty(), Optional.of(realm)));
+        EstateRecord inGuild = kit.died(aria, null);
+        CharacterRef bran = kit.world.alive("Bran");
+        kit.world.kill(bran);
+        kit.world.deathGuilds.put(bran.characterId(),
+                DeathGuild.guild(realm, true, Optional.of(kira.characterId()), Optional.of(realm)));
+        EstateRecord inRealm = kit.died(bran, null);
+        kit.clock.advance(Duration.ofHours(24));
+        kit.coordinator.decideDue();
+        assertEquals(EstateState.DECIDED, now(inGuild).state);
+        assertEquals(EstateState.DECIDED, now(inRealm).state);
     }
 
     @Test
