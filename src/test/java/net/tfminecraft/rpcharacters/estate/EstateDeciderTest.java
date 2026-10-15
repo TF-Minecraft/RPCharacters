@@ -124,8 +124,108 @@ class EstateDeciderTest {
         assertEquals(Recipient.account("guild:" + realm), d.money().recipient());
         assertPart(d.money(), "REALM", "Capital");
         assertTrue(d.property().recipient().isFrozen());
-        assertTrue(d.guildLocks().recipient().isFrozen());
+        assertEquals(Recipient.character(leader), d.guildLocks().recipient());
         assertEquals(realm, d.deathRealm());
+    }
+
+    @Test
+    void leaderlessGuildSendsGuildLocksToTheRealmLeaderAndPropertyWaits() {
+        setUp();
+        UUID realm = kit.world.liveGuild("Capital", leader, null);
+        guild(true, null, realm);
+        Decision noHeir = decide(estate(null));
+        assertEquals(Recipient.character(leader), noHeir.guildLocks().recipient());
+        assertTrue(noHeir.property().recipient().isWaiting());
+        assertPart(noHeir.money(), "GUILD", "Ironhand");
+        setUp();
+        realm = kit.world.liveGuild("Capital", leader, null);
+        guild(true, null, realm);
+        Decision withHeir = decide(estate(heir.characterId()));
+        assertEquals(Recipient.character(leader), withHeir.guildLocks().recipient());
+        assertEquals(Recipient.character(heir), withHeir.property().recipient());
+        assertFalse(withHeir.anyWaiting());
+    }
+
+    @Test
+    void goneGuildSendsGuildLocksToTheRealmLeaderBeforeTheHeir() {
+        setUp();
+        UUID realm = kit.world.liveGuild("Capital", leader, null);
+        guild(false, null, realm);
+        Decision d = decide(estate(heir.characterId()));
+        assertEquals(Recipient.character(leader), d.guildLocks().recipient());
+        assertEquals(Recipient.character(heir), d.property().recipient());
+        setUp();
+        realm = kit.world.liveGuild("Capital", null, null);
+        guild(false, null, realm);
+        assertEquals(Recipient.character(heir), decide(estate(heir.characterId())).guildLocks().recipient());
+    }
+
+    @Test
+    void aDeadRealmLeaderOrTheTestatorAsRealmLeaderDoesNotTakeGuildLocks() {
+        setUp();
+        UUID realm = kit.world.liveGuild("Capital", testator, null);
+        guild(true, null, realm);
+        assertTrue(decide(estate(null)).guildLocks().recipient().isWaiting());
+        setUp();
+        realm = kit.world.liveGuild("Capital", leader, null);
+        kit.world.status(leader, CharacterStatus.DEAD);
+        guild(false, null, realm);
+        assertTrue(decide(estate(null)).guildLocks().recipient().isFrozen());
+    }
+
+    @Test
+    void anUnansweredRealmPostponesAGoneGuildWithAnHeir() {
+        setUp();
+        UUID realm = UUID.randomUUID();
+        kit.world.guilds.put(realm, GuildLookup.UNAVAILABLE);
+        guild(false, null, realm);
+        assertEquals("SimpleFactions cannot find the realm", assertInstanceOf(Verdict.Postpone.class,
+                EstateDecider.decide(estate(heir.characterId()), kit.world, EstateTestKit.T0)).reason());
+    }
+
+    @Test
+    void waitingGuildLocksGoToTheRealmLeaderWhileTheGuildHasNone() {
+        setUp();
+        guild(true, null, null);
+        EstateRecord record = estate(null);
+        record.decision = decide(record);
+        assertTrue(record.decision.guildLocks().recipient().isWaiting());
+        UUID g = record.decision.deathGuild();
+        UUID realm = kit.world.liveGuild("Capital", leader, null);
+        record.decision = new Decision(record.decision.decidedAt(), 0, null, g, realm, record.decision.money(),
+                record.decision.property(), record.decision.guildLocks(), record.decision.letters());
+        Decision revised = assertInstanceOf(Recheck.Revised.class, EstateDecider.recheck(record, kit.world)).decision();
+        assertEquals(Recipient.character(leader), revised.guildLocks().recipient());
+        assertTrue(revised.property().recipient().isWaiting());
+        record.decision = revised;
+        assertEquals("the death guild has no living leader",
+                assertInstanceOf(Recheck.Unchanged.class, EstateDecider.recheck(record, kit.world)).reason());
+        kit.world.guilds.put(g, GuildLookup.GONE);
+        kit.world.guilds.put(realm, GuildLookup.UNAVAILABLE);
+        Decision gone = assertInstanceOf(Recheck.Revised.class, EstateDecider.recheck(record, kit.world)).decision();
+        assertTrue(gone.property().recipient().isFrozen());
+        assertEquals(Recipient.character(leader), gone.guildLocks().recipient());
+    }
+
+    @Test
+    void aWaitingGuildLockOfAGoneGuildGoesToTheRealmLeaderOrWaitsForTheRealm() {
+        setUp();
+        guild(true, null, null);
+        EstateRecord record = estate(heir.characterId());
+        record.decision = decide(record);
+        UUID g = record.decision.deathGuild();
+        UUID realm = UUID.randomUUID();
+        record.decision = new Decision(record.decision.decidedAt(), 0, record.decision.heir(), g, realm,
+                record.decision.money(), record.decision.property(), record.decision.guildLocks(),
+                record.decision.letters());
+        kit.world.guilds.put(g, GuildLookup.GONE);
+        kit.world.guilds.put(realm, GuildLookup.UNAVAILABLE);
+        assertEquals("SimpleFactions cannot find the realm",
+                assertInstanceOf(Recheck.Unchanged.class, EstateDecider.recheck(record, kit.world)).reason());
+        kit.world.guilds.put(realm, GuildLookup.live(new net.tfminecraft.tlibs.character.estate.GuildRef(realm,
+                "Capital", Optional.empty(), Optional.of(leader.characterId()), "guild:" + realm)));
+        Decision d = assertInstanceOf(Recheck.Revised.class, EstateDecider.recheck(record, kit.world)).decision();
+        assertEquals(Recipient.character(leader), d.guildLocks().recipient());
     }
 
     @Test
