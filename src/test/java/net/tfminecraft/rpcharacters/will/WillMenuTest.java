@@ -81,7 +81,7 @@ class WillMenuTest {
     @BeforeEach
     void setUp() {
         state = new RuntimeTestState(WillMenu.class, WillService.class, WillView.class, WillForecast.class);
-        WillMenu.clearPortraits();
+        WillMenu.reset();
         WillMenu.screens = (viewer, screen) -> shown.add(screen);
         WillMenu.clickEvents = (callback, options) -> {
             assertSame(WillScreens.ONCE, options);
@@ -327,7 +327,7 @@ class WillMenuTest {
             WillMenu.open(player);
             assertEquals("[bust]", plain(last().portrait()));
             // Naming a new heir fetches theirs.
-            WillMenu.clearPortraits();
+            WillMenu.reset();
             loads.clear();
             click("Change heir");
             click("Find", Map.of("heir", "Kira"));
@@ -351,15 +351,27 @@ class WillMenuTest {
             WillMenu.open(player);
             assertEquals("[No portrait]", plain(last().portrait()));
             assertTrue(body().contains("Kira\nElf\n"), body());
-            WillMenu.clearPortraits();
+            WillMenu.reset();
             WillMenu.portraits = (owner, id, fallback) -> null;
             WillMenu.open(player);
             assertEquals("[No portrait]", plain(last().portrait()));
-            WillMenu.clearPortraits();
+            WillMenu.reset();
             WillMenu.portraits = (owner, id, fallback) -> CompletableFuture.failedFuture(new IllegalStateException("down"));
             WillMenu.open(player);
             assertEquals("[No portrait]", plain(last().portrait()));
-            WillMenu.clearPortraits();
+            // A load from before a reset (disable, enable) never fills the cache afterwards.
+            WillMenu.reset();
+            List<Runnable> queued = new ArrayList<>();
+            WillMenu.mainThread = queued::add;
+            WillMenu.portraits = (owner, id, fallback) -> CompletableFuture.completedFuture(new BufferedImage(16, 32,
+                    BufferedImage.TYPE_INT_ARGB));
+            WillMenu.open(player);
+            WillMenu.reset();
+            queued.removeFirst().run();
+            WillMenu.mainThread = Runnable::run;
+            WillMenu.open(player);
+            assertEquals("[bust]", plain(last().portrait()));
+            WillMenu.reset();
             WillMenu.mainThread = task -> { throw new IllegalStateException("disabled"); };
             WillMenu.portraits = (owner, id, fallback) -> CompletableFuture.completedFuture(null);
             WillMenu.open(player);

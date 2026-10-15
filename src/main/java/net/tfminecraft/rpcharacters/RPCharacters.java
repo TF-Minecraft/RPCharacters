@@ -336,12 +336,14 @@ public class RPCharacters extends JavaPlugin{
 		registerPlaceholderApi();
 		var will = new net.tfminecraft.rpcharacters.will.WillCommand();
 		getCommand("will").setExecutor(will);
+		net.tfminecraft.rpcharacters.will.WillMenu.reset();
 		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.will.WillPortraitListener(), this);
 		net.tfminecraft.rpcharacters.will.WillQueue.start(this);
 		if (!characterBodiesFailed) net.tfminecraft.rpcharacters.estate.EstateLink.start(this);
 	}
 	@Override
 	public void onDisable() {
+		net.tfminecraft.rpcharacters.will.WillMenu.reset();
 		for (var creation : CreationManager.activeCreators.values()) {
 			if (creation.getWizard() != null) creation.getWizard().close();
 		}

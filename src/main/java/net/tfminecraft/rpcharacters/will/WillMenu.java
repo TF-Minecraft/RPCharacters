@@ -74,6 +74,8 @@ public final class WillMenu {
 
     /** Heirs whose bust is loading. Main thread. */
     private static final Set<UUID> LOADING = new HashSet<>();
+    /** Bumped by {@link #reset()}, so a load started before a disable never fills the cache after it. */
+    private static int generation;
 
     /** One open will menu. */
     private static final class Context {
@@ -112,7 +114,9 @@ public final class WillMenu {
                 : Optional.empty();
     }
 
-    static void clearPortraits() {
+    /** Forgets cached and loading portraits; called on enable and disable. Main thread. */
+    public static void reset() {
+        generation++;
         PORTRAITS.clear();
         LOADING.clear();
     }
@@ -284,7 +288,9 @@ public final class WillMenu {
             future = null;
         }
         if (future == null) future = CompletableFuture.completedFuture(null);
+        int started = generation;
         future.whenComplete((front, error) -> dispatch(() -> {
+            if (started != generation) return;
             BufferedImage image = error == null ? front : null;
             LOADING.remove(id);
             PORTRAITS.put(id, image == null ? CharacterSelectView.placeholder(CharacterSelectView.NO_PORTRAIT)
