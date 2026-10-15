@@ -67,6 +67,10 @@ public final class ChatChannelCommandHandler implements CommandExecutor, TabComp
 					.replace("{channels}", String.join(", ", Cache.chatSwitchableChannels)));
 			return true;
 		}
+		if (!channel.getUsePermission().isBlank() && !player.hasPermission(channel.getUsePermission())) {
+			RPTexts.send(player, RPTexts.ERROR + "You cannot use this chat channel.");
+			return true;
+		}
 
 		String current = ChatChannelPreferenceManager.get().getSwitchedChannelId(player);
 		if (channelId.equals(current) || (current == null && channelId.equals(Cache.chatDefaultChannel))) {

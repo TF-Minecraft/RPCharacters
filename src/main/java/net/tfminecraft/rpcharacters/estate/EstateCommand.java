@@ -101,9 +101,12 @@ final class EstateCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 0) return List.of();
         String prefix = args[args.length - 1];
-        if (!sender.hasPermission(PERMISSION)) return args.length == 1 ? filter(List.of("collect"), prefix) : List.of();
-        if (args.length == 1) return filter(STAFF, prefix);
+        if (!sender.hasPermission(PERMISSION)) return sender instanceof Player && args.length == 1
+                ? filter(List.of("collect"), prefix) : List.of();
+        if (args.length == 1) return filter(STAFF.stream()
+                .filter(sub -> !sub.equals("collect") || sender instanceof Player).toList(), prefix);
         String sub = args[0].toLowerCase(Locale.ROOT);
+        if (sub.equals("collect") && !(sender instanceof Player)) return List.of();
         if (sub.equals("list")) return args.length == 2 ? filter(FILTERS, prefix) : List.of();
         if (!STAFF.contains(sub)) return List.of();
 

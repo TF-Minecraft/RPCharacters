@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
+import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -359,6 +360,7 @@ public class CommandTabCompleter implements TabCompleter {
 		if (data == null) return Collections.emptyList();
 		List<String> ids = new ArrayList<>();
 		for (RPCharacter character : data.getCharacters()) {
+			if (character.getStatus() != Status.ALIVE) continue;
 			String slug = character.getSlug();
 			String id = slug != null && !slug.isBlank() && slug.chars().noneMatch(Character::isWhitespace)
 					&& !slug.equalsIgnoreCase("permanent") ? slug : character.getId();

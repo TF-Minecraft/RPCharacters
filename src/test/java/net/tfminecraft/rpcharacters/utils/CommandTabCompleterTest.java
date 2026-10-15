@@ -8,6 +8,7 @@ import java.util.*;
 import net.tfminecraft.rpcharacters.*;
 import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.creation.*;
+import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.loaders.*;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.*;
@@ -69,7 +70,8 @@ class CommandTabCompleterTest {
     void admin() { grant(Permissions.Permission_Admin, true); }
     List<String> complete(String... args) { return tabs.onTabComplete(player, command, "rpcharacter", args); }
     RPCharacter character(String slug, String name) {
-        RPCharacter character = mock(RPCharacter.class); when(character.getSlug()).thenReturn(slug); when(character.getName()).thenReturn(name); return character;
+        RPCharacter character = mock(RPCharacter.class); when(character.getSlug()).thenReturn(slug); when(character.getName()).thenReturn(name);
+        when(character.getStatus()).thenReturn(Status.ALIVE); return character;
     }
 
     @Test void selectIsSuggestedOnlyWhileCharacterBodiesAreEnabled() {
@@ -221,6 +223,30 @@ class CommandTabCompleterTest {
         assertEquals(List.of("Iris"), complete("injure", "I"));
         assertEquals(List.of(), complete("injure", "Iris", ""));
         assertEquals(List.of(), complete("admin", "permakill", "Iris", ""));
+    }
+
+    @Test void injuryAndPermakillExcludeNonlivingCharactersButKeepLivingSlugsAndIds() {
+        admin(); RPCharacter living = character("living_slug", "Living Name"), livingId = character(null, "Living Without Slug");
+        RPCharacter dead = character("fallen_slug", "Fallen Name"), deadId = character(null, "Fallen Without Slug");
+        RPCharacter missing = character("missing_slug", "Missing Name");
+        when(livingId.getId()).thenReturn("id-living"); when(deadId.getId()).thenReturn("id-dead");
+        when(dead.getStatus()).thenReturn(Status.DEAD); when(deadId.getStatus()).thenReturn(Status.DEAD);
+        when(missing.getStatus()).thenReturn(Status.MISSING);
+        when(data.getCharacters()).thenReturn(List.of(living, dead, livingId, deadId, missing));
+        for (String verb : List.of("injure", "permakill")) {
+            List<String> expected = verb.equals("injure") ? List.of("living_slug", "id-living", "permanent")
+                    : List.of("living_slug", "id-living");
+            assertEquals(expected, complete(verb, "Iris", ""), verb);
+            assertEquals(expected, complete("admin", verb, "Iris", ""), verb);
+            assertEquals(List.of("living_slug"), complete(verb, "Iris", "LiV"), verb);
+            assertEquals(List.of("living_slug"), complete("admin", verb, "Iris", "LiV"), verb);
+            assertEquals(List.of("id-living"), complete(verb, "Iris", "ID-LI"), verb);
+            assertEquals(List.of("id-living"), complete("admin", verb, "Iris", "ID-LI"), verb);
+            for (String prefix : List.of("Fa", "ID-DEAD", "Mi")) {
+                assertEquals(List.of(), complete(verb, "Iris", prefix), verb + " " + prefix);
+                assertEquals(List.of(), complete("admin", verb, "Iris", prefix), verb + " " + prefix);
+            }
+        }
     }
 
     @Test void personaRootsAndNestedArgumentsUseTheExecutionPermissions() {

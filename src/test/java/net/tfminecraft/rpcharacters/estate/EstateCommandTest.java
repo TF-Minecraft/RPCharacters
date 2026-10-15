@@ -29,7 +29,8 @@ class EstateCommandTest {
     private CommandSender console;
     private final UUID current = UUID.randomUUID();
     private Optional<UUID> session = Optional.of(current);
-    private final EstateRecord record = new EstateRecord(UUID.randomUUID(), new CharacterRef(UUID.randomUUID(), UUID.randomUUID()));
+    private final EstateRecord record = new EstateRecord(UUID.fromString("d0000000-0000-0000-0000-000000000001"),
+            new CharacterRef(UUID.randomUUID(), UUID.randomUUID()));
 
     @BeforeEach
     void setUp() {
@@ -135,10 +136,47 @@ class EstateCommandTest {
                 command.onTabComplete(console, null, "estate", new String[] {"assign", record.deathId.toString(), ""}));
         record.state = EstateState.OPEN;
         assertEquals(List.of("--no-guild"), command.onTabComplete(console, null, "estate", new String[] {"decide", record.deathId.toString(), ""}));
-        assertEquals(List.of(), command.onTabComplete(console, null, "estate", new String[] {"show", "d"}));
+        assertEquals(List.of(record.deathId.toString()),
+                command.onTabComplete(console, null, "estate", new String[] {"show", "d"}));
+        assertEquals(List.of(), command.onTabComplete(console, null, "estate", new String[] {"show", "g"}));
     }
     private List<String> tab(String... args) {
         return command.onTabComplete(console, null, "estate", args);
+    }
+
+    @Test void consoleCompletionExcludesCollectionWhileRetainingStaffTools() {
+        assertEquals(List.of("list", "show", "hold", "release", "decide", "assign", "retry", "waive", "revert"), tab(""));
+        assertEquals(List.of("show"), tab("Sh"));
+        assertEquals(List.of(), tab("Co"));
+        assertEquals(List.of(), tab("CoLlEcT", ""));
+        assertEquals(List.of(), tab("collect", "d"));
+        assertEquals(List.of(), tab("collect", "Ilvaran", ""));
+        assertEquals(List.of(), tab("collect", record.deathId.toString(), ""));
+        when(console.hasPermission(EstateCommand.PERMISSION)).thenReturn(false);
+        assertEquals(List.of(), tab(""));
+        assertEquals(List.of(), tab("Co"));
+        assertEquals(List.of(), tab("Sh"));
+        assertEquals(List.of(), tab("collect", ""));
+        verifyNoInteractions(staff, collections);
+    }
+
+    @Test void staffPlayersCanCompleteCollectionEstateIdsAndNameSuffixes() {
+        when(player.hasPermission(EstateCommand.PERMISSION)).thenReturn(true);
+        assertTrue(command.onTabComplete(player, null, "estate", new String[]{""}).contains("collect"));
+        assertEquals(List.of("collect"), command.onTabComplete(player, null, "estate", new String[]{"Co"}));
+        assertEquals(List.of(record.deathId.toString(), "Ilvaran Thorne"),
+                command.onTabComplete(player, null, "estate", new String[]{"CoLlEcT", ""}));
+        assertEquals(List.of(record.deathId.toString()),
+                command.onTabComplete(player, null, "estate", new String[]{"collect", "D000"}));
+        assertEquals(List.of("Ilvaran Thorne"),
+                command.onTabComplete(player, null, "estate", new String[]{"collect", "iLv"}));
+        assertEquals(List.of("Ilvaran Thorne"),
+                command.onTabComplete(player, null, "estate", new String[]{"collect", "Ilvaran"}));
+        assertEquals(List.of("Thorne"),
+                command.onTabComplete(player, null, "estate", new String[]{"collect", "Ilvaran", ""}));
+        assertEquals(List.of("Thorne"),
+                command.onTabComplete(player, null, "estate", new String[]{"collect", "iLvArAn", "tH"}));
+        verify(staff, never()).find(anyString()); verifyNoInteractions(collections);
     }
 
     @Test void rootsFiltersAndEveryArgumentRespectCaseAndCurrentTokenPrefixes() {
@@ -155,7 +193,7 @@ class EstateCommandTest {
 
     @Test void estateIdsAndMultiwordNameSuffixesAreUsableAtTheirActualBoundary() {
         String id = record.deathId.toString();
-        for (String verb : List.of("show", "hold", "release", "decide", "assign", "collect", "retry", "waive", "revert")) {
+        for (String verb : List.of("show", "hold", "release", "decide", "assign", "retry", "waive", "revert")) {
             assertTrue(tab(verb, "").contains(id), verb);
             assertEquals(List.of(id), tab(verb, id.substring(0, 8).toUpperCase(java.util.Locale.ROOT)), verb);
         }
