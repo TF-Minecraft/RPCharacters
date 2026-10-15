@@ -52,22 +52,34 @@ final class EstateDecider {
         String guildName = name(world.guild(g.incarnation()));
         if (g.live()) {
             Part leader = g.leader().map(id -> living(world, id, testator)).map(Part::character).orElse(Part.WAITING);
-            if (heir != null) {
-                return decided(now, heir, g, Part.bank(heir), Part.character(heir), leader, Part.character(heir));
+            // Guild locks follow the guild leader, else the realm leader; property waits for a guild leader.
+            Part locks = leader;
+            if (leader.recipient().isWaiting()) {
+                GuildLookup realm = realmOf(g, world);
+                if (!(realm instanceof GuildLookup.Live) && !(realm instanceof GuildLookup.Gone)) {
+                    return new Verdict.Postpone("SimpleFactions cannot find the realm");
+                }
+                locks = realmLeader(realm, world, testator).map(Part::character).orElse(Part.WAITING);
             }
-            return decided(now, null, g, Part.treasury("guild:" + g.incarnation(), "GUILD", guildName), leader, leader,
+            if (heir != null) {
+                return decided(now, heir, g, Part.bank(heir), Part.character(heir), locks, Part.character(heir));
+            }
+            return decided(now, null, g, Part.treasury("guild:" + g.incarnation(), "GUILD", guildName), leader, locks,
                     Part.SENDER);
         }
-        if (heir != null) {
-            return decided(now, heir, g, Part.bank(heir), Part.character(heir), Part.character(heir), Part.character(heir));
+        GuildLookup realm = realmOf(g, world);
+        if (!(realm instanceof GuildLookup.Live) && !(realm instanceof GuildLookup.Gone)) {
+            return new Verdict.Postpone("SimpleFactions cannot find the realm");
         }
-        if (g.realm().isEmpty()) return decided(now, null, g, Part.FROZEN, Part.FROZEN, Part.FROZEN, Part.SENDER);
-        GuildLookup realm = world.guild(g.realm().get());
-        Part money;
-        if (realm instanceof GuildLookup.Live live) money = Part.treasury(live.guild().treasuryAccount(), "REALM", live.guild().name());
-        else if (realm instanceof GuildLookup.Gone) money = Part.FROZEN;
-        else return new Verdict.Postpone("SimpleFactions cannot find the realm");
-        return decided(now, null, g, money, Part.FROZEN, Part.FROZEN, Part.SENDER);
+        Optional<Named> realmLeader = realmLeader(realm, world, testator);
+        if (heir != null) {
+            Part locks = realmLeader.map(Part::character).orElse(Part.character(heir));
+            return decided(now, heir, g, Part.bank(heir), Part.character(heir), locks, Part.character(heir));
+        }
+        Part money = realm instanceof GuildLookup.Live live
+                ? Part.treasury(live.guild().treasuryAccount(), "REALM", live.guild().name()) : Part.FROZEN;
+        return decided(now, null, g, money, Part.FROZEN, realmLeader.map(Part::character).orElse(Part.FROZEN),
+                Part.SENDER);
     }
 
     /** Re-runs each WAITING part's row against the death guild as it is now (design "WAITING re-check"). */
@@ -79,16 +91,42 @@ final class EstateDecider {
         }
         Part property = d.property();
         Part locks = d.guildLocks();
+        UUID testator = estate.testator.characterId();
+        GuildLookup realm = d.deathRealm() == null ? GuildLookup.GONE : world.guild(d.deathRealm());
         if (guild instanceof GuildLookup.Live live) {
-            Named leader = live.guild().leader().map(id -> living(world, id, estate.testator.characterId())).orElse(null);
-            if (leader == null) return new Recheck.Unchanged("the death guild has no living leader");
-            if (property.recipient().isWaiting()) property = Part.character(leader);
-            if (locks.recipient().isWaiting()) locks = Part.character(leader);
+            Named leader = live.guild().leader().map(id -> living(world, id, testator)).orElse(null);
+            if (leader != null) {
+                if (property.recipient().isWaiting()) property = Part.character(leader);
+                if (locks.recipient().isWaiting()) locks = Part.character(leader);
+            } else {
+                Optional<Named> realmLeader = realmLeader(realm, world, testator);
+                if (!locks.recipient().isWaiting() || realmLeader.isEmpty()) {
+                    return new Recheck.Unchanged("the death guild has no living leader");
+                }
+                locks = Part.character(realmLeader.get());
+            }
         } else {
+            if (locks.recipient().isWaiting()) {
+                if (!(realm instanceof GuildLookup.Live) && !(realm instanceof GuildLookup.Gone)) {
+                    return new Recheck.Unchanged("SimpleFactions cannot find the realm");
+                }
+                locks = realmLeader(realm, world, testator).map(Part::character)
+                        .orElse(d.heir() == null ? Part.FROZEN : Part.character(d.heir()));
+            }
             if (property.recipient().isWaiting()) property = Part.FROZEN;
-            if (locks.recipient().isWaiting()) locks = d.heir() == null ? Part.FROZEN : Part.character(d.heir());
         }
         return new Recheck.Revised(d.revise(d.money(), property, locks));
+    }
+
+    /** The death realm as SimpleFactions answers now; GONE when the guild had none, null when unanswered. */
+    private static GuildLookup realmOf(DeathGuild.Guild g, EstateWorld world) {
+        return g.realm().isEmpty() ? GuildLookup.GONE : world.guild(g.realm().get());
+    }
+
+    /** The living leader of a live realm, other than the testator. */
+    private static Optional<Named> realmLeader(GuildLookup realm, EstateWorld world, UUID testator) {
+        if (!(realm instanceof GuildLookup.Live live)) return Optional.empty();
+        return live.guild().leader().map(id -> living(world, id, testator));
     }
 
     private static Verdict guildless(Instant now, Named heir) {
