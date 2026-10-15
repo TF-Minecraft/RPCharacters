@@ -67,6 +67,10 @@ public final class ChatChannelCommandHandler implements CommandExecutor, TabComp
 					.replace("{channels}", String.join(", ", Cache.chatSwitchableChannels)));
 			return true;
 		}
+		if (!channel.getUsePermission().isBlank() && !player.hasPermission(channel.getUsePermission())) {
+			RPTexts.send(player, RPTexts.ERROR + "You cannot use this chat channel.");
+			return true;
+		}
 
 		String current = ChatChannelPreferenceManager.get().getSwitchedChannelId(player);
 		if (channelId.equals(current) || (current == null && channelId.equals(Cache.chatDefaultChannel))) {
@@ -125,16 +129,20 @@ public final class ChatChannelCommandHandler implements CommandExecutor, TabComp
 
 	@Override
 	public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-		if (args.length != 1) {
+		if (!(sender instanceof Player) || args.length != 1) {
 			return List.of();
 		}
 		String name = command.getName().toLowerCase(Locale.ROOT);
-		List<String> options = CHANNEL_COMMAND.equals(name)
+		List<String> options = CHANNEL_COMMAND.equals(name) && Cache.chatChannelSwitcherEnabled
 				? Cache.chatSwitchableChannels
-				: TOGGLE_COMMAND.equals(name) ? Cache.chatToggleableChannels : List.of();
+				: TOGGLE_COMMAND.equals(name) && Cache.chatChannelTogglerEnabled ? Cache.chatToggleableChannels : List.of();
 		String prefix = args[0].toLowerCase(Locale.ROOT);
 		return options.stream()
-				.filter(option -> option.startsWith(prefix))
+				.filter(option -> ChatLoader.getChannel(option) != null)
+				.filter(option -> !CHANNEL_COMMAND.equals(name)
+						|| ChatLoader.getChannel(option).getUsePermission().isBlank()
+						|| sender.hasPermission(ChatLoader.getChannel(option).getUsePermission()))
+				.filter(option -> option.toLowerCase(Locale.ROOT).startsWith(prefix))
 				.collect(Collectors.toList());
 	}
 }

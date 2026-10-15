@@ -48,6 +48,11 @@ final class EstateStaff {
         }
     }
 
+    /** Loaded records only: no participant, character-directory or persistence calls. */
+    List<EstateRecord> records() {
+        return List.copyOf(book.all());
+    }
+
     String hold(EstateRecord record, String staff) {
         if (record.state != EstateState.OPEN) return "Only an open estate can be held; this one is " + record.state + ".";
         return change(record, staff, "held", next -> {

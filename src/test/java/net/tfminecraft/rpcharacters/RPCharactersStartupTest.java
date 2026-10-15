@@ -35,6 +35,18 @@ class RPCharactersStartupTest {
     <T> T singleton(Class<T> type,MockedStatic.Verification getter){var api=mockStatic(type);boundaries.add(api);T instance=mock(type);api.when(getter).thenReturn(instance);return instance;}
     @AfterEach void cleanup()throws Exception{for(int i=boundaries.size()-1;i>=0;i--)boundaries.get(i).close();state.close();MockBukkit.unmock();}
     @Test void startupWiresCommandsListenersConfigurationAndShutdown(){plugin.startRuntime();assertSame(plugin,RPCharacters.plugin);assertEquals(1,config.constructed().size());assertEquals(1,focus.constructed().size());verify(focus.constructed().getFirst()).start();assertTrue(commands.keySet().containsAll(List.of("focus","rpcharacter","roll","profession","channel","channeltoggle","pvp","duel","grave","players","will")));verify(plugins,atLeast(40)).registerEvents(any(),eq(plugin));verify(commands.get("rpcharacter")).setExecutor(any());verify(config.constructed().getFirst()).load(new File(plugin.getDataFolder(),"config.yml"));plugin.stopRuntime();verify(focus.constructed().getFirst()).shutdown();}
+    @Test void guiRootsExplicitlySuppressPlayerNameFallbackForEveryLabel() {
+        plugin.startRuntime();
+        for (String root : List.of("class", "subclass", "players", "will")) {
+            var captured = org.mockito.ArgumentCaptor.forClass(org.bukkit.command.TabCompleter.class);
+            verify(commands.get(root)).setTabCompleter(captured.capture());
+            for (String label : List.of(root, "rpcharacters:" + root, "c")) {
+                assertEquals(List.of(), captured.getValue().onTabComplete(server.getConsoleSender(), commands.get(root), label, new String[]{""}));
+                assertEquals(List.of(), captured.getValue().onTabComplete(server.getConsoleSender(), commands.get(root), label, new String[]{"I", ""}));
+            }
+        }
+        plugin.stopRuntime();
+    }
     @Test void reloadReportsFocusFailureAndRecoveryWhileRefreshingOtherConfiguration()throws Exception{plugin.startRuntime();var module=focus.constructed().getFirst();var service=mock(FocusService.class);when(module.getService()).thenReturn(service);assertSame(service,RPCharacters.getFocusService());var sender=server.getConsoleSender();plugin.reloadConfigs(sender);when(module.reloadConfig()).thenReturn(true);assertTrue(plugin.reloadFocusConfig());plugin.reload();plugin.reloadConfigs(null);plugin.reloadConfigs(sender);verify(module,atLeast(4)).reloadConfig();doThrow(new IllegalStateException("broken config")).when(config.constructed().getFirst()).load(any());assertDoesNotThrow(()->plugin.reloadConfigs(sender));assertDoesNotThrow(()->plugin.reloadConfigs(null));plugin.stopRuntime();}
     @Test void repeatedStartupReusesDependencyComponentsAndOptionalIntegrationsRegister()throws Exception{when(plugins.isPluginEnabled("SimpleFactions")).thenReturn(true);when(plugins.isPluginEnabled("PlaceholderAPI")).thenReturn(true);var world=mock(World.class);File dataFolder=plugin.getDataFolder();when(world.getWorldFolder()).thenReturn(dataFolder);when(serverFacade.getWorlds()).thenReturn(List.of(world));plugin.createFolders();Files.writeString(plugin.getDataFolder().toPath().resolve("professions.yml"),"{}\n");Files.createDirectories(plugin.getDataFolder().toPath().resolve("traits/subdirectory"));plugin.startRuntime();plugin.stopRuntime();plugin.startRuntime();assertEquals(1,config.constructed().size());assertEquals(2,focus.constructed().size());plugin.stopRuntime();}
     @Test void unreadableDirectoryCannotRegisterTheIdentityProvider() throws Exception {
