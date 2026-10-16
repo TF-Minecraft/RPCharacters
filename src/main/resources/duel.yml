@@ -6,6 +6,9 @@
 # stamina, burning and potion effects go back to how they were at the start.
 # Debuffs a player already had stay, with the time they had left, so a duel never
 # cleanses or heals anything the duel didn't cause.
+# A temporary blue and gold banner marks the challenge and fight. It has no
+# collision, cannot be collected, and changes no blocks. Every ending removes it.
+# Both fighters get countdown sounds and a title and sound confirming the result.
 #
 # A blow from the opponent that would kill ends the duel instead: no death,
 # knockout, grave, dropped items or strike. Burning counts as the opponent's
@@ -62,6 +65,17 @@ messages:
   not-duelling: "&cYou aren't in a duel."
   countdown: "&6{count}"
   fight-title: "&6&lDUEL"
+  victory-title: "&6&lVICTORY"
+  victory-subtitle: "&fYou defeated {name}."
+  yield-victory-subtitle: "&f{name} yielded."
+  defeat-title: "&c&lDEFEAT"
+  defeat-subtitle: "&7{name} won the duel."
+  yield-title: "&e&lDUEL YIELDED"
+  yield-subtitle: "&7You yielded to {name}."
+  draw-title: "&e&lDUEL ENDED"
+  draw-subtitle: "&7{reason}."
+  interrupted-title: "&c&lDUEL INTERRUPTED"
+  interrupted-subtitle: "&7{victim} got into another fight."
   started: "&6Your duel with {name} has begun. &7Only their hits count, and you get back what they take when it ends. &f/duel yield &7gives up."
   announce-start: "&7{a} and {b} begin a duel."
   won: "&6You won the duel against {name}."

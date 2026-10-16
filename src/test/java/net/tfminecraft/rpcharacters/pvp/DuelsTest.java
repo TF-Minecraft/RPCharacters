@@ -5,12 +5,15 @@ import static org.mockito.Mockito.*;
 
 import java.nio.file.Files;
 import java.util.*;
+import java.util.function.Consumer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tfminecraft.rpcharacters.loaders.DuelLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.permadeath.PermadeathBattleExemption;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -36,11 +39,16 @@ import org.mockito.MockedStatic;
 class DuelsTest extends PvpRuntimeFixture {
     DuelCommand handler;Command command;MockedStatic<net.Indyuce.mmocore.api.player.PlayerData> mmo;
     final Map<Player,Double> health=new HashMap<>();final Map<Player,Set<PotionEffect>> effects=new HashMap<>();
+    final List<ItemDisplay> banners=new ArrayList<>();
 
     @BeforeEach void setupDuels() throws Exception {
         Duels.clear();handler=new DuelCommand();command=mock(Command.class);when(command.getName()).thenReturn("duel");mmo=boundary(net.Indyuce.mmocore.api.player.PlayerData.class);
         Files.writeString(folder.resolve("duel.yml"),"announce-radius: 24\n");new DuelLoader().load(folder.resolve("duel.yml").toFile());
         for(Player p:List.of(victim,killer,other)){fighter(p);}
+        when(world.spawn(any(Location.class),eq(ItemDisplay.class),any(Consumer.class))).thenAnswer(call->{
+            var banner=mock(ItemDisplay.class);when(banner.isValid()).thenReturn(true);
+            Consumer<ItemDisplay> setup=call.getArgument(2);setup.accept(banner);banners.add(banner);return banner;
+        });
         bukkit.when(()->org.bukkit.Bukkit.getPlayerExact(anyString())).thenAnswer(c->online.values().stream().filter(p->p.getName().equalsIgnoreCase(c.getArgument(0))).findFirst().orElse(null));
         Duels.start(p->false);
     }
@@ -68,10 +76,60 @@ class DuelsTest extends PvpRuntimeFixture {
     void land(EntityDamageEvent e){handler.onDamage(e);if(e.isCancelled())return;Player p=(Player)e.getEntity();if(health.get(p)-e.getFinalDamage()<=0&&Duels.settleLethalBlow(e,p))return;handler.onDamageTaken(e);health.put(p,Math.max(0,health.get(p)-e.getFinalDamage()));}
     void cancelTracking(EntityDamageEvent e){doAnswer(c->{when(e.isCancelled()).thenReturn(c.getArgument(0));return null;}).when(e).setCancelled(anyBoolean());}
 
+    @Test void bannerBelongsToTheChallengeAndTransfersToTheAcceptedDuel() {
+        command(victim,"Killer");assertEquals(1,banners.size());var banner=banners.getFirst();
+        verify(banner).setPersistent(false);verify(banner).setInvulnerable(true);verify(banner).setGravity(false);verify(banner).addScoreboardTag(DuelBanner.TAG);
+        var item=org.mockito.ArgumentCaptor.forClass(org.bukkit.inventory.ItemStack.class);verify(banner).setItemStack(item.capture());
+        assertEquals(org.bukkit.Material.BLUE_BANNER,item.getValue().getType());assertEquals(2,((org.bukkit.inventory.meta.BannerMeta)item.getValue().getItemMeta()).numberOfPatterns());
+        var anchor=org.mockito.ArgumentCaptor.forClass(Location.class);verify(world).spawn(anchor.capture(),eq(ItemDisplay.class),any(Consumer.class));
+        assertEquals(1,anchor.getValue().getX());assertEquals(64,anchor.getValue().getY());
+        command(killer,"accept");while(!delayed.isEmpty())runNext();assertEquals(1,banners.size(),"Accepting reuses the planted flag");verify(banner,never()).remove();
+        command(victim,"yield");verify(banner).remove();verify(allTasks.getFirst().task()).cancel();
+        command(victim,"yield");verify(banner,times(1)).remove();
+    }
+
+    @Test void pendingBannersLeaveWithDeclinesWithdrawalsReplacementsAndSelection() {
+        command(victim,"Killer");var declined=banners.getLast();command(killer,"decline");verify(declined).remove();
+        command(victim,"Killer");var withdrawn=banners.getLast();command(victim,"cancel");verify(withdrawn).remove();
+        var near=player("Near",3);fighter(near);command(victim,"Killer");var replaced=banners.getLast();command(victim,"Near");verify(replaced).remove();
+        var selected=banners.getLast();Duels.forget(other);verify(selected,never()).remove();Duels.forget(near);verify(selected).remove();
+        command(victim,"Killer");var shutdown=banners.getLast();Duels.shutdown();verify(shutdown).remove();
+    }
+
+    @Test void bannerUsesTheGroundBelowTheMidpointAndCanOnlyBeRemovedOnce() {
+        var ground=mock(org.bukkit.util.RayTraceResult.class);when(ground.getHitPosition()).thenReturn(new org.bukkit.util.Vector(1,63.5,0));
+        when(world.rayTraceBlocks(any(Location.class),any(org.bukkit.util.Vector.class),eq(6.0),eq(org.bukkit.FluidCollisionMode.NEVER),eq(true))).thenReturn(ground);
+        var marker=DuelBanner.plant(victim,killer);var banner=banners.getLast();
+        var anchor=org.mockito.ArgumentCaptor.forClass(Location.class);verify(world).spawn(anchor.capture(),eq(ItemDisplay.class),any(Consumer.class));assertEquals(63.5,anchor.getValue().getY());
+        marker.remove();marker.remove();verify(banner,times(1)).remove();
+    }
+
+    @Test void everyDuelEndingRemovesItsBanner() {
+        for(var ending:Duels.Ending.values()){
+            duel();var banner=banners.getLast();Duels.endFor(List.of(victim.getUniqueId()),ending);
+            assertFalse(Duels.isDuelling(victim.getUniqueId()),ending.name());verify(banner).remove();
+        }
+    }
+
+    @Test void bothPlayersReceiveTheResultAndTheirOwnSound() {
+        duel();var lethal=hit(victim,killer,30);cancelTracking(lethal);land(lethal);
+        verify(killer).sendTitle(contains("VICTORY"),contains("Victim"),eq(5),eq(60),eq(15));
+        verify(victim).sendTitle(contains("DEFEAT"),contains("Killer"),eq(5),eq(60),eq(15));
+        verify(killer).playSound(any(Location.class),eq(Sound.UI_TOAST_CHALLENGE_COMPLETE),eq(SoundCategory.PLAYERS),eq(.7f),eq(1f));
+        verify(victim).playSound(any(Location.class),eq(Sound.BLOCK_NOTE_BLOCK_BASS),eq(SoundCategory.PLAYERS),eq(.7f),eq(.8f));
+        verify(victim,times(3)).playSound(any(Location.class),eq(Sound.BLOCK_NOTE_BLOCK_BELL),eq(SoundCategory.PLAYERS),eq(.6f),eq(1f));
+        verify(other,never()).playSound(any(Location.class),any(Sound.class),any(SoundCategory.class),anyFloat(),anyFloat());
+        duel();command(victim,"yield");verify(victim).sendTitle(contains("DUEL YIELDED"),contains("Killer"),eq(5),eq(60),eq(15));
+        verify(killer).playSound(any(Location.class),eq(Sound.ENTITY_PLAYER_LEVELUP),eq(SoundCategory.PLAYERS),eq(.7f),eq(1f));
+        duel();when(killer.getLocation()).thenReturn(new Location(world,40,64,0));timer.run();
+        verify(victim).sendTitle(contains("DUEL ENDED"),contains("too far apart"),eq(5),eq(60),eq(15));
+        verify(killer).sendTitle(contains("DUEL ENDED"),contains("too far apart"),eq(5),eq(60),eq(15));
+    }
+
     @Test void challengeAcceptCountdownAndFightStart() {
         command(victim,"Killer");assertTrue(text(victim).contains("You challenged Killer"));var prompt=PlainTextComponentSerializer.plainText().serialize(components.get(killer).getFirst());assertTrue(prompt.contains("Victim challenges you")&&prompt.contains("[Accept]")&&prompt.contains("[Decline]"));
         assertEquals(Set.of("/duel accept "+victim.getUniqueId(),"/duel decline "+victim.getUniqueId()),PvpStrikeServiceTest.commands(components.get(killer).getFirst()));
-        command(killer,"accept",victim.getUniqueId().toString());assertTrue(Duels.isDuelling(victim.getUniqueId()));assertEquals(List.of(0L,20L,40L,60L),delayed.stream().map(PendingTask::delay).toList());
+        command(killer,"accept",victim.getUniqueId().toString());assertTrue(Duels.isDuelling(victim.getUniqueId()));assertEquals(List.of(0L,20L,40L,60L),delayed.stream().map(PendingTask::delay).filter(delay->delay!=1L).toList());
         var early=hit(killer,victim,4);cancelTracking(early);land(early);assertTrue(early.isCancelled(),"No hits count during the countdown");
         while(!delayed.isEmpty())runNext();verify(victim).sendTitle(contains("3"),eq(" "),eq(0),eq(25),eq(5));verify(killer).sendTitle(contains("DUEL"),eq(" "),eq(0),eq(25),eq(5));assertTrue(text(victim).contains("Your duel with Killer has begun"));assertTrue(text(other).isEmpty(),"Other is 100 blocks away, past the announce radius");
         var nearby=player("Nearby",5);fighter(nearby);Duels.endFor(List.of(victim.getUniqueId()),Duels.Ending.FIGHT);command(victim,"Killer");command(killer,"accept");while(!delayed.isEmpty())runNext();assertTrue(text(nearby).contains("Victim and Killer begin a duel"));
@@ -196,7 +254,7 @@ class DuelsTest extends PvpRuntimeFixture {
         duel();timer.run();assertTrue(Duels.isDuelling(victim.getUniqueId()));online.remove(killer.getUniqueId());timer.run();assertFalse(Duels.isDuelling(victim.getUniqueId()),"A vanished opponent ends it");online.put(killer.getUniqueId(),killer);
         duel();online.remove(victim.getUniqueId());timer.run();online.put(victim.getUniqueId(),victim);assertFalse(Duels.isDuelling(killer.getUniqueId()));
         try{Files.writeString(folder.resolve("duel.yml"),"max-minutes: 0\ncountdown-seconds: 0\nannounce-radius: 0\n");}catch(Exception e){fail(e);}new DuelLoader().load(folder.resolve("duel.yml").toFile());
-        command(victim,"Killer");command(killer,"accept");assertTrue(delayed.isEmpty(),"No countdown");land(hit(victim,killer,1));assertEquals(19.0,health.get(victim));timer.run();assertTrue(Duels.isDuelling(victim.getUniqueId()));Duels.shutdown();
+        command(victim,"Killer");command(killer,"accept");assertTrue(delayed.stream().allMatch(task->task.delay()==1L),"Only banner planting is scheduled, with no countdown");land(hit(victim,killer,1));assertEquals(19.0,health.get(victim));timer.run();assertTrue(Duels.isDuelling(victim.getUniqueId()));Duels.shutdown();
         Duels.start(p->false);try{Files.writeString(folder.resolve("duel.yml"),"max-minutes: 1\ncountdown-seconds: 0\n");}catch(Exception e){fail(e);}new DuelLoader().load(folder.resolve("duel.yml").toFile());assertEquals(60_000L,DuelLoader.getMaxMs());
         command(victim,"Killer");command(killer,"accept");var running=new ArrayList<Duel>();try{var f=Duels.class.getDeclaredField("duelsByPlayer");f.setAccessible(true);running.add(((Map<UUID,Duel>)f.get(null)).get(victim.getUniqueId()));}catch(ReflectiveOperationException e){fail(e);}running.getFirst().startFight(System.currentTimeMillis()-61_000);timer.run();assertTrue(text(victim).contains("time ran out"));
     }

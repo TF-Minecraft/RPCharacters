@@ -24,6 +24,7 @@ final class Duel {
 	private final Set<UUID> burningFromOpponent = new HashSet<>();
 	private final Map<UUID, Set<PotionEffectType>> effectsFromOpponent = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
+	private DuelBanner banner;
 	private boolean fighting;
 	private long fightStartedMs;
 
@@ -34,6 +35,17 @@ final class Duel {
 
 	UUID first() {
 		return first;
+	}
+
+	void banner(DuelBanner banner) {
+		this.banner = banner;
+	}
+
+	void removeBanner() {
+		if (banner != null) {
+			banner.remove();
+			banner = null;
+		}
 	}
 
 	UUID second() {
