@@ -48,6 +48,22 @@ class ProvinceSystemClientTest {
         gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wills/applied", "{\"realm_id\":\"dev\"}"));
     }
 
+    @Test void outfitLookupUsesTheReadOnlySlotRouteAndRejectsOtherSources() {
+        for (String invalid : Arrays.asList(null, " ", "../x", "x/y", "x\\y")) {
+            assertFalse(fetchWardrobeSkin(invalid, "char", "base").ok);
+            assertFalse(fetchWardrobeSkin("owner", invalid, "base").ok);
+        }
+        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1")) {
+            assertFalse(fetchWardrobeSkin("owner", "char", invalid).ok);
+        }
+        gateway.verifyNoInteractions();
+        for (String slot : List.of("base", "extra_1", "extra_2")) {
+            assertTrue(fetchWardrobeSkin(" owner ", " char ", slot).ok);
+            gateway.verify(() -> GatewayClient.request("GET", "/characters/plugin/wardrobe/owner/char/slots/" + slot, null));
+        }
+        gateway.verifyNoMoreInteractions();
+    }
+
     @Test void resultFactoriesExposeSuccessPayloadsAndFailureDetails() {
         var catalog = CatalogPushResult.success(1, 2, 3, 4, "now");
         assertTrue(catalog.ok); assertEquals(1, catalog.stages); assertEquals(2, catalog.races);

@@ -311,6 +311,9 @@ public class RPCharacters extends JavaPlugin{
 		var focusCommand = new net.tfminecraft.rpcharacters.focus.FocusCommand(this);
 		getCommand("focus").setExecutor(focusCommand);
 		getCommand("focus").setTabCompleter(focusCommand);
+		var plushieCommand = new net.tfminecraft.rpcharacters.wardrobe.PlushieCommand();
+		getCommand("plushie").setExecutor(plushieCommand);
+		getCommand("plushie").setTabCompleter(plushieCommand);
 		startManagers();
 		getCommand(commandManager.cmd1).setExecutor(commandManager);
 		getCommand("rpcharacter").setTabCompleter(new CommandTabCompleter());
