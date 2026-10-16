@@ -68,13 +68,14 @@ final class DuelBanner {
 			entity.setDisplayHeight(3);
 			entity.setViewRange(1);
 			entity.addScoreboardTag(TAG);
-			entity.setTransformation(transform(.65f, .8f));
+			// The banner item model extends half a block below its display origin.
+			entity.setTransformation(transform(1.15f, .8f));
 		});
 		BukkitTask planting = Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
 			if (display.isValid()) {
 				display.setInterpolationDuration(8);
 				display.setInterpolationDelay(0);
-				display.setTransformation(transform(0, 1));
+				display.setTransformation(transform(.5f, 1));
 			}
 		}, 1L);
 		at.getWorld().playSound(at, Sound.BLOCK_WOOL_PLACE, SoundCategory.PLAYERS, .7f, .8f);

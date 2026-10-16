@@ -84,6 +84,8 @@ class DuelsTest extends PvpRuntimeFixture {
         var anchor=org.mockito.ArgumentCaptor.forClass(Location.class);verify(world).spawn(anchor.capture(),eq(ItemDisplay.class),any(Consumer.class));
         assertEquals(1,anchor.getValue().getX());assertEquals(64,anchor.getValue().getY());
         command(killer,"accept");while(!delayed.isEmpty())runNext();assertEquals(1,banners.size(),"Accepting reuses the planted flag");verify(banner,never()).remove();
+        var transforms=org.mockito.ArgumentCaptor.forClass(org.bukkit.util.Transformation.class);verify(banner,times(2)).setTransformation(transforms.capture());
+        assertEquals(1.15f,transforms.getAllValues().getFirst().getTranslation().y());assertEquals(.5f,transforms.getAllValues().getLast().getTranslation().y(),"The pole's base rests on the ground");
         command(victim,"yield");verify(banner).remove();verify(allTasks.getFirst().task()).cancel();
         command(victim,"yield");verify(banner,times(1)).remove();
     }
