@@ -15,6 +15,8 @@ import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -74,7 +76,7 @@ public final class Duels {
 		}
 	}
 
-	private record Challenge(UUID challenger, UUID target, long expiresAtMs) {
+	private record Challenge(UUID challenger, UUID target, long expiresAtMs, DuelBanner banner) {
 	}
 
 	/** Effects whose damage has no attacker, so the duel tracks who applied them. */
@@ -105,6 +107,9 @@ public final class Duels {
 		for (Duel duel : activeDuels()) {
 			end(duel, Ending.STOPPED, null);
 		}
+		for (Challenge challenge : challengesByChallenger.values()) {
+			challenge.banner().remove();
+		}
 		challengesByChallenger.clear();
 	}
 
@@ -126,6 +131,9 @@ public final class Duels {
 			return;
 		}
 		Challenge earlier = challengesByChallenger.remove(challenger.getUniqueId());
+		if (earlier != null) {
+			earlier.banner().remove();
+		}
 		if (earlier != null && !earlier.target().equals(target.getUniqueId())) {
 			Player old = Bukkit.getPlayer(earlier.target());
 			if (old != null) {
@@ -133,7 +141,7 @@ public final class Duels {
 			}
 		}
 		challengesByChallenger.put(challenger.getUniqueId(), new Challenge(challenger.getUniqueId(),
-				target.getUniqueId(), System.currentTimeMillis() + DuelLoader.getChallengeMs()));
+				target.getUniqueId(), System.currentTimeMillis() + DuelLoader.getChallengeMs(), DuelBanner.plant(challenger, target)));
 		send(challenger, "challenge-sent", "{name}", name(target),
 				"{seconds}", String.valueOf(DuelLoader.getChallengeSeconds()));
 		String id = challenger.getUniqueId().toString();
@@ -157,7 +165,7 @@ public final class Duels {
 		}
 		// No challenge back the other way can exist: challenging your challenger accepts theirs.
 		challengesByChallenger.remove(challenger.getUniqueId());
-		begin(challenger, target);
+		begin(challenger, target, challenge.banner());
 	}
 
 	static void decline(Player target, String from) {
@@ -167,6 +175,7 @@ public final class Duels {
 			return;
 		}
 		challengesByChallenger.remove(challenge.challenger());
+		challenge.banner().remove();
 		Player challenger = Bukkit.getPlayer(challenge.challenger());
 		if (challenger != null) {
 			send(challenger, "declined-challenger", "{name}", name(target));
@@ -180,6 +189,7 @@ public final class Duels {
 			send(challenger, "nothing-to-cancel");
 			return;
 		}
+		challenge.banner().remove();
 		Player target = Bukkit.getPlayer(challenge.target());
 		if (target != null) {
 			send(target, "withdrawn-target", "{name}", name(challenger));
@@ -269,8 +279,13 @@ public final class Duels {
 
 	/** Leaving for character selection withdraws open challenges, as a logout does. */
 	public static void forget(Player player) {
-		challengesByChallenger.values().removeIf(c -> c.challenger().equals(player.getUniqueId())
-				|| c.target().equals(player.getUniqueId()));
+		challengesByChallenger.values().removeIf(c -> {
+			if (c.challenger().equals(player.getUniqueId()) || c.target().equals(player.getUniqueId())) {
+				c.banner().remove();
+				return true;
+			}
+			return false;
+		});
 	}
 
 	static void handleQuit(Player player) {
@@ -297,6 +312,7 @@ public final class Duels {
 				continue;
 			}
 			challenges.remove();
+			challenge.banner().remove();
 			Player challenger = Bukkit.getPlayer(challenge.challenger());
 			Player target = Bukkit.getPlayer(challenge.target());
 			if (challenger != null && target != null) {
@@ -339,8 +355,9 @@ public final class Duels {
 		}
 	}
 
-	private static void begin(Player first, Player second) {
+	private static void begin(Player first, Player second, DuelBanner banner) {
 		Duel duel = new Duel(first.getUniqueId(), second.getUniqueId());
+		duel.banner(banner);
 		long now = System.currentTimeMillis();
 		duel.snapshot(first.getUniqueId(), DuelSnapshot.take(first, now));
 		duel.snapshot(second.getUniqueId(), DuelSnapshot.take(second, now));
@@ -352,7 +369,12 @@ public final class Duels {
 		for (int count = countdown; count >= 1; count--) {
 			String shown = text("countdown", "{count}", String.valueOf(count));
 			duel.addTask(Bukkit.getScheduler().runTaskLater(RPCharacters.plugin,
-					() -> titleBoth(duel, shown), (countdown - count) * 20L));
+					() -> {
+						if (duelsByPlayer.get(duel.first()) == duel) {
+							titleBoth(duel, shown);
+							soundBoth(duel, Sound.BLOCK_NOTE_BLOCK_BELL, .6f, 1);
+						}
+					}, (countdown - count) * 20L));
 		}
 		if (countdown == 0) {
 			startFight(duel);
@@ -370,6 +392,7 @@ public final class Duels {
 		}
 		duel.startFight(System.currentTimeMillis());
 		titleBoth(duel, text("fight-title"));
+		soundBoth(duel, Sound.BLOCK_BELL_USE, .6f, 1.3f);
 		send(first, "started", "{name}", name(second));
 		send(second, "started", "{name}", name(first));
 		announce(first, second, text("announce-start", "{a}", name(first), "{b}", name(second)));
@@ -380,6 +403,7 @@ public final class Duels {
 		duelsByPlayer.remove(duel.first());
 		duelsByPlayer.remove(duel.second());
 		duel.cancelTasks();
+		duel.removeBanner();
 		long now = System.currentTimeMillis();
 		Player first = participant(duel.first(), subject);
 		Player second = participant(duel.second(), subject);
@@ -407,6 +431,11 @@ public final class Duels {
 			boolean yielded = ending == Ending.YIELDED;
 			send(winner, yielded ? "yield-winner" : "won", "{name}", subjectName);
 			send(subject, yielded ? "yield-loser" : "lost", "{name}", winnerName);
+			result(winner, "victory-title", yielded ? "yield-victory-subtitle" : "victory-subtitle",
+					yielded ? Sound.ENTITY_PLAYER_LEVELUP : Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f,
+					"{name}", subjectName);
+			result(subject, yielded ? "yield-title" : "defeat-title", yielded ? "yield-subtitle" : "defeat-subtitle",
+					Sound.BLOCK_NOTE_BLOCK_BASS, .8f, "{name}", winnerName);
 			announce(winner, subject, text(yielded ? "announce-yield" : "announce-win",
 					"{winner}", winnerName, "{loser}", subjectName));
 			return;
@@ -414,6 +443,10 @@ public final class Duels {
 		if (ending == Ending.INTERRUPTED) {
 			sendAbout(duel, first, "interrupted", "{victim}", subjectName);
 			sendAbout(duel, second, "interrupted", "{victim}", subjectName);
+			for (Player player : new Player[] { first, second }) {
+				result(player, "interrupted-title", "interrupted-subtitle", Sound.BLOCK_NOTE_BLOCK_BASS, 1,
+						"{victim}", subjectName);
+			}
 			return;
 		}
 		String reason = text(ending.reasonKey, "{name}", subjectName);
@@ -422,6 +455,8 @@ public final class Duels {
 		for (Player player : new Player[] { first, second }) {
 			if (!(subjectGone && player == subject)) {
 				sendAbout(duel, player, "draw", "{reason}", reason);
+				result(player, "draw-title", "draw-subtitle", Sound.BLOCK_NOTE_BLOCK_BASS, 1,
+						"{reason}", reason);
 			}
 		}
 	}
@@ -634,6 +669,23 @@ public final class Duels {
 				RPTexts.title(player, title, " ", 0, 25, 5);
 			}
 		}
+	}
+
+	private static void soundBoth(Duel duel, Sound sound, float volume, float pitch) {
+		for (UUID id : new UUID[] { duel.first(), duel.second() }) {
+			Player player = Bukkit.getPlayer(id);
+			if (player != null) {
+				player.playSound(player.getLocation(), sound, SoundCategory.PLAYERS, volume, pitch);
+			}
+		}
+	}
+
+	private static void result(Player player, String title, String subtitle, Sound sound, float pitch, String... replacements) {
+		if (player == null || !player.isOnline()) {
+			return;
+		}
+		RPTexts.title(player, text(title, replacements), text(subtitle, replacements), 5, 60, 15);
+		player.playSound(player.getLocation(), sound, SoundCategory.PLAYERS, .7f, pitch);
 	}
 
 	private static void announce(Player first, Player second, String raw) {

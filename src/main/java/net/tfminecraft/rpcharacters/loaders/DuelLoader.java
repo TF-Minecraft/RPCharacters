@@ -21,7 +21,7 @@ public final class DuelLoader implements LoaderInterface {
 	private static int countdownSeconds = 3;
 	private static int leashRange = 32;
 	private static int maxMinutes = 10;
-	private static int announceRadius = 24;
+	private static int announceRadius = 0;
 	private static final Map<String, String> messages = new LinkedHashMap<>(DEFAULT_MESSAGES);
 
 	@Override
@@ -38,7 +38,7 @@ public final class DuelLoader implements LoaderInterface {
 		countdownSeconds = Math.max(0, config.getInt("countdown-seconds", 3));
 		leashRange = Math.max(1, config.getInt("leash-range", 32));
 		maxMinutes = Math.max(0, config.getInt("max-minutes", 10));
-		announceRadius = Math.max(0, config.getInt("announce-radius", 24));
+		announceRadius = Math.max(0, config.getInt("announce-radius", 0));
 		messages.clear();
 		for (Map.Entry<String, String> entry : DEFAULT_MESSAGES.entrySet()) {
 			messages.put(entry.getKey(), config.getString("messages." + entry.getKey(), entry.getValue()));
@@ -110,6 +110,17 @@ public final class DuelLoader implements LoaderInterface {
 		m.put("not-duelling", "&cYou aren't in a duel.");
 		m.put("countdown", "&6{count}");
 		m.put("fight-title", "&6&lDUEL");
+		m.put("victory-title", "&6&lVICTORY");
+		m.put("victory-subtitle", "&fYou defeated {name}.");
+		m.put("yield-victory-subtitle", "&f{name} yielded.");
+		m.put("defeat-title", "&c&lDEFEAT");
+		m.put("defeat-subtitle", "&7{name} won the duel.");
+		m.put("yield-title", "&e&lDUEL YIELDED");
+		m.put("yield-subtitle", "&7You yielded to {name}.");
+		m.put("draw-title", "&e&lDUEL ENDED");
+		m.put("draw-subtitle", "&7{reason}.");
+		m.put("interrupted-title", "&c&lDUEL INTERRUPTED");
+		m.put("interrupted-subtitle", "&7{victim} got into another fight.");
 		m.put("started", "&6Your duel with {name} has begun. &7Only their hits count, and you get back what they take when it ends. &f/duel yield &7gives up.");
 		m.put("announce-start", "&7{a} and {b} begin a duel.");
 		m.put("won", "&6You won the duel against {name}.");
