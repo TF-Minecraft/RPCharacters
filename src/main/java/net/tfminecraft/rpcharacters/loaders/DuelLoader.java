@@ -21,7 +21,7 @@ public final class DuelLoader implements LoaderInterface {
 	private static int countdownSeconds = 3;
 	private static int leashRange = 32;
 	private static int maxMinutes = 10;
-	private static int announceRadius = 24;
+	private static int announceRadius = 0;
 	private static final Map<String, String> messages = new LinkedHashMap<>(DEFAULT_MESSAGES);
 
 	@Override
@@ -38,7 +38,7 @@ public final class DuelLoader implements LoaderInterface {
 		countdownSeconds = Math.max(0, config.getInt("countdown-seconds", 3));
 		leashRange = Math.max(1, config.getInt("leash-range", 32));
 		maxMinutes = Math.max(0, config.getInt("max-minutes", 10));
-		announceRadius = Math.max(0, config.getInt("announce-radius", 24));
+		announceRadius = Math.max(0, config.getInt("announce-radius", 0));
 		messages.clear();
 		for (Map.Entry<String, String> entry : DEFAULT_MESSAGES.entrySet()) {
 			messages.put(entry.getKey(), config.getString("messages." + entry.getKey(), entry.getValue()));

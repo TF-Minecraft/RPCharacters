@@ -34,8 +34,9 @@ countdown-seconds: 3
 leash-range: 32
 # The longest a duel can last, in minutes. 0 for no limit.
 max-minutes: 10
-# Players this close see when a duel starts and who won. 0 tells nobody.
-announce-radius: 24
+# Nearby chat notices are off by default; only the duellists get messages.
+# Set a positive radius to opt in to nearby start and result notices.
+announce-radius: 0
 
 messages:
   usage: "&7Usage: /duel [player] | accept [player] | decline [player] | cancel | yield"

@@ -128,6 +128,28 @@ class DuelsTest extends PvpRuntimeFixture {
         verify(killer).sendTitle(contains("DUEL ENDED"),contains("too far apart"),eq(5),eq(60),eq(15));
     }
 
+    @Test void nearbyChatNoticesAreOffByDefaultForEveryResult() throws Exception {
+        Files.writeString(folder.resolve("duel.yml"),"{}\n");new DuelLoader().load(folder.resolve("duel.yml").toFile());
+        assertEquals(0,DuelLoader.getAnnounceRadius());var nearby=player("Nearby",5);fighter(nearby);
+        duel();assertTrue(text(nearby).isEmpty());command(victim,"yield");assertTrue(text(nearby).isEmpty());
+        duel();var lethal=hit(killer,victim,30);cancelTracking(lethal);land(lethal);assertTrue(text(nearby).isEmpty());
+        duel();when(killer.getLocation()).thenReturn(new Location(world,40,64,0));timer.run();assertTrue(text(nearby).isEmpty());
+        assertTrue(text(victim).contains("You won the duel against Killer"));assertTrue(text(killer).contains("Your wounds from it are mended"));
+        verify(victim).sendTitle(contains("VICTORY"),contains("Killer"),eq(5),eq(60),eq(15));
+    }
+
+    @Test void visibleDuelNamesUseCharacterDisplaysRatherThanMinecraftAccounts() {
+        when(net.tfminecraft.rpcharacters.identity.DisplayIdentityService.resolveDisplay(victim)).thenReturn("Lady Aria");
+        when(net.tfminecraft.rpcharacters.identity.DisplayIdentityService.resolveDisplay(killer)).thenReturn("Ser Bram");
+        duel();assertTrue(text(victim).contains("You challenged Ser Bram"));
+        var prompt=PlainTextComponentSerializer.plainText().serialize(components.get(killer).getFirst());assertTrue(prompt.contains("Lady Aria challenges you"));assertFalse(prompt.contains("Victim"));
+        when(killer.getName()).thenReturn("MC_Account_Secret");var lethal=hit(killer,victim,30);cancelTracking(lethal);land(lethal);
+        assertTrue(text(victim).contains("You won the duel against Ser Bram"));assertTrue(text(killer).contains("Lady Aria won the duel"));
+        for(Player p:List.of(victim,killer)){assertFalse(text(p).contains("Victim"));assertFalse(text(p).contains("Killer"));assertFalse(text(p).contains("MC_Account_Secret"));}
+        verify(victim).sendTitle(contains("VICTORY"),contains("Ser Bram"),eq(5),eq(60),eq(15));
+        verify(killer).sendTitle(contains("DEFEAT"),contains("Lady Aria"),eq(5),eq(60),eq(15));
+    }
+
     @Test void challengeAcceptCountdownAndFightStart() {
         command(victim,"Killer");assertTrue(text(victim).contains("You challenged Killer"));var prompt=PlainTextComponentSerializer.plainText().serialize(components.get(killer).getFirst());assertTrue(prompt.contains("Victim challenges you")&&prompt.contains("[Accept]")&&prompt.contains("[Decline]"));
         assertEquals(Set.of("/duel accept "+victim.getUniqueId(),"/duel decline "+victim.getUniqueId()),PvpStrikeServiceTest.commands(components.get(killer).getFirst()));
