@@ -724,7 +724,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -740,7 +740,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase("tutorial")) {
 			return TutorialCommands.handleAdmin(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses> ...");
+		if (args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND)) {
+			return net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(sender, args, 2);
+		}
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp> ...");
 		return true;
 	}
 
