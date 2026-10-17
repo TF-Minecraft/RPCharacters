@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -22,6 +23,10 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -29,12 +34,17 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.tutorial.TutorialService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
+import net.tfminecraft.tlibs.character.CharacterSessionStartEvent;
 
 public final class PvpCommand implements CommandExecutor, TabCompleter, Listener {
 
 	public static final String COMMAND = "pvp";
 
+	private static final String CONFIRM = "confirm";
+
 	private final Map<PvpSituation, List<BukkitTask>> tasksBySituation = new IdentityHashMap<>();
+	/** Players who ran /pvp lethal and may still confirm it, with the character they ran it for. */
+	private final Map<UUID, LethalRequest> lethalRequests = new ConcurrentHashMap<>();
 
 	@Override
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -60,11 +70,15 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 				return true;
 			}
 			case "lethal" -> {
-				setLethal(player, true);
+				if (args.length > 1 && CONFIRM.equalsIgnoreCase(args[1])) {
+					confirmLethal(player);
+				} else {
+					requestLethal(player);
+				}
 				return true;
 			}
 			case "nonlethal" -> {
-				setLethal(player, false);
+				setNonlethal(player);
 				return true;
 			}
 			default -> {
@@ -84,16 +98,68 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 		RPTexts.send(player, PvpLoader.getCurrent().replace("{mode}", mode));
 	}
 
-	private void setLethal(Player player, boolean lethal) {
-		PlayerData pd = PlayerManager.get(player);
-		if (pd == null || !pd.hasActiveCharacter()) {
+	/** Lethal is never switched on directly: the player reads the warning and confirms it. */
+	private void requestLethal(Player player) {
+		RPCharacter character = activeCharacter(player);
+		if (character == null) {
 			RPTexts.send(player, PvpLoader.getNoCharacter());
 			return;
 		}
-		RPCharacter character = pd.getActiveCharacter();
-		character.setPvpLethal(lethal);
-		RPCharacters.getPlayerManager().savePlayer(player);
-		RPTexts.send(player, lethal ? PvpLoader.getLethal() : PvpLoader.getNonlethal());
+		if (character.isPvpLethal()) {
+			RPTexts.send(player, PvpLoader.getAlreadyLethal());
+			return;
+		}
+		lethalRequests.put(player.getUniqueId(), new LethalRequest(character.getId(),
+				System.currentTimeMillis() + PvpLoader.getLethalConfirmMs()));
+		for (String line : PvpLoader.getLethalWarning().split("\\R|\\\\n")) {
+			RPTexts.send(player, line);
+		}
+		String seconds = String.valueOf(PvpLoader.getLethalConfirmSeconds());
+		// Only the button runs the command; children would inherit its click.
+		player.sendMessage(Component.empty()
+				.append(legacy(PvpLoader.getLethalConfirmButton())
+						.clickEvent(ClickEvent.runCommand("/" + COMMAND + " lethal " + CONFIRM))
+						.hoverEvent(HoverEvent.showText(legacy(PvpLoader.getLethalConfirmHover()))))
+				.append(Component.space())
+				.append(legacy(PvpLoader.getLethalConfirmPrompt().replace("{seconds}", seconds))));
+	}
+
+	private void confirmLethal(Player player) {
+		LethalRequest request = lethalRequests.remove(player.getUniqueId());
+		RPCharacter character = activeCharacter(player);
+		if (character == null) {
+			RPTexts.send(player, PvpLoader.getNoCharacter());
+			return;
+		}
+		// The confirmation only covers the character the warning was shown for.
+		if (request == null || System.currentTimeMillis() >= request.expiresAtMs()
+				|| !request.characterId().equals(character.getId())) {
+			RPTexts.send(player, PvpLoader.getLethalConfirmNone()
+					.replace("{seconds}", String.valueOf(PvpLoader.getLethalConfirmSeconds())));
+			return;
+		}
+		character.setPvpLethal(true);
+		RPTexts.send(player, PvpLoader.getLethal());
+	}
+
+	private void setNonlethal(Player player) {
+		lethalRequests.remove(player.getUniqueId());
+		RPCharacter character = activeCharacter(player);
+		if (character == null) {
+			RPTexts.send(player, PvpLoader.getNoCharacter());
+			return;
+		}
+		character.setPvpLethal(false);
+		RPTexts.send(player, PvpLoader.getNonlethal());
+	}
+
+	private static RPCharacter activeCharacter(Player player) {
+		PlayerData pd = PlayerManager.get(player);
+		return pd != null && pd.hasActiveCharacter() ? pd.getActiveCharacter() : null;
+	}
+
+	private static Component legacy(String raw) {
+		return LegacyComponentSerializer.legacySection().deserialize(RPTexts.formatDisplay(raw));
 	}
 
 	private void startWarning(Player player) {
@@ -131,6 +197,7 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 						: cooldownHours == 1 ? "1 hour" : cooldownHours + " hours";
 				TutorialService.show(online, TutorialService.PVP_STRIKES, Map.of(
 						"seconds", String.valueOf(PvpLoader.getDecisionSeconds()),
+						"time", PvpStrikeService.formatDuration(PvpLoader.getDecisionSeconds()),
 						"hours", String.valueOf(cooldownHours),
 						"cooldown", cooldown));
 			}
@@ -268,11 +335,29 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 
 	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
-		PvpStartSessions.end(event.getPlayer().getUniqueId());
+		Player player = event.getPlayer();
+		PvpStartSessions.end(player.getUniqueId());
+		lethalRequests.remove(player.getUniqueId());
+		PvpStrikeService.handleQuit(player);
+	}
+
+	/** Every character starts nonlethal when it becomes active: on login, after a restart and on a switch. */
+	@EventHandler
+	public void onSessionStart(CharacterSessionStartEvent event) {
+		Player player = event.getPlayer();
+		lethalRequests.remove(player.getUniqueId());
+		RPCharacter character = activeCharacter(player);
+		if (character != null) {
+			character.setPvpLethal(false);
+		}
 	}
 
 	@Override
 	public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+		if (args.length == 2 && "lethal".equalsIgnoreCase(args[0])
+				&& CONFIRM.startsWith(args[1].toLowerCase(Locale.ROOT))) {
+			return List.of(CONFIRM);
+		}
 		if (args.length == 1) {
 			String prefix = args[0].toLowerCase(Locale.ROOT);
 			List<String> out = new ArrayList<>();
@@ -284,5 +369,8 @@ public final class PvpCommand implements CommandExecutor, TabCompleter, Listener
 			return out;
 		}
 		return List.of();
+	}
+
+	private record LethalRequest(String characterId, long expiresAtMs) {
 	}
 }

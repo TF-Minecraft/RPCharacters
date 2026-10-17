@@ -145,14 +145,14 @@ class GraveManagerTest {
 
     @Test void saveAndLoadPreserveItemMetadataOwnershipFlagsAndExperience() throws Exception {
         Grave grave = grave(4, 64, 8); grave.getBlockLocation().getBlock().setType(Material.CHEST);
-        UUID killer = UUID.randomUUID(); grave.setKiller(killer); grave.setKillerDisplay("Kïller\n\\n"); grave.setProtected(true); grave.setLocked(false);
+        UUID killer = UUID.randomUUID(); grave.setKiller(killer); grave.setKillerDisplay("Kïller\n\\n"); grave.setProtected(true); grave.setLocked(false); grave.setKillerOnly(true);
         grave.setExperience(31); grave.setHologramId(UUID.randomUUID()); ItemStack sword = namedItem();
         grave.setItem(0, sword); grave.setItem(36, new ItemStack(Material.DIAMOND_BOOTS)); grave.setItem(40, new ItemStack(Material.SHIELD)); grave.addExtra(new ItemStack(Material.EMERALD, 3));
-        manager.save(grave); JsonObject json = read(grave); assertEquals(killer.toString(), json.get("killer").getAsString());
+        manager.save(grave); JsonObject json = read(grave); assertEquals(killer.toString(), json.get("killer").getAsString()); assertTrue(json.get("killerOnly").getAsBoolean());
         assertFalse(json.has("hologramUuid")); assertEquals(36, json.getAsJsonArray("storage").size()); assertEquals(4, json.getAsJsonArray("armor").size());
         manager.loadAll(); Grave loaded = manager.getById(grave.getId()); assertNotNull(loaded); assertNotSame(grave, loaded);
         assertEquals(player.getUniqueId(), loaded.getOwner()); assertEquals(killer, loaded.getKiller()); assertEquals("Kïller\n\\n", loaded.getKillerDisplay());
-        assertTrue(loaded.isProtected()); assertFalse(loaded.isLocked()); assertEquals(31, loaded.getExperience()); assertEquals(grave.getCreated(), loaded.getCreated());
+        assertTrue(loaded.isProtected()); assertFalse(loaded.isLocked()); assertTrue(loaded.isKillerOnly()); assertEquals(31, loaded.getExperience()); assertEquals(grave.getCreated(), loaded.getCreated());
         assertEquals(grave.getBlockLocation(), loaded.getBlockLocation()); assertEquals(sword, loaded.getItem(0));
         assertEquals("kept", loaded.getItem(0).getItemMeta().getPersistentDataContainer().get(new NamespacedKey("test", "marker"), PersistentDataType.STRING));
         assertEquals(Material.DIAMOND_BOOTS, loaded.getItem(36).getType()); assertEquals(Material.SHIELD, loaded.getItem(40).getType()); assertEquals(3, loaded.getExtras().getFirst().getAmount());

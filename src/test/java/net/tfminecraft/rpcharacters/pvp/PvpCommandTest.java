@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.tlibs.character.CharacterSessionStartEvent;
 import org.bukkit.command.*;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -19,13 +22,34 @@ class PvpCommandTest extends PvpRuntimeFixture {
     void start(){command("start");}
     void countdown(){runNext();runNext();runNext();}
 
-    @Test void commandRoutingUsageAndLethalityPersistTheActiveCharacter() {
-        when(command.getName()).thenReturn("other");assertFalse(handler.onCommand(victim,command,"pvp",new String[0]));when(command.getName()).thenReturn("PVP");var console=mock(CommandSender.class);assertTrue(handler.onCommand(console,command,"pvp",new String[0]));verify(console).sendMessage(contains("Players only"));command();assertTrue(text(victim).contains("nonlethal"));command("lethal");assertTrue(character.isPvpLethal());command("unknown");assertTrue(text(victim).contains("lethal"));command("nonlethal");assertFalse(character.isPvpLethal());verify(manager,times(2)).savePlayer(victim);
-        loaded.remove(victim);command();command("lethal");assertTrue(text(victim).contains("active character"));loaded.put(victim,data);doReturn(false).when(data).hasActiveCharacter();command("nonlethal");command();verify(manager,times(2)).savePlayer(victim);
+    @Test void commandRoutingUsageAndLethalModeNeedsAConfirmedWarningAndIsNeverSaved() {
+        when(command.getName()).thenReturn("other");assertFalse(handler.onCommand(victim,command,"pvp",new String[0]));when(command.getName()).thenReturn("PVP");var console=mock(CommandSender.class);assertTrue(handler.onCommand(console,command,"pvp",new String[0]));verify(console).sendMessage(contains("Players only"));command();assertTrue(text(victim).contains("nonlethal"));
+        command("lethal");assertFalse(character.isPvpLethal(),"Lethal needs a confirmation");assertTrue(text(victim).contains("Lethal PvP"));assertTrue(text(victim).contains("can't spare, wound or maim"));
+        var button=components.get(victim).getLast();assertEquals(Set.of("/pvp lethal confirm"),PvpStrikeServiceTest.commands(button));assertTrue(PlainTextComponentSerializer.plainText().serialize(button).contains("within 30 seconds"));
+        command("lethal","CONFIRM");assertTrue(character.isPvpLethal());assertTrue(text(victim).contains("now in lethal PvP"));command("lethal");assertTrue(text(victim).contains("already in lethal"));
+        command("unknown");assertTrue(text(victim).contains("lethal"));command("nonlethal");assertFalse(character.isPvpLethal());
+        command("lethal","confirm");assertFalse(character.isPvpLethal());assertTrue(text(victim).contains("first, then confirm within 30 seconds"));
+        command("lethal");command("nonlethal");command("lethal","confirm");assertFalse(character.isPvpLethal(),"Going nonlethal drops an unconfirmed request");verify(manager,never()).savePlayer(victim);
+        loaded.remove(victim);messages.get(victim).clear();command();command("lethal");assertTrue(text(victim).contains("active character"));messages.get(victim).clear();command("lethal","confirm");assertTrue(text(victim).contains("active character"));messages.get(victim).clear();command("nonlethal");assertTrue(text(victim).contains("active character"));
+        loaded.put(victim,data);doReturn(false).when(data).hasActiveCharacter();command("nonlethal");command();
+    }
+
+    @Test void aConfirmationExpiresAndOnlyCoversTheCharacterThatWasWarned() {
+        config.when(PvpLoader::getLethalConfirmMs).thenReturn(-1L);command("lethal");command("lethal","confirm");assertFalse(character.isPvpLethal());
+        config.when(PvpLoader::getLethalConfirmMs).thenReturn(60_000L);command("lethal");var switched=new RPCharacter(victim);data.addCharacter(switched);doReturn(switched).when(data).getActiveCharacter();command("lethal","confirm");assertFalse(switched.isPvpLethal());assertFalse(character.isPvpLethal());
+        config.when(PvpLoader::getLethalWarning).thenReturn("one\\ntwo\nthree");messages.get(victim).clear();command("lethal");assertEquals(List.of("one","two","three"),messages.get(victim));
+    }
+
+    @Test void everyCharacterSessionStartsNonlethalAndQuittingDropsTheRequest() {
+        command("lethal");command("lethal","confirm");assertTrue(character.isPvpLethal());
+        var session=mock(CharacterSessionStartEvent.class);when(session.getPlayer()).thenReturn(victim);handler.onSessionStart(session);assertFalse(character.isPvpLethal());
+        command("lethal");handler.onSessionStart(session);command("lethal","confirm");assertFalse(character.isPvpLethal(),"A request from before the session started does not carry over");
+        loaded.remove(victim);handler.onSessionStart(session);loaded.put(victim,data);
+        command("lethal");var quit=mock(PlayerQuitEvent.class);when(quit.getPlayer()).thenReturn(victim);handler.onQuit(quit);command("lethal","confirm");assertFalse(character.isPvpLethal());
     }
 
     @Test void completionIsLocaleIndependentAndOnlyCompletesTheFirstArgument() {
-        Locale.setDefault(Locale.forLanguageTag("tr-TR"));assertEquals(List.of("start","end","lethal","nonlethal"),handler.onTabComplete(victim,command,"pvp",new String[]{""}));assertEquals(List.of("lethal"),handler.onTabComplete(victim,command,"pvp",new String[]{"L"}));assertTrue(handler.onTabComplete(victim,command,"pvp",new String[0]).isEmpty());assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"start","x"}).isEmpty());assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"missing"}).isEmpty());
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));assertEquals(List.of("start","end","lethal","nonlethal"),handler.onTabComplete(victim,command,"pvp",new String[]{""}));assertEquals(List.of("lethal"),handler.onTabComplete(victim,command,"pvp",new String[]{"L"}));assertTrue(handler.onTabComplete(victim,command,"pvp",new String[0]).isEmpty());assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"start","x"}).isEmpty());assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"missing"}).isEmpty());assertEquals(List.of("confirm"),handler.onTabComplete(victim,command,"pvp",new String[]{"LETHAL","C"}));assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"lethal","x"}).isEmpty());assertTrue(handler.onTabComplete(victim,command,"pvp",new String[]{"end","c"}).isEmpty());
     }
 
     @Test void countdownIncludesOnlyNearbyPlayersAndStartsTimedSessions() {

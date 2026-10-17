@@ -17,25 +17,27 @@ tutorials:
 
   # Shown when an evil RP session starts. {minutes} is the session length,
   # {strikes} the character's current strikes.
-  evil-rp:
+  evil-rp-lethal:
     lines:
       - "#d65c5cEvil RP"
       - "§7You've started an evil RP session. It lasts {minutes} minutes."
       - "§7Picking a lock, robbing, pickpocketing or looting a locked grave sets it back to {minutes}."
-      - "§7If you're killed or knocked out in a §c/pvp start §7fight before it runs out, your killer can spare, wound, maim or kill you."
       - "§7During a session any strike kills your character, no matter how many strikes you have ({strikes} so far)."
-      - "§7If another player kills you, your grave is left unlocked and anyone can loot it."
+      - "§7If a §clethal §7player kills you in a §c/pvp start §7fight before it runs out, your character dies and only they can open your grave."
+      - "§7If a §anonlethal §7player knocks you out in one, they can spare, wound, maim or kill you."
       - "§7You can't switch characters until it's over. Check with §a/rpcharacter strikes§7."
 
-  # Shown to everyone caught in a /pvp start. {seconds} is how long a killer has to choose.
-  # {cooldown} is that wait: "24 hours", "1 hour", or "no extra time" when the cooldown is off.
-  pvp-strikes:
+  # Shown to everyone caught in a /pvp start. {time} is how long a knockout winner has
+  # to choose ({seconds} is the same in seconds). {cooldown} is the wait before the same
+  # player can strike again: "24 hours", "1 hour", or "no extra time" when it is off.
+  pvp-modes:
     lines:
       - "#d65c5cPvP Strikes"
-      - "§7Someone started a fight near you. If another player kills you or knocks you out in it, they decide your fate."
-      - "§7They have {seconds} seconds to §aspare §7you or give you a §cstrike§7. If they don't choose, you're spared."
-      - "§7First strike is a healing injury, the second a permanent one. The third kills your character."
+      - "§7Someone started a fight near you. What happens if you lose depends on the winner's PvP mode (§a/pvp§7). Everyone starts §anonlethal§7."
+      - "§7If a §clethal §7player kills you, you get a §cstrike §7at once. You keep your items and wake at your spawn point, unless they can loot graves."
+      - "§7If a §anonlethal §7player knocks you out, you stay down for up to {time} while they decide. You can talk, but you can't fight or use items. They can §aspare §7you or give you a §cstrike§7. If they don't choose, you're spared."
+      - "§7First strike is a healing injury, the second a permanent one. The third kills your character, and only your killer can open your grave."
       - "§7The same player must wait {cooldown} before striking you again."
-      - "§7When a strike would kill you, they can also §ewound §7(healing injury) or §6maim §7(permanent injury) you instead, with no strike."
-      - "§7In an evil RP session any strike kills, and if a player kills you your grave is left unlocked."
+      - "§7When a strike would kill you, a nonlethal winner can also §ewound §7(healing injury) or §6maim §7(permanent injury) you instead, with no strike."
+      - "§7In an evil RP session any strike kills."
       - "§7Deaths with no player to blame don't count. Check your strikes with §a/rpcharacter strikes§7."

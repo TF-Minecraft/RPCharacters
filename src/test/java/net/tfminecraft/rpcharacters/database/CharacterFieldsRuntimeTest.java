@@ -112,7 +112,7 @@ class CharacterFieldsRuntimeTest {
         var account = new PlayerData(UUID.randomUUID()); account.setTutorialDismissed("existing", true);
         PlayerTutorialFields.load(null, json(Map.of())); PlayerTutorialFields.load(account, null);
         assertTrue(account.hasDismissedTutorial("existing"));
-        PlayerTutorialFields.load(account, json(Map.of("dismissed-tutorials", Arrays.asList("EVIL-RP", null, " "),
+        PlayerTutorialFields.load(account, json(Map.of("dismissed-tutorials", Arrays.asList("EVIL-RP-LETHAL", null, " "),
             "permadeath-tutorial-dismissed", true)));
         assertEquals(Set.of("existing", TutorialService.EVIL_RP, TutorialService.PERMADEATH_ZONE), account.getDismissedTutorials());
         var saved = new HashMap<String, Object>(); PlayerTutorialFields.save(saved, account);

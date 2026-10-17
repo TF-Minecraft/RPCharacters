@@ -44,7 +44,7 @@ class GraveLoaderTest {
         assertTrue(GraveLoader.getExcludedSlots().isEmpty()); assertTrue(GraveLoader.isInsuranceEnabled()); assertTrue(GraveLoader.isInsuranceConsume());
         assertEquals("&7Bound to your grave at &f{x}, {y}, {z}", GraveLoader.getInsuranceBoundLore());
         assertEquals("&cThis grave is locked.", GraveLoader.getMessageLocked());
-        assertEquals(15, messages().size()); assertTrue(messages().values().stream().allMatch(value -> value != null && !value.isBlank()));
+        assertEquals(17, messages().size()); assertTrue(messages().values().stream().allMatch(value -> value != null && !value.isBlank()));
     }
 
     @Test void configuredSettingsAndEveryMessageAreExposedWithoutLosingPlaceholders() throws Exception {
@@ -132,6 +132,8 @@ class GraveLoaderTest {
         messages.put("insurance-gone", GraveLoader.getMessageInsuranceGone()); messages.put("insurance-bound", GraveLoader.getMessageInsuranceBound());
         messages.put("unlocked-evil-rp", GraveLoader.getMessageUnlockedByStrike()); messages.put("unlock-none", GraveLoader.getMessageUnlockNone());
         messages.put("unlock-already", GraveLoader.getMessageUnlockAlready()); messages.put("unlock-success", GraveLoader.getMessageUnlockSuccess());
+        messages.put("killer-only", GraveLoader.getMessageKillerOnly()); messages.put("unlock-killer-only", GraveLoader.getMessageUnlockKillerOnly());
+        messages.put("killer-only", GraveLoader.getMessageKillerOnly()); messages.put("unlock-killer-only", GraveLoader.getMessageUnlockKillerOnly());
         messages.put("rob-hint", GraveLoader.getMessageRobHint()); return messages;
     }
 }

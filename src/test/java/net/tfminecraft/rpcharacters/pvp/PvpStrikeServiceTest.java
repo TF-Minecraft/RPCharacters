@@ -13,6 +13,7 @@ import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tfminecraft.rpcharacters.*;
+import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.evilrp.*;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
@@ -42,7 +43,7 @@ class PvpStrikeServiceTest extends PvpRuntimeFixture {
     @Test void onlyEligibleKnockoutsAndDeathsOfferDecisions() {
         assertFalse(PvpStrikeService.hasPendingDecision(null));PvpStrikeService.handleJoin(victim);assertTrue(delayed.isEmpty());assertFalse(PvpStrikeService.handleDeath(victim,false));PvpStrikeService.handleKnockout(victim,null);assertFalse(PvpStrikeService.hasPendingDecision(victim));
         PvpStartSessions.begin(List.of(victim.getUniqueId()),System.currentTimeMillis(),60_000);battles.when(()->PermadeathBattleExemption.isInStartedBattle(victim)).thenReturn(true);PvpStrikeService.handleKnockout(victim,killer);assertFalse(PvpStrikeService.hasPendingDecision(victim));battles.when(()->PermadeathBattleExemption.isInStartedBattle(victim)).thenReturn(false);
-        loaded.remove(victim);assertFalse(PvpStrikeService.handleDeath(victim,true));loaded.put(victim,data);doReturn(false).when(data).hasActiveCharacter();assertFalse(PvpStrikeService.handleDeath(victim,true));doReturn(true).when(data).hasActiveCharacter();character.setStatus(Status.DEAD);assertFalse(PvpStrikeService.handleDeath(victim,true));character.setStatus(Status.ALIVE);assertTrue(PvpStrikeService.handleDeath(victim,true));assertTrue(PvpStrikeService.hasPendingDecision(victim));
+        loaded.remove(victim);assertFalse(PvpStrikeService.handleDeath(victim,true));loaded.put(victim,data);doReturn(false).when(data).hasActiveCharacter();assertFalse(PvpStrikeService.handleDeath(victim,true));doReturn(true).when(data).hasActiveCharacter();character.setStatus(Status.DEAD);assertFalse(PvpStrikeService.handleDeath(victim,true));character.setStatus(Status.ALIVE);assertTrue(PvpStrikeService.handleDeath(victim,true));assertFalse(PvpStrikeService.hasPendingDecision(victim));assertEquals(1,character.getEvilRpStrikes());
     }
 
     @Test void promptsExposeOnlyAllowedCommandsAndAccessibleHoverText() {
@@ -174,6 +175,61 @@ class PvpStrikeServiceTest extends PvpRuntimeFixture {
             })) {assertFalse(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));}
             assertEquals(original,Files.readString(verdictFile()));assertNotNull(staged.get());assertArrayEquals(new Throwable[]{cleanupFailure},writeFailure.getSuppressed());assertEquals("partial",Files.readString(staged.get()));assertTrue(PvpStrikeService.hasPendingDecision(victim));
         } finally {if(staged.get()!=null)Files.deleteIfExists(staged.get());}
+    }
+
+    PlayerData nonlethalKiller(){var killerData=spy(new PlayerData(killer));var killerCharacter=new RPCharacter(killer);killerData.addCharacter(killerCharacter);doReturn(true).when(killerData).hasActiveCharacter();doReturn(killerCharacter).when(killerData).getActiveCharacter();loaded.put(killer,killerData);return killerData;}
+
+    @Test void aLethalKillStrikesAtOnceWithoutAPromptAndKeepsTheVictimsCharacter() {
+        assertTrue(PvpStrikeService.handleDeath(victim,true));assertEquals(1,character.getEvilRpStrikes());assertEquals(Status.ALIVE,character.getStatus());assertFalse(PvpStrikeService.hasPendingDecision(victim));assertTrue(components.get(killer).isEmpty(),"A lethal killer already chose not to spare anyone");
+        assertTrue(text(victim).contains("was in lethal PvP"));assertTrue(text(killer).contains("You struck"));evil.verify(()->EvilRpService.applyStrike(victim,character,killer,false));
+    }
+
+    @Test void aLethalKillOnTheLastStrikeKillsAndTheGraveIsForTheKillerOnly() {
+        character.setEvilRpStrikes(2);var grave=PvpStrikeService.graveContext(victim,true);assertTrue(grave.inPvpStart());assertTrue(grave.characterDies());assertNull(grave.killerId());
+        assertTrue(PvpStrikeService.handleDeath(victim,true));assertEquals(Status.DEAD,character.getStatus());assertTrue(text(killer).contains("You killed"));assertTrue(components.get(killer).isEmpty());
+    }
+
+    @Test void anEvilVictimDiesFromAnyLethalKill() {
+        evil.when(()->EvilRpService.isInSession(character)).thenReturn(true);evil.when(()->EvilRpService.isInSession(victim)).thenReturn(true);
+        var grave=PvpStrikeService.graveContext(victim,true);assertTrue(grave.characterDies());assertTrue(grave.evilVictim());
+        assertTrue(PvpStrikeService.handleDeath(victim,true));evil.verify(()->EvilRpService.killByStrike(victim,character,killer,false));assertEquals(Status.DEAD,character.getStatus());
+    }
+
+    @Test void theGraveOnlyExpectsADeathTheStrikeReallyCauses() {
+        character.setEvilRpStrikes(2);assertFalse(PvpStrikeService.graveContext(victim,false).characterDies());
+        battles.when(()->PermadeathBattleExemption.isInStartedBattle(victim)).thenReturn(true);assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());battles.when(()->PermadeathBattleExemption.isInStartedBattle(victim)).thenReturn(false);
+        var clues=boundary(ClueAdminModeService.class);clues.when(()->ClueAdminModeService.isEnabled(victim)).thenReturn(true);assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());clues.when(()->ClueAdminModeService.isEnabled(victim)).thenReturn(false);
+        loaded.remove(victim);assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());loaded.put(victim,data);
+        when(victim.getKiller()).thenReturn(null);assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());when(victim.getKiller()).thenReturn(killer);
+        character.setStrikesByKiller(Map.of(killer.getUniqueId(),System.currentTimeMillis()));assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());character.setStrikesByKiller(Map.of());
+        character.setEvilRpStrikes(0);assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());character.setEvilRpStrikes(2);
+        evil.when(()->EvilRpService.applyDecay(eq(character),anyLong())).thenReturn(true);assertTrue(PvpStrikeService.graveContext(victim,true).characterDies());verify(manager).savePlayer(victim);
+        nonlethalKiller();assertFalse(PvpStrikeService.graveContext(victim,true).characterDies());
+    }
+
+    @Test void aLethalKillDuringTheCooldownIsASpareWithoutTheStrikeNotice() {
+        character.setStrikesByKiller(Map.of(killer.getUniqueId(),System.currentTimeMillis()));assertTrue(PvpStrikeService.handleDeath(victim,true));assertEquals(0,character.getEvilRpStrikes());assertFalse(text(victim).contains("was in lethal PvP"));assertTrue(text(victim).contains("spared"));assertTrue(text(killer).contains("already struck"));
+    }
+
+    @Test void aNonlethalKillerWhoseBlowStillKilledStillDecides() {
+        nonlethalKiller();doReturn(false).when(data).hasActiveCharacter();assertFalse(PvpStrikeService.handleDeath(victim,true));doReturn(true).when(data).hasActiveCharacter();assertTrue(PvpStrikeService.handleDeath(victim,true));assertTrue(PvpStrikeService.hasPendingDecision(victim));assertEquals(0,character.getEvilRpStrikes());assertFalse(text(victim).contains("stay down"),"Someone who already died isn't held down");assertTrue(text(victim).contains("5 minutes"));
+    }
+
+    @Test void aKnockoutKeepsItsVictimDownOnlyWhileTheWinnerDecides() {
+        assertFalse(PvpStrikeService.handleKnockout(victim,killer),"No PvP start, no decision");assertFalse(PvpStrikeService.isAwaitingDecision(null));
+        PvpStartSessions.begin(List.of(victim.getUniqueId()),System.currentTimeMillis(),60_000);assertTrue(PvpStrikeService.handleKnockout(victim,killer));assertTrue(PvpStrikeService.isAwaitingDecision(victim.getUniqueId()));assertTrue(text(victim).contains("you stay down"));assertTrue(text(victim).contains("5 minutes"));
+        assertTrue(PvpStrikeService.choose(killer,victim.getUniqueId(),StrikeChoice.STRIKE));assertFalse(PvpStrikeService.isAwaitingDecision(victim.getUniqueId()));
+        PvpStartSessions.begin(List.of(victim.getUniqueId()),System.currentTimeMillis(),60_000);assertFalse(PvpStrikeService.handleKnockout(victim,killer),"A spare for the cooldown leaves nothing to wait for");
+    }
+
+    @Test void aWinnerWhoLogsOutSparesTheirVictim() {
+        knockout();PvpStrikeService.handleQuit(other);assertTrue(PvpStrikeService.isAwaitingDecision(victim.getUniqueId()));
+        PvpStrikeService.handleQuit(killer);assertFalse(PvpStrikeService.isAwaitingDecision(victim.getUniqueId()));assertTrue(text(victim).contains("logged out before choosing"));assertEquals(0,character.getEvilRpStrikes());
+        knockout();online.remove(victim.getUniqueId());messages.get(victim).clear();PvpStrikeService.handleQuit(killer);assertFalse(PvpStrikeService.hasPendingDecision(victim));assertTrue(messages.get(victim).isEmpty());
+    }
+
+    @Test void decisionTimesReadNaturally() {
+        assertEquals("1 second",PvpStrikeService.formatDuration(1));assertEquals("30 seconds",PvpStrikeService.formatDuration(30));assertEquals("1 minute",PvpStrikeService.formatDuration(60));assertEquals("5 minutes",PvpStrikeService.formatDuration(300));assertEquals("1 minute 1 second",PvpStrikeService.formatDuration(61));assertEquals("2 minutes 30 seconds",PvpStrikeService.formatDuration(150));
     }
 
     static Set<String> commands(Component component){var out=new HashSet<String>();if(component.clickEvent()!=null){out.add(component.clickEvent().value());assertNotNull(component.hoverEvent());}for(var child:component.children())out.addAll(commands(child));return out;}

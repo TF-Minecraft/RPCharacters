@@ -102,10 +102,22 @@ public final class PvpKnockoutManager implements Listener {
 		}
 
 		event.setCancelled(true);
-		applyKnockout(player);
 		Player attacker = attackingPlayer(event);
 		CoreProtectKnockouts.log(attacker, player);
-		PvpStrikeService.handleKnockout(player, attacker);
+		boolean deciding = PvpStrikeService.handleKnockout(player, attacker);
+		applyKnockout(player, deciding);
+	}
+
+	/**
+	 * Nothing hurts a downed player, so no one can finish them off while the winner decides.
+	 * Runs first so other plugins never see the hit. SimpleFactions battles stay lethal.
+	 */
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void onDownedDamage(EntityDamageEvent event) {
+		if (event.getEntity() instanceof Player player && isKnockedOut(player) && downedPlayerSurvives(event)
+				&& !PermadeathBattleExemption.isInStartedBattle(player)) {
+			event.setCancelled(true);
+		}
 	}
 
 	/**
@@ -118,6 +130,11 @@ public final class PvpKnockoutManager implements Listener {
 		if (attacker == null || attacker.getUniqueId().equals(player.getUniqueId())) {
 			return false;
 		}
+		return isNonlethal(attacker);
+	}
+
+	/** Whether this player's active character is in nonlethal PvP. Players without one are lethal. */
+	static boolean isNonlethal(Player attacker) {
 		PlayerData pd = PlayerManager.get(attacker);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			return false;
@@ -125,22 +142,12 @@ public final class PvpKnockoutManager implements Listener {
 		return !pd.getActiveCharacter().isPvpLethal();
 	}
 
-	/**
-	 * A downed player is held in place at half a heart and cannot dodge drowning, fire, or the
-	 * fall when the freeze ends, so damage with no attacker cannot kill them. Players and mobs
-	 * still can, and so can /kill, the void and the world border.
-	 */
+	/** A downed player can't be hurt, except by /kill, the void and the world border. */
 	static boolean downedPlayerSurvives(EntityDamageEvent event) {
-		switch (event.getCause()) {
-			case KILL, VOID, WORLD_BORDER:
-				return false;
-			default:
-				break;
-		}
-		if (event instanceof EntityDamageByEntityEvent) {
-			return false;
-		}
-		return event.getDamageSource() == null || event.getDamageSource().getCausingEntity() == null;
+		return switch (event.getCause()) {
+			case KILL, VOID, WORLD_BORDER -> false;
+			default -> true;
+		};
 	}
 
 	static Player attackingPlayer(EntityDamageEvent event) {
@@ -171,11 +178,16 @@ public final class PvpKnockoutManager implements Listener {
 	}
 
 	private void releaseKnockout(Player player) {
-		if (knockouts.remove(player.getUniqueId()) == null) {
+		Knockout knockout = knockouts.remove(player.getUniqueId());
+		if (knockout == null) {
 			return;
 		}
 		// Each freeze teleport keeps the fall distance, so it would kill them on landing.
 		player.setFallDistance(0f);
+		// A spare or strike can come before the blindness wears off.
+		if (System.currentTimeMillis() < knockout.blindUntilMs) {
+			player.removePotionEffect(PotionEffectType.BLINDNESS);
+		}
 		if (crawl != null) {
 			crawl.release(player);
 		}
@@ -187,10 +199,15 @@ public final class PvpKnockoutManager implements Listener {
 
 	private boolean isKnockedOut(Player player) {
 		Knockout knockout = knockouts.get(player.getUniqueId());
-		return knockout != null && System.currentTimeMillis() < knockout.untilMs && !shouldSkipTick(player);
+		return knockout != null && !knockout.isOver(player.getUniqueId(), System.currentTimeMillis())
+				&& !shouldSkipTick(player);
 	}
 
-	private void applyKnockout(Player player) {
+	/**
+	 * Knocks the player out. While the winner decides ({@code deciding}) they stay down until
+	 * the choice is made or the decision time runs out; otherwise for knockout-seconds.
+	 */
+	private void applyKnockout(Player player, boolean deciding) {
 		double maxHealth = 20.0;
 		var maxAttr = player.getAttribute(Attribute.MAX_HEALTH);
 		if (maxAttr != null) {
@@ -198,18 +215,24 @@ public final class PvpKnockoutManager implements Listener {
 		}
 		player.setHealth(Math.max(0.1, Math.min(1.0, maxHealth)));
 
-		int durationTicks = (int) Math.min(Integer.MAX_VALUE, PvpLoader.getKnockoutSeconds() * 20L);
-		player.addPotionEffect(new PotionEffect(
-				PotionEffectType.BLINDNESS,
-				durationTicks,
-				PvpLoader.getBlindnessAmplifier(),
-				false,
-				false,
-				true));
+		long seconds = deciding ? PvpLoader.getDecisionSeconds() : PvpLoader.getKnockoutSeconds();
+		long blindSeconds = Math.min(seconds, PvpLoader.getKnockoutBlindnessSeconds());
+		if (blindSeconds > 0) {
+			player.addPotionEffect(new PotionEffect(
+					PotionEffectType.BLINDNESS,
+					(int) Math.min(Integer.MAX_VALUE, blindSeconds * 20L),
+					PvpLoader.getBlindnessAmplifier(),
+					false,
+					false,
+					true));
+		}
 
+		long now = System.currentTimeMillis();
 		knockouts.put(player.getUniqueId(), new Knockout(
 				player.getLocation().clone(),
-				System.currentTimeMillis() + PvpLoader.getKnockoutSeconds() * 1000L));
+				now + seconds * 1000L,
+				deciding,
+				now + blindSeconds * 1000L));
 		if (crawl != null) {
 			crawl.enforce(player);
 		}
@@ -225,7 +248,7 @@ public final class PvpKnockoutManager implements Listener {
 				it.remove();
 				continue;
 			}
-			if (!player.isOnline() || now >= entry.getValue().untilMs || shouldSkipTick(player)) {
+			if (!player.isOnline() || entry.getValue().isOver(player.getUniqueId(), now) || shouldSkipTick(player)) {
 				releaseKnockout(player);
 				continue;
 			}
@@ -280,10 +303,19 @@ public final class PvpKnockoutManager implements Listener {
 	private static final class Knockout {
 		private final Location location;
 		private final long untilMs;
+		/** Held down by a winner's decision rather than for a fixed time. */
+		private final boolean deciding;
+		private final long blindUntilMs;
 
-		private Knockout(Location location, long untilMs) {
+		private Knockout(Location location, long untilMs, boolean deciding, long blindUntilMs) {
 			this.location = location;
 			this.untilMs = untilMs;
+			this.deciding = deciding;
+			this.blindUntilMs = blindUntilMs;
+		}
+
+		private boolean isOver(UUID playerId, long nowMs) {
+			return nowMs >= untilMs || deciding && !PvpStrikeService.isAwaitingDecision(playerId);
 		}
 	}
 }

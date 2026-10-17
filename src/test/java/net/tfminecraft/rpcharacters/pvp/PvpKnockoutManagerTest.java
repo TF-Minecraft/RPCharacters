@@ -26,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
@@ -155,18 +156,84 @@ class PvpKnockoutManagerTest {
         assertFalse(PvpKnockoutManager.downedPlayerSurvives(event));
     }
 
-    @Test void mobsAndPlayersCanStillFinishDownedPlayer() {
+    @Test void mobsAndPlayersCannotFinishDownedPlayer() {
         var mobHit = mock(EntityDamageByEntityEvent.class);
         when(mobHit.getCause()).thenReturn(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
         when(mobHit.getDamager()).thenReturn(mock(Entity.class));
-        assertFalse(PvpKnockoutManager.downedPlayerSurvives(mobHit));
+        assertTrue(PvpKnockoutManager.downedPlayerSurvives(mobHit));
         var caused = mock(EntityDamageEvent.class);
         DamageSource source = mock(DamageSource.class);
         when(caused.getCause()).thenReturn(EntityDamageEvent.DamageCause.MAGIC);
         when(caused.getDamageSource()).thenReturn(source);
         Player attacker = player();
         when(source.getCausingEntity()).thenReturn(attacker);
-        assertFalse(PvpKnockoutManager.downedPlayerSurvives(caused));
+        assertTrue(PvpKnockoutManager.downedPlayerSurvives(caused));
+    }
+
+    @Test void downedPlayersTakeNoDamageBeforeOtherPluginsSeeIt() throws Exception {
+        Player victim = knockoutPlayer();
+        var manager = new PvpKnockoutManager();
+        var hit = mock(EntityDamageEvent.class);
+        when(hit.getEntity()).thenReturn(victim);
+        when(hit.getCause()).thenReturn(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
+        manager.onDownedDamage(hit);
+        verify(hit, never()).setCancelled(true);
+        invoke(manager, "applyKnockout", victim);
+        manager.onDownedDamage(hit);
+        verify(hit).setCancelled(true);
+        var kill = mock(EntityDamageEvent.class);
+        when(kill.getEntity()).thenReturn(victim);
+        when(kill.getCause()).thenReturn(EntityDamageEvent.DamageCause.KILL);
+        manager.onDownedDamage(kill);
+        verify(kill, never()).setCancelled(true);
+        var mob = mock(EntityDamageEvent.class);
+        when(mob.getEntity()).thenReturn(mock(Entity.class));
+        manager.onDownedDamage(mob);
+        verify(mob, never()).setCancelled(true);
+        var battle = mock(EntityDamageEvent.class);
+        when(battle.getEntity()).thenReturn(victim);
+        when(battle.getCause()).thenReturn(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
+        try {
+            PermadeathBattleExemption.set(p -> p == victim);
+            manager.onDownedDamage(battle);
+            verify(battle, never()).setCancelled(true);
+        } finally {
+            PermadeathBattleExemption.set(null);
+        }
+    }
+
+    @Test void aDecisionKeepsThePlayerDownUntilTheWinnerChooses() throws Exception {
+        Player victim = knockoutPlayer();
+        var manager = new PvpKnockoutManager();
+        try (var bukkit = mockStatic(Bukkit.class); var strikes = mockStatic(PvpStrikeService.class)) {
+            bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
+            strikes.when(() -> PvpStrikeService.isAwaitingDecision(victim.getUniqueId())).thenReturn(true);
+            invoke(manager, "applyKnockout", victim, true);
+            // Blind only for the first minute, however long the decision takes.
+            verify(victim).addPotionEffect(argThat(effect ->
+                    effect.getType().equals(PotionEffectType.BLINDNESS) && effect.getDuration() == 1200));
+            invoke(manager, "tick");
+            assertTrue(manager.isDown(victim));
+            strikes.when(() -> PvpStrikeService.isAwaitingDecision(victim.getUniqueId())).thenReturn(false);
+            assertFalse(manager.isDown(victim));
+            invoke(manager, "tick");
+            // Spared or struck before the blindness wore off: they can see again at once.
+            verify(victim).removePotionEffect(PotionEffectType.BLINDNESS);
+        }
+    }
+
+    @Test void knockoutAfterTheBlindnessWoreOffLeavesOtherBlindnessAlone() throws Exception {
+        Player victim = knockoutPlayer();
+        var manager = new PvpKnockoutManager();
+        try (var bukkit = mockStatic(Bukkit.class); var config = mockStatic(PvpLoader.class, CALLS_REAL_METHODS)) {
+            bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
+            config.when(PvpLoader::getKnockoutBlindnessSeconds).thenReturn(0);
+            invoke(manager, "applyKnockout", victim);
+            verify(victim, never()).addPotionEffect(any());
+            expire(manager, victim);
+            invoke(manager, "tick");
+            verify(victim, never()).removePotionEffect(any());
+        }
     }
 
     @Test void existingCrawlIsKeptAndInterruptedCrawlIsRestored() throws Exception {
@@ -323,7 +390,17 @@ class PvpKnockoutManagerTest {
         until.setLong(knockout, 0L);
     }
 
+    private void invoke(PvpKnockoutManager manager, String name, Player victim, boolean deciding) throws Exception {
+        var method = PvpKnockoutManager.class.getDeclaredMethod(name, Player.class, boolean.class);
+        method.setAccessible(true);
+        method.invoke(manager, victim, deciding);
+    }
+
     private void invoke(PvpKnockoutManager manager, String name, Player... players) throws Exception {
+        if (name.equals("applyKnockout")) {
+            invoke(manager, name, players[0], false);
+            return;
+        }
         var method = players.length == 0
                 ? PvpKnockoutManager.class.getDeclaredMethod(name)
                 : PvpKnockoutManager.class.getDeclaredMethod(name, Player.class);

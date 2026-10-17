@@ -78,6 +78,26 @@ class GraveLootRulesTest {
 		}
 	}
 
+	@Test
+	void killerOnlyGraveOpensForItsKillerAndAdminsButNotItsOwner() {
+		UUID ownerId = UUID.randomUUID();
+		UUID killerId = UUID.randomUUID();
+		Player owner = player(ownerId);
+		Player killer = player(killerId);
+		Player admin = player(UUID.randomUUID());
+		when(admin.hasPermission("rpchar.grave.admin")).thenReturn(true);
+		Grave grave = grave(ownerId, killerId, false);
+		grave.setKillerOnly(true);
+		assertTrue(grave.isKillerOnly());
+		assertTrue(GraveLootRules.canRecover(killer, grave));
+		assertTrue(GraveLootRules.canRecover(admin, grave));
+		assertFalse(GraveLootRules.canRecover(owner, grave), "The dead character's owner can't take the loot back");
+		assertFalse(GraveLootRules.canSteal(killer, grave));
+		Grave noKiller = grave(ownerId, null, true);
+		noKiller.setKillerOnly(true);
+		assertFalse(GraveLootRules.canRecover(killer, noKiller));
+	}
+
 	private static Player player(UUID id) {
 		Player player = mock(Player.class);
 		when(player.getUniqueId()).thenReturn(id);

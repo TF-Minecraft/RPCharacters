@@ -589,6 +589,7 @@ public final class GraveManager {
 		record.killerDisplay = grave.getKillerDisplay();
 		record.protect = grave.isProtected();
 		record.locked = grave.isLocked();
+		record.killerOnly = grave.isKillerOnly() ? Boolean.TRUE : null;
 		record.created = grave.getCreated();
 		record.experience = grave.getExperience();
 		record.hologramUuid = null;
@@ -615,7 +616,7 @@ public final class GraveManager {
 			return null;
 		}
 		Location block = new Location(world, record.x, record.y, record.z);
-		return new Grave(
+		Grave grave = new Grave(
 				UUID.fromString(record.id),
 				UUID.fromString(record.owner),
 				record.characterOwner != null ? UUID.fromString(record.characterOwner) : null,
@@ -631,6 +632,8 @@ public final class GraveManager {
 				decodeList(record.extras),
 				parseUuid(record.hologramUuid),
 				block);
+		grave.setKillerOnly(Boolean.TRUE.equals(record.killerOnly));
+		return grave;
 	}
 
 	private static UUID parseUuid(String raw) {
@@ -717,6 +720,7 @@ public final class GraveManager {
 		String killerDisplay;
 		boolean protect;
 		Boolean locked;
+		Boolean killerOnly;
 		long created;
 		int experience;
 		String hologramUuid;

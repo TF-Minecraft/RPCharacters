@@ -52,8 +52,10 @@ public final class GraveDeathListener implements Listener {
 		Player killerPlayer = killerId != null ? Bukkit.getPlayer(killerId) : null;
 		boolean killedByOther = killerId != null && !killerId.equals(victim.getUniqueId());
 		boolean killerCanLoot = killerPlayer != null && killedByOther && GraveLootRules.canLootGrave(killerPlayer);
-		boolean unlocked = context.inPvpStart() && killedByOther && context.evilVictim();
-		if (PvpStartDeathPolicy.keepInventory(context.inPvpStart(), killedByOther, killerCanLoot, unlocked)) {
+		// A strike killed the character: everything goes in a grave only the killer can open.
+		boolean killerOnly = context.characterDies() && killedByOther;
+		boolean unlocked = !killerOnly && context.inPvpStart() && killedByOther && context.evilVictim();
+		if (!killerOnly && PvpStartDeathPolicy.keepInventory(context.inPvpStart(), killedByOther, killerCanLoot, unlocked)) {
 			// Set on MONITOR, after DenarEconomy's NORMAL handler has dropped the pouch.
 			keepInventory.add(victim.getUniqueId());
 			return;
@@ -97,7 +99,10 @@ public final class GraveDeathListener implements Listener {
 		if (grave == null) {
 			return;
 		}
-		if (unlocked) {
+		if (killerOnly) {
+			grave.setKillerOnly(true);
+			grave.flush();
+		} else if (unlocked) {
 			// Evil RP victims killed in a PvP start leave their items for anyone to take.
 			grave.setLocked(false);
 			grave.flush();
@@ -116,7 +121,8 @@ public final class GraveDeathListener implements Listener {
 		if (!stash.isEmpty()) {
 			excludedStash.put(victim.getUniqueId(), stash);
 		}
-		sendPlaced(victim, chestBlock, unlocked, binding.bound());
+		sendPlaced(victim, chestBlock, killerOnly ? GraveLoader.getMessageKillerOnly()
+				: unlocked ? GraveLoader.getMessageUnlockedByStrike() : GraveLoader.getMessageUnlockHint(), binding.bound());
 		event.setDroppedExp(0);
 		event.getDrops().clear();
 	}
@@ -246,7 +252,7 @@ public final class GraveDeathListener implements Listener {
 		return item != null ? item.clone() : null;
 	}
 
-	private void sendPlaced(Player player, Block chest, boolean unlocked, boolean insured) {
+	private void sendPlaced(Player player, Block chest, String hint, boolean insured) {
 		List<String> notices = new ArrayList<>();
 		String template = GraveLoader.getMessagePlaced();
 		if (template != null && !template.isBlank()) {
@@ -258,7 +264,6 @@ public final class GraveDeathListener implements Listener {
 					.replace("{world}", world);
 			notices.add(StringFormatter.formatHex(text.replace('&', '\u00A7')));
 		}
-		String hint = unlocked ? GraveLoader.getMessageUnlockedByStrike() : GraveLoader.getMessageUnlockHint();
 		if (hint != null && !hint.isBlank()) {
 			notices.add(StringFormatter.formatHex(hint.replace('&', '\u00A7')));
 		}

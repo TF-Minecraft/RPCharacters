@@ -140,7 +140,7 @@ class GraveEventsTest extends GraveRuntimeFixture {
     }
 
     @Test void pvpVictimsKeepTheirInventoryOnlyAfterPouchDropsAndOnlyForUncancelledDeaths() {
-        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, false, killer.getUniqueId()));
+        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, false, killer.getUniqueId(), false));
         GraveDeathListener listener = new GraveDeathListener(); PlayerDeathEvent event = death(7); listener.onPlayerDeath(event);
         verify(event, never()).setKeepInventory(true); assertNull(newest()); listener.keepItemsAfterPouchDrop(event);
         verify(event).setKeepInventory(true); assertTrue(event.getDrops().isEmpty()); listener.keepItemsAfterPouchDrop(event); verify(event, times(1)).setKeepInventory(true);
@@ -149,11 +149,27 @@ class GraveEventsTest extends GraveRuntimeFixture {
     }
 
     @Test void evilPvpVictimLeavesUnlockedGraveAndGetsTheCorrectNotice() {
-        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, true, killer.getUniqueId()));
+        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, true, killer.getUniqueId(), false));
         identities.when(() -> DisplayIdentityService.resolveDisplay(killer)).thenReturn("§cBandit"); player.getInventory().setItem(0, new ItemStack(Material.DIAMOND));
         GraveDeathListener listener = new GraveDeathListener(); listener.onPlayerDeath(death(1));
         assertFalse(newest().isLocked()); assertEquals(killer.getUniqueId(), newest().getKiller()); assertEquals("Killed by Bandit", newest().getKillerDisplay());
         listener.onPlayerRespawn(respawn()); assertTrue(player.nextMessage().contains("graves")); assertEquals("§cpublic", player.nextMessage());
+    }
+
+    @Test void aStrikeThatKillsTheCharacterLeavesAGraveOnlyTheKillerCanOpen() {
+        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, true, killer.getUniqueId(), true));
+        settings.when(GraveLoader::getMessageKillerOnly).thenReturn("&ckiller only"); player.getInventory().setItem(0, new ItemStack(Material.DIAMOND));
+        GraveDeathListener listener = new GraveDeathListener(); PlayerDeathEvent event = death(3); listener.onPlayerDeath(event);
+        Grave grave = newest(); assertNotNull(grave);
+        assertTrue(grave.isKillerOnly()); assertTrue(grave.isLocked(), "An evil victim's strike death is not left open to everyone"); assertEquals(killer.getUniqueId(), grave.getKiller());
+        assertTrue(event.getDrops().isEmpty()); listener.keepItemsAfterPouchDrop(event); verify(event, never()).setKeepInventory(true);
+        listener.onPlayerRespawn(respawn()); assertTrue(player.nextMessage().contains("graves")); assertEquals("§ckiller only", player.nextMessage());
+    }
+
+    @Test void aDeathPredictedAsAKillWithoutAnotherPlayerKeepsTheNormalGrave() {
+        strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, false, null, true));
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND)); new GraveDeathListener().onPlayerDeath(death(0));
+        assertFalse(newest().isKillerOnly()); assertTrue(newest().isLocked());
     }
 
     @Test void splitInsuranceTicketIsReturnedOneTickAfterRespawn() {
@@ -366,7 +382,7 @@ abstract class GraveRuntimeFixture {
         settings.when(GraveLoader::getMessageInsuranceBound).thenReturn("&ainsured"); settings.when(GraveLoader::getInsuranceBoundLore).thenReturn("&7{world} {x},{y},{z}");
         settings.when(GraveLoader::getMessageInsuranceNone).thenReturn("&enone"); settings.when(GraveLoader::getMessageInsuranceGone).thenReturn("&egone"); settings.when(GraveLoader::getMessageLocked).thenReturn("&clocked");
         settings.when(GraveLoader::getMessageEmpty).thenReturn("&7empty"); settings.when(GraveLoader::getMessageRecovered).thenReturn("&arecovered"); settings.when(GraveLoader::getMessageLooted).thenReturn("&alooted"); settings.when(GraveLoader::getMessageInventoryFull).thenReturn("&efull");
-        protocol=mockStatic(ProtocolLibBridge.class); strikes=mockStatic(PvpStrikeService.class); strikes.when(() -> PvpStrikeService.graveContext(any(),anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(false,false,null));
+        protocol=mockStatic(ProtocolLibBridge.class); strikes=mockStatic(PvpStrikeService.class); strikes.when(() -> PvpStrikeService.graveContext(any(),anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(false,false,null,false));
         starts=mockStatic(PvpStartSessions.class); players=mockStatic(PlayerManager.class); identities=mockStatic(DisplayIdentityService.class);
     }
     @AfterEach void restoreRuntime() throws Exception {

@@ -110,15 +110,15 @@ class EvilRpPersistenceTest {
     @Test
     void dismissedTutorialsRoundTrip() {
         PlayerData pd = new PlayerData(UUID.randomUUID());
-        pd.setTutorialDismissed("Evil-RP", true);
+        pd.setTutorialDismissed("Evil-RP-Lethal", true);
 
         HashMap<String, Object> saved = new HashMap<>();
         PlayerTutorialFields.save(saved, pd);
-        assertEquals(List.of("evil-rp"), saved.get("dismissed-tutorials"));
+        assertEquals(List.of("evil-rp-lethal"), saved.get("dismissed-tutorials"));
 
         PlayerData loaded = new PlayerData(UUID.randomUUID());
         JSONArray ids = new JSONArray();
-        ids.add("evil-rp");
+        ids.add("evil-rp-lethal");
         PlayerTutorialFields.load(loaded, new JSONObject(Map.of("dismissed-tutorials", ids)));
         assertTrue(loaded.hasDismissedTutorial(TutorialService.EVIL_RP));
     }

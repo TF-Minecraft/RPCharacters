@@ -30,6 +30,8 @@ public final class Grave {
 	private String killerDisplay;
 	private boolean protect;
 	private boolean locked;
+	/** Left by a character a strike killed: only the killer (or an admin) may open it. */
+	private boolean killerOnly;
 	private final long created;
 	private int experience;
 	private final ItemStack[] storage;
@@ -151,6 +153,14 @@ public final class Grave {
 
 	public void setLocked(boolean locked) {
 		this.locked = locked;
+	}
+
+	public boolean isKillerOnly() {
+		return killerOnly;
+	}
+
+	public void setKillerOnly(boolean killerOnly) {
+		this.killerOnly = killerOnly;
 	}
 
 	public long getCreated() {

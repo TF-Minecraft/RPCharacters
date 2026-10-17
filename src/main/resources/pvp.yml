@@ -1,4 +1,9 @@
-# /pvp start warning and nonlethal knockout
+# /pvp start warning, PvP modes and nonlethal knockout
+#
+# Every character is nonlethal when it becomes active: after logging in, after a
+# restart and after switching character. A nonlethal player's killing blow knocks the
+# victim out instead. /pvp lethal shows messages.lethal-warning and must be confirmed
+# with /pvp lethal confirm within lethal-confirm-seconds. Lethal is never saved.
 start-radius: 16
 start-warn-seconds: 10
 start-countdown-from: 5
@@ -6,26 +11,36 @@ start-countdown-from: 5
 # who have not died see a title that it has ended and a new RP interaction is
 # needed. The player who ran /pvp start can end it sooner with /pvp end.
 # 0 disables the timeout. Dying, being knocked out, or logging out ends strike
-# eligibility early. A death or knockout in this window by another player lets
-# the killer spare or strike the victim (see strikes below). A death to a player
-# who cannot loot graves keeps the victim's items unless the victim was in an
-# evil RP session. Their coin pouch still drops.
+# eligibility early. In this window a lethal player's kill gives the victim a strike
+# at once, and a nonlethal player's knockout lets them spare or strike the victim
+# (see strikes below). A death to a player who cannot loot graves keeps the victim's
+# items unless the character dies from it. Their coin pouch still drops.
 start-active-minutes: 15
+lethal-confirm-seconds: 30
+# Knockouts outside a /pvp start last this long. In a /pvp start the victim stays down
+# until the winner decides (strikes.decision-seconds at most).
 knockout-seconds: 30
+# Blindness for this many seconds after going down (never longer than the knockout).
+# 0 = no blindness.
+knockout-blindness-seconds: 60
 # Minecraft effect level 5 = amplifier 4
 blindness-amplifier: 4
 # 1 tick = 20Hz freeze loop (only knocks out players)
 freeze-period-ticks: 1
 
-# Strikes from deaths and knockouts during a PvP start. SimpleFactions battles never
-# give strikes. The first strike is a healing injury, the second a permanent one,
-# and the third kills the character. In an evil RP session any strike kills.
-# When a strike would kill, the killer can also Wound (healing injury) or Maim
-# (permanent injury) instead, with no strike added. The same player cannot strike
-# the same character again until the cooldown below has passed.
+# Strikes from deaths and knockouts during a PvP start. SimpleFactions battles and
+# duels never give strikes. The first strike is a healing injury, the second a
+# permanent one, and the third kills the character. In an evil RP session any strike
+# kills. A lethal player's kill always strikes, or kills when the strike would kill,
+# and the dead character's grave can only be opened by the killer. After a nonlethal
+# knockout the winner chooses: Spare or Strike, and when a strike would kill, Wound
+# (healing injury) or Maim (permanent injury) instead, with no strike added, or Kill.
+# The same player cannot strike the same character again until the cooldown below
+# has passed.
 strikes:
-  # How long the killer has to choose. No choice means spare.
-  decision-seconds: 30
+  # How long the winner of a knockout has to choose. The victim stays knocked out,
+  # unhurt and unable to fight until then, but can still talk. No choice means spare.
+  decision-seconds: 300
   # Hours before that same player can strike this character again.
   # The 24 hour default stops one person landing all three strikes in a single day.
   # 0 disables the wait.
@@ -50,7 +65,7 @@ armour:
   slowness-amplifier: 1
 
 messages:
-  start-warning: "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes."
+  start-warning: "&ePvP will start in {seconds} seconds! &7Lethal kills in this fight give strikes, and a knocked out player's fate is up to the winner."
   countdown: "&c{count}"
   started-title: "&cPVP STARTED"
   situation-duration: "&eThis PvP situation lasts {minutes} minutes. &7After that, a new RP interaction is needed."
@@ -58,8 +73,20 @@ messages:
   ended-subtitle: "&eA new RP interaction is needed"
   start-cancelled: "&7The PvP start was cancelled."
   no-situation: "&cYou have no PvP situation to end."
-  lethal: "&aThis character is now in lethal PvP."
+  # Shown by /pvp lethal before it is confirmed. Use \n for new lines.
+  lethal-warning: "&c&l⚠ Lethal PvP\n&7In a &f/pvp start &7fight, anyone you kill gets a strike at once. You decided not to spare anyone when you turned lethal on, so you can't spare, wound or maim them.\n&7If it's their last strike, or they're in an evil RP session, their character dies and only you can open their grave.\n&7Players you kill outside &f/pvp start &7fights get no strike.\n&7Lethal lasts until you log out, switch character or run &f/pvp nonlethal&7."
+  lethal-confirm-button: "&c&l[Confirm]"
+  lethal-confirm-hover: "&7Turn on lethal PvP for this character"
+  # {seconds} = lethal-confirm-seconds
+  lethal-confirm-prompt: "&7Click &c[Confirm] &7or run &f/pvp lethal confirm &7within {seconds} seconds."
+  lethal-confirm-none: "&cRun &f/pvp lethal &cfirst, then confirm within {seconds} seconds."
+  already-lethal: "&7This character is already in lethal PvP."
+  lethal: "&cThis character is now in lethal PvP. &7It goes back to nonlethal when you log out, switch character or run &f/pvp nonlethal&7."
   nonlethal: "&aThis character is now in nonlethal PvP."
+  # Shown (at most once a second) when a knocked out player tries to fight or use an item.
+  downed-blocked: "&cYou're knocked out. You can still talk, but you can't do that."
+  # Sent to a player struck by a lethal kill. {killer} = the killer's display name.
+  auto-strike-victim: "&c{killer} &cwas in lethal PvP, so their kill gave you a strike."
   usage: "&7Usage: /pvp start | end | lethal | nonlethal"
   no-character: "&cYou need an active character to set PvP mode."
   current: "&7This character's PvP mode: {mode}"

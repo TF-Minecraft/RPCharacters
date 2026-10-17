@@ -107,7 +107,7 @@ class PvpKnockoutRuntimeTest {
     }
 
     @Test void largeConfiguredDurationCannotWrapBlindnessToANegativeDuration() throws Exception {
-        Path config = folder.resolve("pvp.yml"); Files.writeString(config, "knockout-seconds: 2147483647\n"); new PvpLoader().load(config.toFile());
+        Path config = folder.resolve("pvp.yml"); Files.writeString(config, "knockout-seconds: 2147483647\nknockout-blindness-seconds: 2147483647\n"); new PvpLoader().load(config.toFile());
         hit(victim, 30);
         assertEquals(Integer.MAX_VALUE, victim.getPotionEffect(PotionEffectType.BLINDNESS).getDuration());
     }
