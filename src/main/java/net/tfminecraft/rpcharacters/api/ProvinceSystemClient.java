@@ -308,6 +308,18 @@ public final class ProvinceSystemClient {
 		return request("GET", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/slots/" + slot, null);
 	}
 
+	/** Start or check a cached miniature; each request returns promptly while MineSkin works. */
+	public static SimpleResult requestPlushieSkin(String playerUuid, String characterId, String slot, String source) {
+		String uuid = sanitizePathSegment(playerUuid);
+		String cid = sanitizePathSegment(characterId);
+		if (uuid == null || cid == null || slot == null || !List.of("base", "extra_1", "extra_2").contains(slot)
+				|| (source != null && !source.matches("[a-f0-9]{64}"))) {
+			return SimpleResult.fail("invalid player, character, outfit or source");
+		}
+		String body = source == null ? "{}" : "{\"source\":\"" + source + "\"}";
+		return request("POST", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/slots/" + slot + "/plushie", body);
+	}
+
 	/**
 	 * POST /characters/plugin/wardrobe/{playerUuid}/{characterId}/active
 	 * Same as PATCH — POST used because Java HttpURLConnection often rejects PATCH.

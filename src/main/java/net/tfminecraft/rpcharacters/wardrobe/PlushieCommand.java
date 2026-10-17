@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -30,7 +31,7 @@ import net.tfminecraft.rpcharacters.playerlist.SkinPortrait;
 import net.tfminecraft.tlibs.character.CharacterInfo;
 import net.tfminecraft.tlibs.character.Characters;
 
-/** Gives a static head from an explicitly selected character outfit. */
+/** Gives a static miniature from an explicitly selected character outfit. */
 public final class PlushieCommand implements CommandExecutor, TabCompleter {
 
 	public static final String PERMISSION = "rpchar.plushie.give";
@@ -83,9 +84,8 @@ public final class PlushieCommand implements CommandExecutor, TabCompleter {
 		String slot = SLOTS.get(outfit - 1);
 		int selectedOutfit = outfit;
 		var session = Characters.currentSession(player).orElse(null);
-		player.sendMessage("Loading " + character.name() + "'s wardrobe outfit " + outfit + "…");
-		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
-			String texture = loadTexture(character, slot);
+		player.sendMessage("Creating " + character.name() + "'s plushie from outfit " + outfit + ". A new outfit may take a moment…");
+		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> loadTexture(character, slot, null, 90, texture -> {
 			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 				pending.remove(playerId);
 				if (!player.isOnline() || !player.hasPermission(PERMISSION)) return;
@@ -94,7 +94,7 @@ public final class PlushieCommand implements CommandExecutor, TabCompleter {
 					return;
 				}
 				if (texture == null) {
-					player.sendMessage("That outfit is unavailable, locked or has no ready skin. No plushie was created.");
+					player.sendMessage("Could not create that plushie. The outfit may be unavailable or generation failed. Try again shortly. No plushie was created.");
 					return;
 				}
 				ItemStack head = createHead(character.name(), texture);
@@ -104,32 +104,52 @@ public final class PlushieCommand implements CommandExecutor, TabCompleter {
 				}
 				player.sendMessage("Created " + character.name() + " Plushie from wardrobe outfit " + selectedOutfit + ".");
 			});
-		});
+		}));
 		return true;
 	}
 
-	static String loadTexture(CharacterInfo character, String slot) {
+	static void loadTexture(CharacterInfo character, String slot, String source, int remaining, Consumer<String> complete) {
+		String normalized = null;
 		try {
 			String id = character.ref().characterId().toString();
-			var result = ProvinceSystemClient.fetchWardrobeSkin(character.ref().ownerId().toString(), id, slot);
-			if (!result.ok) return null;
+			var result = ProvinceSystemClient.requestPlushieSkin(character.ref().ownerId().toString(), id, slot, source);
+			if (!result.ok) {
+				complete.accept(null);
+				return;
+			}
 			JsonObject body = JsonParser.parseString(result.body).getAsJsonObject();
+			String digest = body.get("source").getAsString();
 			if (!id.equalsIgnoreCase(body.get("character_id").getAsString())
 					|| !slot.equals(body.get("slot").getAsString())
-					|| body.get("signature").getAsString().isBlank()) return null;
-			var texture = SkinPortrait.parseTextures(body.get("value").getAsString());
-			if (texture == null) return null;
-			// A URL-only property excludes changing profile timestamps, identities and signatures.
-			JsonObject skin = new JsonObject();
-			skin.addProperty("url", texture.url());
-			JsonObject textures = new JsonObject();
-			textures.add("SKIN", skin);
-			JsonObject profile = new JsonObject();
-			profile.add("textures", textures);
-			return Base64.getEncoder().encodeToString(profile.toString().getBytes(StandardCharsets.UTF_8));
+					|| !digest.matches("[a-f0-9]{64}") || (source != null && !source.equals(digest))) {
+				complete.accept(null);
+				return;
+			}
+			if ("pending".equals(body.get("status").getAsString()) && remaining > 0) {
+				Bukkit.getScheduler().runTaskLaterAsynchronously(RPCharacters.plugin,
+						() -> loadTexture(character, slot, digest, remaining - 1, complete), 20L);
+				return;
+			}
+			if ("ready".equals(body.get("status").getAsString()) && !body.get("signature").getAsString().isBlank()) {
+				normalized = normalizeTexture(body.get("value").getAsString());
+			}
 		} catch (RuntimeException unavailable) {
-			return null;
+			// Malformed responses never fall back to a live player skin.
 		}
+		complete.accept(normalized);
+	}
+
+	private static String normalizeTexture(String value) {
+		var texture = SkinPortrait.parseTextures(value);
+		if (texture == null) return null;
+		// A URL-only property excludes changing profile timestamps, identities and signatures.
+		JsonObject skin = new JsonObject();
+		skin.addProperty("url", texture.url());
+		JsonObject textures = new JsonObject();
+		textures.add("SKIN", skin);
+		JsonObject profile = new JsonObject();
+		profile.add("textures", textures);
+		return Base64.getEncoder().encodeToString(profile.toString().getBytes(StandardCharsets.UTF_8));
 	}
 
 	static ItemStack createHead(String characterName, String texture) {
