@@ -52,17 +52,21 @@ class CarriedExperienceTest extends ProgressFixture {
         var a = live();
         assertTrue(CarriedExperience.carry(player, 350));
         assertEquals(6, level.get()); assertEquals(150d, a.getProgress().getCarriedExperience(), 1e-9);
-        assertEquals(1, said().size()); assertTrue(said().getFirst().contains("150 EXP"));
         assertTrue(CarriedExperience.carry(player, 20.5)); assertEquals(170.5d, a.getProgress().getCarriedExperience(), 1e-9);
-        assertEquals(1, said().size(), "Waiting is said once, not for every reward of a batch");
-        assertEquals(1, later.size(), "One coalesced checkpoint for the whole batch"); runLater();
+        assertTrue(said().isEmpty(), "The batch is reported when it is done");
+        assertEquals(2, later.size(), "One coalesced checkpoint and one notice for the whole batch"); runLater();
+        assertEquals(1, said().size()); assertTrue(said().getFirst().contains("170.5 EXP"), said().getFirst());
         assertEquals(170.5d, store.read(account.getUniqueId(), a.getId()).orElseThrow().getCarriedExperience(), 1e-9,
                 "Carried EXP is saved with the character");
+        clearInvocations(player); level.set(5); CarriedExperience.carry(player, 50); runLater();
+        assertTrue(said().isEmpty(), "Nothing new waits when the class takes the whole batch");
+        level.set(6); CarriedExperience.carry(player, 5); play(a); curve(); runLater();
+        assertTrue(said().isEmpty(), "A batch from an earlier activation is not reported");
 
         clearInvocations(player); CarriedExperience.release(player); assertTrue(said().isEmpty(), "Nothing is added at the cap");
         cap.set(11); CarriedExperience.release(player);
-        assertEquals(7, level.get()); assertEquals(70.5d, experience.get(), 1e-9); assertEquals(0d, a.getProgress().getCarriedExperience());
-        assertTrue(said().getFirst().contains("170.5 carried EXP"));
+        assertEquals(7, level.get()); assertEquals(25.5d, experience.get(), 1e-9); assertEquals(0d, a.getProgress().getCarriedExperience());
+        assertTrue(said().getFirst().contains("125.5 carried EXP"), said().getFirst());
         clearInvocations(player, mmo); CarriedExperience.release(player); verify(mmo, never()).giveExperience(anyDouble(), any(EXPSource.class));
     }
 

@@ -1,6 +1,9 @@
 package net.tfminecraft.rpcharacters.mmocore;
 
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 import org.bukkit.Bukkit;
@@ -26,6 +29,8 @@ public final class CarriedExperience {
 	public static final String SUBCOMMAND = "carryexp";
 	private static final double EPSILON = 1e-6;
 	private static final int MAX_STEPS = 1000;
+	/** Carried EXP at the start of each player's batch still to be reported. Main thread only. */
+	private static final Map<UUID, Double> NOTICES = new HashMap<>();
 
 	private CarriedExperience() {}
 
@@ -45,17 +50,32 @@ public final class CarriedExperience {
 		if (progress == null || ClassService.isApplying(player.getUniqueId())) {
 			return false;
 		}
-		boolean waiting = progress.getCarriedExperience() > EPSILON;
-		progress.setCarriedExperience(progress.getCarriedExperience() + amount);
+		double before = progress.getCarriedExperience();
+		progress.setCarriedExperience(before + amount);
 		release(player, progress);
-		// Said once when EXP starts waiting, not for every reward of a batch.
-		if (!waiting && progress.getCarriedExperience() > EPSILON) {
-			RPTexts.send(player, RPTexts.MUTED + "Your class can't level further yet, so " + RPTexts.WARN
-					+ format(progress.getCarriedExperience()) + " EXP" + RPTexts.MUTED
-					+ " from your other characters is waiting. It is added once your class can level, such as after you pick a subclass with "
-					+ RPTexts.COMMAND + "/class" + RPTexts.MUTED + ".");
-		}
+		noticeAfterBatch(player, before);
 		return true;
+	}
+
+	/**
+	 * Tells the player once a batch of carried rewards is done (they arrive many in one tick) how much
+	 * EXP is waiting, if the batch added to it.
+	 */
+	private static void noticeAfterBatch(Player player, double before) {
+		if (RPCharacters.plugin == null || NOTICES.putIfAbsent(player.getUniqueId(), before) != null) {
+			return;
+		}
+		BooleanSupplier current = ProgressRouting.sessionGuard(player);
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			double start = NOTICES.remove(player.getUniqueId());
+			CharacterProgress progress = ProgressRouting.activeProgress(player);
+			if (current.getAsBoolean() && progress != null && progress.getCarriedExperience() > start + EPSILON) {
+				RPTexts.send(player, RPTexts.MUTED + "Your class can't level further yet, so " + RPTexts.WARN
+						+ format(progress.getCarriedExperience()) + " EXP" + RPTexts.MUTED
+						+ " from your other characters is waiting. It is added once your class can level, such as after you pick a subclass with "
+						+ RPTexts.COMMAND + "/class" + RPTexts.MUTED + ".");
+			}
+		});
 	}
 
 	/** Adds the live character's carried EXP that its class can hold now. */
