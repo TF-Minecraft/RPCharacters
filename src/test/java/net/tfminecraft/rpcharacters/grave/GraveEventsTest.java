@@ -40,6 +40,7 @@ class GraveEventsTest extends GraveRuntimeFixture {
     }
     PlayerRespawnEvent respawn() { PlayerRespawnEvent event = mock(PlayerRespawnEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getRespawnLocation()).thenReturn(player.getLocation()); return event; }
     Grave newest() { return manager.findNewestByOwner(player.getUniqueId()); }
+    Grave nextDeath(GraveDeathListener listener, Grave previous) { try { Thread.sleep(5); } catch (InterruptedException e) { throw new AssertionError(e); } listener.onPlayerDeath(death(0)); Grave grave = newest(); assertNotSame(previous, grave); return grave; }
 
     @Test void deathDoesNothingWhenDisabledKeptOrThereIsNoLoot() {
         GraveDeathListener listener = new GraveDeathListener(); PlayerDeathEvent event = death(0);
@@ -164,6 +165,23 @@ class GraveEventsTest extends GraveRuntimeFixture {
         assertTrue(grave.isKillerOnly()); assertTrue(grave.isLocked(), "An evil victim's strike death is not left open to everyone"); assertEquals(killer.getUniqueId(), grave.getKiller());
         assertTrue(event.getDrops().isEmpty()); listener.keepItemsAfterPouchDrop(event); verify(event, never()).setKeepInventory(true);
         listener.onPlayerRespawn(respawn()); assertTrue(player.nextMessage().contains("graves")); assertEquals("§ckiller only", player.nextMessage());
+    }
+
+    @Test void killerOnlyGravesBindNoInsuranceAndRevertWhenThePermakillIsCancelled() {
+        PlayerMock killer = server.addPlayer("Killer"); strikes.when(() -> PvpStrikeService.graveContext(eq(player), anyBoolean())).thenReturn(new PvpStrikeService.GraveContext(true, false, killer.getUniqueId(), true));
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND)); player.getInventory().setItem(1, new ItemStack(Material.PAPER));
+        GraveDeathListener listener = new GraveDeathListener(); listener.onPlayerDeath(death(0)); Grave grave = newest(); assertTrue(grave.isKillerOnly());
+        player.getInventory().clear(); listener.onPlayerRespawn(respawn());
+        assertNull(GraveInsuranceTickets.boundGrave(player.getInventory().getItem(1)), "A ticket can't insure a grave its owner can't open");
+        // Respawning before the strike settled forgets the grave: a late settle changes nothing.
+        KillerOnlyGraves.settle(player.getUniqueId(), false); assertTrue(grave.isKillerOnly());
+        player.getInventory().setItem(0, new ItemStack(Material.EMERALD)); Grave second = nextDeath(listener, grave); assertTrue(second.isKillerOnly());
+        KillerOnlyGraves.settle(player.getUniqueId(), false); assertFalse(second.isKillerOnly(), "A cancelled permakill hands the grave back to its owner"); assertTrue(second.isLocked());
+        KillerOnlyGraves.settle(player.getUniqueId(), false);
+        player.getInventory().setItem(0, new ItemStack(Material.GOLD_INGOT)); Grave third = nextDeath(listener, second);
+        KillerOnlyGraves.settle(player.getUniqueId(), true); assertTrue(third.isKillerOnly());
+        player.getInventory().setItem(0, new ItemStack(Material.IRON_INGOT)); Grave fourth = nextDeath(listener, third);
+        manager.despawn(fourth); assertDoesNotThrow(() -> KillerOnlyGraves.settle(player.getUniqueId(), false));
     }
 
     @Test void aDeathPredictedAsAKillWithoutAnotherPlayerKeepsTheNormalGrave() {

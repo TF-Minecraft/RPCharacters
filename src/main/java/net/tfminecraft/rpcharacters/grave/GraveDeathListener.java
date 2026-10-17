@@ -68,7 +68,8 @@ public final class GraveDeathListener implements Listener {
 		offhand = stripKept(storage, armor, offhand, stash);
 		ItemStack[] offhandSlot = new ItemStack[] { offhand };
 		ItemStack bundledTicket = null;
-		if (GraveLoader.isInsuranceEnabled() && GraveInsuranceTickets.bindableSlot(stash) == null) {
+		// Insurance can't recover a killer-only grave, so a ticket in a bundle stays an ordinary item there.
+		if (!killerOnly && GraveLoader.isInsuranceEnabled() && GraveInsuranceTickets.bindableSlot(stash) == null) {
 			bundledTicket = GraveInsuranceExtract.pull(storage, armor, offhandSlot, stash.values());
 			offhand = offhandSlot[0];
 		}
@@ -102,13 +103,16 @@ public final class GraveDeathListener implements Listener {
 		if (killerOnly) {
 			grave.setKillerOnly(true);
 			grave.flush();
+			KillerOnlyGraves.remember(victim.getUniqueId(), grave.getId());
 		} else if (unlocked) {
 			// Evil RP victims killed in a PvP start leave their items for anyone to take.
 			grave.setLocked(false);
 			grave.flush();
 		}
 
-		GraveInsuranceTickets.Binding binding = GraveInsuranceTickets.bind(stash, grave);
+		// Loose tickets stay unbound and come back at respawn rather than tying up a grave its owner can't open.
+		GraveInsuranceTickets.Binding binding = killerOnly ? GraveInsuranceTickets.Binding.NONE
+				: GraveInsuranceTickets.bind(stash, grave);
 		if (!binding.bound() && bundledTicket != null) {
 			ItemStack bound = GraveInsuranceTickets.bindTicket(bundledTicket, grave);
 			if (bound != null) {
@@ -142,6 +146,7 @@ public final class GraveDeathListener implements Listener {
 	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
 	public void onPlayerRespawn(PlayerRespawnEvent event) {
 		Player player = event.getPlayer();
+		KillerOnlyGraves.forget(player.getUniqueId());
 		Map<Integer, ItemStack> stashed = excludedStash.remove(player.getUniqueId());
 		if (stashed != null && !stashed.isEmpty()) {
 			PlayerInventory inventory = player.getInventory();

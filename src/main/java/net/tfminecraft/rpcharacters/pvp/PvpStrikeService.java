@@ -29,6 +29,7 @@ import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.evilrp.StrikeOutcome;
+import net.tfminecraft.rpcharacters.grave.KillerOnlyGraves;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -205,6 +206,8 @@ public final class PvpStrikeService {
 		Decision strike = new Decision(character.getId(), killer.getUniqueId(), EvilRpService.isInSession(character),
 				true, false, now, StrikeChoice.STRIKE);
 		execute(victim, PlayerManager.get(victim), strike, killer);
+		// The grave was made killer-only from the expected kill; a cancelled permakill hands it back.
+		KillerOnlyGraves.settle(victim.getUniqueId(), character.getStatus() != Status.ALIVE);
 		return true;
 	}
 
