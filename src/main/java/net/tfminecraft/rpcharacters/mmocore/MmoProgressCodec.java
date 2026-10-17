@@ -83,6 +83,39 @@ public final class MmoProgressCodec {
 		decode(section);
 	}
 
+	/** A stored profession's level and the experience gained towards the next one. */
+	public record ProfessionLevel(int level, double experience) {
+		/** A higher level, or the same level with more experience; anything is above a missing profession. */
+		public boolean isAbove(ProfessionLevel other) {
+			return other == null || level > other.level || level == other.level && experience > other.experience;
+		}
+	}
+
+	/** The stored profession levels by MMOCore profession id. Professions never saved are absent. */
+	public static Map<String, ProfessionLevel> professions(ConfigurationSection section) {
+		Map<String, ProfessionLevel> out = new LinkedHashMap<>();
+		decode(section).professions.forEach((id, stored) -> out.put(id, new ProfessionLevel((int) stored[0], stored[1])));
+		return out;
+	}
+
+	/** A copy of the stored progress with these professions instead of its own; the section itself is left as it was. */
+	public static YamlConfiguration withProfessions(ConfigurationSection section, Map<String, ProfessionLevel> professions) {
+		decode(section);
+		YamlConfiguration copy = new YamlConfiguration();
+		section.getValues(false).forEach(copy::set);
+		List<Map<String, Object>> entries = new ArrayList<>();
+		for (Map.Entry<String, ProfessionLevel> profession : new TreeMap<>(professions).entrySet()) {
+			Map<String, Object> entry = new LinkedHashMap<>();
+			entry.put("id", profession.getKey());
+			entry.put("level", profession.getValue().level());
+			entry.put("experience", profession.getValue().experience());
+			entries.add(entry);
+		}
+		copy.set("professions", entries);
+		decode(copy);
+		return copy;
+	}
+
 	/** Check stored class definitions without applying progress or claiming rewards. */
 	public static void validateClasses(ConfigurationSection section) {
 		validateClasses(decode(section));

@@ -572,6 +572,8 @@ public final class CharacterBodies {
                         try {
                             progress.restoreResources(account, character, resources);
                             body.body().applyHealth(player);
+                            // The body is on, so level-up rewards land in its inventory.
+                            net.tfminecraft.rpcharacters.mmocore.CarriedExperience.release(player);
                             progress.save(account, character);
                         } catch (IOException | RuntimeException error) {
                             fail(player, "restoring character resources", error);

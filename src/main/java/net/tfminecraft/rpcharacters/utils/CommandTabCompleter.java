@@ -168,6 +168,7 @@ public class CommandTabCompleter implements TabCompleter {
 					completions.add("permakill");
 					completions.add("strikes");
 					completions.add("tutorial");
+					completions.add(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND);
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
@@ -262,7 +263,8 @@ public class CommandTabCompleter implements TabCompleter {
 					}
 				}
 			} else if (args[0].equalsIgnoreCase("admin") && Permissions.isAdmin(sender)
-					&& (args[1].equalsIgnoreCase("injure") || args[1].equalsIgnoreCase("permakill"))) {
+					&& (args[1].equalsIgnoreCase("injure") || args[1].equalsIgnoreCase("permakill")
+							|| args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND))) {
 				for (Player online : Bukkit.getOnlinePlayers()) {
 					completions.add(online.getName());
 				}
