@@ -50,6 +50,9 @@ messages:
   unlock-hint: "&eRun &f/grave unlock &eto let others loot this grave."
   # Shown instead of unlock-hint when an evil RP victim dies in a /pvp start fight.
   unlocked-evil-rp: "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it."
+  # Shown instead of unlock-hint when a strike kills the character. Only the killer can open that grave.
+  killer-only: "&cYour character died from a strike. Only your killer can open this grave."
+  unlock-killer-only: "&cOnly the killer can open this grave. It can't be unlocked."
   insurance-none: "&eThis ticket is not bound to a grave. Carry it when you die to insure that grave."
   insurance-gone: "&eThe grave this ticket was bound to is gone."
   # Shown after respawn when a ticket was bound to the new grave.

@@ -124,7 +124,7 @@ class DatabaseLoadTest extends DatabaseFixture {
     @Test void optionalMalformedShapesDoNotDiscardOtherwiseValidCharacters() throws Exception {
         var shapes=List.of(
             obj("conversations","invalid","conversation-last-at","invalid","last-location","invalid","trait-state","invalid","extra-attribute-allocation","invalid","kit-statuses","invalid","kit-customisations","invalid","name-colour","invalid","pvp-lethal",null),
-            obj("last-location",obj("world"," ","x",1,"y",2,"z",3),"pvp-lethal","false","kit-status","eligible"),
+            obj("last-location",obj("world"," ","x",1,"y",2,"z",3),"pvp-lethal","true","kit-status","eligible"),
             obj("last-location",obj("world","world","x","bad","y",2,"z",3),"last-kit-claims","invalid"));
         int index=0; for(var extra:shapes) {var json=characterJson("shape"+index); json.putAll(extra); write(characterFile("shape"+index++),json);}
         var data=new PlayerData(owner); db.loadCharacters(data); assertEquals(3,data.getCharacters().size());

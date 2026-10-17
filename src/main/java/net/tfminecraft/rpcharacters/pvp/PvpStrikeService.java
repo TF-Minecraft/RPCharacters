@@ -25,9 +25,11 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.tfminecraft.rpcharacters.RPCharacters;
+import net.tfminecraft.rpcharacters.clues.discovery.ClueAdminModeService;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpService;
 import net.tfminecraft.rpcharacters.evilrp.StrikeOutcome;
+import net.tfminecraft.rpcharacters.grave.KillerOnlyGraves;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -40,13 +42,15 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.utils.TraitChangeService;
 
 /**
- * Strikes from {@code /pvp start} fights. When a tagged player is killed or knocked out by
- * another player, the killer chooses to spare them or strike them. The same player cannot
- * strike that character again until the cooldown in pvp.yml has passed, so one person
- * cannot land all three strikes in a day. The strike is labelled Kill when it would kill:
- * the character's last strike, or any strike during an evil RP session. Then the killer can
- * also Wound (healing injury) or Maim (permanent injury) instead, with no strike. Running
- * out of time spares them.
+ * Strikes from {@code /pvp start} fights. A lethal player chose not to spare anyone when they
+ * turned lethal on, so a tagged player they kill gets a strike at once, or dies when the strike
+ * would kill. When a nonlethal player knocks a tagged player out, the winner chooses to spare
+ * or strike them while they stay down. The same player cannot strike that character again
+ * until the cooldown in pvp.yml has passed, so one person cannot land all three strikes in a
+ * day. The strike is labelled Kill when it would kill: the character's last strike, or any
+ * strike during an evil RP session. Then the winner of a knockout can also Wound (healing
+ * injury) or Maim (permanent injury) instead, with no strike. Running out of time, or the
+ * winner logging out, spares them.
  */
 public final class PvpStrikeService {
 
@@ -86,20 +90,24 @@ public final class PvpStrikeService {
 		return inPvpStart && !inBattle && killerId != null && !killerId.equals(victimId);
 	}
 
-	/** A knockout ends the victim's PvP start and, if it counts, asks the attacker what to do. */
-	public static void handleKnockout(Player victim, Player attacker) {
+	/**
+	 * A knockout ends the victim's PvP start and, if it counts, asks the attacker what to do.
+	 * Returns whether the attacker is now deciding, which keeps the victim down until they do.
+	 */
+	public static boolean handleKnockout(Player victim, Player attacker) {
 		boolean inPvpStart = PvpStartSessions.consume(victim.getUniqueId(), System.currentTimeMillis());
 		if (!counts(inPvpStart, PermadeathBattleExemption.isInStartedBattle(victim), victim.getUniqueId(),
 				attacker != null ? attacker.getUniqueId() : null)) {
-			return;
+			return false;
 		}
 		openDecision(victim, attacker, false);
+		return pending.containsKey(victim.getUniqueId());
 	}
 
 	/**
-	 * Called from the death event after the battle check. Returns true when a killer's decision
-	 * covers this death, so the permadeath-zone roll is skipped. Deaths without a player killer
-	 * are an automatic spare.
+	 * Called from the death event after the battle check. Returns true when a strike, or a
+	 * killer's decision, covers this death, so the permadeath-zone roll is skipped. Deaths
+	 * without a player killer are an automatic spare.
 	 */
 	public static boolean handleDeath(Player victim, boolean inPvpStart) {
 		UUID victimId = victim.getUniqueId();
@@ -113,27 +121,94 @@ public final class PvpStrikeService {
 		if (!counts(inPvpStart, false, victimId, killer != null ? killer.getUniqueId() : null)) {
 			return false;
 		}
-		return openDecision(victim, killer, true);
+		// A nonlethal blow only kills when no knockout was possible; that killer still decides.
+		if (PvpKnockoutManager.isNonlethal(killer)) {
+			return openDecision(victim, killer, true);
+		}
+		return strikeOnDeath(victim, killer);
 	}
 
 	public static boolean hasPendingDecision(Player player) {
 		return player != null && (pending.containsKey(player.getUniqueId()) || verdicts.containsKey(player.getUniqueId()));
 	}
 
-	/** How the grave listener should treat this death. Consumes a pending Kill. */
+	/** Whether a knockout winner is still choosing what happens to this player. */
+	public static boolean isAwaitingDecision(UUID victimId) {
+		return victimId != null && pending.containsKey(victimId);
+	}
+
+	/** A winner who logs out while choosing spares their victim. */
+	public static void handleQuit(Player player) {
+		UUID killerId = player.getUniqueId();
+		Iterator<Map.Entry<UUID, Decision>> it = pending.entrySet().iterator();
+		while (it.hasNext()) {
+			Map.Entry<UUID, Decision> entry = it.next();
+			if (!entry.getValue().killerId.equals(killerId)) {
+				continue;
+			}
+			it.remove();
+			Player victim = Bukkit.getPlayer(entry.getKey());
+			if (victim != null) {
+				RPTexts.send(victim, RPTexts.SUCCESS + "You were spared. " + RPTexts.MUTED + "They logged out before choosing.");
+			}
+		}
+	}
+
+	/**
+	 * How the grave listener should treat this death. Consumes a pending Kill. It runs before
+	 * {@link #handleDeath}, so it works out the same strike to know whether the character dies.
+	 */
 	public static GraveContext graveContext(Player victim, boolean inPvpStart) {
 		UUID victimId = victim.getUniqueId();
 		Execution execution = executions.remove(victimId);
 		if (execution != null) {
-			return new GraveContext(true, execution.evil, execution.killerId);
+			return new GraveContext(true, execution.evil, execution.killerId, true);
 		}
 		Decision downed = pending.get(victimId);
 		if (downed != null) {
-			return new GraveContext(true, downed.evil, null);
+			return new GraveContext(true, downed.evil, null, false);
 		}
-		boolean evil = inPvpStart && !PermadeathBattleExemption.isInStartedBattle(victim)
-				&& EvilRpService.isInSession(victim);
-		return new GraveContext(inPvpStart, evil, null);
+		boolean inBattle = PermadeathBattleExemption.isInStartedBattle(victim);
+		boolean evil = inPvpStart && !inBattle && EvilRpService.isInSession(victim);
+		return new GraveContext(inPvpStart, evil, null, inPvpStart && !inBattle && strikeKillsOnDeath(victim));
+	}
+
+	/** Whether {@link #handleDeath} will kill this character for a lethal player's kill. */
+	private static boolean strikeKillsOnDeath(Player victim) {
+		Player killer = victim.getKiller();
+		if (!counts(true, false, victim.getUniqueId(), killer != null ? killer.getUniqueId() : null)
+				|| ClueAdminModeService.isEnabled(victim) || PvpKnockoutManager.isNonlethal(killer)) {
+			return false;
+		}
+		RPCharacter character = activeCharacter(victim);
+		if (character == null) {
+			return false;
+		}
+		long now = System.currentTimeMillis();
+		if (EvilRpService.applyDecay(character, now)) {
+			RPCharacters.getPlayerManager().savePlayer(victim);
+		}
+		return !onCooldown(character, killer.getUniqueId(), now)
+				&& StrikeOutcome.nextStrikeKills(character.getEvilRpStrikes(), EvilRpService.isInSession(character));
+	}
+
+	/** A lethal player's kill: they chose not to spare anyone, so the strike, or the Kill, lands at once. */
+	private static boolean strikeOnDeath(Player victim, Player killer) {
+		RPCharacter character = activeCharacter(victim);
+		if (character == null) {
+			return false;
+		}
+		long now = System.currentTimeMillis();
+		if (!onCooldown(character, killer.getUniqueId(), now)) {
+			RPTexts.send(victim, PvpLoader.getAutoStrikeVictim()
+					.replace("{killer}", RPTexts.formatGui(DisplayIdentityService.resolveDisplay(killer))));
+		}
+		Decision strike = new Decision(character.getId(), killer.getUniqueId(), EvilRpService.isInSession(character),
+				true, false, now, StrikeChoice.STRIKE);
+		execute(victim, PlayerManager.get(victim), strike, killer);
+		// The grave was made killer-only from the expected kill; a cancelled permakill hands it back.
+		KillerOnlyGraves.settle(victim.getUniqueId(), character.getStatus() != Status.ALIVE);
+		return true;
 	}
 
 	/** The killer's choice. */
@@ -248,11 +323,12 @@ public final class PvpStrikeService {
 				System.currentTimeMillis() + PvpLoader.getDecisionMs(), StrikeChoice.STRIKE);
 		pending.put(victim.getUniqueId(), decision);
 
-		int seconds = PvpLoader.getDecisionSeconds();
+		String time = formatDuration(PvpLoader.getDecisionSeconds());
 		RPTexts.send(victim, RPTexts.ERROR + "You're at " + RPTexts.formatGui(DisplayIdentityService.resolveDisplay(killer))
-				+ RPTexts.ERROR + "'s mercy. " + RPTexts.MUTED + "They have " + seconds + " seconds to "
-				+ (kills ? "spare, wound, maim or kill you." : "spare or strike you."));
-		sendPrompt(killer, victim, character, evil, kills, seconds);
+				+ RPTexts.ERROR + "'s mercy. " + RPTexts.MUTED + "They have " + time + " to "
+				+ (kills ? "spare, wound, maim or kill you." : "spare or strike you.")
+				+ (died ? "" : " Until then you stay down: you can talk, but you can't fight."));
+		sendPrompt(killer, victim, character, evil, kills, time);
 		return true;
 	}
 
@@ -379,8 +455,20 @@ public final class PvpStrikeService {
 		executions.values().removeIf(execution -> now >= execution.expiresAtMs);
 	}
 
+	/** "30 seconds", "1 minute", "5 minutes" or "2 minutes 30 seconds". */
+	static String formatDuration(int totalSeconds) {
+		int minutes = totalSeconds / 60;
+		int seconds = totalSeconds % 60;
+		String secondsText = seconds + (seconds == 1 ? " second" : " seconds");
+		if (minutes == 0) {
+			return secondsText;
+		}
+		String minutesText = minutes + (minutes == 1 ? " minute" : " minutes");
+		return seconds == 0 ? minutesText : minutesText + " " + secondsText;
+	}
+
 	private static void sendPrompt(Player killer, Player victim, RPCharacter character, boolean evil, boolean kills,
-			int seconds) {
+			String time) {
 		String victimName = RPTexts.formatGui(DisplayIdentityService.resolveDisplay(victim));
 		String command = "/rpcharacter %s " + victim.getUniqueId();
 		int next = character.getEvilRpStrikes() + 1;
@@ -406,7 +494,7 @@ public final class PvpStrikeService {
 		String reason = evil ? " was in an evil RP session, so any strike kills them." : " is at your mercy.";
 		killer.sendMessage(Component.empty()
 				.append(LegacyComponentSerializer.legacySection().deserialize(victimName))
-				.append(Component.text(reason + " If you don't choose in " + seconds + " seconds, they're spared. ",
+				.append(Component.text(reason + " If you don't choose in " + time + ", they're spared. ",
 						NamedTextColor.GRAY))
 				.append(buttons));
 	}
@@ -490,8 +578,11 @@ public final class PvpStrikeService {
 		}
 	}
 
-	/** {@code evilVictim} leaves an unlocked grave; {@code killerId} overrides the death's own killer. */
-	public record GraveContext(boolean inPvpStart, boolean evilVictim, UUID killerId) {
+	/**
+	 * {@code evilVictim} leaves an unlocked grave; {@code killerId} overrides the death's own killer;
+	 * {@code characterDies} means a strike kills the character, so only the killer may open the grave.
+	 */
+	public record GraveContext(boolean inPvpStart, boolean evilVictim, UUID killerId, boolean characterDies) {
 	}
 
 	/** {@code strikeKills} is whether Kill (with Wound and Maim) was offered; {@code choice} is set once picked. */

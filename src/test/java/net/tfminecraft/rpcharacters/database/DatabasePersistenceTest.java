@@ -24,15 +24,15 @@ class DatabasePersistenceTest extends DatabaseFixture {
         write(playerFile,richPlayerJson()); write(characterFile("alpha"),richCharacterJson("alpha"));
         var loaded=db.loadPlayer(player); assertNotNull(loaded); var character=loaded.getCharacters().getFirst();
         loaded.takePendingMmoAttributeRemoves(); // The successful login already consumed the previous creation layer.
-        character.setPaidChangeCount("class",2); character.setStageRevision("class",3,1700000000L);
+        character.setPaidChangeCount("class",2); character.setPvpLethal(true); character.setStageRevision("class",3,1700000000L);
         try(var integrations=mockConstruction(Integrator.class,(integrator,context) -> when(integrator.getRemoveList(player,character)).thenReturn(List.of("strength.4","dexterity.2")))) {
             db.savePlayer(loaded); assertEquals(1,integrations.constructed().size());
         }
         JSONObject playerJson=read(playerFile),characterJson=read(characterFile("alpha"));
         assertEquals("true",playerJson.get("eighteen")); assertEquals(1234567890123L,playerJson.get("last-character-switch-ms")); assertEquals(array("strength.4","dexterity.2"),playerJson.get("to remove"));
         assertEquals(12,((Number)playerJson.get("account-skill-points-total")).intValue()); assertEquals(6,((Number)playerJson.get("account-attribute-points-total")).intValue()); assertEquals(3,((Number)((JSONObject)playerJson.get("account-profession-points")).get("forager")).intValue());
-        assertEquals("alpha",characterJson.get("id")); assertEquals("Aria",characterJson.get("name")); assertEquals(77,((Number)characterJson.get("online-playtime-seconds")).intValue()); assertEquals("false",characterJson.get("mail-listed")); assertEquals("false",characterJson.get("pvp-lethal"));
-        var fresh=new Database().loadPlayer(player); assertNotNull(fresh); var restored=fresh.getCharacters().getFirst();
+        assertEquals("alpha",characterJson.get("id")); assertEquals("Aria",characterJson.get("name")); assertEquals(77,((Number)characterJson.get("online-playtime-seconds")).intValue()); assertEquals("false",characterJson.get("mail-listed")); assertFalse(characterJson.containsKey("pvp-lethal"),"Lethal PvP is never saved");
+        var fresh=new Database().loadPlayer(player); assertNotNull(fresh); var restored=fresh.getCharacters().getFirst(); assertFalse(restored.isPvpLethal());
         assertEquals(character.getId(),restored.getId()); assertEquals(character.getRace().getId(),restored.getRace().getId()); assertEquals(character.getConversationCounts(),restored.getConversationCounts()); assertEquals(character.getConversationLastAtMs(),restored.getConversationLastAtMs());
         assertEquals(character.getNameColour().getHexCodes(),restored.getNameColour().getHexCodes()); assertEquals(character.getPersonaDescription(),restored.getPersonaDescription()); assertEquals(character.getExtraAttributeAllocation(),restored.getExtraAttributeAllocation()); assertEquals(character.getProfessionUpgrades(),restored.getProfessionUpgrades()); assertEquals(character.getForfeitedProfessionPoints(),restored.getForfeitedProfessionPoints()); assertEquals(character.getLastLocationX(),restored.getLastLocationX()); assertEquals(20D,restored.getFuel("fuel")); assertEquals(2,restored.getPaidChangeCount("class")); assertEquals(3,restored.getStageRevision("class")); assertEquals(123,restored.getFoodValue());
         playtime.verify(() -> CharacterPlaytimeDirectory.upsert(owner,character));

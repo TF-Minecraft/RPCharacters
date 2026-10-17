@@ -18,10 +18,13 @@ public final class GraveLootRules {
 		if (player == null || grave == null) {
 			return false;
 		}
-		if (grave.isOwner(player.getUniqueId()) || player.hasPermission(ADMIN_PERMISSION)) {
+		if (player.hasPermission(ADMIN_PERMISSION)) {
 			return true;
 		}
-		return !grave.isLocked();
+		if (grave.isKillerOnly()) {
+			return player.getUniqueId().equals(grave.getKiller());
+		}
+		return grave.isOwner(player.getUniqueId()) || !grave.isLocked();
 	}
 
 	/** Whether this player could take items from a grave they had just made by killing someone. */

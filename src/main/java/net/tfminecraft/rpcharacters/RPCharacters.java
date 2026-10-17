@@ -106,6 +106,7 @@ import net.tfminecraft.rpcharacters.playerlist.QuickActionPack;
 import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
 import net.tfminecraft.rpcharacters.pvp.DuelCommand;
 import net.tfminecraft.rpcharacters.pvp.Duels;
+import net.tfminecraft.rpcharacters.pvp.KnockoutRestrictions;
 import net.tfminecraft.rpcharacters.pvp.PvpCommand;
 import net.tfminecraft.rpcharacters.pvp.PvpKnockoutManager;
 import net.tfminecraft.rpcharacters.pvp.PvpStrikeService;
@@ -442,6 +443,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(wardrobeListener, this);
 		getServer().getPluginManager().registerEvents(rpInjureListener, this);
 		getServer().getPluginManager().registerEvents(pvpKnockoutManager, this);
+		getServer().getPluginManager().registerEvents(new KnockoutRestrictions(pvpKnockoutManager::isDown), this);
 		getServer().getPluginManager().registerEvents(pvpCommand, this);
 		getServer().getPluginManager().registerEvents(duelCommand, this);
 		getServer().getPluginManager().registerEvents(new ArmourDonning(), this);

@@ -23,8 +23,8 @@ import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 public final class TutorialService {
 
 	public static final String PERMADEATH_ZONE = "permadeath-zone";
-	public static final String EVIL_RP = "evil-rp";
-	public static final String PVP_STRIKES = "pvp-strikes";
+	public static final String EVIL_RP = "evil-rp-lethal";
+	public static final String PVP_STRIKES = "pvp-modes";
 
 	private static final String GOT_IT_LABEL = "[Got It]";
 	private static final int SEPARATOR_WIDTH = 40;

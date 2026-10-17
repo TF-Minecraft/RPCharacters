@@ -53,6 +53,8 @@ public final class GraveLoader implements LoaderInterface {
 	private static String messageUnlockedByStrike = "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it.";
 	private static String messageUnlockNone = "&eYou have no grave to unlock.";
 	private static String messageUnlockAlready = "&eYour grave is already unlocked.";
+	private static String messageKillerOnly = "&cYour character died from a strike. Only your killer can open this grave.";
+	private static String messageUnlockKillerOnly = "&cOnly the killer can open this grave. It can't be unlocked.";
 	private static String messageUnlockSuccess = "&aYour grave is now unlocked. Anyone can loot it.";
 	private static String messageRobHint = "&aRight click to rob";
 
@@ -100,6 +102,8 @@ public final class GraveLoader implements LoaderInterface {
 		messageUnlockedByStrike = config.getString("messages.unlocked-evil-rp", "&cYou were in an evil RP session, so your grave is unlocked. Anyone can loot it.");
 		messageUnlockNone = config.getString("messages.unlock-none", "&eYou have no grave to unlock.");
 		messageUnlockAlready = config.getString("messages.unlock-already", "&eYour grave is already unlocked.");
+		messageKillerOnly = config.getString("messages.killer-only", "&cYour character died from a strike. Only your killer can open this grave.");
+		messageUnlockKillerOnly = config.getString("messages.unlock-killer-only", "&cOnly the killer can open this grave. It can't be unlocked.");
 		messageUnlockSuccess = config.getString("messages.unlock-success", "&aYour grave is now unlocked. Anyone can loot it.");
 		messageRobHint = config.getString("messages.rob-hint", "&aRight click to rob");
 	}
@@ -252,6 +256,14 @@ public final class GraveLoader implements LoaderInterface {
 
 	public static String getMessageUnlockedByStrike() {
 		return messageUnlockedByStrike;
+	}
+
+	public static String getMessageKillerOnly() {
+		return messageKillerOnly;
+	}
+
+	public static String getMessageUnlockKillerOnly() {
+		return messageUnlockKillerOnly;
 	}
 
 	public static String getMessageUnlockHint() {

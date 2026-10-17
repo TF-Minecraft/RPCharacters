@@ -18,8 +18,10 @@ public final class PvpLoader implements LoaderInterface {
 	private static int startActiveMinutes = 15;
 	private static int knockoutSeconds = 30;
 	private static int blindnessAmplifier = 4;
+	private static int knockoutBlindnessSeconds = 60;
+	private static int lethalConfirmSeconds = 30;
 	private static long freezePeriodTicks = 1L;
-	private static int decisionSeconds = 30;
+	private static int decisionSeconds = 300;
 	private static int sameTargetCooldownHours = 24;
 	private static boolean strikeDecayEnabled = false;
 	private static int strikeDecayDays = 14;
@@ -29,7 +31,7 @@ public final class PvpLoader implements LoaderInterface {
 	private static int bootsDonSeconds = 2;
 	private static int donSlownessAmplifier = 1;
 
-	private static String startWarning = "&ePvP will start in {seconds} seconds! &7Deaths in this fight can cost strikes.";
+	private static String startWarning = "&ePvP will start in {seconds} seconds! &7Lethal kills in this fight give strikes, and a knocked out player's fate is up to the winner.";
 	private static String countdown = "&c{count}";
 	private static String startedTitle = "&cPVP STARTED";
 	private static String situationDuration = "&eThis PvP situation lasts {minutes} minutes. &7After that, a new RP interaction is needed.";
@@ -37,8 +39,20 @@ public final class PvpLoader implements LoaderInterface {
 	private static String endedSubtitle = "&eA new RP interaction is needed";
 	private static String startCancelled = "&7The PvP start was cancelled.";
 	private static String noSituation = "&cYou have no PvP situation to end.";
-	private static String lethal = "&aThis character is now in lethal PvP.";
+	private static String lethal = "&cThis character is now in lethal PvP. &7It goes back to nonlethal when you log out, switch character or run &f/pvp nonlethal&7.";
 	private static String nonlethal = "&aThis character is now in nonlethal PvP.";
+	private static String lethalWarning = "&c&l⚠ Lethal PvP\n"
+			+ "&7In a &f/pvp start &7fight, anyone you kill gets a strike at once. You decided not to spare anyone when you turned lethal on, so you can't spare, wound or maim them.\n"
+			+ "&7If it's their last strike, or they're in an evil RP session, their character dies and only you can open their grave.\n"
+			+ "&7Players you kill outside &f/pvp start &7fights get no strike.\n"
+			+ "&7Lethal lasts until you log out, switch character or run &f/pvp nonlethal&7.";
+	private static String lethalConfirmButton = "&c&l[Confirm]";
+	private static String lethalConfirmHover = "&7Turn on lethal PvP for this character";
+	private static String lethalConfirmPrompt = "&7Click &c[Confirm] &7or run &f/pvp lethal confirm &7within {seconds} seconds.";
+	private static String lethalConfirmNone = "&cRun &f/pvp lethal &cfirst, then confirm within {seconds} seconds.";
+	private static String alreadyLethal = "&7This character is already in lethal PvP.";
+	private static String downedBlocked = "&cYou're knocked out. You can still talk, but you can't do that.";
+	private static String autoStrikeVictim = "&c{killer} &cwas in lethal PvP, so their kill gave you a strike.";
 	private static String usage = "&7Usage: /pvp start | end | lethal | nonlethal";
 	private static String noCharacter = "&cYou need an active character to set PvP mode.";
 	private static String current = "&7This character's PvP mode: {mode}";
@@ -64,8 +78,10 @@ public final class PvpLoader implements LoaderInterface {
 		startActiveMinutes = Math.max(0, config.getInt("start-active-minutes", 15));
 		knockoutSeconds = Math.max(1, config.getInt("knockout-seconds", 30));
 		blindnessAmplifier = Math.max(0, config.getInt("blindness-amplifier", 4));
+		knockoutBlindnessSeconds = Math.max(0, config.getInt("knockout-blindness-seconds", 60));
+		lethalConfirmSeconds = Math.max(1, config.getInt("lethal-confirm-seconds", 30));
 		freezePeriodTicks = Math.max(1L, config.getLong("freeze-period-ticks", 1L));
-		decisionSeconds = Math.max(1, config.getInt("strikes.decision-seconds", 30));
+		decisionSeconds = Math.max(1, config.getInt("strikes.decision-seconds", 300));
 		sameTargetCooldownHours = Math.max(0, config.getInt("strikes.same-target-cooldown-hours", 24));
 		strikeDecayEnabled = config.getBoolean("strikes.decay.enabled", false);
 		strikeDecayDays = Math.max(1, config.getInt("strikes.decay.days", 14));
@@ -85,6 +101,14 @@ public final class PvpLoader implements LoaderInterface {
 		noSituation = config.getString("messages.no-situation", noSituation);
 		lethal = config.getString("messages.lethal", lethal);
 		nonlethal = config.getString("messages.nonlethal", nonlethal);
+		lethalWarning = config.getString("messages.lethal-warning", lethalWarning);
+		lethalConfirmButton = config.getString("messages.lethal-confirm-button", lethalConfirmButton);
+		lethalConfirmHover = config.getString("messages.lethal-confirm-hover", lethalConfirmHover);
+		lethalConfirmPrompt = config.getString("messages.lethal-confirm-prompt", lethalConfirmPrompt);
+		lethalConfirmNone = config.getString("messages.lethal-confirm-none", lethalConfirmNone);
+		alreadyLethal = config.getString("messages.already-lethal", alreadyLethal);
+		downedBlocked = config.getString("messages.downed-blocked", downedBlocked);
+		autoStrikeVictim = config.getString("messages.auto-strike-victim", autoStrikeVictim);
 		usage = config.getString("messages.usage", usage);
 		noCharacter = config.getString("messages.no-character", noCharacter);
 		current = config.getString("messages.current", current);
@@ -122,6 +146,19 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static int getBlindnessAmplifier() {
 		return blindnessAmplifier;
+	}
+
+	/** How long a knockout blinds, counted from when the player goes down. 0 for no blindness. */
+	public static int getKnockoutBlindnessSeconds() {
+		return knockoutBlindnessSeconds;
+	}
+
+	public static int getLethalConfirmSeconds() {
+		return lethalConfirmSeconds;
+	}
+
+	public static long getLethalConfirmMs() {
+		return lethalConfirmSeconds * 1000L;
 	}
 
 	public static long getFreezePeriodTicks() {
@@ -191,6 +228,38 @@ public final class PvpLoader implements LoaderInterface {
 
 	public static String getNonlethal() {
 		return nonlethal;
+	}
+
+	public static String getLethalWarning() {
+		return lethalWarning;
+	}
+
+	public static String getLethalConfirmButton() {
+		return lethalConfirmButton;
+	}
+
+	public static String getLethalConfirmHover() {
+		return lethalConfirmHover;
+	}
+
+	public static String getLethalConfirmPrompt() {
+		return lethalConfirmPrompt;
+	}
+
+	public static String getLethalConfirmNone() {
+		return lethalConfirmNone;
+	}
+
+	public static String getAlreadyLethal() {
+		return alreadyLethal;
+	}
+
+	public static String getDownedBlocked() {
+		return downedBlocked;
+	}
+
+	public static String getAutoStrikeVictim() {
+		return autoStrikeVictim;
 	}
 
 	public static String getUsage() {

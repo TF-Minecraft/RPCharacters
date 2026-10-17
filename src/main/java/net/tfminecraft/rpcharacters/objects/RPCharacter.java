@@ -108,8 +108,8 @@ public class RPCharacter {
 	public net.tfminecraft.rpcharacters.will.CharacterWill getWill() { return will; }
 	public void setWill(net.tfminecraft.rpcharacters.will.CharacterWill will) { this.will = java.util.Objects.requireNonNull(will, "will"); }
 
-	/** Default lethal (vanilla death). Missing JSON key loads as true. */
-	private boolean pvpLethal = true;
+	/** Never saved: every character starts nonlethal and returns to it when it becomes active. */
+	private boolean pvpLethal;
 
 	private int evilRpStrikes;
 	/** Epoch ms when the evil RP session ends; 0 when there is none. Runs while offline. */

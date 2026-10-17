@@ -411,7 +411,6 @@ public class Database {
 			loadExtraAttributeAllocation(c, json);
 			loadTraitState(c, json);
 			loadLastLocation(c, json);
-			loadPvpLethal(c, json);
 			CharacterEvilRpFields.load(c, json);
 			CharacterStageChangeFields.load(c, json);
 			CharacterClassPickFields.load(c, json);
@@ -594,7 +593,6 @@ public class Database {
 			saveExtraAttributeAllocation(defaults, c);
 			saveTraitState(defaults, c);
 			saveLastLocation(defaults, c);
-			defaults.put("pvp-lethal", String.valueOf(c.isPvpLethal()));
 			CharacterEvilRpFields.save(defaults, c);
 			CharacterStageChangeFields.save(defaults, c);
 			CharacterClassPickFields.save(defaults, c);
@@ -794,20 +792,6 @@ public class Database {
 				((Number) xRaw).doubleValue(),
 				((Number) yRaw).doubleValue(),
 				((Number) zRaw).doubleValue());
-	}
-
-	private void loadPvpLethal(RPCharacter character, JSONObject characterJson) {
-		if (characterJson == null || !characterJson.containsKey("pvp-lethal")) {
-			return;
-		}
-		Object raw = characterJson.get("pvp-lethal");
-		if (raw instanceof Boolean bool) {
-			character.setPvpLethal(bool.booleanValue());
-			return;
-		}
-		if (raw != null) {
-			character.setPvpLethal(Boolean.parseBoolean(String.valueOf(raw)));
-		}
 	}
 
 	private void loadNutritionFields(RPCharacter character, JSONObject characterJson) {

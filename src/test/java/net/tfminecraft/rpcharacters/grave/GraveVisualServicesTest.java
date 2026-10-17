@@ -200,6 +200,8 @@ class GraveVisualServicesTest extends GraveRuntimeFixture {
         settings.when(GraveLoader::getMessageUnlockNone).thenReturn("none"); settings.when(GraveLoader::getMessageUnlockAlready).thenReturn("already"); settings.when(GraveLoader::getMessageUnlockSuccess).thenReturn("success");
         executor.onCommand(player,command,"grave",new String[]{"unlock"}); assertEquals("none",player.nextMessage()); Grave grave=grave(); manager.register(grave); executor.onCommand(player,command,"grave",new String[]{"UNLOCK"}); assertFalse(grave.isLocked()); assertEquals("success",player.nextMessage());
         executor.onCommand(player,command,"grave",new String[]{"unlock"}); assertEquals("already",player.nextMessage());
+        settings.when(GraveLoader::getMessageUnlockKillerOnly).thenReturn("killer only"); grave.setLocked(true); grave.setKillerOnly(true);
+        executor.onCommand(player,command,"grave",new String[]{"unlock"}); assertEquals("killer only",player.nextMessage()); assertTrue(grave.isLocked());
         assertEquals(List.of("unlock"),executor.onTabComplete(player,command,"grave",new String[]{"UN"})); assertTrue(executor.onTabComplete(player,command,"grave",new String[]{"x"}).isEmpty()); assertTrue(executor.onTabComplete(player,command,"grave",new String[0]).isEmpty());
     }
 

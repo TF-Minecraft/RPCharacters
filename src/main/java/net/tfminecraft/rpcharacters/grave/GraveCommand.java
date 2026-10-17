@@ -35,6 +35,10 @@ public final class GraveCommand implements CommandExecutor, TabCompleter {
 			GraveRecover.sendMessage(player, GraveLoader.getMessageUnlockNone());
 			return true;
 		}
+		if (grave.isKillerOnly()) {
+			GraveRecover.sendMessage(player, GraveLoader.getMessageUnlockKillerOnly());
+			return true;
+		}
 		if (!grave.isLocked()) {
 			GraveRecover.sendMessage(player, GraveLoader.getMessageUnlockAlready());
 			return true;
