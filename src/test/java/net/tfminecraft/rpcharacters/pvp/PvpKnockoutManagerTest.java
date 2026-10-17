@@ -109,7 +109,8 @@ class PvpKnockoutManagerTest {
         when(event.getFinalDamage()).thenReturn(4.0);
         var manager = new PvpKnockoutManager();
         PlayerData nonlethal = data(false);
-        try (var players = mockStatic(PlayerManager.class); var strikes = mockStatic(PvpStrikeService.class)) {
+        try (var players = mockStatic(PlayerManager.class); var strikes = mockStatic(PvpStrikeService.class);
+                var coreProtect = mockStatic(CoreProtectKnockouts.class)) {
             players.when(() -> PlayerManager.get(attacker)).thenReturn(nonlethal);
             // SimpleFactions only counts a battle life when the victim really dies.
             PermadeathBattleExemption.set(p -> p == victim);
@@ -121,6 +122,8 @@ class PvpKnockoutManagerTest {
             manager.onLethalDamage(event);
             verify(event).setCancelled(true);
             strikes.verify(() -> PvpStrikeService.handleKnockout(victim, attacker));
+            // The cancelled blow never reaches CoreProtect, so the knockout is reported to it directly.
+            coreProtect.verify(() -> CoreProtectKnockouts.log(attacker, victim));
         } finally {
             PermadeathBattleExemption.set(null);
         }
