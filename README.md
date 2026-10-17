@@ -20,7 +20,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 
 ## Beyond the game
 
-The character pages in [ProvinceSystem](https://github.com/TF-Minecraft/ProvinceSystem) provide the connected web experience for character creation and management.
+The character pages in [TFMCWeb](https://github.com/TF-Minecraft/TFMCWeb) provide the connected web experience for character creation and management.
 
 ## Documentation
 
