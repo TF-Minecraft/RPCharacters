@@ -49,6 +49,7 @@ class PlushieCommandTest {
 
 	private static final UUID OWNER = UUID.randomUUID();
 	private static final UUID CHARACTER = UUID.randomUUID();
+	private static final String SOURCE = "b".repeat(64);
 	private static final String URL = "https://textures.minecraft.net/texture/" + "a".repeat(64);
 	private static final CharacterInfo GRINKLE = new CharacterInfo(new CharacterRef(OWNER, CHARACTER),
 			"Grinkle", CharacterStatus.ALIVE, null, Set.of(), 0, null);
@@ -85,6 +86,8 @@ class PlushieCommandTest {
 		characters.when(() -> Characters.currentSession(player)).thenReturn(Optional.empty());
 		doAnswer(call -> { async.add(call.getArgument(1)); return null; })
 				.when(scheduler).runTaskAsynchronously(nullable(Plugin.class), any(Runnable.class));
+		doAnswer(call -> { async.add(call.getArgument(1)); return null; })
+				.when(scheduler).runTaskLaterAsynchronously(nullable(Plugin.class), any(Runnable.class), eq(20L));
 		doAnswer(call -> { main.add(call.getArgument(1)); return null; })
 				.when(scheduler).runTask(nullable(Plugin.class), any(Runnable.class));
 		for (String slot : List.of("base", "extra_1", "extra_2")) {
@@ -105,8 +108,14 @@ class PlushieCommandTest {
 		main.remove().run();
 	}
 
+	private String loaded() {
+		String[] result = {null};
+		PlushieCommand.loadTexture(GRINKLE, "base", null, 90, value -> result[0] = value);
+		return result[0];
+	}
+
 	private void respond(String slot, SimpleResult result) {
-		client.when(() -> ProvinceSystemClient.fetchWardrobeSkin(OWNER.toString(), CHARACTER.toString(), slot)).thenReturn(result);
+		client.when(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), slot, null)).thenReturn(result);
 	}
 
 	@Test void selectsTheNumberedOutfitOffThreadAndDeliversAStaticPlushieOnMain() {
@@ -115,7 +124,7 @@ class PlushieCommandTest {
 		verifyNoInteractions(inventory);
 		async.remove().run();
 		verifyNoInteractions(inventory);
-		client.verify(() -> ProvinceSystemClient.fetchWardrobeSkin(OWNER.toString(), CHARACTER.toString(), "extra_1"));
+		client.verify(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "extra_1", null));
 		client.verifyNoMoreInteractions();
 		main.remove().run();
 		verify(inventory).addItem(items.constructed().getFirst());
@@ -135,8 +144,8 @@ class PlushieCommandTest {
 		run("Grinkle", "the", "Great", "3"); finish();
 		when(identity.info(CHARACTER)).thenReturn(Optional.of(GRINKLE));
 		run(CHARACTER.toString(), "1"); finish();
-		client.verify(() -> ProvinceSystemClient.fetchWardrobeSkin(OWNER.toString(), CHARACTER.toString(), "base"), times(2));
-		client.verify(() -> ProvinceSystemClient.fetchWardrobeSkin(OWNER.toString(), CHARACTER.toString(), "extra_2"));
+		client.verify(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "base", null), times(2));
+		client.verify(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "extra_2", null));
 	}
 
 	@Test void refusesUnauthorisedConsoleInvalidAndAmbiguousRequestsBeforeLoading() {
@@ -210,16 +219,16 @@ class PlushieCommandTest {
 				response(CHARACTER.toString(), "base", "invalid", "signed"),
 				response(CHARACTER.toString(), "base", texture("https://example.com/skin.png", 1), "signed"))) {
 			respond("base", SimpleResult.success(body));
-			assertNull(PlushieCommand.loadTexture(GRINKLE, "base"));
+			assertNull(loaded());
 		}
 		respond("base", SimpleResult.success(null));
-		assertNull(PlushieCommand.loadTexture(GRINKLE, "base"));
+		assertNull(loaded());
 	}
 
 	@Test void ignoresSourceTimestampsAndUsesTheSameStaticIdentityForCopies() {
-		String first = PlushieCommand.loadTexture(GRINKLE, "base");
+		String first = loaded();
 		respond("base", SimpleResult.success(response(CHARACTER.toString(), "base", texture(URL, 999), "new-signature")));
-		String later = PlushieCommand.loadTexture(GRINKLE, "base");
+		String later = loaded();
 		assertEquals(first, later);
 		PlushieCommand.createHead("Grinkle", first);
 		PlushieCommand.createHead("Grinkle", later);
@@ -236,6 +245,41 @@ class PlushieCommandTest {
 		assertEquals(List.of(), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle", ""}));
 	}
 
+	@Test void waitsForGenerationOffThreadAndPinsTheOutfitUntilReady() {
+		String pending = response(CHARACTER.toString(), "base", null, null).replace("ready", "pending");
+		respond("base", SimpleResult.success(pending));
+		client.when(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "base", SOURCE))
+				.thenReturn(SimpleResult.success(pending), SimpleResult.success(response(CHARACTER.toString(), "base", texture(URL, 1), "signed")));
+		run("Grinkle");
+		async.remove().run();
+		assertTrue(main.isEmpty());
+		run("Grinkle");
+		verify(player).sendMessage("Your previous plushie is still loading.");
+		async.remove().run();
+		assertTrue(main.isEmpty());
+		async.remove().run();
+		main.remove().run();
+		verify(inventory).addItem(any(ItemStack.class));
+		client.verify(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "base", SOURCE), times(2));
+	}
+
+	@Test void rejectsChangedSourcesInvalidStatusesAndUnboundedGeneration() {
+		String ready = response(CHARACTER.toString(), "base", texture(URL, 1), "signed");
+		for (String body : List.of(ready.replace(SOURCE, "bad"), ready.replace("ready", "unknown"))) {
+			respond("base", SimpleResult.success(body));
+			assertNull(loaded());
+		}
+		respond("base", SimpleResult.success(ready));
+		PlushieCommand.loadTexture(GRINKLE, "base", "c".repeat(64), 90, value -> assertNull(value));
+		// A changed digest is refused even when its signed texture is otherwise valid.
+		client.when(() -> ProvinceSystemClient.requestPlushieSkin(OWNER.toString(), CHARACTER.toString(), "base", "c".repeat(64)))
+				.thenReturn(SimpleResult.success(ready));
+		PlushieCommand.loadTexture(GRINKLE, "base", "c".repeat(64), 90, value -> assertNull(value));
+		respond("base", SimpleResult.success(ready.replace("ready", "pending")));
+		PlushieCommand.loadTexture(GRINKLE, "base", null, 0, value -> assertNull(value));
+		assertTrue(async.isEmpty());
+	}
+
 	private static String texture(String url, Integer timestamp) {
 		JsonObject skin = new JsonObject(); skin.addProperty("url", url);
 		JsonObject textures = new JsonObject(); textures.add("SKIN", skin);
@@ -247,6 +291,7 @@ class PlushieCommandTest {
 	private static String response(String id, String slot, String value, String signature) {
 		JsonObject body = new JsonObject();
 		body.addProperty("character_id", id); body.addProperty("slot", slot);
+		body.addProperty("source", SOURCE); body.addProperty("status", "ready");
 		body.addProperty("value", value); body.addProperty("signature", signature);
 		return body.toString();
 	}

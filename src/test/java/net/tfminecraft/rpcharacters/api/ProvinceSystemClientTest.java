@@ -76,6 +76,26 @@ class ProvinceSystemClientTest {
         assertEquals("offline", SimpleResult.fail("offline").error); assertNull(SimpleResult.fail("offline").body);
     }
 
+    @Test void plushieGenerationUsesShortPostRequestsWithAnOptionalPinnedSource() {
+        for (String invalid : Arrays.asList(null, " ", "../x", "x/y", "x\\y")) {
+            assertFalse(requestPlushieSkin(invalid, "char", "base", null).ok);
+            assertFalse(requestPlushieSkin("owner", invalid, "base", null).ok);
+        }
+        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1")) {
+            assertFalse(requestPlushieSkin("owner", "char", invalid, null).ok);
+        }
+        assertFalse(requestPlushieSkin("owner", "char", "base", "bad-source").ok);
+        gateway.verifyNoInteractions();
+        String source = "a".repeat(64);
+        for (String slot : List.of("base", "extra_1", "extra_2")) {
+            assertTrue(requestPlushieSkin(" owner ", " char ", slot, null).ok);
+            gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wardrobe/owner/char/slots/" + slot + "/plushie", "{}"));
+        }
+        assertTrue(requestPlushieSkin("owner", "char", "base", source).ok);
+        gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wardrobe/owner/char/slots/base/plushie", "{\"source\":\"" + source + "\"}"));
+        gateway.verifyNoMoreInteractions();
+    }
+
     @Test void simpleRoutesUseExpectedMethodsAndPreserveResponseAndFailure() {
         respond("accepted");
         assertEquals("accepted", fetchPendingCreates().body); assertEquals("accepted", ackCreates("creates").body);
