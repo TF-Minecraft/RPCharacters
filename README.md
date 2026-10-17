@@ -11,7 +11,7 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 - **Character profiles** — create and switch between characters, with race, traits, descriptions, and website-connected creation.
 - **Roleplay conversation** — use local speech, whispers, shouts, actions, and out-of-character channels, with speech bubbles and channel preferences.
 - **Identity and disguise** — support masks, alternate personas, and control over character visibility in BirdMessenger's recipient list.
-- **Classes and progression** — choose classes and subclasses, develop professions and attributes, and use account-wide class levels across characters.
+- **Classes and progression** — choose classes and subclasses and develop attributes per character; profession levels and points are shared by all of an account's characters, and class EXP carried over from other characters waits for a class that can level.
 - **Character focus** — share a regenerating character resource across Research and Magic, with focus-restoring items.
 - **Injuries and recovery** — manage injuries and prosthetics; healing continues in real time while players are offline.
 - **Combat and consequences** — support lethal or nonlethal PvP, timed conflicts, character strikes, armour preparation, graves, and investigation clues.
