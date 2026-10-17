@@ -298,6 +298,16 @@ public final class ProvinceSystemClient {
 		return request("GET", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/worn", null);
 	}
 
+	/** Read one saved outfit without reconciling slots or changing the worn skin. */
+	public static SimpleResult fetchWardrobeSkin(String playerUuid, String characterId, String slot) {
+		String uuid = sanitizePathSegment(playerUuid);
+		String cid = sanitizePathSegment(characterId);
+		if (uuid == null || cid == null || slot == null || !List.of("base", "extra_1", "extra_2").contains(slot)) {
+			return SimpleResult.fail("invalid player, character or outfit");
+		}
+		return request("GET", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/slots/" + slot, null);
+	}
+
 	/**
 	 * POST /characters/plugin/wardrobe/{playerUuid}/{characterId}/active
 	 * Same as PATCH — POST used because Java HttpURLConnection often rejects PATCH.

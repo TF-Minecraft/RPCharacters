@@ -8,6 +8,10 @@ depend: [TLibs, MMOCore, TFMCWeb, MMOItems, MythicLib]
 softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions, GSit, Codex, ModelEngine]
 
 commands:
+  plushie:
+    description: Create a plushie from a character's wardrobe outfit
+    usage: /plushie <character name or UUID> [1|2|3]
+    permission: rpchar.plushie.give
   class:
     description: Choose your character's base class
     aliases: [c]
@@ -54,6 +58,9 @@ commands:
     usage: /<command> collect | list | show | hold | release | decide | assign | retry | waive | revert
     description: Collect an inheritance; staff estate tools
 permissions:
+  rpchar.plushie.give:
+    description: Create plushies from character wardrobe outfits
+    default: op
   rpchar.focus.admin:
     description: Restore character focus and reload focus configuration
     default: op
