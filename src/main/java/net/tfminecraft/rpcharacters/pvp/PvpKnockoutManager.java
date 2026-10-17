@@ -103,7 +103,9 @@ public final class PvpKnockoutManager implements Listener {
 
 		event.setCancelled(true);
 		applyKnockout(player);
-		PvpStrikeService.handleKnockout(player, attackingPlayer(event));
+		Player attacker = attackingPlayer(event);
+		CoreProtectKnockouts.log(attacker, player);
+		PvpStrikeService.handleKnockout(player, attacker);
 	}
 
 	/**
