@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.prison;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -141,10 +142,14 @@ class PrisonSwitchTest {
             verify(players, times(5)).savePlayer(iris);
         }
 
-        @Test void anOpenCharacterSelectionIsRedrawnWithTheNewMark() {
+        @Test void withCharacterBodiesThePlayerIsToldThroughSelectionFeedback() {
             grant(PrisonSwitch.PERMISSION); var bodies = mock(net.tfminecraft.rpcharacters.body.CharacterBodies.class);
             root.when(RPCharacters::getCharacterBodies).thenReturn(bodies);
-            assertTrue(run("admin", "prison", "Iris", "aria", "on")); verify(bodies).rosterChanged(account);
+            assertTrue(run("admin", "prison", "Iris", "aria", "on"));
+            verify(bodies).feedback(eq(iris), argThat(m -> ChatColor.stripColor(m).equals("Aria is in prison. You can switch to and from them at any time without the character switch cooldown.")));
+            assertTrue(run("admin", "prison", "Iris", "aria", "off"));
+            verify(bodies).feedback(eq(iris), argThat(m -> ChatColor.stripColor(m).startsWith("Aria is out of prison.")));
+            assertNull(iris.nextMessage());
         }
     }
 }

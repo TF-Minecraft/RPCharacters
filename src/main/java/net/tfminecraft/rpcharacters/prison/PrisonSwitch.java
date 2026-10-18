@@ -112,24 +112,27 @@ public final class PrisonSwitch {
 		boolean marked = wanted != null ? wanted : !character.isPrisonSwitch();
 		character.setPrisonSwitch(marked);
 		RPCharacters.getPlayerManager().savePlayer(player);
-		// Redraws an open character selection so the cooldown notice matches the new mark.
-		if (RPCharacters.getCharacterBodies() != null) {
-			RPCharacters.getCharacterBodies().rosterChanged(account);
-		}
 		LOG.info("[RPCharacters] " + sender.getName() + " turned prison switching " + (marked ? "on" : "off")
 				+ " for " + character.getName() + " (" + character.getId() + ") of " + player.getName() + ".");
+		String note;
 		if (marked) {
 			RPTexts.send(sender, RPTexts.SUCCESS + "Prison switching is on for " + RPTexts.WARN + character.getName()
 					+ RPTexts.SUCCESS + " (" + RPTexts.WARN + player.getName() + RPTexts.SUCCESS
 					+ "). They can switch into and out of this character without the switch cooldown.");
-			RPTexts.send(player, RPTexts.WARN + character.getName() + RPTexts.INFO + " is in prison. You can switch"
-					+ " to and from them at any time without the character switch cooldown.");
+			note = RPTexts.WARN + character.getName() + RPTexts.INFO + " is in prison. You can switch"
+					+ " to and from them at any time without the character switch cooldown.";
 		} else {
 			RPTexts.send(sender, RPTexts.SUCCESS + "Prison switching is off for " + RPTexts.WARN + character.getName()
 					+ RPTexts.SUCCESS + " (" + RPTexts.WARN + player.getName() + RPTexts.SUCCESS
 					+ "). The normal switch cooldown applies again.");
-			RPTexts.send(player, RPTexts.WARN + character.getName() + RPTexts.INFO + " is out of prison. The"
-					+ " character switch cooldown applies to them again.");
+			note = RPTexts.WARN + character.getName() + RPTexts.INFO + " is out of prison. The"
+					+ " character switch cooldown applies to them again.";
+		}
+		// Chat waits for Play in character selection, so there the note goes into the selection, which redraws.
+		if (RPCharacters.getCharacterBodies() != null) {
+			RPCharacters.getCharacterBodies().feedback(player, RPTexts.formatDisplay(note));
+		} else {
+			RPTexts.send(player, note);
 		}
 		return true;
 	}
