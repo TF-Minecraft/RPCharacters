@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -179,12 +180,27 @@ public final class CharacterProgressService {
 		CharacterProgress progress = requireProgress(account, character);
 		applied.remove(account);
 		try {
+			shareProfessions(account, progress);
 			ClassService.runApplying(player,
 					() -> MmoProgressCodec.apply(net.Indyuce.mmocore.api.player.PlayerData.get(player), progress.mmo()));
 		} catch (RuntimeException failure) {
 			throw new IOException("Could not apply the progress of character " + character.getId(), failure);
 		}
 		applied.put(account, new Applied(character));
+	}
+
+	/**
+	 * Brings the character's professions up to its account's best before MMOCore loads them. Every
+	 * character on the roster counts, dead ones too, so a death or a switch never loses profession levels.
+	 * The raise is saved with the character's next checkpoint, which follows activation.
+	 */
+	private static void shareProfessions(PlayerData account, CharacterProgress progress) {
+		List<CharacterProgress> others = account.getCharacters().stream().map(RPCharacter::getProgress)
+				.filter(Objects::nonNull).toList();
+		if (SharedProfessions.raise(progress, others)) {
+			RPCharacters.plugin.getLogger().info("Raised the professions of character " + progress.getCharacterId()
+					+ " of " + account.getUniqueId() + " to its account's best");
+		}
 	}
 
 	/** Read before activation: class application may checkpoint temporarily clamped resources. */

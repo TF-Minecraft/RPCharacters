@@ -367,6 +367,8 @@ public final class ClassService {
 			APPLYING.remove(uuid);
 		}
 		CharacterProgressService.checkpoint(player);
+		// A class with a higher cap can take EXP carried from the account's other characters.
+		CarriedExperience.scheduleRelease(player);
 	}
 
 	/**

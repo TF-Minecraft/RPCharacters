@@ -114,8 +114,8 @@ class CommandTabCompleterTest {
         for (String verb : List.of("menu", "clues", "setclass", "seteighteen", "resetkit", "reclaimkit", "skipcooldown", "addtrait", "removetrait", "injure", "discordgate"))
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
-        assertEquals(List.of("injure", "permakill", "strikes", "tutorial"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "resetclasses"), complete("admin", ""));
+        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));
@@ -154,7 +154,7 @@ class CommandTabCompleterTest {
         when(data.hasActiveCharacter()).thenReturn(true); when(data.getActiveCharacter()).thenReturn(active);
         assertEquals(List.of("brave"), complete("addtrait", "Iris", ""));
         assertEquals(List.of(), complete("removetrait", "Iris", ""));
-        for (String verb : List.of("injure", "permakill")) assertEquals(List.of("Iris"), complete("admin", verb, "I"));
+        for (String verb : List.of("injure", "permakill", "carryexp")) assertEquals(List.of("Iris"), complete("admin", verb, "I"));
         assertEquals(List.of(), complete("unknown", "x", ""));
     }
 
