@@ -142,10 +142,20 @@ class PrisonSwitchTest {
             verify(players, times(3)).saveCharacterNow(iris.getUniqueId(), a); verify(players, times(2)).saveCharacterNow(iris.getUniqueId(), b);
         }
 
-        @Test void aFailedSaveKeepsTheOldMarkAndSaysSo() {
+        @Test void aFailedSaveWritesTheOldMarkBackAndSaysSo() {
+            grant(PrisonSwitch.PERMISSION); List<Boolean> saved = new ArrayList<>();
+            when(players.saveCharacterNow(iris.getUniqueId(), a)).thenAnswer(call -> { saved.add(a.isPrisonSwitch()); return saved.size() > 1; });
+            assertTrue(run("admin", "prison", "Iris", "aria", "on"));
+            assertFalse(a.isPrisonSwitch()); assertEquals(List.of(true, false), saved);
+            assertTrue(messages(staff).contains("Could not save Aria, so prison switching was not changed. See the console."));
+            assertNull(iris.nextMessage());
+        }
+
+        @Test void aSaveThatFailsTwiceSaysTheSavedMarkIsUncertain() {
             grant(PrisonSwitch.PERMISSION); when(players.saveCharacterNow(iris.getUniqueId(), a)).thenReturn(false);
             assertTrue(run("admin", "prison", "Iris", "aria", "on"));
-            assertFalse(a.isPrisonSwitch()); assertTrue(messages(staff).contains("Could not save Aria, so prison switching was not changed"));
+            assertFalse(a.isPrisonSwitch()); verify(players, times(2)).saveCharacterNow(iris.getUniqueId(), a);
+            assertTrue(messages(staff).contains("Could not save Aria. Its saved prison switching may be either value until it saves again."));
             assertNull(iris.nextMessage());
         }
 

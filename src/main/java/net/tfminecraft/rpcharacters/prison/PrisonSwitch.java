@@ -114,8 +114,12 @@ public final class PrisonSwitch {
 		character.setPrisonSwitch(marked);
 		if (!RPCharacters.getPlayerManager().saveCharacterNow(player.getUniqueId(), character)) {
 			character.setPrisonSwitch(before);
+			// A failed save may already have replaced the file, so write the old mark back before saying so.
+			boolean restored = RPCharacters.getPlayerManager().saveCharacterNow(player.getUniqueId(), character);
 			RPTexts.send(sender, RPTexts.ERROR + "Could not save " + RPTexts.WARN + character.getName() + RPTexts.ERROR
-					+ ", so prison switching was not changed. See the console.");
+					+ (restored ? ", so prison switching was not changed."
+							: ". Its saved prison switching may be either value until it saves again.")
+					+ " See the console.");
 			return true;
 		}
 		LOG.info("[RPCharacters] " + sender.getName() + " turned prison switching " + (marked ? "on" : "off")
