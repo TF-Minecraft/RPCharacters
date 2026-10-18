@@ -596,6 +596,7 @@ public final class CharacterSelectView {
 				.append(Component.text(name(character), PALE, TextDecoration.BOLD));
 		line(card, joined(race(character), className(character), age(character)), TEAL);
 		line(card, joined(guild(character), lastPlayed(character)), MUTED);
+		if (character.isPrisonSwitch()) line(card, "In prison: no switch cooldown", TEAL);
 		if (blockReason != null) line(card, blockReason, WARN);
 		return card.build();
 	}

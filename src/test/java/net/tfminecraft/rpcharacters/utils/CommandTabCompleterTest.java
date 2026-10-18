@@ -15,6 +15,7 @@ import net.tfminecraft.rpcharacters.objects.*;
 import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
+import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
 import net.tfminecraft.rpcharacters.tutorial.TutorialLoader;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 import org.bukkit.command.*;
@@ -114,8 +115,8 @@ class CommandTabCompleterTest {
         for (String verb : List.of("menu", "clues", "setclass", "seteighteen", "resetkit", "reclaimkit", "skipcooldown", "addtrait", "removetrait", "injure", "discordgate"))
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
-        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses"), complete("admin", ""));
+        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses", "prison"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));
@@ -127,8 +128,17 @@ class CommandTabCompleterTest {
     @Test void adminSuggestionsDisappearWithoutPermission() {
         for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate", "setclass", "skipcooldown", "addtrait", "removetrait", "menu", "injure", "permakill"))
             assertEquals(List.of(), complete(verb, ""), verb);
-        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", ""));
+        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "prison", ""));
         grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses"), complete("admin", ""));
+        grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "prison"), complete("admin", ""));
+    }
+
+    @Test void prisonCompletionOffersPlayersTheirLivingCharactersAndTheSwitch() {
+        grant(PrisonSwitch.PERMISSION, true);
+        assertEquals(List.of("Iris"), complete("admin", "prison", "I"));
+        assertEquals(List.of("hero", "on", "off"), complete("admin", "prison", "Iris", ""));
+        assertEquals(List.of("on", "off"), complete("admin", "PRISON", "Iris", "hero", ""));
+        assertEquals(List.of(), complete("admin", "prison", "Iris", "hero", "on", ""));
     }
 
     @Test void hiddenCharacterSuggestionsWaitForPlayerDataToLoad() {

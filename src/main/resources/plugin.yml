@@ -83,6 +83,9 @@ permissions:
   rpchar.estate.admin:
     description: Staff estate tools (/estate list, show, hold, assign and the rest)
     default: op
+  rpchar.prison:
+    description: Mark imprisoned characters to switch in and out without the switch cooldown (/rpcharacter admin prison)
+    default: op
   rpchar.class.reset:
     description: Reset class picks for every character (class-selection.reset-permission)
     default: op

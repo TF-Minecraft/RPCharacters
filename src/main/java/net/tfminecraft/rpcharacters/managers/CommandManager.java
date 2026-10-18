@@ -40,6 +40,7 @@ import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
+import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
 import net.tfminecraft.rpcharacters.pvp.StrikeChoice;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
 import net.tfminecraft.rpcharacters.tutorial.TutorialCommands;
@@ -81,6 +82,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(ClassPickReset.SUBCOMMAND)) {
 			return ClassPickReset.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)) {
+			return PrisonSwitch.handle(sender, args, 2);
 		}
 		if (args.length >= 1 && args[0].equalsIgnoreCase("admin")) {
 			return handleAdmin(sender, args);
@@ -724,7 +729,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -743,7 +748,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND)) {
 			return net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison> ...");
 		return true;
 	}
 

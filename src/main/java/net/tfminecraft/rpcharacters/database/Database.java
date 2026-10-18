@@ -117,6 +117,9 @@ public class Database {
 				if (json.containsKey("account-attribute-points-total")) {
 					pd.setAccountAttributePointsTotal(((Number) json.get("account-attribute-points-total")).intValue());
 				}
+				if (json.get("last-free-character") instanceof String lastFree) {
+					pd.setLastFreeCharacterId(lastFree);
+				}
 				loadAccountProfessionPoints(pd, json);
 				loadInvestigationPoints(pd, json);
 				PlayerTutorialFields.load(pd, json);
@@ -223,6 +226,9 @@ public class Database {
 					accountSkillPointsTotal);
 			if (json.containsKey("account-attribute-points-total")) {
 				pd.setAccountAttributePointsTotal(((Number) json.get("account-attribute-points-total")).intValue());
+			}
+			if (json.get("last-free-character") instanceof String lastFree) {
+				pd.setLastFreeCharacterId(lastFree);
 			}
 			loadAccountProfessionPoints(pd, json);
 			loadInvestigationPoints(pd, json);
@@ -447,6 +453,9 @@ public class Database {
 	defaults.put("eighteen", String.valueOf(pd.isEighteen()));
 			if (pd.getLastCharacterSwitchAtMs() != null) {
 				defaults.put("last-character-switch-ms", pd.getLastCharacterSwitchAtMs());
+			}
+			if (pd.getLastFreeCharacterId() != null) {
+				defaults.put("last-free-character", pd.getLastFreeCharacterId());
 			}
 	int i = 0;
 	JSONArray stageArray = new JSONArray();
@@ -849,6 +858,9 @@ public class Database {
 		if (characterJson.containsKey("hidden")) {
 			character.setHidden(Boolean.parseBoolean(characterJson.get("hidden").toString()));
 		}
+		if (characterJson.containsKey("prison-switch")) {
+			character.setPrisonSwitch(Boolean.parseBoolean(characterJson.get("prison-switch").toString()));
+		}
 		if (characterJson.containsKey("kit-statuses")) {
 			Object raw = characterJson.get("kit-statuses");
 			if (raw instanceof JSONObject statuses) {
@@ -950,6 +962,9 @@ public class Database {
 		defaults.put("mail-listed", String.valueOf(character.isMailListed()));
 		if (character.isHidden()) {
 			defaults.put("hidden", "true");
+		}
+		if (character.isPrisonSwitch()) {
+			defaults.put("prison-switch", "true");
 		}
 		if (!character.getKitStatuses().isEmpty()) {
 			JSONObject statuses = new JSONObject();

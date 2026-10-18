@@ -577,6 +577,22 @@ class CharacterBodiesTest {
         when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(true);assertNull(bodies.blockReason(account,b));
         when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(false);when(a.getStatus()).thenReturn(Status.DEAD);assertNull(bodies.blockReason(account,b));
     }
+    void backToRoom() {bodies.requestSelection(player);countdown(5);drain();}
+    @Test void prisonCharacterSwitchesInAndOutFreelyButCannotCarryTheCooldownToAnotherCharacter() throws Exception {
+        UUID third=UUID.randomUUID();RPCharacter c=character(third);account.addCharacter(c);when(store.read(owner,third)).thenReturn(Optional.of(record(third,1)));
+        when(b.isPrisonSwitch()).thenReturn(true);leaveRunsOutgoing();
+        groups.when(()->PermissionGroupService.hasCharacterSwitchCooldown(player,account)).thenReturn(true);
+        groups.when(()->PermissionGroupService.getRemainingCooldownMinutes(player,account)).thenReturn(60);
+        play();assertEquals(first.toString(),account.getLastFreeCharacterId());backToRoom();
+        assertNull(bodies.blockReason(account,b));assertTrue(bodies.blockReason(account,c).contains("0d 1h 0m"));
+        actions.play(b);drain();assertEquals(second,bodies.liveCharacter(player));backToRoom();assertEquals(new BodyTag.Room(second),tag);
+        // Leaving prison returns freely to the character it was entered from, never to a third one.
+        assertNull(bodies.blockReason(account,a));assertTrue(bodies.blockReason(account,c).contains("0d 1h 0m"));
+        actions.play(a);drain();assertEquals(first,bodies.liveCharacter(player));assertNull(account.getLastCharacterSwitchAtMs());
+        backToRoom();groups.when(()->PermissionGroupService.hasCharacterSwitchCooldown(player,account)).thenReturn(false);
+        actions.play(b);drain();backToRoom();assertNull(account.getLastCharacterSwitchAtMs());
+        actions.play(c);drain();assertEquals(third,bodies.liveCharacter(player));assertNotNull(account.getLastCharacterSwitchAtMs());assertEquals(third.toString(),account.getLastFreeCharacterId());
+    }
     @Test void selectionRequiresReadyLivingOwnedCharacterAndLinkUnlessBypassed() throws Exception {
         bodies.join(player);assertTrue(bodies.blockReason(account,a).contains("loading"));bodies.prepare(account);drain();
         assertTrue(bodies.blockReason(account,character(UUID.randomUUID())).contains("cannot be played"));
