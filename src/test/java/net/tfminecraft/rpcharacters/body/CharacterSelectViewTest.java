@@ -1042,6 +1042,13 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void aPrisonMarkedCardSaysItSwitchesWithoutTheCooldown() {
+		RPCharacter c = character("c", "Cora", Status.ALIVE);
+		when(c.isPrisonSwitch()).thenReturn(true);
+		assertEquals("Cora\nIn prison: no switch cooldown", text(CharacterSelectView.characterCard(c, null)));
+	}
+
+	@Test
 	void lastPlayedRoundsUnderAnHourAndTheCardOmitsAnEmptyThirdLine() {
 		RPCharacter c = character("c", "Cora", Status.ALIVE);
 		assertEquals("Cora", text(CharacterSelectView.characterCard(c, null)));

@@ -29,10 +29,10 @@ class DatabasePersistenceTest extends DatabaseFixture {
             db.savePlayer(loaded); assertEquals(1,integrations.constructed().size());
         }
         JSONObject playerJson=read(playerFile),characterJson=read(characterFile("alpha"));
-        assertEquals("true",playerJson.get("eighteen")); assertEquals(1234567890123L,playerJson.get("last-character-switch-ms")); assertEquals(array("strength.4","dexterity.2"),playerJson.get("to remove"));
+        assertEquals("true",playerJson.get("eighteen")); assertEquals(1234567890123L,playerJson.get("last-character-switch-ms")); assertEquals("alpha",playerJson.get("last-free-character")); assertEquals(array("strength.4","dexterity.2"),playerJson.get("to remove"));
         assertEquals(12,((Number)playerJson.get("account-skill-points-total")).intValue()); assertEquals(6,((Number)playerJson.get("account-attribute-points-total")).intValue()); assertEquals(3,((Number)((JSONObject)playerJson.get("account-profession-points")).get("forager")).intValue());
-        assertEquals("alpha",characterJson.get("id")); assertEquals("Aria",characterJson.get("name")); assertEquals(77,((Number)characterJson.get("online-playtime-seconds")).intValue()); assertEquals("false",characterJson.get("mail-listed")); assertFalse(characterJson.containsKey("pvp-lethal"),"Lethal PvP is never saved");
-        var fresh=new Database().loadPlayer(player); assertNotNull(fresh); var restored=fresh.getCharacters().getFirst(); assertFalse(restored.isPvpLethal());
+        assertEquals("alpha",characterJson.get("id")); assertEquals("Aria",characterJson.get("name")); assertEquals(77,((Number)characterJson.get("online-playtime-seconds")).intValue()); assertEquals("false",characterJson.get("mail-listed")); assertEquals("true",characterJson.get("prison-switch")); assertFalse(characterJson.containsKey("pvp-lethal"),"Lethal PvP is never saved");
+        var fresh=new Database().loadPlayer(player); assertNotNull(fresh); var restored=fresh.getCharacters().getFirst(); assertFalse(restored.isPvpLethal()); assertTrue(restored.isPrisonSwitch()); assertEquals("alpha",fresh.getLastFreeCharacterId());
         assertEquals(character.getId(),restored.getId()); assertEquals(character.getRace().getId(),restored.getRace().getId()); assertEquals(character.getConversationCounts(),restored.getConversationCounts()); assertEquals(character.getConversationLastAtMs(),restored.getConversationLastAtMs());
         assertEquals(character.getNameColour().getHexCodes(),restored.getNameColour().getHexCodes()); assertEquals(character.getPersonaDescription(),restored.getPersonaDescription()); assertEquals(character.getExtraAttributeAllocation(),restored.getExtraAttributeAllocation()); assertEquals(character.getProfessionUpgrades(),restored.getProfessionUpgrades()); assertEquals(character.getForfeitedProfessionPoints(),restored.getForfeitedProfessionPoints()); assertEquals(character.getLastLocationX(),restored.getLastLocationX()); assertEquals(20D,restored.getFuel("fuel")); assertEquals(2,restored.getPaidChangeCount("class")); assertEquals(3,restored.getStageRevision("class")); assertEquals(123,restored.getFoodValue());
         playtime.verify(() -> CharacterPlaytimeDirectory.upsert(owner,character));
@@ -65,10 +65,10 @@ class DatabasePersistenceTest extends DatabaseFixture {
 
     @Test void emptyAccountsAndMinimalCharactersPersistWithoutOptionalFields() throws Exception {
         var data=new PlayerData(owner); data.setCreatedAtEpochSeconds(0); db.savePlayer(data);
-        var account=read(playerFile); assertEquals("false",account.get("eighteen")); assertEquals(array(),account.get("completed stages")); assertFalse(account.containsKey("account-skill-points-total")); assertFalse(account.containsKey("created-at"));
+        var account=read(playerFile); assertEquals("false",account.get("eighteen")); assertEquals(array(),account.get("completed stages")); assertFalse(account.containsKey("account-skill-points-total")); assertFalse(account.containsKey("created-at")); assertFalse(account.containsKey("last-free-character"));
         var character=new RPCharacter(null); character.setId("minimal"); character.setName("Minimal"); character.setRace(race); character.setCreatedAtEpochSeconds(0);
         db.saveCharacter(data,character); var json=read(characterFile("minimal"));
-        assertEquals("minimal",json.get("id")); assertFalse(json.containsKey("class")); assertFalse(json.containsKey("created-at")); assertFalse(json.containsKey("trait-state")); assertFalse(json.containsKey("last-location")); assertFalse(json.containsKey("profession-upgrades")); assertEquals(RPCharacter.MAX_FOOD_VALUE,((Number)json.get("food-value")).intValue());
+        assertEquals("minimal",json.get("id")); assertFalse(json.containsKey("class")); assertFalse(json.containsKey("created-at")); assertFalse(json.containsKey("trait-state")); assertFalse(json.containsKey("last-location")); assertFalse(json.containsKey("profession-upgrades")); assertFalse(json.containsKey("prison-switch")); assertEquals(RPCharacter.MAX_FOOD_VALUE,((Number)json.get("food-value")).intValue());
         data.addCharacter(character); db.savePlayer(data); assertTrue(Files.exists(characterFile("minimal"))); playtime.verify(() -> CharacterPlaytimeDirectory.upsert(owner,character),times(2));
     }
 

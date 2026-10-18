@@ -20,6 +20,8 @@ public class PlayerData {
 	private Player p;
 	private final UUID uniqueId;
 	private Long lastCharacterSwitchAtMs;
+	/** Last character entered that was not marked for prison; the switch cooldown counts from it. */
+	private String lastFreeCharacterId;
 	private boolean eighteen;
 	
 	private List<RPCharacter> characters = new ArrayList<>();
@@ -229,6 +231,14 @@ public class PlayerData {
 
 	public void clearCharacterSwitchCooldown() {
 		lastCharacterSwitchAtMs = null;
+	}
+
+	public String getLastFreeCharacterId() {
+		return lastFreeCharacterId;
+	}
+
+	public void setLastFreeCharacterId(String lastFreeCharacterId) {
+		this.lastFreeCharacterId = lastFreeCharacterId;
 	}
 
 	public Map<String, Long> getLastKitClaimAtMsMap() {

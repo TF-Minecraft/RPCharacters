@@ -30,6 +30,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
+import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
 import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
 import net.tfminecraft.rpcharacters.professions.ProfessionIntegrator;
 import net.tfminecraft.rpcharacters.pvp.ArmourDonning;
@@ -474,15 +475,13 @@ public final class CharacterBodies {
         BodyTag currentTag;
         try { currentTag = BodyTag.read(player); }
         catch (IOException error) { return "Your saved body needs recovery. Please contact staff."; }
+        // Prison-marked characters switch freely; the cooldown counts from the last unmarked character.
         if (currentTag instanceof BodyTag.Room tag && tag.lastCharacterId() != null
-                && !tag.lastCharacterId().toString().equals(character.getId())) {
-            RPCharacter previous = account.getCharacterById(tag.lastCharacterId().toString());
-            if (previous != null && previous.getStatus() == Status.ALIVE
-                    && !player.hasPermission("rpcharacters.no_cooldown")
-                    && PermissionGroupService.hasCharacterSwitchCooldown(player, account)) {
-                long minutes = PermissionGroupService.getRemainingCooldownMinutes(player, account);
-                return "You can switch in " + (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m. You can resume your current character.";
-            }
+                && PrisonSwitch.cooldownApplies(account, tag.lastCharacterId().toString(), character)
+                && !player.hasPermission("rpcharacters.no_cooldown")
+                && PermissionGroupService.hasCharacterSwitchCooldown(player, account)) {
+            long minutes = PermissionGroupService.getRemainingCooldownMinutes(player, account);
+            return "You can switch in " + (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m. You can resume your current character.";
         }
         return null;
     }
@@ -549,9 +548,7 @@ public final class CharacterBodies {
             MmoInventorySlots.refresh(player);
             progress.restoreResources(account, character, resources);
             body.body().applyHealth(player);
-            if (previous.lastCharacterId() != null && !previous.lastCharacterId().equals(body.characterId())) {
-                account.recordCharacterSwitch();
-            }
+            PrisonSwitch.entered(account, previous.lastCharacterId() == null ? null : previous.lastCharacterId().toString(), character);
             BodyTag.live(player, body.characterId(), body.rev());
             live.put(owner, new BodyTag.Live(body.characterId(), body.rev()));
             selecting.remove(owner);

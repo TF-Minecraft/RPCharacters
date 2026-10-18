@@ -70,6 +70,8 @@ public class RPCharacter {
 	private String alias;
 	private String slug;
 	private boolean hidden;
+	/** Staff mark for prison roleplay: switching into or out of this character skips the switch cooldown. */
+	private boolean prisonSwitch;
 	private boolean mailListed = true;
 	/** Per grant-kit id. Empty/missing kit = legacy never claim for that kit. */
 	private final Map<String, net.tfminecraft.rpcharacters.kit.KitStatus> kitStatuses =
@@ -687,6 +689,14 @@ public class RPCharacter {
 
 	public void setHidden(boolean hidden) {
 		this.hidden = hidden;
+	}
+
+	public boolean isPrisonSwitch() {
+		return prisonSwitch;
+	}
+
+	public void setPrisonSwitch(boolean prisonSwitch) {
+		this.prisonSwitch = prisonSwitch;
 	}
 
 	public Map<String, net.tfminecraft.rpcharacters.kit.KitStatus> getKitStatuses() {

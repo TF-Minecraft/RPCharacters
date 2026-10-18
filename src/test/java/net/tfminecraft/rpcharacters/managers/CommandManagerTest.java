@@ -14,6 +14,7 @@ import net.tfminecraft.rpcharacters.api.ProvinceSystemClient.CatalogPushResult;
 import net.tfminecraft.rpcharacters.catalog.CreationCatalogSyncService;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
+import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
 import net.tfminecraft.rpcharacters.clues.discovery.*;
 import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.creation.*;
@@ -158,6 +159,8 @@ class CommandManagerTest {
         resets.verify(() -> ClassPickReset.handle(player, reset, 2));
         var carried = boundary(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.class); String[] carry = {"admin", "CarryExp", "Iris", "40"};
         assertFalse(run(carry)); carried.verify(() -> net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(player, carry, 2));
+        var prisons = boundary(PrisonSwitch.class); String[] prison = {"admin", "Prison", "Iris"}; assertFalse(run(prison));
+        prisons.verify(() -> PrisonSwitch.handle(player, prison, 2));
         String[] directKill = {"permakill", "Iris"}; assertFalse(run(directKill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, directKill, 1, "permakill"));
         String[] directInjure = {"injure", "Iris", "permanent"}; assertFalse(run(directInjure)); death.verify(() -> PermadeathAdminCommands.handleInjure(eq(player), same(directInjure), eq(1), anyString()));
         run("reload"); verify(plugin).reloadConfigs(player);

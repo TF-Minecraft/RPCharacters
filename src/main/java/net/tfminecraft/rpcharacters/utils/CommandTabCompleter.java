@@ -27,6 +27,7 @@ import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
+import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 
 public class CommandTabCompleter implements TabCompleter {
@@ -107,6 +108,10 @@ public class CommandTabCompleter implements TabCompleter {
 				&& ClassPickReset.canUse(sender)) {
 			return filter(List.of("confirm"), args[2]);
 		}
+		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)
+				&& PrisonSwitch.canUse(sender)) {
+			return completePrison(args);
+		}
 		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
 				&& (args[1].equalsIgnoreCase("strikes") || args[1].equalsIgnoreCase("tutorial"))) {
 			return completeAdminEvilRp(args);
@@ -172,6 +177,9 @@ public class CommandTabCompleter implements TabCompleter {
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
+				}
+				if (PrisonSwitch.canUse(sender)) {
+					completions.add(PrisonSwitch.SUBCOMMAND);
 				}
 			} else if (args[0].equalsIgnoreCase("addtrait") || args[0].equalsIgnoreCase("removetrait")
 					|| args[0].equalsIgnoreCase("injure") || sub.equals("permakill")) {
@@ -308,6 +316,20 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 
 		return Collections.emptyList();
+	}
+
+	/** {@code admin prison <player> [character] [on|off]}. */
+	private List<String> completePrison(String[] args) {
+		String last = args[args.length - 1];
+		if (args.length == 3) {
+			return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList()), last);
+		}
+		if (args.length == 4) {
+			List<String> completions = new ArrayList<>(characterIds(args[2]));
+			completions.addAll(List.of("on", "off"));
+			return filter(completions, last);
+		}
+		return args.length == 5 ? filter(List.of("on", "off"), last) : Collections.emptyList();
 	}
 
 	/** {@code admin strikes <action> <player> ...} and {@code admin tutorial reset <player> [tutorial]}. */

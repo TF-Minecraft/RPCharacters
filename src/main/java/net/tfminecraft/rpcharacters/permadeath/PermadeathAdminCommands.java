@@ -151,7 +151,8 @@ public final class PermadeathAdminCommands {
 		return new ResolvedTarget(player, character);
 	}
 
-	private static RPCharacter findCharacter(PlayerData pd, String query) {
+	/** By slug, then id, then name (ignoring case). */
+	public static RPCharacter findCharacter(PlayerData pd, String query) {
 		RPCharacter bySlug = pd.getCharacterBySlug(query);
 		if (bySlug != null) {
 			return bySlug;
