@@ -109,9 +109,15 @@ public final class PrisonSwitch {
 					+ ". Name the character: " + USAGE);
 			return true;
 		}
-		boolean marked = wanted != null ? wanted : !character.isPrisonSwitch();
+		boolean before = character.isPrisonSwitch();
+		boolean marked = wanted != null ? wanted : !before;
 		character.setPrisonSwitch(marked);
-		RPCharacters.getPlayerManager().savePlayer(player);
+		if (!RPCharacters.getPlayerManager().saveCharacterNow(player.getUniqueId(), character)) {
+			character.setPrisonSwitch(before);
+			RPTexts.send(sender, RPTexts.ERROR + "Could not save " + RPTexts.WARN + character.getName() + RPTexts.ERROR
+					+ ", so prison switching was not changed. See the console.");
+			return true;
+		}
 		LOG.info("[RPCharacters] " + sender.getName() + " turned prison switching " + (marked ? "on" : "off")
 				+ " for " + character.getName() + " (" + character.getId() + ") of " + player.getName() + ".");
 		String note;

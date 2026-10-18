@@ -92,7 +92,7 @@ class PrisonSwitchTest {
 
         @BeforeEach void setup() {
             server = MockBukkit.mock(); staff = server.addPlayer("Staff"); iris = server.addPlayer("Iris"); server.addPlayer("Loading");
-            players = mock(PlayerManager.class);
+            players = mock(PlayerManager.class); when(players.saveCharacterNow(any(), any())).thenReturn(true);
             root = mockStatic(RPCharacters.class); mocks.add(root); root.when(RPCharacters::getPlayerManager).thenReturn(players);
             var data = mockStatic(PlayerManager.class); mocks.add(data); data.when(() -> PlayerManager.get(iris)).thenReturn(account);
             when(a.getSlug()).thenReturn("aria");
@@ -126,7 +126,7 @@ class PrisonSwitchTest {
             assertTrue(run("admin", "prison", "Iris", "zed")); assertTrue(messages(staff).contains("No living character matching zed for Iris"));
             when(c.getStatus()).thenReturn(Status.DEAD);
             assertTrue(run("admin", "prison", "Iris", "Cora", "on")); assertTrue(messages(staff).contains("No living character matching Cora"));
-            verify(c, never()).setPrisonSwitch(anyBoolean()); verifyNoInteractions(players);
+            verify(c, never()).setPrisonSwitch(anyBoolean()); verify(players, never()).saveCharacterNow(any(), any());
         }
 
         @Test void markFlipsOrIsSetExplicitlyAndBothSidesAreTold() {
@@ -139,7 +139,14 @@ class PrisonSwitchTest {
             assertTrue(messages(staff).contains("Prison switching is off for Aria")); assertTrue(messages(iris).contains("Aria is out of prison"));
             assertTrue(run("admin", "prison", "Iris", "Bram", "on")); assertTrue(b.isPrisonSwitch()); messages(staff);
             assertTrue(run("admin", "prison", "Iris", "b", "off")); assertFalse(b.isPrisonSwitch());
-            verify(players, times(5)).savePlayer(iris);
+            verify(players, times(3)).saveCharacterNow(iris.getUniqueId(), a); verify(players, times(2)).saveCharacterNow(iris.getUniqueId(), b);
+        }
+
+        @Test void aFailedSaveKeepsTheOldMarkAndSaysSo() {
+            grant(PrisonSwitch.PERMISSION); when(players.saveCharacterNow(iris.getUniqueId(), a)).thenReturn(false);
+            assertTrue(run("admin", "prison", "Iris", "aria", "on"));
+            assertFalse(a.isPrisonSwitch()); assertTrue(messages(staff).contains("Could not save Aria, so prison switching was not changed"));
+            assertNull(iris.nextMessage());
         }
 
         @Test void withCharacterBodiesThePlayerIsToldThroughSelectionFeedback() {
