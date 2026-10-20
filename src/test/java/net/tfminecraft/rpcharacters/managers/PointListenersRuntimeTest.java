@@ -78,7 +78,8 @@ class PointListenersRuntimeTest {
         invoke(attribute, event(Action.LEFT_CLICK_AIR, EquipmentSlot.HAND));
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.OFF_HAND));
         invoke(attribute, event(Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND));
-        tome(2); players.when(() -> PlayerManager.get(player)).thenReturn(null);
+        tome(2); var denied = event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND); denied.setUseItemInHand(org.bukkit.event.Event.Result.DENY); invoke(attribute, denied);
+        players.when(() -> PlayerManager.get(player)).thenReturn(null);
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND));
         players.when(() -> PlayerManager.get(player)).thenReturn(data); data.getCharacters().clear();
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND));
@@ -88,16 +89,26 @@ class PointListenersRuntimeTest {
 
     @ParameterizedTest @ValueSource(booleans = {true, false})
     void eachTomeGrantsItsConfiguredPointsAndConsumesExactlyOneItem(boolean attribute) {
+        attributes.when(() -> AttributePointService.tryGrantItemAttributePoints(eq(player), anyInt())).thenReturn(true);
+        skills.when(() -> ClassService.tryGrantItemSkillPoints(eq(player), anyInt())).thenReturn(true);
         for (int amount : new int[]{1, 3}) {
             tome(amount); player.getInventory().setItemInMainHand(new ItemStack(Material.BOOK, amount));
             var event = event(Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND); invoke(attribute, event);
             assertTrue(event.isCancelled());
             if (amount == 1) assertTrue(player.getInventory().getItemInMainHand().getType().isAir());
             else assertEquals(amount - 1, player.getInventory().getItemInMainHand().getAmount());
-            assertTrue(player.nextMessage().contains("+" + amount));
-            if (attribute) attributes.verify(() -> AttributePointService.grantAttributePoints(player, amount));
-            else skills.verify(() -> ClassService.grantSkillPoints(player, amount));
+            var message = player.nextMessage(); assertTrue(message.contains("+" + amount) && message.contains("all your characters"));
+            if (attribute) attributes.verify(() -> AttributePointService.tryGrantItemAttributePoints(player, amount));
+            else skills.verify(() -> ClassService.tryGrantItemSkillPoints(player, amount));
         }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void aTomeThatCreditsNothingIsKept(boolean attribute) {
+        tome(2); player.getInventory().setItemInMainHand(new ItemStack(Material.BOOK, 2));
+        var event = event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND); invoke(attribute, event);
+        assertTrue(event.isCancelled()); assertEquals(2, player.getInventory().getItemInMainHand().getAmount());
+        assertTrue(player.nextMessage().contains("right now"));
     }
 
     @Test void attributeSpendCapturesAllocationThenReappliesRemainingPoints() {

@@ -16,6 +16,7 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
+import net.tfminecraft.rpcharacters.progress.ItemPoints;
 import net.tfminecraft.rpcharacters.progress.ProgressPools;
 import net.tfminecraft.rpcharacters.progress.ProgressRouting;
 import net.tfminecraft.rpcharacters.RPCharacters;
@@ -154,6 +155,15 @@ public final class AttributePointService {
 
 	/** @return false when there were no pools to credit, such as in the character room */
 	public static boolean tryGrantAttributePoints(Player player, int amount) {
+		return creditAttributePoints(player, amount, false);
+	}
+
+	/** As {@link #tryGrantAttributePoints}, for points from an item such as a tome: every character receives them. */
+	public static boolean tryGrantItemAttributePoints(Player player, int amount) {
+		return creditAttributePoints(player, amount, true);
+	}
+
+	private static boolean creditAttributePoints(Player player, int amount, boolean fromItem) {
 		if (player == null || amount <= 0) {
 			return false;
 		}
@@ -162,7 +172,11 @@ public final class AttributePointService {
 		if (pools == null) {
 			return false;
 		}
-		pools.addAttributePoints(amount);
+		if (fromItem) {
+			ItemPoints.grantAttributePoints(pd, pools, amount);
+		} else {
+			pools.addAttributePoints(amount);
+		}
 		RPCharacter active = pd.getActiveCharacter();
 		if (active != null) {
 			clampExcessAttributePool(player, active);

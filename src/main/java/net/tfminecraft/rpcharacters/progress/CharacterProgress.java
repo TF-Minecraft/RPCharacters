@@ -33,6 +33,8 @@ public final class CharacterProgress implements ProgressPools {
 	private int classLevel = 1;
 	private double classExperience;
 	private double carriedExperience;
+	private int itemSkillPoints;
+	private int itemAttributePoints;
 	private final Map<String, Integer> professionPoints = new TreeMap<>();
 	private YamlConfiguration mmo;
 
@@ -178,6 +180,24 @@ public final class CharacterProgress implements ProgressPools {
 		carriedExperience = Math.max(0.0, experience);
 	}
 
+	/** How many of the account's item skill points this character's skill total already holds. */
+	public int getItemSkillPoints() {
+		return itemSkillPoints;
+	}
+
+	public void setItemSkillPoints(int points) {
+		itemSkillPoints = Math.max(0, points);
+	}
+
+	/** How many of the account's item attribute points this character's attribute total already holds. */
+	public int getItemAttributePoints() {
+		return itemAttributePoints;
+	}
+
+	public void setItemAttributePoints(int points) {
+		itemAttributePoints = Math.max(0, points);
+	}
+
 	/** An unsaved copy of these pools and MMOCore data for another character. */
 	CharacterProgress copyFor(String characterId, String source) {
 		CharacterProgress copy = new CharacterProgress(ownerId, characterId, source, mmo);
@@ -187,6 +207,8 @@ public final class CharacterProgress implements ProgressPools {
 		copy.classLevel = classLevel;
 		copy.classExperience = classExperience;
 		copy.carriedExperience = carriedExperience;
+		copy.itemSkillPoints = itemSkillPoints;
+		copy.itemAttributePoints = itemAttributePoints;
 		copy.professionPoints.putAll(professionPoints);
 		return copy;
 	}
@@ -199,6 +221,8 @@ public final class CharacterProgress implements ProgressPools {
 		pools.set("class-level", classLevel);
 		pools.set("class-experience", classExperience);
 		pools.set("carried-experience", carriedExperience);
+		pools.set("item-skill-points", itemSkillPoints);
+		pools.set("item-attribute-points", itemAttributePoints);
 		List<Map<String, Object>> professions = new ArrayList<>();
 		professionPoints.forEach((id, value) -> {
 			Map<String, Object> entry = new LinkedHashMap<>();
@@ -233,6 +257,13 @@ public final class CharacterProgress implements ProgressPools {
 		// Files written before carried EXP existed have none.
 		if (pools.contains("carried-experience")) {
 			progress.setCarriedExperience(number(pools, "carried-experience").doubleValue());
+		}
+		// Files written before item points were shared hold none.
+		if (pools.contains("item-skill-points")) {
+			progress.setItemSkillPoints(integer(pools, "item-skill-points", 0));
+		}
+		if (pools.contains("item-attribute-points")) {
+			progress.setItemAttributePoints(integer(pools, "item-attribute-points", 0));
 		}
 		if (!(pools.get("profession-points") instanceof List<?> professions)) {
 			throw new IOException("Progress is missing profession-points");

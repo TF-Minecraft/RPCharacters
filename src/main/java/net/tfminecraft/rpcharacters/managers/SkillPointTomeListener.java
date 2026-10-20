@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.managers;
 
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -18,13 +19,14 @@ import net.tfminecraft.rpcharacters.mmocore.ClassService;
 
 public class SkillPointTomeListener implements Listener {
 
-	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	// Not ignoreCancelled: Bukkit fires air clicks already cancelled. useItemInHand still respects protections.
+	@EventHandler(priority = EventPriority.HIGH)
 	public void onPlayerInteract(PlayerInteractEvent event) {
 		Action action = event.getAction();
 		if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
 			return;
 		}
-		if (event.getHand() != EquipmentSlot.HAND) {
+		if (event.getHand() != EquipmentSlot.HAND || event.useItemInHand() == Event.Result.DENY) {
 			return;
 		}
 
@@ -42,11 +44,14 @@ public class SkillPointTomeListener implements Listener {
 		}
 
 		event.setCancelled(true);
-		ClassService.grantSkillPoints(player, tome.getSkillPoints());
+		if (!ClassService.tryGrantItemSkillPoints(player, tome.getSkillPoints())) {
+			RPTexts.send(player, RPTexts.ERROR + "You can't use skill point tomes right now.");
+			return;
+		}
 
 		int points = tome.getSkillPoints();
 		String label = points == 1 ? "skill point" : "skill points";
-		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label);
+		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label + " for all your characters");
 		player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.4f);
 
 		if (item.getAmount() <= 1) {

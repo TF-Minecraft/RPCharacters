@@ -1,18 +1,13 @@
+# Tomes add points every character of the account holds, not just the one reading it.
 skill-point-tomes:
-  minor_tome:
-    item: m.items.skill_tome_minor
+  skill_training_manual:
+    item: m.books.SKILL_POINT_BOOK
     skill-points: 1
-  major_tome:
-    item: m.items.skill_tome_major
-    skill-points: 5
 
 attribute-point-tomes:
-  minor_tome:
-    item: m.items.attribute_tome_minor
+  attribute_tome:
+    item: m.books.ATTRIBUTE_POINT_BOOK
     attribute-points: 1
-  major_tome:
-    item: m.items.attribute_tome_major
-    attribute-points: 5
 
 magnifying-glasses:
   iron:
