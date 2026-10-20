@@ -28,6 +28,7 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.progress.CharacterProgress;
 import net.tfminecraft.rpcharacters.progress.CharacterProgressService;
+import net.tfminecraft.rpcharacters.progress.ItemPoints;
 import net.tfminecraft.rpcharacters.progress.ProgressPools;
 import net.tfminecraft.rpcharacters.progress.ProgressRouting;
 import net.tfminecraft.rpcharacters.RPCharacters;
@@ -153,14 +154,28 @@ public final class ClassService {
 
 	/** @return false when there were no pools to credit, such as in the character room */
 	public static boolean tryGrantSkillPoints(Player player, int amount) {
+		return creditSkillPoints(player, amount, false);
+	}
+
+	/** As {@link #tryGrantSkillPoints}, for points from an item such as a tome: every character receives them. */
+	public static boolean tryGrantItemSkillPoints(Player player, int amount) {
+		return creditSkillPoints(player, amount, true);
+	}
+
+	private static boolean creditSkillPoints(Player player, int amount, boolean fromItem) {
 		if (player == null || amount <= 0) {
 			return false;
 		}
-		ProgressPools pools = ProgressRouting.pools(PlayerManager.get(player));
+		net.tfminecraft.rpcharacters.objects.PlayerData account = PlayerManager.get(player);
+		ProgressPools pools = ProgressRouting.pools(account);
 		if (pools == null) {
 			return false;
 		}
-		pools.addSkillPoints(amount);
+		if (fromItem) {
+			ItemPoints.grantSkillPoints(account, pools, amount);
+		} else {
+			pools.addSkillPoints(amount);
+		}
 		applyFreeSkillPoints(player);
 		RPCharacters.getPlayerManager().savePlayer(player);
 		CharacterProgressService.checkpoint(player);

@@ -42,11 +42,14 @@ public class SkillPointTomeListener implements Listener {
 		}
 
 		event.setCancelled(true);
-		ClassService.grantSkillPoints(player, tome.getSkillPoints());
+		if (!ClassService.tryGrantItemSkillPoints(player, tome.getSkillPoints())) {
+			RPTexts.send(player, RPTexts.ERROR + "You can't use skill point tomes right now.");
+			return;
+		}
 
 		int points = tome.getSkillPoints();
 		String label = points == 1 ? "skill point" : "skill points";
-		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label);
+		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label + " for all your characters");
 		player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.4f);
 
 		if (item.getAmount() <= 1) {

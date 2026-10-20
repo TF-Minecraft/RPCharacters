@@ -125,6 +125,7 @@ public class Database {
 				PlayerTutorialFields.load(pd, json);
 				PlayerClassLevelFields.load(pd, json);
 				PlayerSkillRewardFields.load(pd, json);
+				PlayerItemPointFields.load(pd, json);
 				if (json.containsKey("last-kit-claims")) {
 					loadLastKitClaims(pd, json.get("last-kit-claims"));
 				} else if (json.containsKey("last-kit-grant-ms")) {
@@ -235,6 +236,7 @@ public class Database {
 			PlayerTutorialFields.load(pd, json);
 			PlayerClassLevelFields.load(pd, json);
 			PlayerSkillRewardFields.load(pd, json);
+			PlayerItemPointFields.load(pd, json);
 			if (json.containsKey("last-kit-claims")) {
 				loadLastKitClaims(pd, json.get("last-kit-claims"));
 			} else if (json.containsKey("last-kit-grant-ms")) {
@@ -486,6 +488,7 @@ public class Database {
 			PlayerTutorialFields.save(defaults, pd);
 			PlayerClassLevelFields.save(defaults, pd);
 			PlayerSkillRewardFields.save(defaults, pd);
+			PlayerItemPointFields.save(defaults, pd);
 			if (!pd.getLastKitClaimAtMsMap().isEmpty()) {
 				JSONObject claims = new JSONObject();
 				for (var entry : pd.getLastKitClaimAtMsMap().entrySet()) {

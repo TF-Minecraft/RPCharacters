@@ -181,6 +181,7 @@ public final class CharacterProgressService {
 		applied.remove(account);
 		try {
 			shareProfessions(account, progress);
+			shareItemPoints(account, progress);
 			ClassService.runApplying(player,
 					() -> MmoProgressCodec.apply(net.Indyuce.mmocore.api.player.PlayerData.get(player), progress.mmo()));
 		} catch (RuntimeException failure) {
@@ -200,6 +201,14 @@ public final class CharacterProgressService {
 		if (SharedProfessions.raise(progress, others)) {
 			RPCharacters.plugin.getLogger().info("Raised the professions of character " + progress.getCharacterId()
 					+ " of " + account.getUniqueId() + " to its account's best");
+		}
+	}
+
+	/** Gives the character the item points its account gained since it last played; saved like the profession raise. */
+	private static void shareItemPoints(PlayerData account, CharacterProgress progress) {
+		if (ItemPoints.catchUp(account, progress)) {
+			RPCharacters.plugin.getLogger().info("Gave character " + progress.getCharacterId() + " of "
+					+ account.getUniqueId() + " its account's item skill and attribute points");
 		}
 	}
 

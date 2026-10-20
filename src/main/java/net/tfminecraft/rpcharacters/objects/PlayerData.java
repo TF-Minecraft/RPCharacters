@@ -29,6 +29,8 @@ public class PlayerData {
 	private int createdAtEpochSeconds;
 	private Integer accountSkillPointsTotal;
 	private int accountRewardSkillPoints;
+	private int itemSkillPoints;
+	private int itemAttributePoints;
 	private Integer accountAttributePointsTotal;
 	private Integer accountClassLevel;
 	private double accountClassExperience;
@@ -130,6 +132,36 @@ public class PlayerData {
 
 	public void setAccountRewardSkillPoints(int accountRewardSkillPoints) {
 		this.accountRewardSkillPoints = Math.max(0, accountRewardSkillPoints);
+	}
+
+	/** Skill points from items such as tomes; every character of the account holds them. */
+	public int getItemSkillPoints() {
+		return itemSkillPoints;
+	}
+
+	public void setItemSkillPoints(int itemSkillPoints) {
+		this.itemSkillPoints = Math.max(0, itemSkillPoints);
+	}
+
+	public void addItemSkillPoints(int amount) {
+		if (amount > 0) {
+			setItemSkillPoints((int) Math.min(Integer.MAX_VALUE, (long) itemSkillPoints + amount));
+		}
+	}
+
+	/** Attribute points from items such as tomes; every character of the account holds them. */
+	public int getItemAttributePoints() {
+		return itemAttributePoints;
+	}
+
+	public void setItemAttributePoints(int itemAttributePoints) {
+		this.itemAttributePoints = Math.max(0, itemAttributePoints);
+	}
+
+	public void addItemAttributePoints(int amount) {
+		if (amount > 0) {
+			setItemAttributePoints((int) Math.min(Integer.MAX_VALUE, (long) itemAttributePoints + amount));
+		}
 	}
 
 	/**

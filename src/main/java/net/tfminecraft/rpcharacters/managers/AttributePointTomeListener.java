@@ -42,11 +42,14 @@ public class AttributePointTomeListener implements Listener {
 		}
 
 		event.setCancelled(true);
-		AttributePointService.grantAttributePoints(player, tome.getAttributePoints());
+		if (!AttributePointService.tryGrantItemAttributePoints(player, tome.getAttributePoints())) {
+			RPTexts.send(player, RPTexts.ERROR + "You can't use attribute point tomes right now.");
+			return;
+		}
 
 		int points = tome.getAttributePoints();
 		String label = points == 1 ? "attribute point" : "attribute points";
-		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label);
+		RPTexts.send(player, RPTexts.SUCCESS + "+" + points + " " + label + " for all your characters");
 		player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.4f);
 
 		if (item.getAmount() <= 1) {
