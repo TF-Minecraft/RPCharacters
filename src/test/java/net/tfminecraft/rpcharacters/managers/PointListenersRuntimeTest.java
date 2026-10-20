@@ -78,7 +78,8 @@ class PointListenersRuntimeTest {
         invoke(attribute, event(Action.LEFT_CLICK_AIR, EquipmentSlot.HAND));
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.OFF_HAND));
         invoke(attribute, event(Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND));
-        tome(2); players.when(() -> PlayerManager.get(player)).thenReturn(null);
+        tome(2); var denied = event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND); denied.setUseItemInHand(org.bukkit.event.Event.Result.DENY); invoke(attribute, denied);
+        players.when(() -> PlayerManager.get(player)).thenReturn(null);
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND));
         players.when(() -> PlayerManager.get(player)).thenReturn(data); data.getCharacters().clear();
         invoke(attribute, event(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND));
