@@ -145,7 +145,8 @@ channels:
     commands: [scene]
     use-perm: rpchar.chat.use
     read-perm: rpchar.chat.use
-    format: '&7&o*{message}*'
+    masked: true
+    format: '&f[&3Scene&f] &f{display}&7: &3&o*{message}*'
     range: 20
     bubble: false
     smart-messages: false
