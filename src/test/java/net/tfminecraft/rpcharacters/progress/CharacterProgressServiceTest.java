@@ -240,10 +240,34 @@ class CharacterProgressServiceTest extends ProgressFixture {
         var a=character(); enable(); service.prepare(account); CharacterProgressService.checkpoint(null); CharacterProgressService.checkpoint(player); CharacterProgressService.scheduleCheckpoint(null); CharacterProgressService.scheduleCheckpoint(player);
         play(a); long revision=a.getProgress().getRevision(); ClassService.runApplying(player,()->{assertTrue(ClassService.isApplying(player.getUniqueId()));ClassService.runApplying(player,()->CharacterProgressService.checkpoint(player));assertTrue(ClassService.isApplying(player.getUniqueId()));}); assertFalse(ClassService.isApplying(player.getUniqueId()));
         assertEquals(revision,a.getProgress().getRevision());
-        CharacterProgressService.scheduleCheckpoint(player); CharacterProgressService.scheduleCheckpoint(player); assertEquals(1,later.size()); later.removeFirst().run(); assertEquals(revision+1,a.getProgress().getRevision());
+        CharacterProgressService.scheduleCheckpoint(player); CharacterProgressService.scheduleCheckpoint(player); assertEquals(1,later.size()); verify(Bukkit.getScheduler()).runTaskLater(any(org.bukkit.plugin.Plugin.class),any(Runnable.class),eq(CharacterProgressService.CHECKPOINT_DELAY_TICKS)); later.removeFirst().run(); assertEquals(revision,a.getProgress().getRevision(),"Unchanged progress is not written again"); CharacterProgressService.scheduleCheckpoint(player); a.getProgress().addSkillPoints(1); later.removeFirst().run(); assertEquals(revision+1,a.getProgress().getRevision());
         CharacterProgressService.scheduleCheckpoint(player); play(a); later.removeFirst().run(); assertEquals(revision+1,a.getProgress().getRevision());
         Files.writeString(store.characterPath(account.getUniqueId(),a.getId()),"bad: ["); assertDoesNotThrow(()->CharacterProgressService.checkpoint(player));
         assertThrows(IllegalArgumentException.class,()->ClassService.runApplying(player,()->{throw new IllegalArgumentException("test");})); assertFalse(ClassService.isApplying(player.getUniqueId()));
+    }
+    @Test void aSwitchWithinTheDelayLetsTheNextCharacterArmItsOwnCheckpointWhileTheStaleOneSavesNothing() throws Exception {
+        var a=character(); var b=character(); enable(); service.prepare(account); play(a);
+        Path aFile=store.characterPath(account.getUniqueId(),a.getId()); String aSaved=Files.readString(aFile);
+        CharacterProgressService.scheduleCheckpoint(player); a.getProgress().addSkillPoints(1); assertEquals(1,later.size());
+        play(b); long bRevision=b.getProgress().getRevision(); b.getProgress().addSkillPoints(2);
+        CharacterProgressService.scheduleCheckpoint(player); CharacterProgressService.scheduleCheckpoint(player);
+        assertEquals(2,later.size(),"B arms its own checkpoint while A's is still pending");
+        later.removeFirst().run(); assertEquals(bRevision,b.getProgress().getRevision(),"A's stale callback saves nothing"); assertEquals(aSaved,Files.readString(aFile));
+        CharacterProgressService.scheduleCheckpoint(player); assertEquals(1,later.size(),"A's stale callback leaves B's pending checkpoint armed");
+        later.removeFirst().run(); assertEquals(bRevision+1,b.getProgress().getRevision(),"B's gain is saved by its own checkpoint");
+        CharacterProgressService.scheduleCheckpoint(player); assertEquals(1,later.size(),"B can arm again after its save"); later.clear();
+        play(a); CharacterProgressService.scheduleCheckpoint(player); assertEquals(1,later.size(),"Switching back arms for the new activation");
+    }
+    @Test void promptCheckpointsSaveOneOffXpSoonAndCoalesceApartFromRepeatableXp() throws Exception {
+        var a=character(); enable(); service.prepare(account); play(a); long revision=a.getProgress().getRevision();
+        CharacterProgressService.schedulePromptCheckpoint(player); CharacterProgressService.schedulePromptCheckpoint(player); CharacterProgressService.scheduleCheckpoint(player);
+        assertEquals(2,later.size(),"One prompt and one repeatable checkpoint");
+        verify(Bukkit.getScheduler()).runTaskLater(any(org.bukkit.plugin.Plugin.class),any(Runnable.class),eq(CharacterProgressService.PROMPT_CHECKPOINT_DELAY_TICKS));
+        verify(Bukkit.getScheduler()).runTaskLater(any(org.bukkit.plugin.Plugin.class),any(Runnable.class),eq(CharacterProgressService.CHECKPOINT_DELAY_TICKS));
+        a.getProgress().addSkillPoints(1); later.removeFirst().run(); assertEquals(revision+1,a.getProgress().getRevision());
+        CharacterProgressService.schedulePromptCheckpoint(player); assertEquals(2,later.size(),"The prompt checkpoint can arm again after it ran");
+        later.removeFirst().run(); later.removeFirst().run(); assertEquals(revision+1,a.getProgress().getRevision(),"Nothing new to write");
+        a.setActiveState(false); CharacterProgressService.schedulePromptCheckpoint(player); assertTrue(later.isEmpty(),"No live character, nothing to arm");
     }
     @Test void baselineMigrationUsesLegacyWatermarksAndPreservesCappedLevelsWithoutWritingAccount() throws Exception {
         var a=character(); account=new PlayerData(player); account.getCharacters().add(a); account.setAccountClassProgress(30,6); when(mmo.hasReachedMaxLevel()).thenReturn(true); when(mmo.getSkillPoints()).thenReturn(7); when(mmo.countSkillPointsSpent()).thenReturn(4); when(mmo.getAttributePoints()).thenReturn(3);

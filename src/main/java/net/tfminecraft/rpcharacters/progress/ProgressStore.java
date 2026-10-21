@@ -21,6 +21,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * Progress files under {@code <root>/<owner>/}: {@code baseline.yml}, written once, and
  * {@code characters/<id>.yml}. Writes go to a temporary file that is synced, renamed over the target
  * and followed by a directory sync. A file that cannot be read is an error, never an empty record.
+ * A replacement whose content matches the revision on disk is not written again.
  */
 final class ProgressStore {
 	static final int FORMAT = 1;
@@ -76,7 +77,7 @@ final class ProgressStore {
 		YamlConfiguration yaml = header(baseline.ownerId());
 		yaml.set("characters", baseline.characterIds());
 		baseline.template().writeTo(yaml);
-		write(baselinePath(baseline.ownerId()), yaml.saveToString(), true);
+		write(baselinePath(baseline.ownerId()), yaml.saveToString(), true, true);
 	}
 
 	Optional<CharacterProgress> read(UUID owner, String characterId) throws IOException {
@@ -103,6 +104,7 @@ final class ProgressStore {
 		long revision = ((Number) rawRevision).longValue();
 		CharacterProgress progress = CharacterProgress.readFrom(yaml, owner, characterId, source);
 		progress.setRevision(revision);
+		progress.setSavedContent(content(progress));
 		return Optional.of(progress);
 	}
 
@@ -111,12 +113,16 @@ final class ProgressStore {
 		Path target = characterPath(progress.getOwnerId(), progress.getCharacterId());
 		String first = text(progress, 1L);
 		// Keep evidence of allocation even if the primary disappears before its first checkpoint.
-		write(previous(target), first, true);
-		write(target, first, true);
+		write(previous(target), first, true, true);
+		write(target, first, true, true);
 		progress.setRevision(1L);
+		progress.setSavedContent(content(progress));
 	}
 
-	/** Writes the next revision, refusing if the file is not the revision this copy was read as. */
+	/**
+	 * Writes the next revision, refusing if the file is not the revision this copy was read as. Content
+	 * equal to that revision is left in place: the revision stays and nothing is written.
+	 */
 	void replace(CharacterProgress progress) throws IOException {
 		long onDisk = read(progress.getOwnerId(), progress.getCharacterId())
 				.orElseThrow(() -> new IOException("Progress for " + progress.getCharacterId() + " is missing"))
@@ -128,11 +134,27 @@ final class ProgressStore {
 		if (onDisk == Long.MAX_VALUE) {
 			throw new IOException("Progress revision is exhausted");
 		}
+		String content = content(progress);
+		if (content.equals(progress.savedContent())) {
+			return;
+		}
 		long next = onDisk + 1;
 		Path target = characterPath(progress.getOwnerId(), progress.getCharacterId());
-		write(previous(target), Files.readString(target, StandardCharsets.UTF_8), false);
-		write(target, text(progress, next), false);
+		// Both files share a directory, so the sync after the primary also publishes the .prev copy.
+		// The .prev file is only kept as evidence; nothing restores from it.
+		write(previous(target), Files.readString(target, StandardCharsets.UTF_8), false, false);
+		write(target, text(progress, next), false, true);
 		progress.setRevision(next);
+		progress.setSavedContent(content);
+	}
+
+	/** What a revision records, without the fields that change on every write. */
+	private static String content(CharacterProgress progress) {
+		YamlConfiguration yaml = new YamlConfiguration();
+		yaml.set("character", progress.getCharacterId());
+		yaml.set("source", progress.getSource());
+		progress.writeTo(yaml);
+		return yaml.saveToString();
 	}
 
 	private static String text(CharacterProgress progress, long revision) {
@@ -169,7 +191,8 @@ final class ProgressStore {
 		return yaml;
 	}
 
-	private static void write(Path target, String text, boolean createOnly) throws IOException {
+	private static void write(Path target, String text, boolean createOnly, boolean syncDirectory)
+			throws IOException {
 		Path directory = target.getParent();
 		ensureDirectory(directory);
 		if (createOnly && Files.exists(target)) {
@@ -195,7 +218,9 @@ final class ProgressStore {
 			Files.deleteIfExists(staged);
 			throw failure;
 		}
-		syncDirectory(directory);
+		if (syncDirectory) {
+			syncDirectory(directory);
+		}
 	}
 
 	private static void ensureDirectory(Path directory) throws IOException {

@@ -108,8 +108,9 @@ public final class CarriedExperience {
 
 	/**
 	 * Gives the carried EXP level by level until it runs out or the class reaches its cap, so MMOCore
-	 * never drops any of it and each level-up claims its rewards. The character is saved by a coalesced
-	 * checkpoint, since a batch of shared rewards carries EXP many times in one tick.
+	 * never drops any of it and each level-up claims its rewards. The character is saved by a prompt
+	 * coalesced checkpoint, since a batch of shared rewards carries EXP many times in one tick and each
+	 * reward is already recorded where it came from.
 	 */
 	private static void release(Player player, CharacterProgress progress) {
 		PlayerData mmo = PlayerData.get(player);
@@ -128,7 +129,7 @@ public final class CarriedExperience {
 		if (left != progress.getCarriedExperience()) {
 			progress.setCarriedExperience(left <= EPSILON ? 0 : left);
 		}
-		CharacterProgressService.scheduleCheckpoint(player);
+		CharacterProgressService.schedulePromptCheckpoint(player);
 	}
 
 	/** {@code /rpcharacter admin carryexp <player> <amount>}, for Codex and ConditionalEvents shared rewards. */

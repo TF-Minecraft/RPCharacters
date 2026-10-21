@@ -61,6 +61,17 @@ class ProgressStoreTest extends ProgressFixture {
         value.addSkillPoints(9);assertThrows(IOException.class,()->store.replace(value));assertEquals(1,value.getRevision());assertEquals(before,Files.readString(primary));
         try(var files=Files.list(primary.getParent())){assertTrue(files.noneMatch(p->p.getFileName().toString().startsWith(".progress-")));}
     }
+    @Test void unchangedReplacementKeepsItsRevisionAndFilesWhileChangesStillAdvanceWithPrevious() throws Exception {
+        var a = character(); var value = progress(a.getId()); store.create(value); value.addSkillPoints(2); store.replace(value);
+        Path primary = store.characterPath(account.getUniqueId(), a.getId()); Path previous = primary.resolveSibling(primary.getFileName() + ".prev");
+        String written = Files.readString(primary); String prior = Files.readString(previous); assertEquals(2, value.getRevision());
+        store.replace(value); assertEquals(2, value.getRevision()); assertEquals(written, Files.readString(primary)); assertEquals(prior, Files.readString(previous));
+        var reread = store.read(account.getUniqueId(), a.getId()).orElseThrow(); store.replace(reread); assertEquals(2, reread.getRevision()); assertEquals(written, Files.readString(primary));
+        assertThrows(IOException.class, () -> store.replace(progress(a.getId())), "A copy that is not the revision on disk is still refused");
+        reread.addSkillPoints(1); store.replace(reread); assertEquals(3, reread.getRevision()); assertEquals(written, Files.readString(previous));
+        assertEquals(3, store.read(account.getUniqueId(), a.getId()).orElseThrow().getSkillPointsTotal());
+        assertThrows(IOException.class, () -> store.replace(value), "The older live copy cannot overwrite the newer revision");
+    }
     @Test void mutablePoolsClampAndSaturateWithoutSharingClones() {
         var value = progress(UUID.randomUUID().toString()); value.setSkillPointsTotal(-1); value.setAttributePointsTotal(-2); value.setRewardSkillPoints(-3);
         value.addSkillPoints(0); value.addAttributePoints(-1); value.addProfessionPoints("mining",0); value.setProfessionPoints(null,3);

@@ -4,14 +4,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 
@@ -37,11 +36,17 @@ import net.tfminecraft.rpcharacters.professions.ProfessionPointService;
  */
 public final class CharacterProgressService {
 	private static volatile CharacterProgressService active;
+	/** Thirty seconds for repeatable XP: gains between saves are lost only if the server crashes. */
+	static final long CHECKPOINT_DELAY_TICKS = 600L;
+	/** One second for XP that pairs with a record saved elsewhere, such as a one-off reward. */
+	static final long PROMPT_CHECKPOINT_DELAY_TICKS = 20L;
 
 	private final ProgressStore store;
 	/** The character whose MMOCore copy is applied for each loaded account; reloaded accounts start empty. */
 	private final Map<PlayerData, Applied> applied = Collections.synchronizedMap(new WeakHashMap<>());
-	private final Set<Player> pendingCheckpoints = new HashSet<>();
+	/** The activation each player's pending checkpoint was armed for; a new activation arms its own. */
+	private final Map<Player, Object> pendingCheckpoints = new HashMap<>();
+	private final Map<Player, Object> pendingPromptCheckpoints = new HashMap<>();
 	private final Map<PlayerData, LegacyJoin> legacyAtJoin = new WeakHashMap<>();
 	private record LegacyJoin(RPCharacter activeCharacter, List<String> characterIds) {}
 	private record Applied(RPCharacter character) {}
@@ -59,6 +64,7 @@ public final class CharacterProgressService {
 	public void close() {
 		applied.clear();
 		pendingCheckpoints.clear();
+		pendingPromptCheckpoints.clear();
 		legacyAtJoin.clear();
 		if (active == this) {
 			active = null;
@@ -283,20 +289,44 @@ public final class CharacterProgressService {
 		}
 	}
 
-	/** Coalesces XP events after MMOCore applies them; a delayed save never crosses an activation. */
+	/**
+	 * Coalesces repeatable XP events after MMOCore applies them; a delayed save never crosses an
+	 * activation. The first gain of each activation arms one save {@link #CHECKPOINT_DELAY_TICKS} later.
+	 * Level-ups, point changes and every transition still save at once.
+	 */
 	public static void scheduleCheckpoint(Player player) {
+		schedule(player, false);
+	}
+
+	/**
+	 * Like {@link #scheduleCheckpoint}, but saves {@link #PROMPT_CHECKPOINT_DELAY_TICKS} later: for XP that
+	 * pairs with a record saved elsewhere (command and quest rewards, carried EXP), which a crash must not
+	 * leave recorded but unpaid for long.
+	 */
+	public static void schedulePromptCheckpoint(Player player) {
+		schedule(player, true);
+	}
+
+	private static void schedule(Player player, boolean prompt) {
 		CharacterProgressService service = active;
-		if (service == null || player == null || ProgressRouting.activeProgress(player) == null
-				|| !service.pendingCheckpoints.add(player)) {
+		if (service == null || player == null || ProgressRouting.activeProgress(player) == null) {
 			return;
 		}
+		Object activation = service.token(PlayerManager.get(player));
+		Map<Player, Object> pending = prompt ? service.pendingPromptCheckpoints : service.pendingCheckpoints;
+		if (activation == null || pending.get(player) == activation) {
+			return;
+		}
+		pending.put(player, activation);
 		BooleanSupplier current = ProgressRouting.sessionGuard(player);
 		Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
-			service.pendingCheckpoints.remove(player);
+			if (pending.get(player) == activation) {
+				pending.remove(player);
+			}
 			if (current.getAsBoolean()) {
 				checkpoint(player);
 			}
-		}, 20L);
+		}, prompt ? PROMPT_CHECKPOINT_DELAY_TICKS : CHECKPOINT_DELAY_TICKS);
 	}
 
 	boolean holds(PlayerData account, RPCharacter character) {
