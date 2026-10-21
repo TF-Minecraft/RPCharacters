@@ -37,6 +37,7 @@ public final class CharacterProgress implements ProgressPools {
 	private int itemAttributePoints;
 	private final Map<String, Integer> professionPoints = new TreeMap<>();
 	private YamlConfiguration mmo;
+	private String savedContent;
 
 	CharacterProgress(UUID ownerId, String characterId, String source, YamlConfiguration mmo) {
 		this.ownerId = ownerId;
@@ -66,6 +67,15 @@ public final class CharacterProgress implements ProgressPools {
 
 	void setRevision(long revision) {
 		this.revision = revision;
+	}
+
+	/** The saved content of {@link #getRevision()}, so an unchanged checkpoint can skip its write. */
+	String savedContent() {
+		return savedContent;
+	}
+
+	void setSavedContent(String savedContent) {
+		this.savedContent = savedContent;
 	}
 
 	YamlConfiguration mmo() {

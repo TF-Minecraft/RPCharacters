@@ -37,6 +37,8 @@ import net.tfminecraft.rpcharacters.professions.ProfessionPointService;
  */
 public final class CharacterProgressService {
 	private static volatile CharacterProgressService active;
+	/** Thirty seconds: XP gains between saves are lost only if the server crashes. */
+	static final long CHECKPOINT_DELAY_TICKS = 600L;
 
 	private final ProgressStore store;
 	/** The character whose MMOCore copy is applied for each loaded account; reloaded accounts start empty. */
@@ -283,7 +285,11 @@ public final class CharacterProgressService {
 		}
 	}
 
-	/** Coalesces XP events after MMOCore applies them; a delayed save never crosses an activation. */
+	/**
+	 * Coalesces XP events after MMOCore applies them; a delayed save never crosses an activation. The first
+	 * gain arms one save {@link #CHECKPOINT_DELAY_TICKS} later. Level-ups, point changes and every
+	 * transition still save at once.
+	 */
 	public static void scheduleCheckpoint(Player player) {
 		CharacterProgressService service = active;
 		if (service == null || player == null || ProgressRouting.activeProgress(player) == null
@@ -296,7 +302,7 @@ public final class CharacterProgressService {
 			if (current.getAsBoolean()) {
 				checkpoint(player);
 			}
-		}, 20L);
+		}, CHECKPOINT_DELAY_TICKS);
 	}
 
 	boolean holds(PlayerData account, RPCharacter character) {
