@@ -80,8 +80,15 @@ public final class SlotBuffScope implements Listener {
 	// MythicLib menus (the MMOCore skill list included) cancel every click before acting on it.
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onInventoryClick(InventoryClickEvent event) {
-		if (event.getView().getTopInventory().getHolder(false) instanceof PluginInventory) {
-			scopeNextTick(event.getWhoClicked().getUniqueId());
+		if (task == null) {
+			return;
+		}
+		try {
+			if (event.getView().getTopInventory().getHolder(false) instanceof PluginInventory) {
+				scopeNextTick(event.getWhoClicked().getUniqueId());
+			}
+		} catch (LinkageError err) {
+			disable(err);
 		}
 	}
 
@@ -101,10 +108,7 @@ public final class SlotBuffScope implements Listener {
 		}
 		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			QUEUED.remove(id);
-			Player player = Bukkit.getPlayer(id);
-			if (player != null && PlayerData.has(player)) {
-				scopeNow(PlayerData.get(player));
-			}
+			scopePlayer(Bukkit.getPlayer(id));
 		});
 	}
 
@@ -113,9 +117,20 @@ public final class SlotBuffScope implements Listener {
 			if (task == null) {
 				return;
 			}
+			scopePlayer(player);
+		}
+	}
+
+	private static void scopePlayer(Player player) {
+		if (task == null || player == null) {
+			return;
+		}
+		try {
 			if (PlayerData.has(player)) {
 				scopeNow(PlayerData.get(player));
 			}
+		} catch (LinkageError err) {
+			disable(err);
 		}
 	}
 

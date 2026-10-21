@@ -10,7 +10,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import io.lumine.mythic.lib.api.player.EquipmentSlot;
 import io.lumine.mythic.lib.api.player.MMOPlayerData;
+import io.lumine.mythic.lib.player.modifier.ModifierSource;
 import io.lumine.mythic.lib.player.modifier.ModifierType;
 import io.lumine.mythic.lib.player.skillmod.SkillModifier;
 import io.lumine.mythic.lib.player.skillmod.SkillModifierMap;
@@ -72,6 +74,23 @@ class SlotBuffScopeTest {
 
 		assertEquals(0, SlotBuffScope.scope(playerData));
 		assertEquals(7.5, map.calculateValue(first, 10, "damage"), 1e-9);
+	}
+
+	@Test
+	void narrowedCopyKeepsEverythingButTheTargets() {
+		SkillModifier mod = new SkillModifier(SLOT_KEY, "cooldown", everySkill, 25, ModifierType.COMPOUND,
+				EquipmentSlot.MAIN_HAND, ModifierSource.MELEE_WEAPON);
+
+		SkillModifier copy = SlotBuffScope.narrow(mod, second);
+
+		assertEquals(mod.getUniqueId(), copy.getUniqueId());
+		assertEquals(mod.getKey(), copy.getKey());
+		assertEquals("cooldown", copy.getParameter());
+		assertEquals(25, copy.getValue(), 1e-9);
+		assertEquals(ModifierType.COMPOUND, copy.getType());
+		assertEquals(EquipmentSlot.MAIN_HAND, copy.getSlot());
+		assertEquals(ModifierSource.MELEE_WEAPON, copy.getSource());
+		assertEquals(List.of(second), copy.getSkills());
 	}
 
 	@Test
