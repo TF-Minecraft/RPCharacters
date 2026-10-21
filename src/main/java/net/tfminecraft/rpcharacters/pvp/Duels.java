@@ -261,8 +261,12 @@ public final class Duels {
 			boolean projectile = directlyByProjectile(event);
 			duel.touchedByOpponent(victim.getUniqueId(), projectile ? Duel.Touch.PROJECTILE : Duel.Touch.HIT, tick);
 			// Only a swing wears the held weapon; a bow or trident wears when shot, a skill or cloud not at all.
-			if (!projectile && (event.getCause() == DamageCause.ENTITY_ATTACK || event.getCause() == DamageCause.ENTITY_SWEEP_ATTACK)) {
-				duel.wears(duel.opponentOf(victim.getUniqueId()), Duel.Wear.WEAPON, tick);
+			if (!projectile && (event.getCause() == DamageCause.ENTITY_ATTACK || event.getCause() == DamageCause.ENTITY_SWEEP_ATTACK)
+					&& causingEntity(event) instanceof Player striker) {
+				ItemStack weapon = striker.getInventory().getItemInMainHand();
+				if (weapon != null && !weapon.getType().isAir()) {
+					duel.swung(striker.getUniqueId(), weapon, tick);
+				}
 			}
 		}
 		duel.addDamage(victim.getUniqueId(), Math.max(0.0, Math.min(event.getFinalDamage(), victim.getHealth())));
@@ -281,7 +285,7 @@ public final class Duels {
 
 	/**
 	 * A duel blow or shot wears gear on its own tick: the struck player's armour or raised
-	 * shield, the striker's held weapon (once per swing), the shooter's bow. Only that gear's
+	 * shield, the weapon the striker swung (once per swing), the shooter's bow. Only that gear's
 	 * wear on that tick is spared; a tool mining, an elytra gliding or any other wear stays real.
 	 */
 	static void spareDuelWear(PlayerItemDamageEvent event) {
@@ -293,12 +297,22 @@ public final class Duels {
 		UUID id = player.getUniqueId();
 		int tick = Bukkit.getCurrentTick();
 		ItemStack item = event.getItem();
-		if (duel.wearsAt(id, Duel.Wear.WEAPON, tick) && item.isSimilar(player.getInventory().getItemInMainHand())) {
-			duel.clearWear(id, Duel.Wear.WEAPON);
+		if (item.isSimilar(player.getInventory().getItemInMainHand()) && duel.takeSwing(id, item, tick)) {
 			event.setCancelled(true);
 		} else if ((duel.wearsAt(id, Duel.Wear.ARMOUR, tick) && isWornArmourOrShield(player, item))
 				|| (duel.wearsAt(id, Duel.Wear.SHOT, tick) && SHOT_WEAPONS.contains(item.getType()))) {
 			event.setCancelled(true);
+		}
+	}
+
+	/**
+	 * Breaking a block or using an item wears it after this, so a swing left over from the same
+	 * tick (its wear skipped by Unbreaking) can't cover that wear.
+	 */
+	static void forgetSwing(Player player) {
+		Duel duel = duelsByPlayer.get(player.getUniqueId());
+		if (duel != null) {
+			duel.forgetSwing(player.getUniqueId());
 		}
 	}
 

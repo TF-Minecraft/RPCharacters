@@ -15,6 +15,7 @@ import org.bukkit.entity.Trident;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.AreaEffectCloudApplyEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -23,6 +24,8 @@ import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.projectiles.ProjectileSource;
@@ -111,6 +114,21 @@ public final class DuelCommand implements CommandExecutor, TabCompleter, Listene
 		if (event.getEntity() instanceof Trident trident && trident.getShooter() instanceof Entity thrower) {
 			Duels.recordShot(thrower);
 		}
+	}
+
+	@EventHandler(priority = EventPriority.LOWEST)
+	public void onBreak(BlockBreakEvent event) {
+		Duels.forgetSwing(event.getPlayer());
+	}
+
+	@EventHandler(priority = EventPriority.LOWEST)
+	public void onInteract(PlayerInteractEvent event) {
+		Duels.forgetSwing(event.getPlayer());
+	}
+
+	@EventHandler(priority = EventPriority.LOWEST)
+	public void onInteractEntity(PlayerInteractEntityEvent event) {
+		Duels.forgetSwing(event.getPlayer());
 	}
 
 	/** Lowest, so MMOItems' custom durability and battle wear scaling never see a spared wear. */
