@@ -63,9 +63,12 @@ public final class SlotBuffScope implements Listener {
 		QUEUED.clear();
 	}
 
-	/** Scopes the player's slot buffs now; never throws. */
+	/**
+	 * Scopes the player's slot buffs now; never throws. Skips data MMOCore is still loading on its worker
+	 * thread: the bound skills can change under the scan, which would narrow a buff onto the wrong skill.
+	 */
 	public static void scopeNow(PlayerData playerData) {
-		if (task == null || playerData == null) {
+		if (task == null || playerData == null || !playerData.isSynchronized()) {
 			return;
 		}
 		try {

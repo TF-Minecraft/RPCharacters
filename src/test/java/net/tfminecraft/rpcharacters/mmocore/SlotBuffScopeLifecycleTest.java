@@ -60,6 +60,7 @@ class SlotBuffScopeLifecycleTest {
 		when(RPCharacters.plugin.getLogger()).thenReturn(logger);
 		when(player.getUniqueId()).thenReturn(id);
 		when(data.getUniqueId()).thenReturn(id);
+		when(data.isSynchronized()).thenReturn(true);
 		when(data.getBoundSkills()).thenReturn(Map.of());
 		when(scheduler.runTaskTimer(any(Plugin.class), timer.capture(), anyLong(), anyLong())).thenReturn(task);
 		when(scheduler.runTask(any(Plugin.class), nextTick.capture())).thenReturn(task);
@@ -130,6 +131,17 @@ class SlotBuffScopeLifecycleTest {
 		listener.onClassChange(change);
 		nextTick.getValue().run();
 		verify(data, times(1)).getBoundSkills();
+	}
+
+	@Test
+	void skipsDataMmoCoreIsStillLoading() {
+		when(data.isSynchronized()).thenReturn(false);
+		SlotBuffScope.start();
+
+		SlotBuffScope.scopeNow(data);
+		timer.getValue().run();
+
+		verify(data, never()).getBoundSkills();
 	}
 
 	@Test
