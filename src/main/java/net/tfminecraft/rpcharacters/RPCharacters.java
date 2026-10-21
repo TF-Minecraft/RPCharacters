@@ -377,6 +377,7 @@ public class RPCharacters extends JavaPlugin{
 		Duels.shutdown();
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
+		net.tfminecraft.rpcharacters.mmocore.SlotBuffScope.shutdown();
 		PvpStrikeService.shutdown();
 		ArmourDonning.shutdown();
 		LastSolidTracker.get().shutdown();
@@ -468,6 +469,7 @@ public class RPCharacters extends JavaPlugin{
 		pvpKnockoutManager.start();
 		Duels.start(pvpKnockoutManager::isDown);
 		EvilRpService.start();
+		net.tfminecraft.rpcharacters.mmocore.SlotBuffScope.start();
 		PvpStrikeService.start();
 		ArmourDonning.start();
 		LastSolidTracker.get().start();
