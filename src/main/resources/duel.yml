@@ -6,6 +6,9 @@
 # stamina, burning and potion effects go back to how they were at the start.
 # Debuffs a player already had stay, with the time they had left, so a duel never
 # cleanses or heals anything the duel didn't cause.
+# Gear doesn't wear in the fight: armour, shields and weapons lose no durability
+# to a blow between the two, and a bow, crossbow or trident shot during the
+# fight (hit or miss) wears nothing. Other wear, like a tool mining, stays real.
 # A temporary blue and gold banner marks the challenge and fight. It has no
 # collision, cannot be collected, and changes no blocks. Every ending removes it.
 # Both fighters get countdown sounds and a title and sound confirming the result.

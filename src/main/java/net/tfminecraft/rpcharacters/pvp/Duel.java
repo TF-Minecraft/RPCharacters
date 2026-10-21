@@ -21,6 +21,7 @@ final class Duel {
 	private final Map<UUID, Double> damageTaken = new HashMap<>();
 	private final Map<UUID, String> names = new HashMap<>();
 	private final Map<UUID, Map<Touch, Integer>> opponentTouchTicks = new HashMap<>();
+	private final Map<UUID, Map<Wear, Integer>> wearTicks = new HashMap<>();
 	private final Set<UUID> burningFromOpponent = new HashSet<>();
 	private final Map<UUID, Set<PotionEffectType>> effectsFromOpponent = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
@@ -104,6 +105,28 @@ final class Duel {
 			}
 		}
 		return false;
+	}
+
+	/** The gear a duel blow wears: the struck player's armour, the striker's weapon, the shooter's bow. */
+	enum Wear {
+		ARMOUR, WEAPON, SHOT
+	}
+
+	/** A duel blow on this server tick wears this kind of the player's gear. */
+	void wears(UUID id, Wear wear, int tick) {
+		wearTicks.computeIfAbsent(id, key -> new EnumMap<>(Wear.class)).put(wear, tick);
+	}
+
+	boolean wearsAt(UUID id, Wear wear, int tick) {
+		Integer at = wearTicks.getOrDefault(id, Map.of()).get(wear);
+		return at != null && at == tick;
+	}
+
+	void clearWear(UUID id, Wear wear) {
+		Map<Wear, Integer> ticks = wearTicks.get(id);
+		if (ticks != null) {
+			ticks.remove(wear);
+		}
 	}
 
 	void setBurningFromOpponent(UUID id, boolean fromOpponent) {

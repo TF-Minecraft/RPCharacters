@@ -11,6 +11,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Trident;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -18,8 +19,11 @@ import org.bukkit.event.entity.AreaEffectCloudApplyEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.projectiles.ProjectileSource;
 
@@ -94,6 +98,25 @@ public final class DuelCommand implements CommandExecutor, TabCompleter, Listene
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onDamageTaken(EntityDamageEvent event) {
 		Duels.recordDamage(event);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onShoot(EntityShootBowEvent event) {
+		Duels.recordShot(event.getEntity());
+	}
+
+	/** A thrown trident has no shoot event; snowballs, pearls and the like wear nothing. */
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onLaunch(ProjectileLaunchEvent event) {
+		if (event.getEntity() instanceof Trident trident && trident.getShooter() instanceof Entity thrower) {
+			Duels.recordShot(thrower);
+		}
+	}
+
+	/** Lowest, so MMOItems' custom durability and battle wear scaling never see a spared wear. */
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void onItemDamage(PlayerItemDamageEvent event) {
+		Duels.spareDuelWear(event);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

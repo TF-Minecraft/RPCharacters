@@ -197,6 +197,38 @@ class DuelsTest extends PvpRuntimeFixture {
         handler.onCombust(combust(victim,killer));handler.onEffect(effect(victim,POISON,ADDED,EntityPotionEffectEvent.Cause.PLUGIN));
     }
 
+    /** Only the very same stack is similar, like two worn items with different damage. */
+    static org.bukkit.inventory.ItemStack stack(org.bukkit.Material m){var i=mock(org.bukkit.inventory.ItemStack.class);when(i.getType()).thenReturn(m);when(i.isSimilar(any())).thenAnswer(c->c.getArgument(0)==i);return i;}
+    final org.bukkit.inventory.ItemStack HELMET=stack(org.bukkit.Material.IRON_HELMET),SWORD=stack(org.bukkit.Material.IRON_SWORD),PICKAXE=stack(org.bukkit.Material.IRON_PICKAXE),BOW=stack(org.bukkit.Material.BOW),TRIDENT=stack(org.bukkit.Material.TRIDENT),SHIELD=stack(org.bukkit.Material.SHIELD),ELYTRA=stack(org.bukkit.Material.ELYTRA);
+    /** Wearing an iron helmet and an elytra and holding {@code held}. */
+    void kit(Player p,org.bukkit.inventory.ItemStack held){when(p.getInventory().getArmorContents()).thenReturn(new org.bukkit.inventory.ItemStack[]{null,null,ELYTRA,HELMET});when(p.getInventory().getItemInMainHand()).thenReturn(held);}
+    /** Wear on {@code item} as the server fires it: true when the duel spares it. */
+    boolean spared(Player p,org.bukkit.inventory.ItemStack item){var e=new org.bukkit.event.player.PlayerItemDamageEvent(p,item,1,1);handler.onItemDamage(e);return e.isCancelled();}
+    void shoot(Player p){var e=mock(org.bukkit.event.entity.EntityShootBowEvent.class);when(e.getEntity()).thenReturn(p);handler.onShoot(e);}
+    void launch(Projectile projectile){var e=mock(org.bukkit.event.entity.ProjectileLaunchEvent.class);when(e.getEntity()).thenReturn(projectile);handler.onLaunch(e);}
+
+    @Test void duelBlowsAndShotsWearNoGearWhileOtherWearStaysReal() {
+        int[] tick={200};bukkit.when(org.bukkit.Bukkit::getCurrentTick).thenAnswer(c->tick[0]);kit(victim,PICKAXE);kit(killer,SWORD);kit(other,SWORD);when(victim.getActiveItem()).thenReturn(SHIELD);
+        command(victim,"Killer");command(killer,"accept");var early=hit(victim,killer,2);cancelTracking(early);land(early);assertTrue(early.isCancelled());assertFalse(spared(victim,HELMET)||spared(killer,SWORD),"Nothing is spared before the fight starts");
+        while(!delayed.isEmpty())runNext();land(hit(victim,killer,2));
+        assertTrue(spared(victim,HELMET),"The struck player's armour");assertTrue(spared(victim,SHIELD),"Their raised shield");assertTrue(spared(killer,SWORD),"The striker's weapon");
+        assertFalse(spared(killer,SWORD),"One swing wears the weapon once, so a second wear on that tick is real");
+        assertFalse(spared(victim,stack(org.bukkit.Material.SHIELD)),"A shield they aren't raising");assertFalse(spared(victim,PICKAXE),"The struck player's tool mining on that tick");assertFalse(spared(victim,ELYTRA),"A worn elytra wears from gliding, not hits");
+        assertFalse(spared(killer,HELMET),"The striker's armour");assertFalse(spared(killer,PICKAXE),"A tool the striker isn't holding");assertFalse(spared(other,SWORD));
+        land(hurt(victim,DamageCause.LAVA,1));assertFalse(spared(victim,HELMET),"Lava on the same tick as a duel blow wears armour as usual");
+        tick[0]=201;assertFalse(spared(victim,HELMET)||spared(killer,SWORD),"A tick later wear is real again");
+        tick[0]=202;var arrow=mock(Arrow.class);when(arrow.getShooter()).thenReturn(killer);land(hit(victim,arrow,2));assertTrue(spared(victim,HELMET));assertFalse(spared(killer,SWORD)||spared(killer,BOW),"A bow wears when it shoots, not when its arrow lands");
+        tick[0]=203;var blast=hurt(victim,DamageCause.ENTITY_EXPLOSION,1);var source=mock(DamageSource.class);when(source.getCausingEntity()).thenReturn(killer);when(blast.getDamageSource()).thenReturn(source);land(blast);assertTrue(spared(victim,HELMET),"The opponent's blast is the duel's");assertFalse(spared(killer,SWORD),"Only a swing wears the held weapon");
+        tick[0]=204;shoot(killer);assertTrue(spared(killer,BOW),"The duellist's own shot");assertFalse(spared(killer,SWORD),"Only the shooting weapon");assertFalse(spared(victim,BOW));
+        tick[0]=205;var snowball=mock(Snowball.class);when(snowball.getShooter()).thenReturn(victim);launch(snowball);assertFalse(spared(victim,PICKAXE)||spared(victim,TRIDENT),"Throwing a snowball spares nothing");
+        var trident=mock(Trident.class);when(trident.getShooter()).thenReturn(victim);launch(trident);assertTrue(spared(victim,TRIDENT),"A thrown trident");assertFalse(spared(victim,PICKAXE));
+        shoot(other);var stray=mock(Trident.class);when(stray.getShooter()).thenReturn(other);launch(stray);assertFalse(spared(other,BOW)||spared(other,TRIDENT),"Not in a duel");
+        var dispensed=mock(Trident.class);when(dispensed.getShooter()).thenReturn(mock(org.bukkit.projectiles.BlockProjectileSource.class));launch(dispensed);
+        tick[0]=206;land(hit(victim,killer,1));var zombie=mock(Zombie.class);when(zombie.getUniqueId()).thenReturn(UUID.randomUUID());land(hit(victim,zombie,1));assertFalse(Duels.isDuelling(victim.getUniqueId()));assertFalse(spared(victim,HELMET),"Once an outsider's hit ends the duel, its wear on that tick is real");
+        tick[0]=207;shoot(killer);assertFalse(spared(killer,BOW),"No duel, no spared shot");
+        duel();tick[0]=208;var lethal=hit(victim,killer,30);cancelTracking(lethal);land(lethal);assertTrue(lethal.isCancelled());assertFalse(spared(victim,HELMET)||spared(killer,SWORD),"The duel is over, so wear is real");
+    }
+
     @Test void anOutsiderInterruptsAndDuellistsCannotHurtBystanders() {
         var zombie=mock(Zombie.class);when(zombie.getUniqueId()).thenReturn(UUID.randomUUID());duel();
         var stray=hit(other,killer,4);cancelTracking(stray);land(stray);assertTrue(stray.isCancelled(),"Duellists can't hurt bystanders");

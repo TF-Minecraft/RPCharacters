@@ -15,6 +15,7 @@ import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.attribute.Attribute;
@@ -27,7 +28,10 @@ import org.bukkit.event.entity.EntityCombustByEntityEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -47,8 +51,9 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * Friendly duels. Only damage between the two duellists belongs to the duel: it is given
- * back when the duel ends, and a blow that would kill ends the duel instead. Anything else
- * that happens to them stays real, so a duel can't heal or shield anyone.
+ * back when the duel ends, the wear it puts on their gear is spared, and a blow that would
+ * kill ends the duel instead. Anything else that happens to them stays real, so a duel
+ * can't heal or shield anyone.
  */
 public final class Duels {
 
@@ -81,6 +86,8 @@ public final class Duels {
 
 	/** Effects whose damage has no attacker, so the duel tracks who applied them. */
 	private static final Set<PotionEffectType> LINGERING_EFFECTS = Set.of(PotionEffectType.POISON, PotionEffectType.WITHER);
+	/** What wears when a duellist shoots. */
+	private static final Set<Material> SHOT_WEAPONS = Set.of(Material.BOW, Material.CROSSBOW, Material.TRIDENT);
 
 	private static final Map<UUID, Challenge> challengesByChallenger = new LinkedHashMap<>();
 	private static final Map<UUID, Duel> duelsByPlayer = new HashMap<>();
@@ -244,13 +251,70 @@ public final class Duels {
 			return;
 		}
 		if (!countsForDuel(event, victim, duel)) {
+			// This hurt's armour wear comes next and is real, even on the tick of a duel blow.
+			duel.clearWear(victim.getUniqueId(), Duel.Wear.ARMOUR);
 			return;
 		}
+		int tick = Bukkit.getCurrentTick();
+		duel.wears(victim.getUniqueId(), Duel.Wear.ARMOUR, tick);
 		if (causingEntity(event) != null) {
-			duel.touchedByOpponent(victim.getUniqueId(), directlyByProjectile(event) ? Duel.Touch.PROJECTILE : Duel.Touch.HIT,
-					Bukkit.getCurrentTick());
+			boolean projectile = directlyByProjectile(event);
+			duel.touchedByOpponent(victim.getUniqueId(), projectile ? Duel.Touch.PROJECTILE : Duel.Touch.HIT, tick);
+			// Only a swing wears the held weapon; a bow or trident wears when shot, a skill or cloud not at all.
+			if (!projectile && (event.getCause() == DamageCause.ENTITY_ATTACK || event.getCause() == DamageCause.ENTITY_SWEEP_ATTACK)) {
+				duel.wears(duel.opponentOf(victim.getUniqueId()), Duel.Wear.WEAPON, tick);
+			}
 		}
 		duel.addDamage(victim.getUniqueId(), Math.max(0.0, Math.min(event.getFinalDamage(), victim.getHealth())));
+	}
+
+	/**
+	 * Any bow, crossbow or trident shot a duellist makes during the fight wears nothing, hit or
+	 * miss: the wear comes as it is shot, before anyone knows where it lands.
+	 */
+	static void recordShot(Entity shooter) {
+		Duel duel = fightingDuelOf(shooter);
+		if (duel != null) {
+			duel.wears(shooter.getUniqueId(), Duel.Wear.SHOT, Bukkit.getCurrentTick());
+		}
+	}
+
+	/**
+	 * A duel blow or shot wears gear on its own tick: the struck player's armour or raised
+	 * shield, the striker's held weapon (once per swing), the shooter's bow. Only that gear's
+	 * wear on that tick is spared; a tool mining, an elytra gliding or any other wear stays real.
+	 */
+	static void spareDuelWear(PlayerItemDamageEvent event) {
+		Player player = event.getPlayer();
+		Duel duel = fightingDuelOf(player);
+		if (duel == null) {
+			return;
+		}
+		UUID id = player.getUniqueId();
+		int tick = Bukkit.getCurrentTick();
+		ItemStack item = event.getItem();
+		if (duel.wearsAt(id, Duel.Wear.WEAPON, tick) && item.isSimilar(player.getInventory().getItemInMainHand())) {
+			duel.clearWear(id, Duel.Wear.WEAPON);
+			event.setCancelled(true);
+		} else if ((duel.wearsAt(id, Duel.Wear.ARMOUR, tick) && isWornArmourOrShield(player, item))
+				|| (duel.wearsAt(id, Duel.Wear.SHOT, tick) && SHOT_WEAPONS.contains(item.getType()))) {
+			event.setCancelled(true);
+		}
+	}
+
+	private static boolean isWornArmourOrShield(Player player, ItemStack item) {
+		if (item.getType() == Material.SHIELD) {
+			return item.isSimilar(player.getActiveItem());
+		}
+		if (item.getType() == Material.ELYTRA) {
+			return false;
+		}
+		for (ItemStack worn : player.getInventory().getArmorContents()) {
+			if (item.isSimilar(worn)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
