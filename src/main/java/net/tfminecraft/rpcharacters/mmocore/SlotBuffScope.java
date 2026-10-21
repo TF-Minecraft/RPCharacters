@@ -17,6 +17,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.scheduler.BukkitTask;
 
+import io.lumine.mythic.lib.gui.PluginInventory;
 import io.lumine.mythic.lib.player.skillmod.SkillModifier;
 import io.lumine.mythic.lib.player.skillmod.SkillModifierMap;
 import io.lumine.mythic.lib.skill.handler.SkillHandler;
@@ -35,20 +36,22 @@ import net.tfminecraft.rpcharacters.RPCharacters;
  * <p>
  * Each such modifier is replaced in the player's map by a copy with the same UUID that targets only the
  * bound skill. MMOCore removes slot buffs by UUID on unbind, so that still clears the copy. MMOCore fires
- * no bind event, so binds are caught a tick after the ways players bind (skill GUI clicks, data load,
- * class change, RPCharacters' own restore), and a 20-tick pass catches the rest (admin commands, reload).
+ * no bind event, so binds are scoped right after RPCharacters' own class switch and restore, a tick
+ * after skill GUI clicks, data load and class change, and by a 20-tick pass for the rest (admin
+ * commands, reload).
  */
 public final class SlotBuffScope implements Listener {
 
 	private static final long PERIOD_TICKS = 20L;
+	private static final long WARN_INTERVAL_MS = 60_000L;
 	private static final Set<UUID> QUEUED = ConcurrentHashMap.newKeySet();
 
 	private static BukkitTask task;
-	private static boolean warned;
+	private static long lastWarnMs = 0L;
 
 	public static void start() {
 		shutdown();
-		warned = false;
+		lastWarnMs = 0L;
 		task = Bukkit.getScheduler().runTaskTimer(RPCharacters.plugin, SlotBuffScope::tick, PERIOD_TICKS, PERIOD_TICKS);
 	}
 
@@ -68,15 +71,18 @@ public final class SlotBuffScope implements Listener {
 		try {
 			scope(playerData);
 		} catch (RuntimeException ex) {
-			warnOnce(playerData.getUniqueId(), ex);
+			warn(playerData.getUniqueId(), ex);
 		} catch (LinkageError err) {
 			disable(err);
 		}
 	}
 
-	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	// MythicLib menus (the MMOCore skill list included) cancel every click before acting on it.
+	@EventHandler(priority = EventPriority.MONITOR)
 	public void onInventoryClick(InventoryClickEvent event) {
-		scopeNextTick(event.getWhoClicked().getUniqueId());
+		if (event.getView().getTopInventory().getHolder(false) instanceof PluginInventory) {
+			scopeNextTick(event.getWhoClicked().getUniqueId());
+		}
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
@@ -139,9 +145,10 @@ public final class SlotBuffScope implements Listener {
 		SkillModifierMap map = playerData.getMMOPlayerData().getSkillModifierMap();
 		List<SkillModifier> narrowed = new ArrayList<>();
 		for (SkillModifier mod : map.getModifiers()) {
-			// The trigger hands its own list to the modifier it registers; a narrowed copy has its own.
+			// The trigger hands its own list to the modifier it registers (MMOCore registers it only when the
+			// list holds the bound skill); a narrowed copy has its own list.
 			SkillHandler<?> handler = wide.get(mod.getSkills());
-			if (handler != null && mod.getSkills().contains(handler)) {
+			if (handler != null) {
 				narrowed.add(narrow(mod, handler));
 			}
 		}
@@ -156,11 +163,12 @@ public final class SlotBuffScope implements Listener {
 				mod.getValue(), mod.getType(), mod.getSlot(), mod.getSource());
 	}
 
-	private static void warnOnce(UUID id, RuntimeException ex) {
-		if (warned) {
+	private static void warn(UUID id, RuntimeException ex) {
+		long now = System.currentTimeMillis();
+		if (now - lastWarnMs < WARN_INTERVAL_MS) {
 			return;
 		}
-		warned = true;
+		lastWarnMs = now;
 		RPCharacters.plugin.getLogger().log(Level.WARNING, "Cannot scope skill slot buffs for " + id
 				+ "; their slot buffs may apply to every skill", ex);
 	}

@@ -337,6 +337,7 @@ public final class ClassService {
 			}
 			sanitizeForeignSkillLevels(mmoPd);
 			unbindLockedSkills(mmoPd);
+			SlotBuffScope.scopeNow(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
 			creditRewardSkillPoints(player, mmoPd);
 			clampExcessSkillPool(player);
@@ -372,6 +373,7 @@ public final class ClassService {
 			mmoPd.setExperience(exp);
 			sanitizeForeignSkillLevels(mmoPd);
 			unbindLockedSkills(mmoPd);
+			SlotBuffScope.scopeNow(mmoPd);
 			claimMissedLevelRewards(mmoPd, target);
 			creditRewardSkillPoints(player, mmoPd);
 			clampExcessSkillPool(player);

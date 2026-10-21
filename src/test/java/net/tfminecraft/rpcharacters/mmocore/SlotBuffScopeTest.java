@@ -23,6 +23,8 @@ import net.Indyuce.mmocore.skill.binding.SkillSlot;
 
 class SlotBuffScopeTest {
 
+	private static final String SLOT_KEY = SkillSlot.SKILL_MODIFIER_TRIGGER_KEY;
+
 	private final SkillHandler<?> first = mock(SkillHandler.class);
 	private final SkillHandler<?> second = mock(SkillHandler.class);
 	private final List<SkillHandler<?>> everySkill = List.of(first, second);
@@ -40,7 +42,7 @@ class SlotBuffScopeTest {
 	@Test
 	void slotBuffOnlyChangesTheSkillInThatSlot() {
 		bind(1, first);
-		SkillModifier damage = new SkillModifier("mmocore_trigger", "damage", everySkill, -25, ModifierType.RELATIVE);
+		SkillModifier damage = new SkillModifier(SLOT_KEY, "damage", everySkill, -25, ModifierType.RELATIVE);
 		bind(3, second, trigger(damage));
 		map.addModifier(damage);
 
@@ -65,7 +67,7 @@ class SlotBuffScopeTest {
 		map.addModifier(fromTree);
 		bind(1, first);
 		// The slot's own buff has its own target list and is not registered here.
-		bind(3, second, trigger(new SkillModifier("mmocore_trigger", "damage", List.of(first, second), -25,
+		bind(3, second, trigger(new SkillModifier(SLOT_KEY, "damage", List.of(first, second), -25,
 				ModifierType.RELATIVE)));
 
 		assertEquals(0, SlotBuffScope.scope(playerData));
@@ -73,12 +75,30 @@ class SlotBuffScopeTest {
 	}
 
 	@Test
-	void skipsBuffsThatDoNotTargetTheBoundSkill() {
-		SkillModifier onlyFirst = new SkillModifier("mmocore_trigger", "damage", List.of(first), -25,
+	void leavesSingleSkillBuffsAlone() {
+		SkillModifier onlySecond = new SkillModifier(SLOT_KEY, "damage", List.of(second), -25,
 				ModifierType.RELATIVE);
-		bind(3, second, trigger(onlyFirst));
+		bind(3, second, trigger(onlySecond));
+		map.addModifier(onlySecond);
 
 		assertEquals(0, SlotBuffScope.scope(playerData));
+		assertEquals(7.5, map.calculateValue(second, 10, "damage"), 1e-9);
+	}
+
+	@Test
+	void eachBuffedSlotKeepsItsBuffOnItsOwnSkill() {
+		SkillModifier slot2 = new SkillModifier(SLOT_KEY, "damage", List.of(first, second), -10,
+				ModifierType.RELATIVE);
+		SkillModifier slot3 = new SkillModifier(SLOT_KEY, "damage", List.of(first, second), -25,
+				ModifierType.RELATIVE);
+		bind(2, first, trigger(slot2));
+		bind(3, second, trigger(slot3));
+		map.addModifier(slot2);
+		map.addModifier(slot3);
+
+		assertEquals(2, SlotBuffScope.scope(playerData));
+		assertEquals(9, map.calculateValue(first, 10, "damage"), 1e-9);
+		assertEquals(7.5, map.calculateValue(second, 10, "damage"), 1e-9);
 	}
 
 	private SkillModifierTrigger trigger(SkillModifier mod) {
