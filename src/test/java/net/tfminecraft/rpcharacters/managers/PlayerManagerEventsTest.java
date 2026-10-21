@@ -405,6 +405,21 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
     }
 
     @Test
+    void oneOffRewardExperienceSavesPromptlyAndRepeatableExperienceCoalesces() {
+        active.set(character);
+        try (var progress = mockStatic(net.tfminecraft.rpcharacters.progress.CharacterProgressService.class)) {
+            for (var source : net.Indyuce.mmocore.experience.EXPSource.values()) {
+                PlayerExperienceGainEvent event = experience("mining", 5); when(event.getSource()).thenReturn(source);
+                manager.xpGain(event);
+            }
+            PlayerExperienceGainEvent unknown = experience("mining", 5); manager.xpGain(unknown);
+            progress.verify(() -> net.tfminecraft.rpcharacters.progress.CharacterProgressService.schedulePromptCheckpoint(player), times(2));
+            progress.verify(() -> net.tfminecraft.rpcharacters.progress.CharacterProgressService.scheduleCheckpoint(player),
+                    times(net.Indyuce.mmocore.experience.EXPSource.values().length - 2 + 1));
+        }
+    }
+
+    @Test
     void experienceModifierUsesProfessionAndTracksClassProgression() {
         PlayerExperienceGainEvent event = experience("mining", 20);
         active.set(null); manager.xpGain(event);

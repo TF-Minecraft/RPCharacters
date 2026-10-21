@@ -29,6 +29,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import net.Indyuce.mmocore.api.event.PlayerChangeClassEvent;
 import net.Indyuce.mmocore.api.event.PlayerLevelChangeEvent;
 import net.Indyuce.mmocore.api.event.PlayerExperienceGainEvent;
+import net.Indyuce.mmocore.experience.EXPSource;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
@@ -912,7 +913,12 @@ public class PlayerManager implements Listener{
 		Player p = e.getPlayer();
 		PlayerData pd = get(p);
 		if(pd == null || !pd.hasActiveCharacter()) return;
-		net.tfminecraft.rpcharacters.progress.CharacterProgressService.scheduleCheckpoint(p);
+		// Command and quest EXP are one-off rewards their source has already recorded, so save those soon.
+		if(e.getSource() == EXPSource.COMMAND || e.getSource() == EXPSource.QUEST) {
+			net.tfminecraft.rpcharacters.progress.CharacterProgressService.schedulePromptCheckpoint(p);
+		} else {
+			net.tfminecraft.rpcharacters.progress.CharacterProgressService.scheduleCheckpoint(p);
+		}
 		if(e.getProfession() == null) {
 			ClassService.trackFromPlayer(p);
 			return;
