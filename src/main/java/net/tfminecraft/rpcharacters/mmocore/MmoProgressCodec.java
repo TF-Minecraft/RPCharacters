@@ -221,6 +221,7 @@ public final class MmoProgressCodec {
 			mmo.applyClassInfo(slotClass, new SavedClassInformation(slot.getValue()));
 		}
 		mmo.applyTemporaryTriggers();
+		SlotBuffScope.scopeNow(mmo);
 		new Resources(current).apply(mmo);
 	}
 
