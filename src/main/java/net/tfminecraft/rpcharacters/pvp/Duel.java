@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -21,6 +22,8 @@ final class Duel {
 	private final Map<UUID, Double> damageTaken = new HashMap<>();
 	private final Map<UUID, String> names = new HashMap<>();
 	private final Map<UUID, Map<Touch, Integer>> opponentTouchTicks = new HashMap<>();
+	private final Map<UUID, Map<Wear, Integer>> wearTicks = new HashMap<>();
+	private final Map<UUID, Swing> swings = new HashMap<>();
 	private final Set<UUID> burningFromOpponent = new HashSet<>();
 	private final Map<UUID, Set<PotionEffectType>> effectsFromOpponent = new HashMap<>();
 	private final List<BukkitTask> tasks = new ArrayList<>();
@@ -104,6 +107,51 @@ final class Duel {
 			}
 		}
 		return false;
+	}
+
+	/** The gear a duel blow wears: the struck player's armour or raised shield, the shooter's bow. */
+	enum Wear {
+		ARMOUR, SHOT
+	}
+
+	private record Swing(ItemStack weapon, int tick) {
+	}
+
+	/** A duel blow on this server tick wears this kind of the player's gear. */
+	void wears(UUID id, Wear wear, int tick) {
+		wearTicks.computeIfAbsent(id, key -> new EnumMap<>(Wear.class)).put(wear, tick);
+	}
+
+	boolean wearsAt(UUID id, Wear wear, int tick) {
+		Integer at = wearTicks.getOrDefault(id, Map.of()).get(wear);
+		return at != null && at == tick;
+	}
+
+	/** The player struck their opponent with this held weapon on this server tick. */
+	void swung(UUID id, ItemStack weapon, int tick) {
+		swings.put(id, new Swing(weapon, tick));
+	}
+
+	/** True once, for the swung weapon's wear on the tick of the swing; that uses the swing up. */
+	boolean takeSwing(UUID id, ItemStack item, int tick) {
+		Swing swing = swings.get(id);
+		if (swing == null || swing.tick() != tick || !item.isSimilar(swing.weapon())) {
+			return false;
+		}
+		swings.remove(id);
+		return true;
+	}
+
+	/** A swing whose wear never came (Unbreaking) must not cover the next thing the weapon does. */
+	void forgetSwing(UUID id) {
+		swings.remove(id);
+	}
+
+	void clearWear(UUID id, Wear wear) {
+		Map<Wear, Integer> ticks = wearTicks.get(id);
+		if (ticks != null) {
+			ticks.remove(wear);
+		}
 	}
 
 	void setBurningFromOpponent(UUID id, boolean fromOpponent) {
