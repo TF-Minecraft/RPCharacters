@@ -84,6 +84,7 @@ import net.tfminecraft.rpcharacters.persona.PersonaCooldownManager;
 import net.tfminecraft.rpcharacters.profile.ProfileManager;
 import net.tfminecraft.rpcharacters.profile.ProfileViewCooldownManager;
 import net.tfminecraft.rpcharacters.mmocore.AttributePointService;
+import net.tfminecraft.rpcharacters.mmocore.SlotBuffScope;
 import net.tfminecraft.rpcharacters.professions.ProfessionCommandHandler;
 import net.tfminecraft.rpcharacters.professions.ProfessionEffectService;
 import net.tfminecraft.rpcharacters.professions.ProfessionListener;
@@ -377,7 +378,7 @@ public class RPCharacters extends JavaPlugin{
 		Duels.shutdown();
 		pvpKnockoutManager.shutdown();
 		EvilRpService.shutdown();
-		net.tfminecraft.rpcharacters.mmocore.SlotBuffScope.shutdown();
+		SlotBuffScope.shutdown();
 		PvpStrikeService.shutdown();
 		ArmourDonning.shutdown();
 		LastSolidTracker.get().shutdown();
@@ -402,6 +403,7 @@ public class RPCharacters extends JavaPlugin{
 	public void registerListeners() {
 		getServer().getPluginManager().registerEvents(playerManager, this);
 		getServer().getPluginManager().registerEvents(new net.tfminecraft.rpcharacters.mmocore.MmoCorePlayerReady(), this);
+		getServer().getPluginManager().registerEvents(new SlotBuffScope(), this);
 		getServer().getPluginManager().registerEvents(creationManager, this);
 		getServer().getPluginManager().registerEvents(new PaidChangeListener(), this);
 		var classPickListener = new net.tfminecraft.rpcharacters.classpick.ClassPickListener();
@@ -469,7 +471,7 @@ public class RPCharacters extends JavaPlugin{
 		pvpKnockoutManager.start();
 		Duels.start(pvpKnockoutManager::isDown);
 		EvilRpService.start();
-		net.tfminecraft.rpcharacters.mmocore.SlotBuffScope.start();
+		SlotBuffScope.start();
 		PvpStrikeService.start();
 		ArmourDonning.start();
 		LastSolidTracker.get().start();

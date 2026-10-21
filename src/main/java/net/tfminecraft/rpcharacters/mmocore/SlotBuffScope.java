@@ -1,16 +1,27 @@
 package net.tfminecraft.rpcharacters.mmocore;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.scheduler.BukkitTask;
 
 import io.lumine.mythic.lib.player.skillmod.SkillModifier;
 import io.lumine.mythic.lib.player.skillmod.SkillModifierMap;
 import io.lumine.mythic.lib.skill.handler.SkillHandler;
+import net.Indyuce.mmocore.api.event.PlayerChangeClassEvent;
+import net.Indyuce.mmocore.api.event.PlayerDataLoadEvent;
 import net.Indyuce.mmocore.api.player.PlayerData;
 import net.Indyuce.mmocore.api.quest.trigger.SkillModifierTrigger;
 import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
@@ -23,21 +34,21 @@ import net.tfminecraft.rpcharacters.RPCharacters;
  * the player has: a martial's Slot III -25% also hit the Slot I passive.
  * <p>
  * Each such modifier is replaced in the player's map by a copy with the same UUID that targets only the
- * bound skill. MMOCore removes slot buffs by UUID on unbind, so that still clears the copy. MMOCore has no
- * bind event, so a timer looks for new slot buffs; a fresh bind keeps the wide buff until the next pass.
+ * bound skill. MMOCore removes slot buffs by UUID on unbind, so that still clears the copy. MMOCore fires
+ * no bind event, so binds are caught a tick after the ways players bind (skill GUI clicks, data load,
+ * class change, RPCharacters' own restore), and a 20-tick pass catches the rest (admin commands, reload).
  */
-public final class SlotBuffScope {
+public final class SlotBuffScope implements Listener {
 
 	private static final long PERIOD_TICKS = 20L;
+	private static final Set<UUID> QUEUED = ConcurrentHashMap.newKeySet();
 
 	private static BukkitTask task;
 	private static boolean warned;
 
-	private SlotBuffScope() {
-	}
-
 	public static void start() {
 		shutdown();
+		warned = false;
 		task = Bukkit.getScheduler().runTaskTimer(RPCharacters.plugin, SlotBuffScope::tick, PERIOD_TICKS, PERIOD_TICKS);
 	}
 
@@ -46,46 +57,92 @@ public final class SlotBuffScope {
 			task.cancel();
 			task = null;
 		}
+		QUEUED.clear();
+	}
+
+	/** Scopes the player's slot buffs now; never throws. */
+	public static void scopeNow(PlayerData playerData) {
+		if (task == null || playerData == null) {
+			return;
+		}
+		try {
+			scope(playerData);
+		} catch (RuntimeException ex) {
+			warnOnce(playerData.getUniqueId(), ex);
+		} catch (LinkageError err) {
+			disable(err);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onInventoryClick(InventoryClickEvent event) {
+		scopeNextTick(event.getWhoClicked().getUniqueId());
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void onDataLoad(PlayerDataLoadEvent event) {
+		scopeNextTick(event.getData().getUniqueId());
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onClassChange(PlayerChangeClassEvent event) {
+		scopeNextTick(event.getData().getUniqueId());
+	}
+
+	private static void scopeNextTick(UUID id) {
+		if (task == null || !QUEUED.add(id)) {
+			return;
+		}
+		Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+			QUEUED.remove(id);
+			Player player = Bukkit.getPlayer(id);
+			if (player != null && PlayerData.has(player)) {
+				scopeNow(PlayerData.get(player));
+			}
+		});
 	}
 
 	private static void tick() {
 		for (Player player : Bukkit.getOnlinePlayers()) {
-			try {
-				if (PlayerData.has(player)) {
-					scope(PlayerData.get(player));
-				}
-			} catch (RuntimeException ex) {
-				// One player's data must not stop the others.
-				warnOnce(player, ex);
+			if (task == null) {
+				return;
+			}
+			if (PlayerData.has(player)) {
+				scopeNow(PlayerData.get(player));
 			}
 		}
 	}
 
 	/** Returns how many modifiers were narrowed. */
 	static int scope(PlayerData playerData) {
-		Collection<BoundSkillInfo> bound = playerData.getBoundSkills().values();
-		if (bound.isEmpty()) {
-			return 0;
-		}
-		SkillModifierMap map = null;
-		List<SkillModifier> narrowed = new ArrayList<>();
-		for (BoundSkillInfo info : bound) {
+		// Each buffed slot's target list (by identity) to the skill bound there.
+		Map<List<SkillHandler<?>>, SkillHandler<?>> wide = null;
+		for (BoundSkillInfo info : playerData.getBoundSkills().values()) {
 			List<SkillModifierTrigger> buffs = info.getSkillSlot().getBuffs();
 			if (buffs.isEmpty()) {
 				continue;
 			}
-			if (map == null) {
-				map = playerData.getMMOPlayerData().getSkillModifierMap();
-			}
 			SkillHandler<?> handler = info.getClassSkill().getSkill();
 			for (SkillModifierTrigger buff : buffs) {
 				List<SkillHandler<?>> targets = buff.getTargetSkills();
-				for (SkillModifier mod : map.getModifiers()) {
-					// The trigger hands its own list to the modifier it registers; a narrowed copy has its own.
-					if (mod.getSkills() == targets && targets.size() > 1 && targets.contains(handler)) {
-						narrowed.add(narrow(mod, handler));
+				if (targets.size() > 1) {
+					if (wide == null) {
+						wide = new IdentityHashMap<>();
 					}
+					wide.put(targets, handler);
 				}
+			}
+		}
+		if (wide == null) {
+			return 0;
+		}
+		SkillModifierMap map = playerData.getMMOPlayerData().getSkillModifierMap();
+		List<SkillModifier> narrowed = new ArrayList<>();
+		for (SkillModifier mod : map.getModifiers()) {
+			// The trigger hands its own list to the modifier it registers; a narrowed copy has its own.
+			SkillHandler<?> handler = wide.get(mod.getSkills());
+			if (handler != null && mod.getSkills().contains(handler)) {
+				narrowed.add(narrow(mod, handler));
 			}
 		}
 		for (SkillModifier mod : narrowed) {
@@ -99,12 +156,18 @@ public final class SlotBuffScope {
 				mod.getValue(), mod.getType(), mod.getSlot(), mod.getSource());
 	}
 
-	private static void warnOnce(Player player, RuntimeException ex) {
+	private static void warnOnce(UUID id, RuntimeException ex) {
 		if (warned) {
 			return;
 		}
 		warned = true;
-		RPCharacters.plugin.getLogger().warning("Cannot scope skill slot buffs for " + player.getName()
-				+ "; their slot buffs may apply to every skill: " + ex);
+		RPCharacters.plugin.getLogger().log(Level.WARNING, "Cannot scope skill slot buffs for " + id
+				+ "; their slot buffs may apply to every skill", ex);
+	}
+
+	private static void disable(LinkageError err) {
+		shutdown();
+		RPCharacters.plugin.getLogger().log(Level.SEVERE, "MMOCore/MythicLib no longer match the slot buff API;"
+				+ " skill slot buffs apply to every skill again", err);
 	}
 }
