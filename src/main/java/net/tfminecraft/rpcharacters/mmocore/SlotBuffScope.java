@@ -17,12 +17,12 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.scheduler.BukkitTask;
 
+import io.lumine.mythic.lib.api.event.SynchronizedDataLoadEvent;
 import io.lumine.mythic.lib.gui.PluginInventory;
 import io.lumine.mythic.lib.player.skillmod.SkillModifier;
 import io.lumine.mythic.lib.player.skillmod.SkillModifierMap;
 import io.lumine.mythic.lib.skill.handler.SkillHandler;
 import net.Indyuce.mmocore.api.event.PlayerChangeClassEvent;
-import net.Indyuce.mmocore.api.event.PlayerDataLoadEvent;
 import net.Indyuce.mmocore.api.player.PlayerData;
 import net.Indyuce.mmocore.api.quest.trigger.SkillModifierTrigger;
 import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
@@ -93,8 +93,17 @@ public final class SlotBuffScope implements Listener {
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
-	public void onDataLoad(PlayerDataLoadEvent event) {
-		scopeNextTick(event.getData().getUniqueId());
+	public void onDataLoad(SynchronizedDataLoadEvent event) {
+		if (task == null) {
+			return;
+		}
+		try {
+			if (event.getHolder() instanceof PlayerData playerData) {
+				scopeNextTick(playerData.getUniqueId());
+			}
+		} catch (LinkageError err) {
+			disable(err);
+		}
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
