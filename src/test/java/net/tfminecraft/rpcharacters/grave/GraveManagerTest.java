@@ -104,6 +104,19 @@ class GraveManagerTest {
         assertSame(grave, manager.getAt(grave.getBlockLocation().getBlock()));
     }
 
+    @Test void taggedLookupReadsTheLiveBlockEntityWithoutCopyingTheChest() {
+        Grave grave = grave(3, 64, 3); manager.register(grave);
+        Block block = mock(Block.class); TileState live = mock(TileState.class, RETURNS_DEEP_STUBS);
+        when(block.getWorld()).thenReturn(world); when(block.getX()).thenReturn(3); when(block.getY()).thenReturn(64); when(block.getZ()).thenReturn(3);
+        when(block.getState(false)).thenReturn(live);
+        when(live.getPersistentDataContainer().get(GraveKeys.graveId(), GraveKeys.GRAVE_ID_TYPE)).thenReturn(grave.getId().toString());
+        assertSame(grave, manager.getAt(block)); assertTrue(manager.isGrave(block));
+        // The grave is also indexed at these coordinates, so check the tag itself was read.
+        verify(block, times(2)).getState(false);
+        verify(live.getPersistentDataContainer(), times(2)).get(GraveKeys.graveId(), GraveKeys.GRAVE_ID_TYPE);
+        verify(block, never()).getState();
+    }
+
     @Test void staleBlockTagsCannotExposeLootFromAMovedGrave() {
         Grave grave = grave(1, 64, 1); Block previous = grave.getBlockLocation().getBlock(); previous.setType(Material.CHEST);
         manager.save(grave); grave.setBlockLocation(new Location(world, 9, 64, 9)); manager.register(grave);

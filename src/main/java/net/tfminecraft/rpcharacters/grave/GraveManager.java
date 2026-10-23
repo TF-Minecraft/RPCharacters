@@ -56,7 +56,9 @@ public final class GraveManager {
 		if (block == null) {
 			return null;
 		}
-		if (block.getState() instanceof TileState tile) {
+		// Hopper moves call this for every transfer. A snapshot copies the whole chest
+		// inventory just to read one tag, so read the live block entity instead.
+		if (block.getState(false) instanceof TileState tile) {
 			String raw = tile.getPersistentDataContainer().get(GraveKeys.graveId(), GraveKeys.GRAVE_ID_TYPE);
 			if (raw != null && !raw.isBlank()) {
 				try {
