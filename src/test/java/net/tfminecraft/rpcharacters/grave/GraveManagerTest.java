@@ -111,6 +111,9 @@ class GraveManagerTest {
         when(block.getState(false)).thenReturn(live);
         when(live.getPersistentDataContainer().get(GraveKeys.graveId(), GraveKeys.GRAVE_ID_TYPE)).thenReturn(grave.getId().toString());
         assertSame(grave, manager.getAt(block)); assertTrue(manager.isGrave(block));
+        // The grave is also indexed at these coordinates, so check the tag itself was read.
+        verify(block, times(2)).getState(false);
+        verify(live.getPersistentDataContainer(), times(2)).get(GraveKeys.graveId(), GraveKeys.GRAVE_ID_TYPE);
         verify(block, never()).getState();
     }
 
