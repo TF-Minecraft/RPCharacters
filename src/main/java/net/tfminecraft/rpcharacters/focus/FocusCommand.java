@@ -14,6 +14,8 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 
 public final class FocusCommand implements CommandExecutor, TabCompleter {
     public static final String PERMISSION = "rpchar.focus.admin";
+    private static final List<String> VALUES = List.of("get", "set", "add", "remove", "reset");
+    private static final String USAGE = "Usage: /focus <get|restore|reset> <player> | /focus <set|add|remove> <player> <points> | /focus reload";
     private final RPCharacters plugin;
 
     public FocusCommand(RPCharacters plugin) {
@@ -48,7 +50,45 @@ public final class FocusCommand implements CommandExecutor, TabCompleter {
                     + focus.getPoints(target) + "/" + focus.getMax() + ").");
             return true;
         }
-        sender.sendMessage("Usage: /focus restore <player> | /focus reload");
+        if (args.length >= 2 && VALUES.contains(args[0].toLowerCase(Locale.ROOT))) {
+            String action = args[0].toLowerCase(Locale.ROOT);
+            boolean numeric = List.of("set", "add", "remove").contains(action);
+            if (args.length != (numeric ? 3 : 2)) {
+                sender.sendMessage(USAGE);
+                return true;
+            }
+            int amount = 0;
+            if (numeric) {
+                try {
+                    amount = Integer.parseInt(args[2]);
+                    if (action.equals("remove") && amount < 0) throw new NumberFormatException();
+                } catch (NumberFormatException ex) {
+                    sender.sendMessage("Use whole points within the integer range; remove requires a nonnegative amount.");
+                    return true;
+                }
+            }
+            Player target = Bukkit.getPlayerExact(args[1]);
+            if (target == null) {
+                sender.sendMessage("Player not found: " + args[1]);
+                return true;
+            }
+            FocusService focus = RPCharacters.getFocusService();
+            if (focus == null || focus.getLoadedPoints(target) < 0) {
+                sender.sendMessage("Focus unavailable for " + target.getName() + ". Check their active character.");
+                return true;
+            }
+            if (!action.equals("get")) {
+                if (action.equals("reset")) amount = focus.getMax();
+                if (action.equals("remove")) amount = -amount;
+                if (!focus.editPoints(target, amount, action.equals("add") || action.equals("remove"))) {
+                    sender.sendMessage("Could not save focus for " + target.getName() + ". Check console.");
+                    return true;
+                }
+            }
+            sender.sendMessage("Focus for " + target.getName() + ": " + focus.getLoadedPoints(target) + "/" + focus.getMax() + ".");
+            return true;
+        }
+        sender.sendMessage(USAGE);
         return true;
     }
 
@@ -56,10 +96,10 @@ public final class FocusCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission(PERMISSION)) return List.of();
         if (args.length == 1) {
-            return List.of("restore", "reload").stream()
+            return List.of("restore", "reload", "get", "set", "add", "remove", "reset").stream()
                     .filter(value -> value.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("restore")) {
+        if (args.length == 2 && (args[0].equalsIgnoreCase("restore") || VALUES.contains(args[0].toLowerCase(Locale.ROOT)))) {
             String prefix = args[1].toLowerCase(Locale.ROOT);
             return Bukkit.getOnlinePlayers().stream().map(Player::getName)
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix)).sorted().toList();

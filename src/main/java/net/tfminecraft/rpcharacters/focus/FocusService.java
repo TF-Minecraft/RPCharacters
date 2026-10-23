@@ -89,12 +89,25 @@ public final class FocusService {
     }
 
     public boolean restore(Player player) {
+        return editPoints(player, FocusConfig.max, false);
+    }
+
+    /** Current loaded character's balance, or -1 when Focus is unavailable. */
+    public int getLoadedPoints(Player player) {
         FocusData data = dataFor(player);
-        if (data == null) {
-            return false;
-        }
-        data.setPoints(FocusConfig.max);
-        return saveSafely(data);
+        return data == null ? -1 : data.getPoints();
+    }
+
+    /** Admin edit, clamped before narrowing; persists now and rolls back on save failure. */
+    public boolean editPoints(Player player, int amount, boolean relative) {
+        FocusData data = dataFor(player);
+        if (data == null) return false;
+        int before = data.getPoints();
+        long next = relative ? (long) before + amount : amount;
+        data.setPoints((int) Math.max(0L, Math.min(FocusConfig.max, next)));
+        if (saveSafely(data)) return true;
+        data.setPoints(before);
+        return false;
     }
 
     public void activate(Player player, RPCharacter character) {

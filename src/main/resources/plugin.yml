@@ -19,7 +19,7 @@ commands:
     description: Choose a subclass of your character's class
   focus:
     description: Manage character focus
-    usage: /focus restore <player> | /focus reload
+    usage: /focus <get|restore|reset> <player> | /focus <set|add|remove> <player> <points> | /focus reload
     permission: rpchar.focus.admin
   rpcharacter:
     useage: /<command>
