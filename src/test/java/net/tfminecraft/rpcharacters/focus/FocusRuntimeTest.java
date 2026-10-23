@@ -26,6 +26,23 @@ import org.mockbukkit.mockbukkit.*;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 class FocusRuntimeTest extends FocusRuntimeFixture {
+    @Test void adminEditsClampOverflowPersistAndRollBackFailedSaves() {
+        var tracked = mock(FocusStore.class);
+        var data = FocusData.createNew(character.getId(), "owner");
+        when(tracked.load(character.getId())).thenReturn(data);
+        var service = new FocusService(plugin, tracked);
+        assertEquals(-1, service.getLoadedPoints(player));
+        assertFalse(service.editPoints(player, 1, false));
+        service.activate(player, character);
+        assertTrue(service.editPoints(player, 20, false)); assertEquals(20, service.getLoadedPoints(player));
+        assertTrue(service.editPoints(player, Integer.MAX_VALUE, true)); assertEquals(FocusConfig.max, service.getLoadedPoints(player));
+        assertTrue(service.editPoints(player, Integer.MIN_VALUE, true)); assertEquals(0, service.getLoadedPoints(player));
+        assertTrue(service.editPoints(player, 42, true)); assertEquals(42, service.getLoadedPoints(player));
+        verify(tracked, times(4)).save(data);
+        doThrow(new IllegalStateException("disk full")).when(tracked).save(data);
+        assertFalse(service.editPoints(player, 80, false)); assertEquals(42, service.getLoadedPoints(player));
+        assertFalse(service.editPoints(player, -1, true)); assertEquals(42, service.getLoadedPoints(player));
+    }
     @Test void configurationLoadsBonusesBoundsAndExplicitlyDisabledRestoreItems() throws Exception {
         Files.writeString(config, """
             max: 0
@@ -193,7 +210,7 @@ class FocusRuntimeTest extends FocusRuntimeFixture {
         player.addAttachment(plugin, FocusCommand.PERMISSION, true); var handler = new FocusCommand(plugin);
         for (String[] args : List.of(new String[0], new String[]{"unknown"}, new String[]{"restore"})) {
             assertTrue(handler.onCommand(player, mock(Command.class), "focus", args));
-            assertEquals("Usage: /focus restore <player> | /focus reload", player.nextMessage());
+            assertEquals("Usage: /focus <get|restore|reset> <player> | /focus <set|add|remove> <player> <points> | /focus reload", player.nextMessage());
         }
     }
 

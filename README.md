@@ -20,6 +20,8 @@ Beyond a name and appearance, characters have traits, professions, injuries, and
 
 ## Beyond the game
 
+[Staff Focus commands](FOCUS-ADMIN.md)
+
 The character pages in [TFMCWeb](https://github.com/TF-Minecraft/TFMCWeb) provide the connected web experience for character creation and management.
 
 ## Documentation
