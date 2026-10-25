@@ -202,12 +202,17 @@ public final class PvpKnockoutManager implements Listener {
 	 * carry the body. Returns false when the player is not knocked out.
 	 */
 	public boolean moveDowned(Player player, Location to) {
-		if (to == null || !isKnockedOut(player)) {
+		if (to == null || to.getWorld() == null || !isKnockedOut(player)) {
 			return false;
 		}
-		Knockout knockout = knockouts.get(player.getUniqueId());
-		knockout.location = to.clone();
-		enforceFreeze(player, knockout.location);
+		Location dest = to.clone();
+		dest.setYaw(player.getLocation().getYaw());
+		dest.setPitch(player.getLocation().getPitch());
+		// Only a move that really happened becomes the new freeze spot; a refused teleport keeps the old one.
+		if (!player.teleport(dest)) {
+			return false;
+		}
+		knockouts.get(player.getUniqueId()).location = to.clone();
 		return true;
 	}
 
@@ -303,7 +308,8 @@ public final class PvpKnockoutManager implements Listener {
 
 	private void enforceFreeze(Player player, Location freezeAt) {
 		Location here = player.getLocation();
-		if (here.getX() == freezeAt.getX()
+		if (here.getWorld() == freezeAt.getWorld()
+				&& here.getX() == freezeAt.getX()
 				&& here.getY() == freezeAt.getY()
 				&& here.getZ() == freezeAt.getZ()) {
 			return;
