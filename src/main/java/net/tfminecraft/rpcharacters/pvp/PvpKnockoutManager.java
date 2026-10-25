@@ -197,6 +197,20 @@ public final class PvpKnockoutManager implements Listener {
 		return isKnockedOut(player);
 	}
 
+	/**
+	 * Moves a knocked-out player and keeps them down at the new spot, for plugins that drag or
+	 * carry the body. Returns false when the player is not knocked out.
+	 */
+	public boolean moveDowned(Player player, Location to) {
+		if (to == null || !isKnockedOut(player)) {
+			return false;
+		}
+		Knockout knockout = knockouts.get(player.getUniqueId());
+		knockout.location = to.clone();
+		enforceFreeze(player, knockout.location);
+		return true;
+	}
+
 	private boolean isKnockedOut(Player player) {
 		Knockout knockout = knockouts.get(player.getUniqueId());
 		return knockout != null && !knockout.isOver(player.getUniqueId(), System.currentTimeMillis())
@@ -301,7 +315,7 @@ public final class PvpKnockoutManager implements Listener {
 	}
 
 	private static final class Knockout {
-		private final Location location;
+		private Location location;
 		private final long untilMs;
 		/** Held down by a winner's decision rather than for a fixed time. */
 		private final boolean deciding;
