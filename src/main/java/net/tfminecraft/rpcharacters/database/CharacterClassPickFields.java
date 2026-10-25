@@ -1,8 +1,10 @@
 package net.tfminecraft.rpcharacters.database;
 
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import net.tfminecraft.rpcharacters.classpick.PendingClassPick;
@@ -12,14 +14,26 @@ import net.tfminecraft.rpcharacters.paidchange.Payment;
 /**
  * Class picker state in the character file, under "class-picks": whether the free subclass pick
  * is used ("subclass-picked"), how many picks were paid for ("paid") and a paid pick saved before
- * its debit ("pending").
+ * its debit ("pending"). Hidden classes the character has unlocked are listed under
+ * "unlocked-classes".
  */
 public final class CharacterClassPickFields {
+	static final String UNLOCKED_CLASSES = "unlocked-classes";
+
 	private CharacterClassPickFields() {}
 
 	public static void load(RPCharacter character, JSONObject characterJson) {
-		if (character == null || characterJson == null
-				|| !(characterJson.get("class-picks") instanceof Map<?, ?> picks)) {
+		if (character == null || characterJson == null) {
+			return;
+		}
+		if (characterJson.get(UNLOCKED_CLASSES) instanceof List<?> unlocked) {
+			for (Object classId : unlocked) {
+				if (classId instanceof String id && !id.isBlank()) {
+					character.addUnlockedClass(id.trim());
+				}
+			}
+		}
+		if (!(characterJson.get("class-picks") instanceof Map<?, ?> picks)) {
 			return;
 		}
 		character.setSubclassPicked(Boolean.TRUE.equals(picks.get("subclass-picked")));
@@ -40,6 +54,11 @@ public final class CharacterClassPickFields {
 
 	@SuppressWarnings("unchecked")
 	public static void save(Map<String, Object> defaults, RPCharacter character) {
+		if (!character.getUnlockedClasses().isEmpty()) {
+			JSONArray unlocked = new JSONArray();
+			unlocked.addAll(character.getUnlockedClasses());
+			defaults.put(UNLOCKED_CLASSES, unlocked);
+		}
 		PendingClassPick pending = character.getPendingClassPick();
 		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0 && pending == null) {
 			return;

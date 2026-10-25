@@ -130,6 +130,8 @@ public class RPCharacter {
 	private boolean subclassPicked;
 	/** Class picks this character has paid for. */
 	private int paidClassPicks;
+	/** Upper-case ids of hidden classes this character may pick; see ClassUnlocks. */
+	private final Set<String> unlockedClasses = new LinkedHashSet<>();
 	/** Stage revision each stage's lock window was last opened for, keyed by stage id. */
 	private final Map<String, Integer> stageRevisions = new HashMap<>();
 	/** Epoch seconds a revision reset opened each stage's window; 0 counts from creation. */
@@ -273,6 +275,21 @@ public class RPCharacter {
 
 	public void setPaidClassPicks(int paidClassPicks) {
 		this.paidClassPicks = Math.max(0, paidClassPicks);
+	}
+
+	/** Upper-case class ids, in unlock order. */
+	public Set<String> getUnlockedClasses() {
+		return Collections.unmodifiableSet(unlockedClasses);
+	}
+
+	/** True when the id was not unlocked before. */
+	public boolean addUnlockedClass(String classId) {
+		return unlockedClasses.add(classId.toUpperCase(Locale.ROOT));
+	}
+
+	/** True when the id was unlocked. */
+	public boolean removeUnlockedClass(String classId) {
+		return unlockedClasses.remove(classId.toUpperCase(Locale.ROOT));
 	}
 
 	public net.tfminecraft.rpcharacters.classpick.PendingClassPick getPendingClassPick() {

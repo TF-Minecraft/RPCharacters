@@ -161,6 +161,12 @@ class CommandManagerTest {
         assertFalse(run(carry)); carried.verify(() -> net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(player, carry, 2));
         var prisons = boundary(PrisonSwitch.class); String[] prison = {"admin", "Prison", "Iris"}; assertFalse(run(prison));
         prisons.verify(() -> PrisonSwitch.handle(player, prison, 2));
+        var unlocks = boundary(net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand.class);
+        unlocks.when(() -> net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand.isSubcommand(anyString())).thenCallRealMethod();
+        for (String verb : List.of("UnlockClass", "lockclass")) {
+            String[] unlock = {"admin", verb, "Iris", "blood_mage"}; assertFalse(run(unlock));
+            unlocks.verify(() -> net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand.handle(player, unlock, 2));
+        }
         String[] directKill = {"permakill", "Iris"}; assertFalse(run(directKill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, directKill, 1, "permakill"));
         String[] directInjure = {"injure", "Iris", "permanent"}; assertFalse(run(directInjure)); death.verify(() -> PermadeathAdminCommands.handleInjure(eq(player), same(directInjure), eq(1), anyString()));
         run("reload"); verify(plugin).reloadConfigs(player);

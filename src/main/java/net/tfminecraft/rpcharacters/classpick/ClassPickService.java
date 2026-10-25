@@ -101,12 +101,7 @@ public final class ClassPickService {
 	/** Displayed base classes in display order. */
 	public static List<PlayerClass> baseClasses() {
 		List<PlayerClass> classes = new ArrayList<>();
-		Set<String> subclassIds = new HashSet<>();
-		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
-			for (Subclass subclass : playerClass.getSubclasses()) {
-				subclassIds.add(subclass.getProfess().getId().toUpperCase(Locale.ROOT));
-			}
-		}
+		Set<String> subclassIds = subclassIds();
 		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
 			if (!subclassIds.contains(playerClass.getId().toUpperCase(Locale.ROOT))
 					&& MmoCoreClassGuiHelper.isClassDisplayed(playerClass)) {
@@ -115,6 +110,50 @@ public final class ClassPickService {
 		}
 		classes.sort(Comparator.comparingInt(PlayerClass::getDisplayOrder));
 		return classes;
+	}
+
+	/**
+	 * Displayed base classes, then the hidden base classes {@code character} has unlocked (see
+	 * {@link ClassUnlocks}), each group in display order.
+	 */
+	public static List<PlayerClass> baseClasses(RPCharacter character) {
+		List<PlayerClass> classes = baseClasses();
+		Set<String> listed = new HashSet<>(subclassIds());
+		classes.forEach(playerClass -> listed.add(playerClass.getId().toUpperCase(Locale.ROOT)));
+		List<PlayerClass> unlocked = new ArrayList<>();
+		for (String classId : character.getUnlockedClasses()) {
+			PlayerClass playerClass = MMOCore.plugin.classManager.get(classId);
+			if (playerClass != null && listed.add(playerClass.getId().toUpperCase(Locale.ROOT))) {
+				unlocked.add(playerClass);
+			}
+		}
+		unlocked.sort(Comparator.comparingInt(PlayerClass::getDisplayOrder));
+		classes.addAll(unlocked);
+		return classes;
+	}
+
+	private static Set<String> subclassIds() {
+		Set<String> subclassIds = new HashSet<>();
+		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
+			for (Subclass subclass : playerClass.getSubclasses()) {
+				subclassIds.add(subclass.getProfess().getId().toUpperCase(Locale.ROOT));
+			}
+		}
+		return subclassIds;
+	}
+
+	/** {@link #option(String)}, or one of the hidden base classes {@code character} has unlocked. */
+	public static Option option(RPCharacter character, String classId) {
+		Option option = option(classId);
+		if (option != null || classId == null) {
+			return option;
+		}
+		for (PlayerClass base : baseClasses(character)) {
+			if (base.getId().equalsIgnoreCase(classId)) {
+				return new Option(base, null, 0);
+			}
+		}
+		return null;
 	}
 
 	/** The pick for {@code classId}: a displayed base class or one of their subclasses, else null. */
@@ -217,7 +256,7 @@ public final class ClassPickService {
 		}
 		PlayerData pd = PlayerManager.get(player);
 		RPCharacter character = pd.getActiveCharacter();
-		Option option = option(classId);
+		Option option = option(character, classId);
 		if (option == null) {
 			return new Result(Status.UNKNOWN_CLASS, null, BigDecimal.ZERO, null);
 		}

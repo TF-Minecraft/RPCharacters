@@ -89,7 +89,7 @@ public final class ClassPickGui {
 		holder.classBySlot.clear();
 		holder.choosable.clear();
 		List<Option> options = holder.subclasses ? ClassPickService.subclassOptions(character)
-				: ClassPickService.baseClasses().stream().map(base -> new Option(base, null, 0)).toList();
+				: ClassPickService.baseClasses(character).stream().map(base -> new Option(base, null, 0)).toList();
 		for (int index = 0; index < Math.min(options.size(), OPTION_SLOTS.length); index++) {
 			place(holder, OPTION_SLOTS[index], options.get(index), character, level);
 		}

@@ -330,6 +330,26 @@ class ClassPickTest {
         character.setMMOClass("missing"); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
     }
 
+    @Test void anUnlockedHiddenClassIsOfferedAfterTheDisplayedOnesAndPricedLikeAnyChange() {
+        assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "test").status(), "A hidden class stays closed until unlocked");
+        var blood = playerClass("blood", "Blood", -5, null);
+        for (String id : List.of("test", "blood", "berserker", "mage", "gone")) character.addUnlockedClass(id);
+        assertEquals(List.of(warrior, mage), ClassPickService.baseClasses());
+        assertEquals(List.of(warrior, mage, blood, hidden), ClassPickService.baseClasses(character));
+        assertNull(ClassPickService.option("test")); assertEquals(new Option(hidden, null, 0), ClassPickService.option(character, "TEST"));
+        assertNull(ClassPickService.option(character, "gone")); assertNull(ClassPickService.option(character, null));
+        assertSame(berserker, ClassPickService.option(character, "berserker").playerClass());
+        assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, ClassPickService.option(character, "test")));
+        var top = openPicker(); var holder = (ClassPickGui.Holder) top.getHolder();
+        assertEquals("Test", ChatColor.stripColor(top.getItem(13).getItemMeta().getDisplayName())); assertTrue(lore(top.getItem(13)).contains("Cost: 200 denars"));
+        wallet.set(Account.POUCH, 50_000); ClassPickGui.click(player, holder, 13); ClassPickGui.click(player, holder, 13);
+        assertEquals("TEST", character.getMMOClass()); assertEquals(30_000, wallet.get(Account.POUCH)); assertEquals(1, character.getPaidClassPicks());
+        assertTrue(messages().contains("You are now a Test.")); classService.verify(() -> ClassService.applyClass(player, "test"));
+        assertEquals(Status.CURRENT_CLASS, ClassPickService.choose(player, "test").status());
+        character.removeUnlockedClass("test");
+        assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "test").status()); assertEquals("TEST", character.getMMOClass());
+    }
+
     @Test void pickerUsesAdditionalRowsForMoreThanSevenClassesAndSubclasses() {
         for (int i = 0; i < 9; i++) { playerClass("base" + i, "Base " + i, 10 + i, null); displayed.add("base" + i); }
         var top = openPicker(); assertEquals(Material.PAPER, top.getItem(19).getType());
