@@ -521,7 +521,7 @@ class WillMenuTest {
         link("How wills work");
         assertEquals("How wills work", last().title());
         assertTrue(body().startsWith("1 Name one living character as your heir."), body());
-        assertTrue(body().contains("6 Leading never passes by will, except a realm you're the only member of: your heir takes it on."), body());
+        assertTrue(body().contains("6 Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on."), body());
         click("Back");
         assertEquals("Will of Aria", last().title());
         identity.when(() -> Characters.isCurrent(session)).thenReturn(false);

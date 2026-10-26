@@ -345,7 +345,7 @@ public final class WillMenu {
                 "Everything passes 24 hours later. A staff revive before then keeps it all.",
                 "Your heir collects stored items with /estate collect.",
                 "No living heir: money goes to your guild and property to its leader. No guild: it waits 7 days, then staff hold it.",
-                "Leading never passes by will, except a realm you're the only member of: your heir takes it on.");
+                "Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on.");
         List<Component> lines = new ArrayList<>();
         for (int i = 0; i < rules.size(); i++) {
             lines.add(Component.text((i + 1) + " ", WillView.WARN).append(Component.text(rules.get(i), WillView.TEXT)));
