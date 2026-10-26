@@ -143,9 +143,16 @@ public final class WillMenu {
             lines.add(WillView.lines(List.of(Component.text(info.name(), WillView.HEIR, TextDecoration.BOLD),
                     Component.text(about(ctx, info, will), WillView.MUTED))));
             lines.add(Component.text("— ✦ —", WillView.MUTED));
-            lines.add(heirGets(info.name() + " would get", estate, !(guild instanceof Guild.Member) && !(guild instanceof Guild.Unknown)));
-            Component elsewhere = elsewhere(ctx, estate, guild);
-            if (elsewhere != null) lines.add(elsewhere);
+            Optional<WillForecast.Realm> solo = solo(guild);
+            // The heir who takes on a realm leads its guild, so guild and faction locks follow the rest.
+            lines.add(heirGets(info.name() + " would get", estate, solo.isPresent()
+                    || !(guild instanceof Guild.Member) && !(guild instanceof Guild.Unknown)));
+            if (solo.isPresent()) {
+                lines.add(realmTo(info, solo.get()));
+            } else {
+                Component elsewhere = elsewhere(ctx, estate, guild);
+                if (elsewhere != null) lines.add(elsewhere);
+            }
         } else {
             List<Component> top = new ArrayList<>();
             top.add(Component.text(!will.named() ? "⚠ No heir named"
@@ -208,6 +215,26 @@ public final class WillMenu {
         return WillView.lines(lines);
     }
 
+    private static Optional<WillForecast.Realm> solo(Guild guild) {
+        return guild instanceof Guild.Member member ? member.soloRealm() : Optional.empty();
+    }
+
+    /** A realm this character is alone in is held for the heir, who takes it on if in no faction by then. */
+    private static Component realmTo(CharacterInfo heir, WillForecast.Realm realm) {
+        return WillView.lines(List.of(WillView.heading("Your realm"),
+                Component.text(realm.name(), WillView.TEXT).append(arrow()).append(Component.text(heir.name() + ", "
+                        + span(realm.heirWaitHours()) + " after your death", WillView.TEXT)),
+                Component.text("Only if " + heir.name() + " is in no faction then. If nobody takes it on, it closes after 7 days, once at peace.",
+                        WillView.MUTED)));
+    }
+
+    /** "24 hours", or minutes for a wait shortened for a rehearsal. */
+    static String span(double hours) {
+        long minutes = Math.round(hours * 60);
+        if (minutes >= 60 && minutes % 60 == 0) return minutes / 60 + (minutes == 60 ? " hour" : " hours");
+        return minutes + (minutes == 1 ? " minute" : " minutes");
+    }
+
     /** With an heir and a guild, guild and faction locks go to the guild's leader, else the realm's. */
     private static Component elsewhere(Context ctx, Estate estate, Guild guild) {
         Row locks = estate.rows().stream().filter(row -> WillView.GUILD_LOCKS.equals(row.key())).findFirst().orElse(null);
@@ -219,7 +246,8 @@ public final class WillMenu {
 
     private static Component noHeir(Context ctx, Estate estate, Guild guild) {
         List<Component> lines = new ArrayList<>();
-        Guild.Member member = guild instanceof Guild.Member m ? m : null;
+        // A solo realm closes before its estate is decided, so its guild takes nothing; the note says so.
+        Guild.Member member = guild instanceof Guild.Member m && m.soloRealm().isEmpty() ? m : null;
         if (estate.money() != null) {
             Component money = WillView.money(estate.money());
             lines.add(member == null ? money
@@ -240,6 +268,10 @@ public final class WillMenu {
         if (guild instanceof Guild.None) return "You're in no guild, so it would wait 7 days in case of a revive, then staff would hold it.";
         if (!(guild instanceof Guild.Member member)) {
             return "Money goes to your guild and property to its leader. Without a guild, staff hold it after 7 days.";
+        }
+        if (member.soloRealm().isPresent()) {
+            return "You're the only member of " + member.soloRealm().get().name() + ", so it would be held for 7 days, then close once at peace, "
+                    + "and staff would hold your estate. A living heir in no faction would take on the realm. " + alts;
         }
         if (member.youLead()) {
             return "You lead " + member.name() + ", so its next leader would take it; with nobody to take over, it waits until one is appointed. " + alts;
@@ -313,7 +345,9 @@ public final class WillMenu {
                 "Everything passes 24 hours later. A staff revive before then keeps it all.",
                 "Your heir collects stored items with /estate collect.",
                 "No living heir: money goes to your guild and property to its leader. No guild: it waits 7 days, then staff hold it.",
-                "Leading a guild or realm never passes by will.");
+                // Only a SimpleFactions that seats will heirs lets a realm pass.
+                WillForecast.heirWaitHours.get() == null ? "Leading a guild or realm never passes by will."
+                        : "Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on.");
         List<Component> lines = new ArrayList<>();
         for (int i = 0; i < rules.size(); i++) {
             lines.add(Component.text((i + 1) + " ", WillView.WARN).append(Component.text(rules.get(i), WillView.TEXT)));

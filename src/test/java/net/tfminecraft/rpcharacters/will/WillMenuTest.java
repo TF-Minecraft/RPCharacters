@@ -215,7 +215,48 @@ class WillMenuTest {
     }
 
     private Guild.Member ironhold(Optional<CharacterInfo> leader, boolean youLead, Optional<CharacterInfo> realmLeader) {
-        return new Guild.Member("Ironhold", leader, youLead, realmLeader);
+        return new Guild.Member("Ironhold", leader, youLead, realmLeader, Optional.empty());
+    }
+
+    private Guild.Member soloRealm(double hours) {
+        return new Guild.Member("Ironhold", Optional.empty(), true, Optional.empty(),
+                Optional.of(new WillForecast.Realm("Eastern Territories", hours)));
+    }
+
+    @Test
+    void aRealmYouAreAloneInGoesToYourHeirWithItsGuildLocks() {
+        standardEstate();
+        WillForecast.guilds = id -> soloRealm(24);
+        aria.setWill(new CharacterWill(kira.ref().characterId(), 1, now, null));
+        WillMenu.open(player);
+        String body = body();
+        assertTrue(body.contains("Kira would get\n163.40 in the pouch, 0.00 in the bank\n1 vehicle\n1 lock\n1 letter\n1 guild or faction lock"), body);
+        assertTrue(body.contains("Your realm\nEastern Territories → Kira, 24 hours after your death\n"
+                + "Only if Kira is in no faction then. If nobody takes it on, it closes after 7 days, once at peace."), body);
+        assertFalse(body.contains("Goes elsewhere"), body);
+    }
+
+    @Test
+    void aRealmYouAreAloneInIsHeldThenClosesWithoutAnHeir() {
+        standardEstate();
+        WillForecast.guilds = id -> soloRealm(24);
+        WillMenu.open(player);
+        String body = body();
+        assertTrue(body.contains("You're the only member of Eastern Territories, so it would be held for 7 days, then close once at peace, "
+                + "and staff would hold your estate. A living heir in no faction would take on the realm. "
+                + "Your other characters get nothing unless you name one."), body);
+        // Its guild is gone before the estate is decided, so nothing is promised to it.
+        assertTrue(body.contains("163.40 in the pouch, 0.00 in the bank\n1 vehicle\n1 lock\n1 letter → back to their writers\n1 guild or faction lock\n"), body);
+        assertFalse(body.contains("treasury"), body);
+    }
+
+    @Test
+    void realmWaitsReadInHoursOrMinutes() {
+        assertEquals("24 hours", WillMenu.span(24));
+        assertEquals("1 hour", WillMenu.span(1));
+        assertEquals("3 minutes", WillMenu.span(0.05));
+        assertEquals("1 minute", WillMenu.span(1 / 60.0));
+        assertEquals("90 minutes", WillMenu.span(1.5));
     }
 
     @Test
@@ -480,7 +521,12 @@ class WillMenuTest {
         link("How wills work");
         assertEquals("How wills work", last().title());
         assertTrue(body().startsWith("1 Name one living character as your heir."), body());
+        // The test classpath's SimpleFactions 4.0.0 seats no will heirs, so the old rule stands.
         assertTrue(body().contains("6 Leading a guild or realm never passes by will."), body());
+        click("Back");
+        WillForecast.heirWaitHours = () -> 24.0;
+        link("How wills work");
+        assertTrue(body().contains("6 Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on."), body());
         click("Back");
         assertEquals("Will of Aria", last().title());
         identity.when(() -> Characters.isCurrent(session)).thenReturn(false);

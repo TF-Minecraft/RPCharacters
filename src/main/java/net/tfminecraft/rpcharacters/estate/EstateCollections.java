@@ -1,6 +1,8 @@
 package net.tfminecraft.rpcharacters.estate;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -16,6 +18,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
 import com.google.common.hash.Hashing;
+
+import net.tfminecraft.tlibs.character.estate.EstateState;
 
 /**
  * Hands stripped bodies to their recipients, one batch of free storage slots per collect. The remaining
@@ -47,8 +51,48 @@ final class EstateCollections {
     /** {@code /estate collect} by the recipient character's current session. */
     String collect(Player player, UUID characterId) {
         List<EstateRecord> waiting = waitingFor(characterId);
-        if (waiting.isEmpty()) return "You have no inheritance to collect.";
+        if (waiting.isEmpty()) return notYet(player.getUniqueId(), characterId);
         return deliver(player, waiting.getFirst(), "recipient " + characterId);
+    }
+
+    /**
+     * Why nothing can be collected yet, for an estate that will give this character something. Wills are secret,
+     * so an estate not yet decided is named only to an heir on the testator's own account.
+     */
+    private String notYet(UUID account, UUID characterId) {
+        Instant now = book.now();
+        for (EstateRecord record : book.all()) {
+            if (record.revivedAt != null) continue;
+            if ((record.state == EstateState.OPEN || record.state == EstateState.HELD) && characterId.equals(record.willHeir)
+                    && account.equals(record.testator.ownerId())) {
+                if (record.state == EstateState.HELD) {
+                    return "Staff are holding the estate of " + record.name + ". It passes to you once they release it.";
+                }
+                if (now.isBefore(record.dueAt)) {
+                    return "The estate of " + record.name + " falls due " + in(Duration.between(now, record.dueAt))
+                            + ". Try again then.";
+                }
+                return "The estate of " + record.name + " is due and passes to you once it can be decided. Try again later.";
+            }
+            if (record.settling() && record.decision.property().recipient().character()
+                    .filter(ref -> ref.characterId().equals(characterId)).isPresent()) {
+                EstateRecord.Report body = record.participants.get(BodyEstate.ID);
+                if (body == null || body.settles(record.decision.revision())) continue;
+                return body.outcome().equals("BLOCKED")
+                        ? "The estate of " + record.name + " needs staff before it can be handed over. Contact staff."
+                        : "The estate of " + record.name + " is being handed over to you. Try again later.";
+            }
+        }
+        return "You have no inheritance to collect.";
+    }
+
+    /** "in 40 minutes", "in about 17 hours", "in about 3 days". */
+    static String in(Duration left) {
+        long minutes = Math.max(1, (left.toSeconds() + 59) / 60);
+        if (minutes < 90) return "in " + minutes + (minutes == 1 ? " minute" : " minutes");
+        long hours = Math.round(minutes / 60.0);
+        if (hours < 48) return "in about " + hours + " hours";
+        return "in about " + Math.round(hours / 24.0) + " days";
     }
 
     /**
