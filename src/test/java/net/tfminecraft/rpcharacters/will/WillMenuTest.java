@@ -232,7 +232,7 @@ class WillMenuTest {
         String body = body();
         assertTrue(body.contains("Kira would get\n163.40 in the pouch, 0.00 in the bank\n1 vehicle\n1 lock\n1 letter\n1 guild or faction lock"), body);
         assertTrue(body.contains("Your realm\nEastern Territories → Kira, 24 hours after your death\n"
-                + "Only if Kira is in no faction then. Nobody taking it on within 7 days closes it."), body);
+                + "Only if Kira is in no faction then. If nobody takes it on, it closes after 7 days, once at peace."), body);
         assertFalse(body.contains("Goes elsewhere"), body);
     }
 
@@ -242,7 +242,7 @@ class WillMenuTest {
         WillForecast.guilds = id -> soloRealm(24);
         WillMenu.open(player);
         String body = body();
-        assertTrue(body.contains("You're the only member of Eastern Territories, so it would be held for 7 days, then close, "
+        assertTrue(body.contains("You're the only member of Eastern Territories, so it would be held for 7 days, then close once at peace, "
                 + "and staff would hold your estate. A living heir in no faction would take on the realm. "
                 + "Your other characters get nothing unless you name one."), body);
         // Its guild is gone before the estate is decided, so nothing is promised to it.
@@ -521,6 +521,11 @@ class WillMenuTest {
         link("How wills work");
         assertEquals("How wills work", last().title());
         assertTrue(body().startsWith("1 Name one living character as your heir."), body());
+        // The test classpath's SimpleFactions 4.0.0 seats no will heirs, so the old rule stands.
+        assertTrue(body().contains("6 Leading a guild or realm never passes by will."), body());
+        click("Back");
+        WillForecast.heirWaitHours = () -> 24.0;
+        link("How wills work");
         assertTrue(body().contains("6 Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on."), body());
         click("Back");
         assertEquals("Will of Aria", last().title());

@@ -224,7 +224,7 @@ public final class WillMenu {
         return WillView.lines(List.of(WillView.heading("Your realm"),
                 Component.text(realm.name(), WillView.TEXT).append(arrow()).append(Component.text(heir.name() + ", "
                         + span(realm.heirWaitHours()) + " after your death", WillView.TEXT)),
-                Component.text("Only if " + heir.name() + " is in no faction then. Nobody taking it on within 7 days closes it.",
+                Component.text("Only if " + heir.name() + " is in no faction then. If nobody takes it on, it closes after 7 days, once at peace.",
                         WillView.MUTED)));
     }
 
@@ -270,7 +270,7 @@ public final class WillMenu {
             return "Money goes to your guild and property to its leader. Without a guild, staff hold it after 7 days.";
         }
         if (member.soloRealm().isPresent()) {
-            return "You're the only member of " + member.soloRealm().get().name() + ", so it would be held for 7 days, then close, "
+            return "You're the only member of " + member.soloRealm().get().name() + ", so it would be held for 7 days, then close once at peace, "
                     + "and staff would hold your estate. A living heir in no faction would take on the realm. " + alts;
         }
         if (member.youLead()) {
@@ -345,7 +345,9 @@ public final class WillMenu {
                 "Everything passes 24 hours later. A staff revive before then keeps it all.",
                 "Your heir collects stored items with /estate collect.",
                 "No living heir: money goes to your guild and property to its leader. No guild: it waits 7 days, then staff hold it.",
-                "Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on.");
+                // Only a SimpleFactions that seats will heirs lets a realm pass.
+                WillForecast.heirWaitHours.get() == null ? "Leading a guild or realm never passes by will."
+                        : "Leading never passes by will, except a realm you're the only member of: an heir in no faction takes it on.");
         List<Component> lines = new ArrayList<>();
         for (int i = 0; i < rules.size(); i++) {
             lines.add(Component.text((i + 1) + " ", WillView.WARN).append(Component.text(rules.get(i), WillView.TEXT)));
