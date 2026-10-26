@@ -135,4 +135,103 @@ class EstateCollectionsTest {
         player.getInventory().clear();
         assertEquals("You collected 1 stack from the estate of Aria.", collections.collectAsStaff(player, addressed, true));
     }
+
+    private EstateRecord estate(CharacterRef testator, net.tfminecraft.tlibs.character.estate.EstateState state) throws Exception {
+        EstateRecord record = new EstateRecord(UUID.randomUUID(), testator);
+        record.name = "Lyza";
+        record.createdAt = kit.clock.instant();
+        record.diedAt = kit.clock.instant();
+        record.dueAt = kit.clock.instant().plus(java.time.Duration.ofHours(24));
+        record.state = state;
+        record.willHeir = kira.characterId();
+        kit.book.save(record);
+        return record;
+    }
+
+    private String collect() {
+        return collections.collect(player, kira.characterId());
+    }
+
+    @Test
+    void anHeirOnTheTestatorsAccountIsToldWhenTheEstatePasses() throws Exception {
+        var open = net.tfminecraft.tlibs.character.estate.EstateState.OPEN;
+        EstateRecord own = estate(new CharacterRef(kira.ownerId(), UUID.randomUUID()), open);
+        kit.clock.advance(java.time.Duration.ofHours(7).plusMinutes(10));
+        assertEquals("The estate of Lyza passes to you in about 17 hours. Collect it then.", collect());
+        kit.clock.advance(java.time.Duration.ofHours(16).plusMinutes(10));
+        assertEquals("The estate of Lyza passes to you in 40 minutes. Collect it then.", collect());
+        kit.clock.advance(java.time.Duration.ofMinutes(41));
+        assertEquals("The estate of Lyza is due and passes to you once it can be decided. Try again later.", collect());
+        EstateRecord held = EstateBook.edit(own);
+        held.state = net.tfminecraft.tlibs.character.estate.EstateState.HELD;
+        kit.book.save(held);
+        assertEquals("Staff are holding the estate of Lyza. It passes to you once they release it.", collect());
+        EstateRecord revived = EstateBook.edit(held);
+        revived.revivedAt = kit.clock.instant();
+        kit.book.save(revived);
+        assertEquals("You have no inheritance to collect.", collect());
+    }
+
+    @Test
+    void aWillStaysSecretFromOtherAccountsAndOtherCharacters() throws Exception {
+        var open = net.tfminecraft.tlibs.character.estate.EstateState.OPEN;
+        estate(new CharacterRef(UUID.randomUUID(), UUID.randomUUID()), open);
+        assertEquals("You have no inheritance to collect.", collect());
+        EstateRecord other = estate(new CharacterRef(kira.ownerId(), UUID.randomUUID()), open);
+        EstateRecord renamed = EstateBook.edit(other);
+        renamed.willHeir = UUID.randomUUID();
+        kit.book.save(renamed);
+        assertEquals("You have no inheritance to collect.", collect());
+        EstateRecord cancelled = EstateBook.edit(renamed);
+        cancelled.willHeir = kira.characterId();
+        cancelled.state = net.tfminecraft.tlibs.character.estate.EstateState.CANCELLED;
+        kit.book.save(cancelled);
+        assertEquals("You have no inheritance to collect.", collect());
+    }
+
+    @Test
+    void aDecidedEstateSaysTheBodyIsOnItsWayUntilItIsCollectable() throws Exception {
+        EstateRecord record = estate(new CharacterRef(UUID.randomUUID(), UUID.randomUUID()),
+                net.tfminecraft.tlibs.character.estate.EstateState.OPEN);
+        EstateRecord.Part to = EstateRecord.Part.character(new Named(kira, "Kira"));
+        EstateRecord next = EstateBook.edit(record);
+        next.state = net.tfminecraft.tlibs.character.estate.EstateState.DECIDED;
+        next.decision = new EstateRecord.Decision(kit.clock.instant(), 2, new Named(kira, "Kira"), null, null,
+                EstateRecord.Part.bank(new Named(kira, "Kira")), EstateRecord.Part.FROZEN, to, EstateRecord.Part.SENDER);
+        kit.book.save(next);
+        assertEquals("You have no inheritance to collect.", collect());
+        next = EstateBook.edit(next);
+        next.decision = new EstateRecord.Decision(kit.clock.instant(), 2, new Named(kira, "Kira"), null, null,
+                EstateRecord.Part.bank(new Named(kira, "Kira")), to, to, EstateRecord.Part.SENDER);
+        kit.book.save(next);
+        // No answer from the body participant yet, as where character bodies are off.
+        assertEquals("You have no inheritance to collect.", collect());
+        next.participants.put(BodyEstate.ID, report("RETRY", 2));
+        kit.book.save(next);
+        assertEquals("The estate of Lyza is being handed over to you. Try again in a few minutes.", collect());
+        next.participants.put(BodyEstate.ID, report("BLOCKED", 2));
+        kit.book.save(next);
+        assertEquals("The estate of Lyza needs staff before it can be handed over. Contact staff.", collect());
+        next.participants.put(BodyEstate.ID, report("DONE", 2));
+        kit.book.save(next);
+        assertEquals("You have no inheritance to collect.", collect());
+        next.participants.put(BodyEstate.ID, report("RETRY", 1));
+        next.revivedAt = kit.clock.instant();
+        kit.book.save(next);
+        assertEquals("You have no inheritance to collect.", collect());
+    }
+
+    private EstateRecord.Report report(String outcome, long revision) {
+        return new EstateRecord.Report(outcome, revision, null, java.util.Map.of(), List.of(), kit.clock.instant());
+    }
+
+    @Test
+    void waitsReadInMinutesHoursOrDays() {
+        assertEquals("in 1 minute", EstateCollections.in(java.time.Duration.ofSeconds(1)));
+        assertEquals("in 1 minute", EstateCollections.in(java.time.Duration.ZERO));
+        assertEquals("in 89 minutes", EstateCollections.in(java.time.Duration.ofMinutes(89)));
+        assertEquals("in about 2 hours", EstateCollections.in(java.time.Duration.ofMinutes(90)));
+        assertEquals("in about 47 hours", EstateCollections.in(java.time.Duration.ofHours(47)));
+        assertEquals("in about 3 days", EstateCollections.in(java.time.Duration.ofHours(70)));
+    }
 }
