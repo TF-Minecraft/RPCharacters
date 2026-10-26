@@ -246,7 +246,8 @@ public final class WillMenu {
 
     private static Component noHeir(Context ctx, Estate estate, Guild guild) {
         List<Component> lines = new ArrayList<>();
-        Guild.Member member = guild instanceof Guild.Member m ? m : null;
+        // A solo realm closes before its estate is decided, so its guild takes nothing; the note says so.
+        Guild.Member member = guild instanceof Guild.Member m && m.soloRealm().isEmpty() ? m : null;
         if (estate.money() != null) {
             Component money = WillView.money(estate.money());
             lines.add(member == null ? money
@@ -269,8 +270,8 @@ public final class WillMenu {
             return "Money goes to your guild and property to its leader. Without a guild, staff hold it after 7 days.";
         }
         if (member.soloRealm().isPresent()) {
-            return "You're the only member of " + member.soloRealm().get().name() + ", so it would be held for 7 days, then close. "
-                    + "A living heir in no faction would take it on. " + alts;
+            return "You're the only member of " + member.soloRealm().get().name() + ", so it would be held for 7 days, then close, "
+                    + "and staff would hold your estate. A living heir in no faction would take on the realm. " + alts;
         }
         if (member.youLead()) {
             return "You lead " + member.name() + ", so its next leader would take it; with nobody to take over, it waits until one is appointed. " + alts;

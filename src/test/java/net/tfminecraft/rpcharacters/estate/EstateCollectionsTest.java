@@ -157,9 +157,9 @@ class EstateCollectionsTest {
         var open = net.tfminecraft.tlibs.character.estate.EstateState.OPEN;
         EstateRecord own = estate(new CharacterRef(kira.ownerId(), UUID.randomUUID()), open);
         kit.clock.advance(java.time.Duration.ofHours(7).plusMinutes(10));
-        assertEquals("The estate of Lyza passes to you in about 17 hours. Collect it then.", collect());
+        assertEquals("The estate of Lyza falls due in about 17 hours. Try again then.", collect());
         kit.clock.advance(java.time.Duration.ofHours(16).plusMinutes(10));
-        assertEquals("The estate of Lyza passes to you in 40 minutes. Collect it then.", collect());
+        assertEquals("The estate of Lyza falls due in 40 minutes. Try again then.", collect());
         kit.clock.advance(java.time.Duration.ofMinutes(41));
         assertEquals("The estate of Lyza is due and passes to you once it can be decided. Try again later.", collect());
         EstateRecord held = EstateBook.edit(own);
@@ -208,7 +208,7 @@ class EstateCollectionsTest {
         assertEquals("You have no inheritance to collect.", collect());
         next.participants.put(BodyEstate.ID, report("RETRY", 2));
         kit.book.save(next);
-        assertEquals("The estate of Lyza is being handed over to you. Try again in a few minutes.", collect());
+        assertEquals("The estate of Lyza is being handed over to you. Try again later.", collect());
         next.participants.put(BodyEstate.ID, report("BLOCKED", 2));
         kit.book.save(next);
         assertEquals("The estate of Lyza needs staff before it can be handed over. Contact staff.", collect());

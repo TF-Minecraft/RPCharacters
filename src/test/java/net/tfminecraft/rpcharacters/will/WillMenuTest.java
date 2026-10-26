@@ -241,8 +241,13 @@ class WillMenuTest {
         standardEstate();
         WillForecast.guilds = id -> soloRealm(24);
         WillMenu.open(player);
-        assertTrue(body().contains("You're the only member of Eastern Territories, so it would be held for 7 days, then close. "
-                + "A living heir in no faction would take it on. Your other characters get nothing unless you name one."), body());
+        String body = body();
+        assertTrue(body.contains("You're the only member of Eastern Territories, so it would be held for 7 days, then close, "
+                + "and staff would hold your estate. A living heir in no faction would take on the realm. "
+                + "Your other characters get nothing unless you name one."), body);
+        // Its guild is gone before the estate is decided, so nothing is promised to it.
+        assertTrue(body.contains("163.40 in the pouch, 0.00 in the bank\n1 vehicle\n1 lock\n1 letter → back to their writers\n1 guild or faction lock\n"), body);
+        assertFalse(body.contains("treasury"), body);
     }
 
     @Test

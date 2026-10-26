@@ -69,8 +69,8 @@ final class EstateCollections {
                     return "Staff are holding the estate of " + record.name + ". It passes to you once they release it.";
                 }
                 if (now.isBefore(record.dueAt)) {
-                    return "The estate of " + record.name + " passes to you " + in(Duration.between(now, record.dueAt))
-                            + ". Collect it then.";
+                    return "The estate of " + record.name + " falls due " + in(Duration.between(now, record.dueAt))
+                            + ". Try again then.";
                 }
                 return "The estate of " + record.name + " is due and passes to you once it can be decided. Try again later.";
             }
@@ -80,7 +80,7 @@ final class EstateCollections {
                 if (body == null || body.settles(record.decision.revision())) continue;
                 return body.outcome().equals("BLOCKED")
                         ? "The estate of " + record.name + " needs staff before it can be handed over. Contact staff."
-                        : "The estate of " + record.name + " is being handed over to you. Try again in a few minutes.";
+                        : "The estate of " + record.name + " is being handed over to you. Try again later.";
             }
         }
         return "You have no inheritance to collect.";
