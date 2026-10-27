@@ -13,24 +13,28 @@ import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
- * {@code /rpcharacter admin unlockclass|lockclass <player> <classId>}: staff give or take a hidden
- * class from a player's active character through {@link ClassUnlocks}. The caller checks the admin
- * permission.
+ * {@code /rpcharacter admin assignclass|releaseclass <player> <classId>}: staff put a player's active
+ * character into a hidden class (bound to it), or release it so the character may change class again,
+ * through {@link ClassUnlocks}. The older names unlockclass and lockclass still work. The caller checks
+ * the admin permission.
  */
 public final class ClassUnlockCommand {
 
-	public static final String UNLOCK = "unlockclass";
-	public static final String LOCK = "lockclass";
+	public static final String UNLOCK = "assignclass";
+	public static final String LOCK = "releaseclass";
+	private static final String OLD_UNLOCK = "unlockclass";
+	private static final String OLD_LOCK = "lockclass";
 
 	private ClassUnlockCommand() {}
 
 	public static boolean isSubcommand(String arg) {
-		return UNLOCK.equalsIgnoreCase(arg) || LOCK.equalsIgnoreCase(arg);
+		return UNLOCK.equalsIgnoreCase(arg) || LOCK.equalsIgnoreCase(arg)
+				|| OLD_UNLOCK.equalsIgnoreCase(arg) || OLD_LOCK.equalsIgnoreCase(arg);
 	}
 
 	/** {@code args[index - 1]} is the subcommand, then the player and the class id. */
 	public static boolean handle(CommandSender sender, String[] args, int index) {
-		boolean unlock = args[index - 1].equalsIgnoreCase(UNLOCK);
+		boolean unlock = args[index - 1].equalsIgnoreCase(UNLOCK) || args[index - 1].equalsIgnoreCase(OLD_UNLOCK);
 		if (args.length != index + 2) {
 			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin " + (unlock ? UNLOCK : LOCK)
 					+ " <player> <classId>");
@@ -51,30 +55,32 @@ public final class ClassUnlockCommand {
 		}
 		String name = playerClass == null ? id : ClassPickService.className(playerClass);
 		String who = RPTexts.WARN + character.getName() + RPTexts.MUTED + " (" + player.getName() + ")";
-		if (ClassUnlocks.isUnlocked(player, id) == unlock) {
-			RPTexts.send(sender, RPTexts.WARN + name + RPTexts.MUTED + " is already " + (unlock ? "unlocked" : "locked")
-					+ " for " + who + RPTexts.MUTED + ".");
+		boolean playing = playerClass != null && id.equalsIgnoreCase(character.getMMOClass());
+		if (unlock ? ClassUnlocks.isUnlocked(player, id) && playing : !ClassUnlocks.isUnlocked(player, id)) {
+			RPTexts.send(sender, RPTexts.WARN + name + RPTexts.MUTED + " is already " + (unlock ? "assigned to" : "released for")
+					+ " " + who + RPTexts.MUTED + ".");
 			return true;
 		}
-		if (!(unlock ? ClassUnlocks.unlock(player, id) : ClassUnlocks.lock(player, id))) {
-			RPTexts.send(sender, RPTexts.ERROR + "Could not save " + RPTexts.WARN + character.getName() + RPTexts.ERROR
-					+ ", so nothing changed. See the console.");
+		if (!(unlock ? ClassUnlocks.assign(player, id) : ClassUnlocks.lock(player, id))) {
+			RPTexts.send(sender, RPTexts.ERROR + "Could not " + (unlock ? "assign " + name + RPTexts.ERROR + " to " : "save ")
+					+ RPTexts.WARN + character.getName() + RPTexts.ERROR + ". See the console.");
 			return true;
 		}
 		RPTexts.send(sender, unlock
-				? RPTexts.SUCCESS + "Unlocked " + name + RPTexts.SUCCESS + " for " + who + RPTexts.SUCCESS
-						+ ". They can pick it in " + RPTexts.COMMAND + "/class" + RPTexts.SUCCESS + "."
-				: RPTexts.SUCCESS + "Locked " + name + RPTexts.SUCCESS + " for " + who + RPTexts.SUCCESS
-						+ ". Their current class did not change.");
+				? RPTexts.SUCCESS + "Assigned " + name + RPTexts.SUCCESS + " to " + who + RPTexts.SUCCESS
+						+ ". They are bound to it until released."
+				: RPTexts.SUCCESS + "Released " + name + RPTexts.SUCCESS + " for " + who + RPTexts.SUCCESS
+						+ ". They keep it for now, but can change class in " + RPTexts.COMMAND + "/class"
+						+ RPTexts.SUCCESS + " and can't pick it back.");
 		return true;
 	}
 
-	/** Candidates for {@code admin unlockclass|lockclass <player> <classId>}, before prefix filtering. */
+	/** Candidates for {@code admin assignclass|releaseclass <player> <classId>}, before prefix filtering. */
 	public static List<String> tabComplete(String[] args) {
 		List<String> completions = new ArrayList<>();
 		if (args.length == 3) {
 			Bukkit.getOnlinePlayers().forEach(online -> completions.add(online.getName()));
-		} else if (args.length == 4 && args[1].equalsIgnoreCase(LOCK)) {
+		} else if (args.length == 4 && (args[1].equalsIgnoreCase(LOCK) || args[1].equalsIgnoreCase(OLD_LOCK))) {
 			completions.addAll(ClassUnlocks.unlocked(Bukkit.getPlayerExact(args[2])));
 		} else if (args.length == 4 && MMOCore.plugin != null && MMOCore.plugin.classManager != null) {
 			Player target = Bukkit.getPlayerExact(args[2]);

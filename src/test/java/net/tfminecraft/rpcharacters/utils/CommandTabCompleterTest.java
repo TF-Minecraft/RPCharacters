@@ -115,8 +115,8 @@ class CommandTabCompleterTest {
         for (String verb : List.of("menu", "clues", "setclass", "seteighteen", "resetkit", "reclaimkit", "skipcooldown", "addtrait", "removetrait", "injure", "discordgate"))
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
-        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "unlockclass", "lockclass", "prison"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "unlockclass", "lockclass", "resetclasses", "prison"), complete("admin", ""));
+        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "resetclasses", "prison"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));

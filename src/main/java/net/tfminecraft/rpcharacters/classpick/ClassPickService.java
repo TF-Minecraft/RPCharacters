@@ -58,6 +58,8 @@ public final class ClassPickService {
 		NO_CHARACTER,
 		BUSY,
 		UNKNOWN_CLASS,
+		/** The character plays a class another plugin assigned (see {@link ClassUnlocks}); it can't leave it. */
+		ASSIGNED_CLASS,
 		CURRENT_CLASS,
 		LEVEL_TOO_LOW,
 		UNAVAILABLE,
@@ -112,26 +114,6 @@ public final class ClassPickService {
 		return classes;
 	}
 
-	/**
-	 * Displayed base classes, then the hidden base classes {@code character} has unlocked (see
-	 * {@link ClassUnlocks}), each group in display order.
-	 */
-	public static List<PlayerClass> baseClasses(RPCharacter character) {
-		List<PlayerClass> classes = baseClasses();
-		Set<String> listed = new HashSet<>(subclassIds());
-		classes.forEach(playerClass -> listed.add(playerClass.getId().toUpperCase(Locale.ROOT)));
-		List<PlayerClass> unlocked = new ArrayList<>();
-		for (String classId : character.getUnlockedClasses()) {
-			PlayerClass playerClass = MMOCore.plugin.classManager.get(classId);
-			if (playerClass != null && listed.add(playerClass.getId().toUpperCase(Locale.ROOT))) {
-				unlocked.add(playerClass);
-			}
-		}
-		unlocked.sort(Comparator.comparingInt(PlayerClass::getDisplayOrder));
-		classes.addAll(unlocked);
-		return classes;
-	}
-
 	private static Set<String> subclassIds() {
 		Set<String> subclassIds = new HashSet<>();
 		for (PlayerClass playerClass : MMOCore.plugin.classManager.getAll()) {
@@ -140,20 +122,6 @@ public final class ClassPickService {
 			}
 		}
 		return subclassIds;
-	}
-
-	/** {@link #option(String)}, or one of the hidden base classes {@code character} has unlocked. */
-	public static Option option(RPCharacter character, String classId) {
-		Option option = option(classId);
-		if (option != null || classId == null) {
-			return option;
-		}
-		for (PlayerClass base : baseClasses(character)) {
-			if (base.getId().equalsIgnoreCase(classId)) {
-				return new Option(base, null, 0);
-			}
-		}
-		return null;
 	}
 
 	/** The pick for {@code classId}: a displayed base class or one of their subclasses, else null. */
@@ -246,6 +214,9 @@ public final class ClassPickService {
 		if (pd == null || !pd.hasActiveCharacter()) {
 			return Status.NO_CHARACTER;
 		}
+		if (ClassUnlocks.isLockedIn(pd.getActiveCharacter())) {
+			return Status.ASSIGNED_CLASS;
+		}
 		return CreationManager.activeCreators.containsKey(player) ? Status.BUSY : null;
 	}
 
@@ -256,7 +227,7 @@ public final class ClassPickService {
 		}
 		PlayerData pd = PlayerManager.get(player);
 		RPCharacter character = pd.getActiveCharacter();
-		Option option = option(character, classId);
+		Option option = option(classId);
 		if (option == null) {
 			return new Result(Status.UNKNOWN_CLASS, null, BigDecimal.ZERO, null);
 		}
@@ -415,6 +386,7 @@ public final class ClassPickService {
 			case NO_CHARACTER -> RPTexts.ERROR + "You need an active character to pick a class.";
 			case BUSY -> RPTexts.ERROR + "Finish your character session first.";
 			case UNKNOWN_CLASS -> RPTexts.ERROR + "That class can't be picked.";
+			case ASSIGNED_CLASS -> RPTexts.ERROR + "Your class is bound to your character and can't be changed.";
 			case CURRENT_CLASS -> RPTexts.WARN + "You are already a " + name + RPTexts.WARN + ".";
 			case LEVEL_TOO_LOW -> RPTexts.ERROR + name + RPTexts.ERROR + " unlocks at level " + requiredLevel(result.target()) + ".";
 			case UNAVAILABLE -> RPTexts.ERROR + "You can't pay for a class change right now. Try again later.";

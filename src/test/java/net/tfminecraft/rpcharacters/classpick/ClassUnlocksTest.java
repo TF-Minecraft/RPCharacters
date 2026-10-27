@@ -22,13 +22,15 @@ import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.manager.ClassManager;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.enums.Status;
+import net.tfminecraft.rpcharacters.lifecycle.CharacterLifecycle;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.mmocore.ClassService;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 
 class ClassUnlocksTest {
     ServerMock server; PlayerMock iris, staff; MMOCore previousMmo; PlayerData account; RPCharacter character; PlayerManager saves;
-    MockedStatic<PlayerManager> players; final List<MockedStatic<?>> mocks = new ArrayList<>();
+    MockedStatic<PlayerManager> players; MockedStatic<ClassService> service; final List<MockedStatic<?>> mocks = new ArrayList<>();
     final Map<String, PlayerClass> classMap = new HashMap<>();
     final List<LogRecord> logs = new ArrayList<>();
     final Handler handler = new Handler() {
@@ -49,6 +51,8 @@ class ClassUnlocksTest {
         players = mockStatic(PlayerManager.class); mocks.add(players); players.when(() -> PlayerManager.get(iris)).thenReturn(account);
         saves = mock(PlayerManager.class); when(saves.saveCharacterNow(any(), any())).thenReturn(true);
         var root = mockStatic(RPCharacters.class); mocks.add(root); root.when(RPCharacters::getPlayerManager).thenReturn(saves);
+        service = mockStatic(ClassService.class); mocks.add(service); service.when(() -> ClassService.applyClass(any(), anyString())).thenReturn(true);
+        mocks.add(mockStatic(CharacterLifecycle.class));
         Logger.getLogger("RPCharacters").addHandler(handler);
     }
 
@@ -105,19 +109,49 @@ class ClassUnlocksTest {
         assertEquals(List.of(Set.of(), Set.of("BLOOD_MAGE")), written); assertTrue(logged("stays unlocked."));
     }
 
-    @Test void staffCommandsUnlockAndLockWithClearReplies() {
-        assertTrue(ClassUnlockCommand.isSubcommand("UnlockClass")); assertTrue(ClassUnlockCommand.isSubcommand("lockclass")); assertFalse(ClassUnlockCommand.isSubcommand("prison"));
-        assertTrue(run("admin", "unlockclass", "Iris")); assertEquals("Usage: /rpcharacter admin unlockclass <player> <classId>", messages());
-        assertTrue(run("admin", "LOCKCLASS", "Iris", "a", "b")); assertEquals("Usage: /rpcharacter admin lockclass <player> <classId>", messages());
-        assertTrue(run("admin", "unlockclass", "Nobody", "blood_mage")); assertEquals("No online player with an active living character named Nobody.", messages());
-        assertTrue(run("admin", "unlockclass", "Iris", "nothing")); assertEquals("No class by the id NOTHING.", messages());
-        assertTrue(run("admin", "unlockclass", "Iris", "blood-mage")); assertEquals("Unlocked Blood Mage for Hero (Iris). They can pick it in /class.", messages());
-        assertEquals(Set.of("BLOOD_MAGE"), character.getUnlockedClasses());
-        assertTrue(run("admin", "unlockclass", "Iris", "BLOOD_MAGE")); assertEquals("Blood Mage is already unlocked for Hero (Iris).", messages());
-        assertTrue(run("admin", "lockclass", "Iris", "blood_mage")); assertEquals("Locked Blood Mage for Hero (Iris). Their current class did not change.", messages());
-        assertTrue(run("admin", "lockclass", "Iris", "gone")); assertEquals("GONE is already locked for Hero (Iris).", messages());
+    @Test void assignSwitchesTheCharacterIntoTheClassForFreeAndBindsIt() {
+        character.setMMOClass("MAGE");
+        assertFalse(ClassUnlocks.isLockedIn(character)); assertFalse(ClassUnlocks.isLockedIn(null));
+        assertTrue(ClassUnlocks.assign(iris, "blood-mage"));
+        assertEquals("BLOOD_MAGE", character.getMMOClass()); assertTrue(ClassUnlocks.isLockedIn(character));
+        service.verify(() -> ClassService.applyClass(iris, "BLOOD_MAGE"));
+        verify(saves).savePlayer(iris); assertTrue(logged("Assigned class BLOOD_MAGE to Hero"));
+        service.when(() -> ClassService.isOnClass(iris, "BLOOD_MAGE")).thenReturn(true);
+        assertTrue(ClassUnlocks.assign(iris, "BLOOD_MAGE"), "Already in it: nothing to do");
+        service.verify(() -> ClassService.applyClass(any(), anyString()), times(1));
+        assertTrue(ClassUnlocks.lock(iris, "blood_mage")); assertFalse(ClassUnlocks.isLockedIn(character), "Released: it may change class again");
+        assertFalse(ClassUnlocks.assign(iris, "missing")); assertFalse(ClassUnlocks.assign(null, "BLOOD_MAGE"));
+    }
+
+    @Test void aClassMmoCoreWontApplyLeavesTheOldClassButKeepsTheRecordForARetry() {
+        character.setMMOClass("MAGE");
+        service.when(() -> ClassService.applyClass(any(), anyString())).thenReturn(false);
+        assertFalse(ClassUnlocks.assign(iris, "blood_mage"));
+        assertEquals("MAGE", character.getMMOClass()); assertEquals(Set.of("BLOOD_MAGE"), character.getUnlockedClasses());
+        assertTrue(logged("Could not switch Hero"));
+        service.when(() -> ClassService.applyClass(any(), anyString())).thenThrow(new IllegalStateException("boom"));
+        assertFalse(ClassUnlocks.assign(iris, "blood_mage")); assertEquals("MAGE", character.getMMOClass());
+        verify(saves, never()).savePlayer(any());
+    }
+
+    @Test void staffCommandsAssignAndReleaseWithClearReplies() {
+        assertTrue(ClassUnlockCommand.isSubcommand("AssignClass")); assertTrue(ClassUnlockCommand.isSubcommand("releaseclass"));
+        assertTrue(ClassUnlockCommand.isSubcommand("unlockclass")); assertTrue(ClassUnlockCommand.isSubcommand("lockclass")); assertFalse(ClassUnlockCommand.isSubcommand("prison"));
+        assertTrue(run("admin", "assignclass", "Iris")); assertEquals("Usage: /rpcharacter admin assignclass <player> <classId>", messages());
+        assertTrue(run("admin", "LOCKCLASS", "Iris", "a", "b")); assertEquals("Usage: /rpcharacter admin releaseclass <player> <classId>", messages());
+        assertTrue(run("admin", "assignclass", "Nobody", "blood_mage")); assertEquals("No online player with an active living character named Nobody.", messages());
+        assertTrue(run("admin", "assignclass", "Iris", "nothing")); assertEquals("No class by the id NOTHING.", messages());
+        assertTrue(run("admin", "unlockclass", "Iris", "blood-mage")); assertEquals("Assigned Blood Mage to Hero (Iris). They are bound to it until released.", messages());
+        assertEquals(Set.of("BLOOD_MAGE"), character.getUnlockedClasses()); assertEquals("BLOOD_MAGE", character.getMMOClass());
+        assertTrue(run("admin", "assignclass", "Iris", "BLOOD_MAGE")); assertEquals("Blood Mage is already assigned to Hero (Iris).", messages());
+        assertTrue(run("admin", "releaseclass", "Iris", "blood_mage"));
+        assertEquals("Released Blood Mage for Hero (Iris). They keep it for now, but can change class in /class and can't pick it back.", messages());
+        assertTrue(run("admin", "releaseclass", "Iris", "gone")); assertEquals("GONE is already released for Hero (Iris).", messages());
         when(saves.saveCharacterNow(any(), any())).thenReturn(false);
-        assertTrue(run("admin", "unlockclass", "Iris", "blood_mage")); assertEquals("Could not save Hero, so nothing changed. See the console.", messages());
-        assertTrue(character.getUnlockedClasses().isEmpty()); assertNull(iris.nextMessage(), "Hidden unlocks are not announced to the player");
+        assertTrue(run("admin", "assignclass", "Iris", "blood_mage")); assertEquals("Could not assign Blood Mage to Hero. See the console.", messages());
+        assertTrue(character.getUnlockedClasses().isEmpty());
+        character.addUnlockedClass("BLOOD_MAGE");
+        assertTrue(run("admin", "releaseclass", "Iris", "blood_mage")); assertEquals("Could not save Hero. See the console.", messages());
+        assertNull(iris.nextMessage(), "Assignments are not announced to the player by RPCharacters");
     }
 }

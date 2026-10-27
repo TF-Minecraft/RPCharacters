@@ -15,10 +15,11 @@ import net.tfminecraft.rpcharacters.paidchange.Payment;
  * Class picker state in the character file, under "class-picks": whether the free subclass pick
  * is used ("subclass-picked"), how many picks were paid for ("paid") and a paid pick saved before
  * its debit ("pending"). Hidden classes the character has unlocked are listed under
- * "unlocked-classes".
+ * "unlocked-classes", and classes with their own skill-point pool under "class-skill-points".
  */
 public final class CharacterClassPickFields {
 	static final String UNLOCKED_CLASSES = "unlocked-classes";
+	static final String CLASS_SKILL_POINTS = "class-skill-points";
 
 	private CharacterClassPickFields() {}
 
@@ -30,6 +31,13 @@ public final class CharacterClassPickFields {
 			for (Object classId : unlocked) {
 				if (classId instanceof String id && !id.isBlank()) {
 					character.addUnlockedClass(id.trim());
+				}
+			}
+		}
+		if (characterJson.get(CLASS_SKILL_POINTS) instanceof Map<?, ?> pools) {
+			for (Map.Entry<?, ?> pool : pools.entrySet()) {
+				if (pool.getKey() instanceof String id && !id.isBlank() && pool.getValue() instanceof Number total) {
+					character.setClassSkillPoints(id.trim(), total.intValue());
 				}
 			}
 		}
@@ -58,6 +66,11 @@ public final class CharacterClassPickFields {
 			JSONArray unlocked = new JSONArray();
 			unlocked.addAll(character.getUnlockedClasses());
 			defaults.put(UNLOCKED_CLASSES, unlocked);
+		}
+		if (!character.getClassSkillPoints().isEmpty()) {
+			JSONObject pools = new JSONObject();
+			pools.putAll(character.getClassSkillPoints());
+			defaults.put(CLASS_SKILL_POINTS, pools);
 		}
 		PendingClassPick pending = character.getPendingClassPick();
 		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0 && pending == null) {

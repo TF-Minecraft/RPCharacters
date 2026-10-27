@@ -50,4 +50,40 @@ class CharacterClassPickFieldsTest {
         CharacterClassPickFields.load(scalar, oddJson);
         assertTrue(scalar.getUnlockedClasses().isEmpty());
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void classSkillPointPoolsRoundTripAndSkipOddEntries() throws Exception {
+        RPCharacter character = new RPCharacter(mock(Player.class));
+        assertTrue(character.getClassSkillPoints("bloodsworn").isEmpty());
+        assertTrue(character.getClassSkillPoints(null).isEmpty());
+        character.setClassSkillPoints("bloodsworn", 8);
+        character.setClassSkillPoints("Sanguinar", -3);
+        assertEquals(8, character.getClassSkillPoints("BLOODSWORN").getAsInt());
+        assertEquals(0, character.getClassSkillPoints("sanguinar").getAsInt());
+        assertThrows(UnsupportedOperationException.class, () -> character.getClassSkillPoints().put("X", 1));
+        HashMap<String, Object> saved = new HashMap<>();
+        CharacterClassPickFields.save(saved, character);
+        assertEquals(Set.of("class-skill-points"), saved.keySet());
+        JSONObject json = (JSONObject) new JSONParser().parse(new JSONObject(saved).toJSONString());
+        RPCharacter loaded = new RPCharacter(mock(Player.class));
+        CharacterClassPickFields.load(loaded, json);
+        assertEquals(java.util.Map.of("BLOODSWORN", 8, "SANGUINAR", 0), loaded.getClassSkillPoints());
+        loaded.removeClassSkillPoints("bloodsworn");
+        assertTrue(loaded.getClassSkillPoints("BLOODSWORN").isEmpty());
+        JSONObject odd = new JSONObject();
+        HashMap<Object, Object> pools = new HashMap<>();
+        pools.put(" ", 1);
+        pools.put("shade", "x");
+        pools.put(" Seer ", 2L);
+        pools.put(5, 5);
+        odd.put("class-skill-points", pools);
+        RPCharacter oddCharacter = new RPCharacter(mock(Player.class));
+        CharacterClassPickFields.load(oddCharacter, odd);
+        assertEquals(java.util.Map.of("SEER", 2), oddCharacter.getClassSkillPoints());
+        odd.put("class-skill-points", "BLOODSWORN");
+        RPCharacter scalar = new RPCharacter(mock(Player.class));
+        CharacterClassPickFields.load(scalar, odd);
+        assertTrue(scalar.getClassSkillPoints().isEmpty());
+    }
 }

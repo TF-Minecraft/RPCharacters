@@ -730,7 +730,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|unlockclass|lockclass> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|assignclass|releaseclass> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -752,7 +752,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (ClassUnlockCommand.isSubcommand(args[1])) {
 			return ClassUnlockCommand.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|unlockclass|lockclass> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|assignclass|releaseclass> ...");
 		return true;
 	}
 
