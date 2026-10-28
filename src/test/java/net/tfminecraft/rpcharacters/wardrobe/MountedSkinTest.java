@@ -80,6 +80,20 @@ class MountedSkinTest extends WardrobeFixture {
             verify(retryTask).cancel();
         }
     }
+    @Test void everyAppliedSkinResendsHungerToTheRespawnedClient() {
+        var client = (WardrobePlayer) player;
+        assertTrue(SkinApplyHelper.apply(player, "first", "signed"));
+        assertEquals(1, client.healthUpdates);
+        assertTrue(SkinApplyHelper.apply(player, "first", "signed"));
+        assertEquals(1, client.healthUpdates, "an unchanged skin does not respawn the client");
+        mount();
+        assertFalse(SkinApplyHelper.apply(player, "seated", "signed"));
+        assertEquals(1, client.healthUpdates);
+        player.leaveVehicle();
+        retry.run();
+        assertEquals(2, client.healthUpdates);
+    }
+
     @Test void repeatedChangesApplyOnlyTheLatestSkinAfterDismount() {
         mount();
         SkinApplyHelper.apply(player, "first", "signed");

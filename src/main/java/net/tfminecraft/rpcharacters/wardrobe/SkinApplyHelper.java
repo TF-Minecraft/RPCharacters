@@ -84,6 +84,8 @@ public final class SkinApplyHelper {
 			profile.removeProperty("textures");
 			profile.setProperty(new ProfileProperty("textures", value, signature));
 			player.setPlayerProfile(profile);
+			// The respawn shows a full hunger bar until food changes; Paper resends health, not food.
+			player.sendHealthUpdate();
 			WardrobeCache.setLastApplied(player, next);
 			return true;
 		} catch (Throwable t) {
