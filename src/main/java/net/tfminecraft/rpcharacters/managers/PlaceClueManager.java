@@ -4,18 +4,23 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.scheduler.BukkitTask;
 
+import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.rpcharacters.objects.SpawnedClue;
+import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -24,9 +29,12 @@ import net.tfminecraft.rpcharacters.utils.ClueGiver;
 public final class PlaceClueManager implements Listener {
 
 	private static final long AWAIT_TIMEOUT_MS = 30_000L;
+	/** How far /rpcharacter removeclue reaches for the player's own placed clues. */
+	public static final double REMOVE_RADIUS = 10.0;
 
 	private final Map<UUID, String> awaiting = new HashMap<>();
 	private final Map<UUID, BukkitTask> timeoutTasks = new HashMap<>();
+	private final Map<UUID, Integer> placedOnTick = new HashMap<>();
 
 	public boolean startAwaiting(Player player, String text) {
 		String validationError = ClueFormatter.validate(text);
@@ -50,7 +58,16 @@ public final class PlaceClueManager implements Listener {
 			return;
 		}
 		Player player = event.getPlayer();
-		String pending = awaiting.get(player.getUniqueId());
+		UUID playerId = player.getUniqueId();
+		if (event.getHand() == EquipmentSlot.OFF_HAND) {
+			// The off-hand half of the click that placed a clue must not also use the off-hand item.
+			Integer placedTick = placedOnTick.remove(playerId);
+			if (placedTick != null && placedTick == Bukkit.getCurrentTick()) {
+				event.setCancelled(true);
+			}
+			return;
+		}
+		String pending = awaiting.get(playerId);
 		if (pending == null) {
 			return;
 		}
@@ -58,15 +75,38 @@ public final class PlaceClueManager implements Listener {
 		if (clicked == null) {
 			return;
 		}
+		if (!Permissions.canPlaceClues(player)) {
+			event.setCancelled(true);
+			endAwaiting(playerId);
+			RPTexts.send(player, RPTexts.ERROR + "You can no longer place clues.");
+			return;
+		}
+		// Knockouts, the selection room, locks and region protection deny the click before us; respect them.
+		// Graves act on cancelled clicks too, so a click on one stays a grave click.
+		if (event.useInteractedBlock() == Event.Result.DENY || GraveManager.get().getAt(clicked) != null) {
+			if (event.getItem() != null && player.hasCooldown(event.getItem().getType())) {
+				// Paper also denies the block while the held item recovers.
+				RPTexts.send(player, RPTexts.ERROR + "Wait for your held item to recover, or switch items.");
+			} else {
+				RPTexts.send(player, RPTexts.ERROR + "You can't place a clue there. Right-click another block.");
+			}
+			return;
+		}
 
 		event.setCancelled(true);
-		endAwaiting(player.getUniqueId());
+		endAwaiting(playerId);
+		if (CreationManager.activeCreators.containsKey(player)) {
+			RPTexts.send(player, RPTexts.ERROR + "You are busy creating a character");
+			return;
+		}
+		placedOnTick.put(playerId, Bukkit.getCurrentTick());
 		placeWorldClue(player, clicked, pending);
 	}
 
 	@EventHandler
 	public void onPlayerQuit(PlayerQuitEvent event) {
 		endAwaiting(event.getPlayer().getUniqueId());
+		placedOnTick.remove(event.getPlayer().getUniqueId());
 	}
 
 	private void placeWorldClue(Player player, Block targetBlock, String text) {
@@ -80,12 +120,14 @@ public final class PlaceClueManager implements Listener {
 			return;
 		}
 
-		SpawnedClue spawned = ClueGiver.spawnClueWithText(anchor, targetBlock.getLocation(), player, text, false);
+		SpawnedClue spawned = ClueGiver.spawnPlacedClue(anchor, targetBlock.getLocation(), player, text);
 		if (spawned == null) {
 			RPTexts.send(player, RPTexts.ERROR + "Could not spawn world clue. Ensure you have an active character.");
 			return;
 		}
-		RPTexts.send(player, RPTexts.SUCCESS + "Spawned world clue linked to that block.");
+		RPTexts.send(player, RPTexts.SUCCESS + "Placed a clue linked to that block.");
+		RPTexts.send(player, RPTexts.MUTED + "Remove your clues nearby with " + RPTexts.COMMAND
+				+ "/rpcharacter removeclue" + RPTexts.MUTED + ".");
 	}
 
 	private void scheduleTimeout(Player player) {

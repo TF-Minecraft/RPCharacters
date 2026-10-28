@@ -616,7 +616,7 @@ public class CommandManager implements Listener, CommandExecutor{
 				RPTexts.sendPrefixed(p, RPTexts.ERROR + "Error with command format");
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("placeclue")) {
-				if (!Permissions.isAdmin(sender)) {
+				if (!Permissions.canPlaceClues(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
 					return true;
 				}
@@ -629,7 +629,38 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Clue text cannot be empty.");
 					return true;
 				}
+				if (CreationManager.activeCreators.containsKey(p)) {
+					RPTexts.send(p, RPTexts.ERROR + "You are busy creating a character");
+					return true;
+				}
+				PlayerData placer = PlayerManager.get(p);
+				if (placer == null || !placer.hasActiveCharacter()) {
+					RPTexts.send(p, RPTexts.ERROR + "You have no active character");
+					return true;
+				}
 				RPCharacters.getPlaceClueManager().startAwaiting(p, text);
+				return true;
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("removeclue")) {
+				if (!Permissions.canPlaceClues(sender)) {
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
+					return true;
+				}
+				if (args.length != 1) {
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Usage: /rpcharacter removeclue");
+					return true;
+				}
+				int removed = SpawnedClueManager.get().clearPlacedByOwnerNear(p.getLocation(),
+						PlaceClueManager.REMOVE_RADIUS, p.getUniqueId());
+				if (removed == 0) {
+					RPTexts.sendPrefixed(p, RPTexts.MUTED + "You have no placed clues within "
+							+ (int) PlaceClueManager.REMOVE_RADIUS + " blocks.");
+					return true;
+				}
+				net.tfminecraft.rpcharacters.database.Database.log(p, "Removed " + removed + " placed clue(s) near "
+						+ p.getWorld().getName() + " " + p.getLocation().getBlockX() + ","
+						+ p.getLocation().getBlockY() + "," + p.getLocation().getBlockZ());
+				RPTexts.sendPrefixed(p, RPTexts.MUTED + "Removed " + RPTexts.WARN + removed
+						+ RPTexts.MUTED + " of your placed clue(s) nearby.");
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("clearclues")) {
 				if (!Permissions.isAdmin(sender)) {

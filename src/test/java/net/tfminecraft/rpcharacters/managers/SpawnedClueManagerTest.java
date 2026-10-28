@@ -62,6 +62,18 @@ class SpawnedClueManagerTest {
         assertEquals(1,manager.clearLinkedToBlock(block));assertNull(manager.get(target.getId()));assertEquals(0,manager.clearLinkedToBlock(block));
     }
 
+    @Test void ownersRemoveOnlyTheirOwnPlacedCluesNearby() {
+        var owner=UUID.randomUUID();var center=new Location(world,0,65,0);
+        var mine=new SpawnedClue(UUID.randomUUID(),world.getName(),1,65,1,"mine",Long.MAX_VALUE,owner);mine.setPlaced(true);
+        var thievery=new SpawnedClue(UUID.randomUUID(),world.getName(),2,65,2,"left behind",Long.MAX_VALUE,owner);
+        var someoneElses=clue(1,2);someoneElses.setPlaced(true);
+        var farAway=new SpawnedClue(UUID.randomUUID(),world.getName(),100,65,100,"far",Long.MAX_VALUE,owner);farAway.setPlaced(true);
+        for(var clue:List.of(mine,thievery,someoneElses,farAway))manager.register(clue);
+        assertEquals(0,manager.clearPlacedByOwnerNear(center,10,null));assertEquals(1,manager.clearPlacedByOwnerNear(center,10,owner));
+        assertNull(manager.get(mine.getId()));assertSame(thievery,manager.get(thievery.getId()));assertSame(someoneElses,manager.get(someoneElses.getId()));assertSame(farAway,manager.get(farAway.getId()));
+        assertEquals(0,manager.clearPlacedByOwnerNear(center,10,owner));assertEquals(0,manager.clearPlacedByOwnerNear(null,10,owner));
+    }
+
     @Test void removalCleansBothVisualStoresAndEmptyOrSharedIndexes() {
         var one=clue(0,0);var two=clue(1,1);manager.register(one);manager.register(two);manager.remove(null);manager.removeVisuals(null);manager.remove(one);
         assertNull(manager.get(one.getId()));assertSame(two,manager.get(two.getId()));holograms.verify(() -> ClueHologram.remove(one));verify(visuals,atLeastOnce()).removeClue(one.getId());

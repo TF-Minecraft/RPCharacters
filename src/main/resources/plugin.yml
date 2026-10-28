@@ -76,6 +76,9 @@ permissions:
     default: true
   rpchar.injure:
     default: true
+  rpchar.clue.place:
+    description: Place your own clues and remove them again (/rpcharacter placeclue, removeclue)
+    default: true
   rpchar.grave.protect:
     default: true
   rpchar.grave.admin:

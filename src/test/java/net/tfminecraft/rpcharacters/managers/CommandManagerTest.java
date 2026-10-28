@@ -74,7 +74,7 @@ class CommandManagerTest {
         plugin = mock(RPCharacters.class); RPCharacters.plugin = plugin;
         commands = new CommandManager(); command = mock(Command.class); when(command.getName()).thenReturn("rpcharacter");
         for (String permission : List.of(Permissions.Permission_Admin, Cache.personaTempaliasPermission,
-                Cache.personaCharacterHiddenPermission, "rpchar.injure")) grant(permission, false);
+                Cache.personaCharacterHiddenPermission, "rpchar.injure", Permissions.PLACE_CLUE)) grant(permission, false);
         data = mock(PlayerData.class); character = mock(RPCharacter.class);
         when(data.getUniqueId()).thenReturn(target.getUniqueId()); when(data.getActiveCharacter()).thenReturn(character);
         when(character.getName()).thenReturn("Hero"); when(character.getSlug()).thenReturn("hero");
@@ -373,10 +373,31 @@ class CommandManagerTest {
     @Test void placingAndClearingCluesValidateArgumentsAndReportResults() {
         run("placeclue", "text"); message("access"); run("clearclues", "5"); message("access"); admin();
         run("placeclue"); message("Usage:"); run("placeclue", " "); message("cannot be empty");
-        run("placeclue", " One", "two "); verify(placeClues).startAwaiting(player, "One two");
+        when(data.hasActiveCharacter()).thenReturn(true); run("placeclue", " One", "two "); verify(placeClues).startAwaiting(player, "One two");
         run("clearclues"); message("Usage:"); run("clearclues", "many"); message("must be a number"); run("clearclues", "0"); message("greater than 0");
         SpawnedClueManager clues = mock(SpawnedClueManager.class); boundary(SpawnedClueManager.class).when(SpawnedClueManager::get).thenReturn(clues);
         when(clues.clearInRadius(player.getLocation(), 5)).thenReturn(3); run("clearclues", "5"); message("Removed 3 spawned clue(s) within 5.0 blocks");
+    }
+
+    @Test void playersWithThePermissionPlaceCluesOnlyWithAnActiveCharacter() {
+        grant(Permissions.PLACE_CLUE, true); run("placeclue", "A muddy footprint"); message("no active character");
+        when(data.hasActiveCharacter()).thenReturn(true); creator(player); run("placeclue", "A muddy footprint"); message("busy creating");
+        CreationManager.activeCreators.clear(); players.when(() -> PlayerManager.get(player)).thenReturn(null); run("placeclue", "A muddy footprint"); message("no active character");
+        verifyNoInteractions(placeClues); players.when(() -> PlayerManager.get(player)).thenReturn(data);
+        run("placeclue", "A", "muddy", "footprint"); verify(placeClues).startAwaiting(player, "A muddy footprint");
+        run("clearclues", "5"); message("access"); run("adminmode", "on"); message("access");
+    }
+
+    @Test void removeClueClearsOnlyTheCallersPlacedCluesNearby() {
+        SpawnedClueManager clues = mock(SpawnedClueManager.class); boundary(SpawnedClueManager.class).when(SpawnedClueManager::get).thenReturn(clues);
+        var log = boundary(net.tfminecraft.rpcharacters.database.Database.class);
+        run("removeclue"); message("access"); verifyNoInteractions(clues); grant(Permissions.PLACE_CLUE, true);
+        run("removeclue", "5"); message("Usage: /rpcharacter removeclue"); verifyNoInteractions(clues);
+        run("removeclue"); message("no placed clues within 10 blocks"); log.verifyNoInteractions();
+        when(clues.clearPlacedByOwnerNear(player.getLocation(), PlaceClueManager.REMOVE_RADIUS, player.getUniqueId())).thenReturn(2);
+        run("removeclue"); message("Removed 2 of your placed clue(s) nearby");
+        log.verify(() -> net.tfminecraft.rpcharacters.database.Database.log(eq(player), contains("Removed 2 placed clue(s)")));
+        grant(Permissions.PLACE_CLUE, false); admin(); run("removeclue"); message("Removed 2 of your placed clue(s) nearby");
     }
 
     @Test void nonFiniteClueRadiusCannotTriggerAnyDeletion() {
