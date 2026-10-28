@@ -374,7 +374,7 @@ class GraveEventsTest extends GraveRuntimeFixture {
         when(extend.getBlock()).thenReturn(ordinary); listener.onPistonExtend(extend); verify(extend,times(2)).setCancelled(true);
         BlockPistonRetractEvent retract=mock(BlockPistonRetractEvent.class); when(retract.getBlocks()).thenReturn(List.of(protectedBlock)); listener.onPistonRetract(retract); verify(retract).setCancelled(true);
         when(retract.getBlocks()).thenReturn(List.of(ordinary)); listener.onPistonRetract(retract); verify(retract,times(1)).setCancelled(true);
-        Inventory graveInventory=((Chest)protectedBlock.getState()).getInventory(); InventoryOpenEvent open=mock(InventoryOpenEvent.class); when(open.getInventory()).thenReturn(graveInventory); listener.onInventoryOpen(open); verify(open).setCancelled(true);
+        Chest graveChest=(Chest)protectedBlock.getState(); Inventory graveInventory=spy(graveChest.getInventory()); doReturn(graveChest).when(graveInventory).getHolder(false); InventoryOpenEvent open=mock(InventoryOpenEvent.class); when(open.getInventory()).thenReturn(graveInventory); listener.onInventoryOpen(open); verify(open).setCancelled(true);
         Inventory loose=mock(Inventory.class); when(loose.getLocation()).thenReturn(protectedBlock.getLocation()); InventoryMoveItemEvent hopper=mock(InventoryMoveItemEvent.class); when(hopper.getSource()).thenReturn(loose); listener.onHopperMove(hopper); verify(hopper).setCancelled(true);
         when(hopper.getSource()).thenReturn(null); when(hopper.getDestination()).thenReturn(graveInventory); listener.onHopperMove(hopper); verify(hopper,times(2)).setCancelled(true);
         when(hopper.getDestination()).thenReturn(mock(Inventory.class)); listener.onHopperMove(hopper); verify(hopper,times(2)).setCancelled(true);
