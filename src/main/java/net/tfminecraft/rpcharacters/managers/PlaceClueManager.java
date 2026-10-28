@@ -20,6 +20,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.rpcharacters.objects.SpawnedClue;
+import net.tfminecraft.rpcharacters.Permissions;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.utils.ClueFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
@@ -72,6 +73,12 @@ public final class PlaceClueManager implements Listener {
 		}
 		Block clicked = event.getClickedBlock();
 		if (clicked == null) {
+			return;
+		}
+		if (!Permissions.canPlaceClues(player)) {
+			event.setCancelled(true);
+			endAwaiting(playerId);
+			RPTexts.send(player, RPTexts.ERROR + "You can no longer place clues.");
 			return;
 		}
 		// Knockouts, the selection room, locks and region protection deny the click before us; respect them.
