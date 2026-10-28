@@ -16,7 +16,7 @@ basic_prosthetic_arm:
   description:
     - "§7A fitted prosthetic arm with modest function."
   attribute-modifiers:
-    - strength.-1
+    - strength.-2
 
 arcane_prosthetic_arm:
   name: "#8939EEArcane Prosthetic Arm"
@@ -58,7 +58,7 @@ basic_prosthetic_leg:
   description:
     - "§7A fitted prosthetic leg with modest mobility."
   attribute-modifiers:
-    - dexterity.-1
+    - dexterity.-2
 
 arcane_prosthetic_leg:
   name: "#8939EEArcane Prosthetic Leg"
