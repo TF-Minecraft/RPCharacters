@@ -378,6 +378,9 @@ class GraveEventsTest extends GraveRuntimeFixture {
         Inventory loose=mock(Inventory.class); when(loose.getLocation()).thenReturn(protectedBlock.getLocation()); InventoryMoveItemEvent hopper=mock(InventoryMoveItemEvent.class); when(hopper.getSource()).thenReturn(loose); listener.onHopperMove(hopper); verify(hopper).setCancelled(true);
         when(hopper.getSource()).thenReturn(null); when(hopper.getDestination()).thenReturn(graveInventory); listener.onHopperMove(hopper); verify(hopper,times(2)).setCancelled(true);
         when(hopper.getDestination()).thenReturn(mock(Inventory.class)); listener.onHopperMove(hopper); verify(hopper,times(2)).setCancelled(true);
+        Chest liveHolder=mock(Chest.class); when(liveHolder.getBlock()).thenReturn(protectedBlock);
+        Inventory live=mock(Inventory.class); when(live.getHolder(false)).thenReturn(liveHolder); when(hopper.getDestination()).thenReturn(live);
+        listener.onHopperMove(hopper); verify(hopper,times(3)).setCancelled(true); verify(live,never()).getHolder();
     }
 }
 

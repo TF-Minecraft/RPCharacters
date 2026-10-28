@@ -123,7 +123,9 @@ public final class GraveInteractListener implements Listener {
 		if (inventory == null) {
 			return null;
 		}
-		InventoryHolder holder = inventory.getHolder();
+		// Hopper moves call this for every transfer. getHolder() snapshots the whole chest
+		// inventory just to find its block, so ask for the live holder instead.
+		InventoryHolder holder = inventory.getHolder(false);
 		if (holder instanceof BlockState state) {
 			return state.getBlock();
 		}
