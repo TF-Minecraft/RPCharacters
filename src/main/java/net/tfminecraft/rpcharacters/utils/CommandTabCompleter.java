@@ -59,6 +59,7 @@ public class CommandTabCompleter implements TabCompleter {
 			completions.add("wardrobe");
 			completions.add("party");
 			if (Permissions.isAdmin(sender) || sender.hasPermission("rpchar.injure")) completions.add("injure");
+			if (Permissions.canPlaceClues(sender)) completions.addAll(List.of("placeclue", "removeclue"));
 			PERSONA_SUBCOMMANDS.stream().filter(sub -> canUsePersona(sender, sub)).forEach(completions::add);
 			if (Permissions.isAdmin(sender)) {
 				completions.add("admin");
@@ -75,7 +76,6 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("addtrait");
 				completions.add("removetrait");
 				completions.add("clearclues");
-				completions.add("placeclue");
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
@@ -191,7 +191,7 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("10");
 				completions.add("25");
 				completions.add("50");
-			} else if (args[0].equalsIgnoreCase("placeclue") && Permissions.isAdmin(sender)) {
+			} else if (args[0].equalsIgnoreCase("placeclue") && Permissions.canPlaceClues(sender)) {
 				// text is free-form; no tab completions
 			} else if (args[0].equalsIgnoreCase("adminmode") && Permissions.isAdmin(sender)) {
 				completions.add("on");

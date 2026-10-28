@@ -159,7 +159,7 @@ public final class ClueGiver {
 		RPCharacter character = pd.getActiveCharacter();
 		String clue = getRandomClueExcluding(character, exclude);
 		if (clue == null) return null;
-		return registerSpawnedClue(spawnLocation, targetBlock, owner, clue);
+		return registerSpawnedClue(spawnLocation, targetBlock, owner, clue, false);
 	}
 
 	/**
@@ -168,6 +168,19 @@ public final class ClueGiver {
 	 */
 	public static SpawnedClue spawnClueWithText(Location anchor, Location targetBlock, Player owner,
 			String clueText, boolean fallbackLocation) {
+		return spawnWithText(anchor, targetBlock, owner, clueText, fallbackLocation, false);
+	}
+
+	/**
+	 * Spawns a clue a player wrote with /rpcharacter placeclue. It is marked as placed, so the owner can
+	 * remove it again without touching clues Thievery left behind. Must be called on the main thread.
+	 */
+	public static SpawnedClue spawnPlacedClue(Location anchor, Location targetBlock, Player owner, String clueText) {
+		return spawnWithText(anchor, targetBlock, owner, clueText, false, true);
+	}
+
+	private static SpawnedClue spawnWithText(Location anchor, Location targetBlock, Player owner,
+			String clueText, boolean fallbackLocation, boolean placed) {
 		if (anchor == null || owner == null || anchor.getWorld() == null) return null;
 		if (clueText == null || clueText.isEmpty()) return null;
 
@@ -177,11 +190,11 @@ public final class ClueGiver {
 		Location spawnLocation = resolveSpawnLocation(anchor, owner, fallbackLocation);
 		if (spawnLocation == null) return null;
 
-		return registerSpawnedClue(spawnLocation, targetBlock, owner, clueText);
+		return registerSpawnedClue(spawnLocation, targetBlock, owner, clueText, placed);
 	}
 
 	private static SpawnedClue registerSpawnedClue(Location spawnLocation, Location targetBlock, Player owner,
-			String clue) {
+			String clue, boolean placed) {
 		Integer targetBlockX = null;
 		Integer targetBlockY = null;
 		Integer targetBlockZ = null;
@@ -214,9 +227,10 @@ public final class ClueGiver {
 				null,
 				0,
 				0L);
+		spawned.setPlaced(placed);
 
 		SpawnedClueManager.get().register(spawned);
-		String logMessage = "Spawned clue at "
+		String logMessage = (placed ? "Placed clue at " : "Spawned clue at ")
 				+ spawnLocation.getWorld().getName() + " "
 				+ spawnLocation.getBlockX() + "," + spawnLocation.getBlockY() + "," + spawnLocation.getBlockZ();
 		if (targetBlockX != null) {

@@ -122,9 +122,11 @@ public class SpawnedClueDatabase {
 						potency = Math.max(0, potency * (1.0 - ageFraction * 0.5));
 					}
 
-					clues.add(new SpawnedClue(id, world, x, y, z, clueText, expiresAt, ownerUuid,
+					SpawnedClue clue = new SpawnedClue(id, world, x, y, z, clueText, expiresAt, ownerUuid,
 							targetBlockX, targetBlockY, targetBlockZ, displayEntityIds, potency, spawnedAtMs,
-							discovered, footTrafficEvents, footTrafficWindowStart));
+							discovered, footTrafficEvents, footTrafficWindowStart);
+					clue.setPlaced(Boolean.TRUE.equals(obj.get("placed")));
+					clues.add(clue);
 				} catch (RuntimeException invalidRow) {
 					invalidRow.printStackTrace();
 				}
@@ -161,6 +163,9 @@ public class SpawnedClueDatabase {
 				obj.put("ownerUuid", clue.getOwnerUuid().toString());
 				obj.put("potency", clue.getPotency());
 				obj.put("spawnedAtMs", clue.getSpawnedAtMs());
+				if (clue.isPlaced()) {
+					obj.put("placed", true);
+				}
 				if (clue.hasTargetBlock()) {
 					obj.put("targetBlockX", clue.getTargetBlockX());
 					obj.put("targetBlockY", clue.getTargetBlockY());

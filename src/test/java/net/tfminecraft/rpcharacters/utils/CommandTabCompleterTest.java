@@ -93,11 +93,14 @@ class CommandTabCompleterTest {
     @Test void rootSuggestionsRespectPermissionsAndPrefixAndAreFreshCopies() {
         List<String> basic = complete(""); assertFalse(basic.contains("create")); assertFalse(basic.contains("next")); assertTrue(basic.containsAll(List.of("wardrobe", "party", "mail", "strikes")));
         assertFalse(basic.contains("admin")); assertFalse(basic.contains("tempalias")); assertFalse(basic.contains("sethidden"));
+        assertFalse(basic.contains("placeclue")); assertFalse(basic.contains("removeclue"));
+        grant(Permissions.PLACE_CLUE, true); assertTrue(complete("").containsAll(List.of("placeclue", "removeclue"))); assertFalse(complete("").contains("clearclues"));
+        assertEquals(List.of(), complete("placeclue", "")); grant(Permissions.PLACE_CLUE, false);
         basic.clear(); assertFalse(complete((String) null).isEmpty());
         grant("rpchar.class.reset", true); assertTrue(complete("").contains("admin")); assertFalse(complete("").contains("reload"));
         admin(); grant(Cache.personaTempaliasPermission, true); grant(Cache.personaCharacterHiddenPermission, true);
         assertTrue(complete("").containsAll(List.of("admin", "reload", "catalog", "pending", "wipe", "reclaimkit", "resetkit", "stage", "setclass",
-            "seteighteen", "skipcooldown", "addtrait", "removetrait", "clearclues", "placeclue", "adminmode", "discordgate", "setworldspawn", "tempalias", "sethidden")));
+            "seteighteen", "skipcooldown", "addtrait", "removetrait", "clearclues", "placeclue", "removeclue", "adminmode", "discordgate", "setworldspawn", "tempalias", "sethidden")));
         Locale.setDefault(Locale.forLanguageTag("tr-TR")); assertEquals(List.of("injure"), complete("INJ"));
     }
 
