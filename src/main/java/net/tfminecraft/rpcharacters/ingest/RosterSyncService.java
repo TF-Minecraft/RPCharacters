@@ -380,7 +380,8 @@ public final class RosterSyncService {
 		}
 		java.util.List<String> editable = Cache.editableTraits;
 		for (Trait trait : character.getTraits()) {
-			if (trait == null || trait.getId() == null || trait.getTraitData() == null) {
+			if (trait == null || trait.getId() == null || trait.getTraitData() == null
+					|| trait.getTraitData().isHidden()) {
 				continue;
 			}
 			String key = trait.getTraitData().getKey();

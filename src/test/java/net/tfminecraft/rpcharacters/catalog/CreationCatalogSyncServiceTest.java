@@ -175,7 +175,7 @@ class CreationCatalogSyncServiceTest {
         arm.getTraitData().getExclusive().addAll(Arrays.asList(null, "one", "two"));
         prosthetics.when(() -> ProstheticLoader.getReplacementForProsthetic("arm")).thenReturn(new ProstheticReplacement("lost_arm", Map.of("arm", "v.IRON_INGOT")));
         trait("leg", "prosthetic", "required-account-playtime: 1.5\n");
-        trait("permanent", "injury", ""); trait("temporary", "injury", "duration: 1h\n");
+        trait("permanent", "injury", ""); trait("temporary", "injury", "duration: 1h\n"); trait("secret", "injury", "hidden: true\n");
         Trait nullKey = mock(Trait.class); TraitData data = mock(TraitData.class); when(nullKey.getId()).thenReturn("untyped");
         when(nullKey.getTraitData()).thenReturn(data); when(nullKey.getDesc()).thenReturn(List.of()); TraitLoader.oList.add(nullKey);
         JSONObject root = payload(); var races = rows(root, "races"); assertEquals(2, races.size());
