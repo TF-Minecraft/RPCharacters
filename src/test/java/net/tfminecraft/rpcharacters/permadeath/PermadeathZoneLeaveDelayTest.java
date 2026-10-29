@@ -73,6 +73,18 @@ class PermadeathZoneLeaveDelayTest extends ZoneBridgeFixture {
     @Test void zoneReloadedAwayWhileItsLeaveWaitsShowsNothing() throws Exception {
         move("REGION_I");title();move(null);loadZones("leave-title-delay-ms: 1000\n");ticks(40);assertNull(title());
     }
+    @Test void subTickDelayStillWaitsOneTick() throws Exception {
+        loadZones("leave-title-delay-ms: 1\npermadeath-zones:\n  REGION_I:\n    name: Highlands\n");
+        move("REGION_I");title();move(null);assertNull(title());
+        ticks(1);assertEquals("Now leaving Highlands",title());
+    }
+    @Test void deathRightAfterLeavingShowsTheWaitingLeaveTitleAtOnce(){
+        move("REGION_I");title();move(null);
+        var death=mock(org.bukkit.event.entity.PlayerDeathEvent.class);when(death.getEntity()).thenReturn(player);
+        try(var service=mockStatic(PermadeathService.class)){new PermadeathZoneListener().onPlayerDeath(death);}
+        assertEquals("Now leaving Highlands",title());
+        ticks(40);assertNull(title());
+    }
     @Test void disabledPluginShowsTheLeaveTitleAtOnce(){
         move("REGION_I");title();when(plugin.isEnabled()).thenReturn(false);
         move(null);assertEquals("Now leaving Highlands",title());

@@ -59,6 +59,7 @@ public final class PermadeathZoneListener implements Listener {
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onPlayerDeath(PlayerDeathEvent event) {
+		showPendingLeaveNow(event.getEntity());
 		PermadeathService.handleDeath(event.getEntity(), event.getEntity().getLocation());
 	}
 
@@ -137,7 +138,7 @@ public final class PermadeathZoneListener implements Listener {
 	private static void scheduleLeave(Player player, String zoneId, PermadeathZoneDefinition zone) {
 		UUID uuid = player.getUniqueId();
 		cancelPendingLeave(uuid);
-		long delayTicks = PermadeathZoneLoader.getLeaveTitleDelayMs() / 50L;
+		long delayTicks = Math.ceilDiv(PermadeathZoneLoader.getLeaveTitleDelayMs(), 50);
 		if (delayTicks <= 0 || !RPCharacters.plugin.isEnabled()) {
 			onZoneLeave(player, zone);
 			return;
@@ -145,13 +146,25 @@ public final class PermadeathZoneListener implements Listener {
 		// Whatever replaces or clears this entry cancels the task first, so a run is always current.
 		BukkitTask task = Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
 			pendingLeaves.remove(uuid);
-			// A zones.yml reload may have removed the zone meanwhile.
-			PermadeathZoneDefinition still = PermadeathZoneLoader.getZone(zoneId);
-			if (still != null && player.isOnline()) {
-				onZoneLeave(player, still);
-			}
+			showLeaveIfZoneExists(player, zoneId);
 		}, delayTicks);
 		pendingLeaves.put(uuid, new PendingLeave(zoneId, task));
+	}
+
+	/** A death just after leaving shows the waiting title at once, so the player knows it wasn't in the zone. */
+	private static void showPendingLeaveNow(Player player) {
+		PendingLeave pending = cancelPendingLeave(player.getUniqueId());
+		if (pending != null) {
+			showLeaveIfZoneExists(player, pending.zoneId());
+		}
+	}
+
+	private static void showLeaveIfZoneExists(Player player, String zoneId) {
+		// A zones.yml reload may have removed the zone meanwhile.
+		PermadeathZoneDefinition zone = PermadeathZoneLoader.getZone(zoneId);
+		if (zone != null && player.isOnline()) {
+			onZoneLeave(player, zone);
+		}
 	}
 
 	private static PendingLeave cancelPendingLeave(UUID uuid) {
