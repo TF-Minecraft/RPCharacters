@@ -30,6 +30,8 @@ block-attenuation:
   TINTED_GLASS: 0.10
   LEAVES: 0.10
   OBSIDIAN: 0.62
+  # Solid ItemsAdder furniture (pots, flower stands, tables) uses barrier hitboxes.
+  BARRIER: 0.06
 
 muffle-rules:
   - replace: th
