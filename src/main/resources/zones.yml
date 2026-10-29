@@ -1,5 +1,9 @@
 permadeath-chance-per-injury: 10
 zone-check-cooldown-ms: 100
+# How long a player must stay outside a zone before "Now leaving" shows (0-60000).
+# Stepping back into the same zone sooner shows nothing, so walking along an edge
+# doesn't flash titles. 0 shows the leave title at once.
+leave-title-delay-ms: 5000
 
 world-spawn: null
 
