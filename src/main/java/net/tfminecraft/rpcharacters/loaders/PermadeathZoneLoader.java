@@ -25,6 +25,7 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 	private static File configFile;
 	private static int chancePerInjury = 10;
 	private static int zoneCheckCooldownMs = 100;
+	private static int leaveTitleDelayMs = 5000;
 	private static final Map<String, PermadeathZoneDefinition> zones = new HashMap<>();
 	private static Location worldSpawn;
 
@@ -40,6 +41,7 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 
 		chancePerInjury = Math.max(0, config.getInt("permadeath-chance-per-injury", 10));
 		zoneCheckCooldownMs = Math.max(0, config.getInt("zone-check-cooldown-ms", 100));
+		leaveTitleDelayMs = Math.clamp(config.getInt("leave-title-delay-ms", 5000), 0, 60000);
 		worldSpawn = parseWorldSpawn(config.getConfigurationSection("world-spawn"));
 
 		zones.clear();
@@ -85,6 +87,10 @@ public final class PermadeathZoneLoader implements LoaderInterface {
 
 	public static int getZoneCheckCooldownMs() {
 		return zoneCheckCooldownMs;
+	}
+
+	public static int getLeaveTitleDelayMs() {
+		return leaveTitleDelayMs;
 	}
 
 	public static PermadeathZoneDefinition getZone(String regionId) {

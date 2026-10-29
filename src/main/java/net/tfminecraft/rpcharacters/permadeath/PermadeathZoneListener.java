@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,7 +17,9 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.scheduler.BukkitTask;
 
+import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
 import net.tfminecraft.rpcharacters.objects.PermadeathZoneDefinition;
 import net.tfminecraft.rpcharacters.tutorial.TutorialService;
@@ -25,6 +28,11 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 public final class PermadeathZoneListener implements Listener {
 
 	private static final ConcurrentHashMap<UUID, String> currentZoneId = new ConcurrentHashMap<>();
+	/** Zones a player just stepped out of whose "Now leaving" title has not shown yet. */
+	private static final ConcurrentHashMap<UUID, PendingLeave> pendingLeaves = new ConcurrentHashMap<>();
+
+	private record PendingLeave(String zoneId, BukkitTask task) {
+	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onPlayerMove(PlayerMoveEvent event) {
@@ -61,15 +69,17 @@ public final class PermadeathZoneListener implements Listener {
 
 	@EventHandler
 	public void onPlayerQuit(PlayerQuitEvent event) {
-		currentZoneId.remove(event.getPlayer().getUniqueId());
+		clearZoneTracking(event.getPlayer());
 		PermadeathService.clearPendingPermadeathRespawn(event.getPlayer());
 	}
 
 	public static void clearZoneTracking(Player player) {
 		currentZoneId.remove(player.getUniqueId());
+		cancelPendingLeave(player.getUniqueId());
 	}
 
 	public static void silentZoneSync(Player player, Location location) {
+		cancelPendingLeave(player.getUniqueId());
 		if (location == null) {
 			currentZoneId.remove(player.getUniqueId());
 			return;
@@ -99,16 +109,57 @@ public final class PermadeathZoneListener implements Listener {
 		if (previousId != null) {
 			PermadeathZoneDefinition fromZone = PermadeathZoneLoader.getZone(previousId);
 			if (fromZone != null) {
-				onZoneLeave(player, fromZone);
+				if (toId == null) {
+					scheduleLeave(player, previousId, fromZone);
+				} else {
+					onZoneLeave(player, fromZone);
+				}
 			}
 		}
 
 		if (toId != null) {
-			onZoneEnter(player, toZone);
+			PendingLeave pending = cancelPendingLeave(uuid);
+			// Back in the zone before its leave title showed: the player never saw it end.
+			if (pending == null || !pending.zoneId().equals(toId)) {
+				onZoneEnter(player, toZone);
+			}
 			currentZoneId.put(uuid, toId);
 		} else {
 			currentZoneId.remove(uuid);
 		}
+	}
+
+	/**
+	 * Holds the leave title for {@code leave-title-delay-ms}, so a player walking along a zone's
+	 * edge doesn't get a title every few steps. Entering any zone always warns at once, unless the
+	 * player returns to the zone whose leave title is still waiting.
+	 */
+	private static void scheduleLeave(Player player, String zoneId, PermadeathZoneDefinition zone) {
+		UUID uuid = player.getUniqueId();
+		cancelPendingLeave(uuid);
+		long delayTicks = PermadeathZoneLoader.getLeaveTitleDelayMs() / 50L;
+		if (delayTicks <= 0 || !RPCharacters.plugin.isEnabled()) {
+			onZoneLeave(player, zone);
+			return;
+		}
+		// Whatever replaces or clears this entry cancels the task first, so a run is always current.
+		BukkitTask task = Bukkit.getScheduler().runTaskLater(RPCharacters.plugin, () -> {
+			pendingLeaves.remove(uuid);
+			// A zones.yml reload may have removed the zone meanwhile.
+			PermadeathZoneDefinition still = PermadeathZoneLoader.getZone(zoneId);
+			if (still != null && player.isOnline()) {
+				onZoneLeave(player, still);
+			}
+		}, delayTicks);
+		pendingLeaves.put(uuid, new PendingLeave(zoneId, task));
+	}
+
+	private static PendingLeave cancelPendingLeave(UUID uuid) {
+		PendingLeave pending = pendingLeaves.remove(uuid);
+		if (pending != null) {
+			pending.task().cancel();
+		}
+		return pending;
 	}
 
 	public static void onZoneEnter(Player player, PermadeathZoneDefinition zone) {
