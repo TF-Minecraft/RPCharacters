@@ -85,6 +85,18 @@ class PermadeathZoneLeaveDelayTest extends ZoneBridgeFixture {
         assertEquals("Now leaving Highlands",title());
         ticks(40);assertNull(title());
     }
+    void teleport(String zoneId){current=zoneId==null?null:zone(zoneId);var to=player.getLocation().clone().add(100,0,0);new PermadeathZoneListener().onPlayerTeleport(new org.bukkit.event.player.PlayerTeleportEvent(player,player.getLocation(),to));}
+    @Test void teleportOutOfAZoneShowsTheLeaveTitleAtOnce(){
+        move("REGION_I");title();
+        teleport(null);assertEquals("Now leaving Highlands",title());
+        ticks(40);assertNull(title());
+    }
+    @Test void teleportWhileALeaveWaitsSettlesItAndWarnsOnArrival(){
+        move("REGION_I");title();move(null);
+        teleport("REGION_I");assertEquals("Now leaving Highlands",title());assertEquals("Now entering Highlands",title());
+        ticks(40);assertNull(title());
+        tutorial.verify(()->TutorialService.show(player,TutorialService.PERMADEATH_ZONE),times(2));
+    }
     @Test void disabledPluginShowsTheLeaveTitleAtOnce(){
         move("REGION_I");title();when(plugin.isEnabled()).thenReturn(false);
         move(null);assertEquals("Now leaving Highlands",title());

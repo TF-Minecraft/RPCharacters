@@ -49,7 +49,10 @@ public final class PermadeathZoneListener implements Listener {
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onPlayerTeleport(PlayerTeleportEvent event) {
-		syncFromLocation(event.getPlayer(), event.getTo());
+		// A teleport is a deliberate jump (a character switch, a warp), not edge walking: settle any
+		// waiting leave and tell the player where they land at once.
+		showPendingLeaveNow(event.getPlayer());
+		syncFromLocation(event.getPlayer(), event.getTo(), false);
 	}
 
 	@EventHandler
@@ -94,6 +97,10 @@ public final class PermadeathZoneListener implements Listener {
 	}
 
 	public static void syncFromLocation(Player player, Location to) {
+		syncFromLocation(player, to, true);
+	}
+
+	private static void syncFromLocation(Player player, Location to, boolean delayLeave) {
 		if (player == null || to == null) {
 			return;
 		}
@@ -110,7 +117,7 @@ public final class PermadeathZoneListener implements Listener {
 		if (previousId != null) {
 			PermadeathZoneDefinition fromZone = PermadeathZoneLoader.getZone(previousId);
 			if (fromZone != null) {
-				if (toId == null) {
+				if (toId == null && delayLeave) {
 					scheduleLeave(player, previousId, fromZone);
 				} else {
 					onZoneLeave(player, fromZone);
@@ -151,7 +158,7 @@ public final class PermadeathZoneListener implements Listener {
 		pendingLeaves.put(uuid, new PendingLeave(zoneId, task));
 	}
 
-	/** A death just after leaving shows the waiting title at once, so the player knows it wasn't in the zone. */
+	/** Death or a teleport just after leaving shows the waiting title at once, e.g. so a death is clearly outside. */
 	private static void showPendingLeaveNow(Player player) {
 		PendingLeave pending = cancelPendingLeave(player.getUniqueId());
 		if (pending != null) {
