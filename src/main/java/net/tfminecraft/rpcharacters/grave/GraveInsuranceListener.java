@@ -40,17 +40,28 @@ public final class GraveInsuranceListener implements Listener {
 		}
 
 		event.setCancelled(true);
-		UUID graveId = GraveInsuranceTickets.boundGrave(item);
-		if (graveId == null) {
-			send(player, GraveLoader.getMessageInsuranceNone());
-			return;
+		Grave grave;
+		if (GraveLoader.isInsuranceRequireTicketAtDeath()) {
+			UUID boundId = GraveInsuranceTickets.boundGrave(item);
+			if (boundId == null) {
+				send(player, GraveLoader.getMessageInsuranceNone());
+				return;
+			}
+			grave = GraveManager.get().getById(boundId);
+			if (grave == null) {
+				unbind(player, item);
+				send(player, GraveLoader.getMessageInsuranceGone());
+				return;
+			}
+		} else {
+			// Simple tickets can be acquired after death; old bindings do not select the grave.
+			grave = GraveManager.get().findNewestByOwner(player.getUniqueId());
+			if (grave == null) {
+				send(player, GraveLoader.getMessageInsuranceNoGrave());
+				return;
+			}
 		}
-		Grave grave = GraveManager.get().getById(graveId);
-		if (grave == null) {
-			unbind(player, item);
-			send(player, GraveLoader.getMessageInsuranceGone());
-			return;
-		}
+		UUID graveId = grave.getId();
 		if (!GraveLootRules.canRecover(player, grave)) {
 			send(player, GraveLoader.getMessageLocked());
 			return;

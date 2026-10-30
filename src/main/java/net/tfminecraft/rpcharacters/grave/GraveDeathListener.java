@@ -69,7 +69,7 @@ public final class GraveDeathListener implements Listener {
 		ItemStack[] offhandSlot = new ItemStack[] { offhand };
 		ItemStack bundledTicket = null;
 		// Insurance can't recover a killer-only grave, so a ticket in a bundle stays an ordinary item there.
-		if (!killerOnly && GraveLoader.isInsuranceEnabled() && GraveInsuranceTickets.bindableSlot(stash) == null) {
+		if (!killerOnly && GraveLoader.isInsuranceRequireTicketAtDeath() && GraveLoader.isInsuranceEnabled() && GraveInsuranceTickets.bindableSlot(stash) == null) {
 			bundledTicket = GraveInsuranceExtract.pull(storage, armor, offhandSlot, stash.values());
 			offhand = offhandSlot[0];
 		}
@@ -111,7 +111,7 @@ public final class GraveDeathListener implements Listener {
 		}
 
 		// Loose tickets stay unbound and come back at respawn rather than tying up a grave its owner can't open.
-		GraveInsuranceTickets.Binding binding = killerOnly ? GraveInsuranceTickets.Binding.NONE
+		GraveInsuranceTickets.Binding binding = killerOnly || !GraveLoader.isInsuranceRequireTicketAtDeath() ? GraveInsuranceTickets.Binding.NONE
 				: GraveInsuranceTickets.bind(stash, grave);
 		if (!binding.bound() && bundledTicket != null) {
 			ItemStack bound = GraveInsuranceTickets.bindTicket(bundledTicket, grave);
