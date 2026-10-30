@@ -243,13 +243,27 @@ final class ProgressStore {
 		boolean waiting = current != null && !current.running;
 		Queued task = waiting ? current
 				: new Queued(progress.getOwnerId(), progress.getCharacterId(), target, expected);
+		String savedContent = progress.savedContent();
 		task.revision = next;
 		task.text = text;
 		progress.setRevision(next);
 		progress.setSavedContent(content);
 		if (!waiting) {
 			queued.put(target, task);
-			writer.execute(() -> run(task));
+			try {
+				writer.execute(() -> run(task));
+			} catch (RuntimeException | Error refused) {
+				// Nothing will run the task: undo the queue entry and the copy's revision, so nobody waits on it.
+				if (current != null) {
+					queued.put(target, current);
+				} else {
+					queued.remove(target);
+				}
+				progress.setRevision(expected);
+				progress.setSavedContent(savedContent);
+				task.done.completeExceptionally(refused);
+				throw refused;
+			}
 		}
 		return task.done;
 	}

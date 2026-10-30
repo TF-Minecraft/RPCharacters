@@ -98,6 +98,26 @@ class ProgressQueueTest extends ProgressFixture {
         pool.shutdown();
     }
 
+    @Test void aWriterThatRefusesTheTaskLeavesNothingQueuedAndTheCopyUnmoved() throws Exception {
+        var id = character().getId();
+        var refusing = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var store = queued(task -> {
+            if (refusing.get()) throw new java.util.concurrent.RejectedExecutionException("writer gone");
+            task.run();
+        });
+        var value = progress(id); store.create(value);
+
+        value.addSkillPoints(1);
+        assertThrows(java.util.concurrent.RejectedExecutionException.class, () -> store.queueReplace(value));
+        assertEquals(1, value.getRevision(), "the copy keeps its revision when nothing will write it");
+        assertEquals(1, store.read(account.getUniqueId(), id).orElseThrow().getRevision(), "a read does not wait on it");
+
+        refusing.set(false);
+        assertFalse(store.queueReplace(value).isCompletedExceptionally(), "the next checkpoint writes normally");
+        assertEquals(2, store.read(account.getUniqueId(), id).orElseThrow().getRevision());
+        assertEquals(1, store.read(account.getUniqueId(), id).orElseThrow().getSkillPointsTotal());
+    }
+
     @Test void aFailedCheckpointIsReportedAndTheNextWriteOfThatCopyResumesFromTheDisk() throws Exception {
         var id = character().getId();
         var inline = queued(Runnable::run);
