@@ -18,6 +18,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.kyori.adventure.text.Component;
@@ -857,20 +858,42 @@ public final class CharacterBodies {
         progress.close();
     }
 
+    /** Every five minutes: live progress is queued for the progress writer, so the tick never waits for the disk. */
     public void checkpoint() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID owner = player.getUniqueId();
             if (selecting.contains(owner) && !live.containsKey(owner) && !failed.contains(owner)) hideFromSelf(player);
         }
+        BukkitScheduler scheduler = Bukkit.getScheduler();
         for (PlayerData account : PlayerManager.getOnlineData()) {
             BodyTag.Live body = live.get(account.getUniqueId());
             if (body == null || failed.contains(account.getUniqueId())) continue;
             RPCharacter character = account.getCharacterById(body.characterId().toString());
             if (character == null || character.getStatus() != Status.ALIVE) continue;
-            try { progress.save(account, character); }
-            catch (IOException | RuntimeException error) { fail(account.getPlayer(), "saving character progression", error); }
+            Player player = account.getPlayer();
+            try {
+                progress.queueSave(account, character).whenComplete((ignored, error) -> {
+                    if (error != null) failCheckpoint(scheduler, player, body, error);
+                });
+            } catch (IOException | RuntimeException error) {
+                fail(player, "saving character progression", error);
+            }
         }
         CharacterSelectView.refreshAll();
+    }
+
+    /**
+     * On the progress writer: a queued checkpoint failed. The session it was taken in fails on the main thread, as
+     * a failed save always has; once the plugin is disabling there is only the log.
+     */
+    private void failCheckpoint(BukkitScheduler scheduler, Player player, BodyTag.Live body, Throwable error) {
+        try {
+            scheduler.runTask(plugin, () -> {
+                if (live.get(player.getUniqueId()) == body) fail(player, "saving character progression", error);
+            });
+        } catch (RuntimeException disabled) {
+            plugin.getLogger().log(Level.SEVERE, "Failed saving character progression for " + player.getUniqueId(), error);
+        }
     }
 
     private void fail(Player player, String operation, Throwable error) {

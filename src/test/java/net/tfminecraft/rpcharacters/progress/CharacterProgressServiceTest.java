@@ -245,6 +245,29 @@ class CharacterProgressServiceTest extends ProgressFixture {
         Files.writeString(store.characterPath(account.getUniqueId(),a.getId()),"bad: ["); assertDoesNotThrow(()->CharacterProgressService.checkpoint(player));
         assertThrows(IllegalArgumentException.class,()->ClassService.runApplying(player,()->{throw new IllegalArgumentException("test");})); assertFalse(ClassService.isApplying(player.getUniqueId()));
     }
+    @Test void aCheckpointFailingOnTheWriterIsLoggedAsBeforeAndTheNextTransitionSavesTheLatest() throws Exception {
+        var a=character(); enable(); service.prepare(account); play(a);
+        Path primary=store.characterPath(account.getUniqueId(),a.getId()); Path previous=primary.resolveSibling(primary.getFileName()+".prev");
+        Files.delete(previous); Files.createDirectory(previous); Files.writeString(previous.resolve("occupied"),"keep");
+        a.getProgress().addSkillPoints(1); var logger=RPCharacters.plugin.getLogger(); String message="Could not checkpoint the progress of character "+a.getId();
+        CharacterProgressService.checkpoint(player);
+        verify(logger).log(eq(java.util.logging.Level.WARNING),eq(message),any(IOException.class));
+        Files.delete(previous.resolve("occupied")); Files.delete(previous);
+        service.save(account,a);
+        var saved=store.read(account.getUniqueId(),a.getId()).orElseThrow();
+        assertEquals(a.getProgress().getRevision(),saved.getRevision()); assertEquals(a.getProgress().getSkillPointsTotal(),saved.getSkillPointsTotal());
+        // A checkpoint refused before it is queued is logged the same way.
+        a.getProgress().setRevision(Long.MAX_VALUE); a.getProgress().addSkillPoints(1); clearInvocations(logger);
+        assertDoesNotThrow(()->CharacterProgressService.checkpoint(player));
+        verify(logger).log(eq(java.util.logging.Level.WARNING),eq(message),any(IOException.class));
+    }
+    @Test void theServiceWritesCheckpointsOnItsOwnThreadAndDrainsThemWhenClosed() throws Exception {
+        var a=character(); service=new CharacterProgressService(root.resolve("progress")); service.recordLegacyActive(account,null);
+        service.prepare(account); play(a); a.getProgress().addSkillPoints(2);
+        var written=service.queueSave(account,a); service.close();
+        assertTrue(written.isDone()&&!written.isCompletedExceptionally(),"closing waited for the checkpoint");
+        assertEquals(a.getProgress().getRevision(),store.read(account.getUniqueId(),a.getId()).orElseThrow().getRevision());
+    }
     @Test void aSwitchWithinTheDelayLetsTheNextCharacterArmItsOwnCheckpointWhileTheStaleOneSavesNothing() throws Exception {
         var a=character(); var b=character(); enable(); service.prepare(account); play(a);
         Path aFile=store.characterPath(account.getUniqueId(),a.getId()); String aSaved=Files.readString(aFile);

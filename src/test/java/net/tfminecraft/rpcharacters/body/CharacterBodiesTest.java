@@ -168,6 +168,7 @@ class CharacterBodiesTest {
         packs=packGates.constructed().getFirst();
         database=dbs.constructed().getFirst();store=stores.constructed().getFirst();migration=migrations.constructed().getFirst();progress=progresses.constructed().getFirst();
         leases=leaseStores.constructed().getFirst();
+        when(progress.queueSave(any(),any())).thenReturn(CompletableFuture.completedFuture(null));
         when(migration.initialize(account,snapshot)).thenReturn(first);when(migration.migrated(owner)).thenReturn(true);
         when(store.read(owner,first)).thenReturn(Optional.of(record(first,1)));
         when(store.read(owner,second)).thenReturn(Optional.of(record(second,1)));
@@ -712,10 +713,45 @@ class CharacterBodiesTest {
         bodies.quit(player);account.addCharacter(a);tag=new BodyTag.Room(first);play();when(database.trySavePlayer(account)).thenReturn(false);
         clearInvocations(player.getInventory());bodies.stow(account,"quit");verify(player.getInventory(),never()).clear();assertInstanceOf(BodyTag.Live.class,tag);
     }
+    @Test void aQueuedCheckpointThatFailsFailsTheSessionItWasTakenInOnTheMainThread() throws Exception {
+        play(); var written=new CompletableFuture<Void>(); when(progress.queueSave(account,a)).thenReturn(written);
+        bodies.checkpoint(); verify(player,never()).kickPlayer(anyString()); assertTrue(queued.isEmpty(),"nothing waits for the disk");
+        written.completeExceptionally(new IOException("disk"));
+        verify(player,never()).kickPlayer(anyString()); drain();
+        verify(player).kickPlayer(contains("needs attention"));
+        clearInvocations(player.getInventory()); bodies.stow(account,"quit"); verify(player.getInventory(),never()).clear();
+    }
+    @Test void aQueuedCheckpointFailingAfterItsSessionEndedChangesNothing() throws Exception {
+        play(); var written=new CompletableFuture<Void>(); when(progress.queueSave(account,a)).thenReturn(written);
+        bodies.checkpoint(); bodies.stow(account,"selection"); assertFalse(bodies.hasLiveBody(player));
+        written.completeExceptionally(new IOException("disk")); drain();
+        verify(player,never()).kickPlayer(anyString());
+    }
+    @Test void aQueuedCheckpointFailingWhileDisablingIsLogged() throws Exception {
+        play(); var written=new CompletableFuture<Void>(); when(progress.queueSave(account,a)).thenReturn(written);
+        var records=new ArrayList<java.util.logging.LogRecord>();
+        var capture=new java.util.logging.Handler(){
+            @Override public void publish(java.util.logging.LogRecord r){records.add(r);}
+            @Override public void flush(){} @Override public void close(){}};
+        Logger.getLogger("CharacterBodiesTest").addHandler(capture);
+        try {
+            bodies.checkpoint();
+            var scheduler=Bukkit.getScheduler(); doThrow(new IllegalStateException("disabled")).when(scheduler).runTask(eq(plugin),any(Runnable.class));
+            written.completeExceptionally(new IOException("disk"));
+            assertTrue(records.stream().anyMatch(r->r.getLevel()==java.util.logging.Level.SEVERE
+                    && r.getMessage().equals("Failed saving character progression for "+owner)
+                    && r.getThrown() instanceof IOException),records.toString());
+            verify(player,never()).kickPlayer(anyString());
+        } finally { Logger.getLogger("CharacterBodiesTest").removeHandler(capture); }
+    }
+    @Test void aCheckpointThatCannotEvenBeQueuedFailsAtOnce() throws Exception {
+        play(); when(progress.queueSave(account,a)).thenThrow(new IOException("capture"));
+        bodies.checkpoint(); verify(player).kickPlayer(contains("needs attention"));
+    }
     @Test void deathSavesProgressBeforeDeathAndStoresTheDeadBodyAtItsDeathLocation() throws Exception {
         play();clearInvocations(player);assertTrue(bodies.prepareDeath(account,a));verify(progress).save(account,a);
         bodies.markDead(account,a);when(a.getStatus()).thenReturn(Status.DEAD);a.setActiveState(false);assertTrue(bodies.awaitingDeadBody(player));
-        bodies.checkpoint();verify(progress,times(1)).save(account,a);
+        bodies.checkpoint();verify(progress,times(1)).save(account,a);verify(progress,never()).queueSave(any(),any());
         bodies.finishDeath(player);drain();verify(store).write(owner,first,1,"permadeath",snapshot);verify(progress,times(1)).save(account,a);
         assertTrue(bodies.isSelecting(player));assertFalse(bodies.awaitingDeadBody(player));assertNotNull(actions);verify(player).teleport(room);
     }
@@ -764,8 +800,9 @@ class CharacterBodiesTest {
     }
     @Test void switchRequestsStartTheReturnToSelectionAndShutdownStowsThenClosesProgress() throws Exception {
         play();bodies.requestSwitch(account,a);assertNull(timer);bodies.requestSwitch(account,b);assertNotNull(timer);verify(player,never()).kickPlayer(anyString());
-        view.when(CharacterSelectView::refreshAll).thenAnswer(call->{verify(progress).save(account,a);return null;});
-        bodies.checkpoint();view.verify(CharacterSelectView::refreshAll);verify(progress).save(account,a);bodies.shutdown();verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
+        view.when(CharacterSelectView::refreshAll).thenAnswer(call->{verify(progress).queueSave(account,a);return null;});
+        bodies.checkpoint();view.verify(CharacterSelectView::refreshAll);verify(progress).queueSave(account,a);verify(progress,never()).save(account,a);
+        bodies.shutdown();verify(progress).save(account,a);verify(store).write(owner,first,1,"shutdown",snapshot);view.verify(CharacterSelectView::cleanupAll);verify(progress).close();
     }
     void leaveRunsOutgoing() {
         doAnswer(c->{((Runnable)c.getArgument(2)).run();return null;}).when(transitions).leave(eq(account),eq(Reason.SWITCH),any());
