@@ -284,6 +284,47 @@ class GraveEventsTest extends GraveRuntimeFixture {
         settings.when(GraveLoader::getMessageInsuranceNone).thenReturn(" "); listener.onPlayerInteract(event); assertNull(player.nextMessage());
     }
 
+    @Test void simpleInsuranceCanBeAcquiredAfterDeathAndConsumesOneFromAnUnboundStack() {
+        settings.when(GraveLoader::isInsuranceRequireTicketAtDeath).thenReturn(false);
+        player.getInventory().setItem(0,new ItemStack(Material.DIAMOND,3));
+        new GraveDeathListener().onPlayerDeath(death(0)); Grave grave=newest();
+        player.getInventory().clear(); player.getInventory().setItemInMainHand(new ItemStack(Material.PAPER,2));
+        new GraveInsuranceListener().onPlayerInteract(interact(Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND));
+        assertNull(manager.getById(grave.getId())); assertEquals(1,player.getInventory().getItemInMainHand().getAmount());
+        assertEquals(3,player.getInventory().all(Material.DIAMOND).values().stream().mapToInt(ItemStack::getAmount).sum());
+    }
+
+    @Test void simpleDeathKeepsLooseTicketsUnboundAndLeavesBundledTicketsInTheGrave() {
+        settings.when(GraveLoader::isInsuranceRequireTicketAtDeath).thenReturn(false);
+        player.getInventory().setItem(0,bundle(new ItemStack(Material.PAPER,2)));
+        player.getInventory().setItem(1,new ItemStack(Material.PAPER,3));
+        GraveDeathListener listener=new GraveDeathListener(); listener.onPlayerDeath(death(0)); Grave grave=newest();
+        assertEquals(2,((BundleMeta)grave.getItem(0).getItemMeta()).getItems().getFirst().getAmount());
+        player.getInventory().clear(); listener.onPlayerRespawn(respawn()); server.getScheduler().performOneTick();
+        assertEquals(3,player.getInventory().getItem(1).getAmount()); assertNull(GraveInsuranceTickets.boundGrave(player.getInventory().getItem(1)));
+    }
+
+    @Test void simpleInsuranceIgnoresOldBindingAndCannotRecoverAnotherPlayersGrave() {
+        settings.when(GraveLoader::isInsuranceRequireTicketAtDeath).thenReturn(false);
+        settings.when(GraveLoader::getMessageInsuranceNoGrave).thenReturn("&eno grave");
+        Grave other=new Grave(null,UUID.randomUUID(),new Location(world,2,64,2)); other.setExperience(3); manager.register(other);
+        ItemStack ticket=GraveInsuranceTickets.bindTicket(new ItemStack(Material.PAPER),other); player.getInventory().setItemInMainHand(ticket);
+        GraveInsuranceListener listener=new GraveInsuranceListener(); listener.onPlayerInteract(interact(Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND));
+        assertEquals("§eno grave",player.nextMessage()); assertNotNull(manager.getById(other.getId()));
+        Grave own=grave(); own.setExperience(7); manager.register(own);
+        listener.onPlayerInteract(interact(Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND));
+        assertNull(manager.getById(own.getId())); assertNotNull(manager.getById(other.getId()));
+    }
+
+    @Test void simpleInsuranceRespectsKillerOnlyGraves() {
+        settings.when(GraveLoader::isInsuranceRequireTicketAtDeath).thenReturn(false);
+        Grave own=grave(); own.setKillerOnly(true); own.setExperience(7); manager.register(own);
+        player.getInventory().setItemInMainHand(new ItemStack(Material.PAPER));
+        new GraveInsuranceListener().onPlayerInteract(interact(Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND));
+        assertNotNull(manager.getById(own.getId())); assertEquals(Material.PAPER,player.getInventory().getItemInMainHand().getType());
+        assertEquals("§clocked",player.nextMessage());
+    }
+
     @Test void insuranceRecoversRemotelyAndConsumesExactlyOneTicket() {
         for (int amount : List.of(1,3)) {
             Grave grave=grave(); grave.setExperience(5); manager.register(grave);
@@ -395,7 +436,7 @@ abstract class GraveRuntimeFixture {
         plugin=mock(RPCharacters.class); logger=mock(Logger.class); when(plugin.getName()).thenReturn("RPCharacters"); when(plugin.namespace()).thenReturn("rpcharacters");
         when(plugin.getDataFolder()).thenReturn(directory.toFile()); when(plugin.getLogger()).thenReturn(logger); when(plugin.getServer()).thenReturn(server); when(plugin.isEnabled()).thenReturn(true); RPCharacters.plugin=plugin;
         manager=GraveManager.get(); for(Object singleton:List.of(manager,LastSolidTracker.get(),GraveExpiryService.get(),GraveVisualManager.get())) instances.add(new InstanceState(singleton));
-        settings=mockStatic(GraveLoader.class); settings.when(GraveLoader::isEnabled).thenReturn(true); settings.when(GraveLoader::isInsuranceEnabled).thenReturn(true); settings.when(GraveLoader::isInsuranceConsume).thenReturn(true);
+        settings=mockStatic(GraveLoader.class); settings.when(GraveLoader::isInsuranceRequireTicketAtDeath).thenReturn(true); settings.when(GraveLoader::isEnabled).thenReturn(true); settings.when(GraveLoader::isInsuranceEnabled).thenReturn(true); settings.when(GraveLoader::isInsuranceConsume).thenReturn(true);
         settings.when(GraveLoader::getMaterial).thenReturn(Material.CHEST); settings.when(GraveLoader::getSnapshotIntervalTicks).thenReturn(2L); settings.when(GraveLoader::getHologramRadius).thenReturn(32.0); settings.when(GraveLoader::getHologramOffsetY).thenReturn(1.2);
         settings.when(() -> GraveLoader.isInsuranceItem(any())).thenAnswer(call -> { ItemStack item=call.getArgument(0);return item!=null && item.getType()==Material.PAPER; });
         settings.when(() -> GraveLoader.keepOutOfGrave(anyInt(),any())).thenAnswer(call -> { ItemStack item=call.getArgument(1);return item!=null && item.getType()==Material.PAPER; });
