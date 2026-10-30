@@ -240,9 +240,37 @@ public final class ClassService {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
-		int total = pools.getSkillPointsTotal();
+		OwnPool own = ownPool(player, mmoPd);
+		int total = own != null ? own.total() : pools.getSkillPointsTotal();
 		int spent = mmoPd.countSkillPointsSpent();
 		mmoPd.setSkillPoints(Math.max(0, total - spent));
+	}
+
+	/** Clamps and re-applies the free skill points after a class's own pool changed. */
+	public static void refreshSkillPoints(Player player) {
+		if (player == null) {
+			return;
+		}
+		clampExcessSkillPool(player);
+		applyFreeSkillPoints(player);
+	}
+
+	/**
+	 * A class with its own skill-point pool (see {@link net.tfminecraft.rpcharacters.classpick.ClassSkillPoints}):
+	 * the live character, the class id and its total.
+	 */
+	private record OwnPool(net.tfminecraft.rpcharacters.objects.RPCharacter character, String classId, int total) {}
+
+	/** The current class's own pool on the active character, or null when it shares the character's pool. */
+	private static OwnPool ownPool(Player player, PlayerData mmoPd) {
+		net.tfminecraft.rpcharacters.objects.PlayerData account = PlayerManager.get(player);
+		net.tfminecraft.rpcharacters.objects.RPCharacter character = account == null ? null : account.getActiveCharacter();
+		PlayerClass profess = mmoPd.getProfess();
+		if (character == null || profess == null) {
+			return null;
+		}
+		java.util.OptionalInt total = character.getClassSkillPoints(profess.getId());
+		return total.isEmpty() ? null : new OwnPool(character, profess.getId(), total.getAsInt());
 	}
 
 	public static void syncSkillPoints(Player player) {
@@ -261,19 +289,27 @@ public final class ClassService {
 		List<String> stripped = sanitizeForeignSkillLevels(mmoPd);
 		int spent = mmoPd.countSkillPointsSpent();
 		int mmoPool = (int) Math.min(Integer.MAX_VALUE, (long) mmoPd.getSkillPoints() + spent);
-		int beforeTotal = pools.getSkillPointsTotal();
+		// Staff skill-point commands on a class with its own pool change that pool, not the shared one.
+		OwnPool own = ownPool(player, mmoPd);
+		int beforeTotal = own != null ? own.total() : pools.getSkillPointsTotal();
 		if (mmoPool != beforeTotal) {
-			pools.setSkillPointsTotal(mmoPool);
-			RPCharacters.getPlayerManager().savePlayer(player);
-			CharacterProgressService.checkpoint(player);
+			if (own != null) {
+				own.character().setClassSkillPoints(own.classId(), mmoPool);
+				RPCharacters.getPlayerManager().saveCharacterNow(player.getUniqueId(), own.character());
+			} else {
+				pools.setSkillPointsTotal(mmoPool);
+				RPCharacters.getPlayerManager().savePlayer(player);
+				CharacterProgressService.checkpoint(player);
+			}
 		}
 		applyFreeSkillPoints(player);
 		if (sender != null && Cache.skillPointsAdminDebugMessages) {
-			int afterTotal = pools.getSkillPointsTotal();
+			OwnPool after = ownPool(player, mmoPd);
+			int afterTotal = after != null ? after.total() : pools.getSkillPointsTotal();
 			int unspent = mmoPd.getSkillPoints();
 			spent = mmoPd.countSkillPointsSpent();
 			RPTexts.sendPrefixed(sender, RPTexts.WARN + player.getName()
-					+ " skill points: " + pools.holder() + " total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
+					+ " skill points: " + (after != null ? "class" : pools.holder()) + " total " + RPTexts.SUCCESS + beforeTotal + " → " + afterTotal
 					+ RPTexts.WARN + ", unspent now " + RPTexts.SUCCESS + unspent
 					+ RPTexts.WARN + " (spent on class: " + RPTexts.SUCCESS + spent
 					+ RPTexts.WARN + ", mmo pool: " + RPTexts.SUCCESS + mmoPool + RPTexts.WARN + ")");
@@ -531,7 +567,8 @@ public final class ClassService {
 			return;
 		}
 		PlayerData mmoPd = PlayerData.get(player);
-		int lifetime = pools.getSkillPointsTotal();
+		OwnPool own = ownPool(player, mmoPd);
+		int lifetime = own != null ? own.total() : pools.getSkillPointsTotal();
 		while ((long) mmoPd.getSkillPoints() + mmoPd.countSkillPointsSpent() > lifetime) {
 			int unspent = mmoPd.getSkillPoints();
 			if (unspent > 0) {

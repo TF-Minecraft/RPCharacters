@@ -330,6 +330,30 @@ class ClassPickTest {
         character.setMMOClass("missing"); assertTrue(ClassPickService.subclassOptions(character).isEmpty());
     }
 
+    @Test void assignedHiddenClassesAreNeverOfferedAndBindTheCharacterWhilePlayed() {
+        assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "test").status(), "Players never pick a hidden class");
+        playerClass("blood", "Blood", -5, null);
+        for (String id : List.of("test", "blood")) character.addUnlockedClass(id);
+        assertEquals(List.of(warrior, mage), ClassPickService.baseClasses());
+        assertNull(ClassPickService.option("test"));
+        assertEquals(Status.UNKNOWN_CLASS, ClassPickService.choose(player, "test").status(), "Assigned or not, the picker can't choose it");
+        var top = openPicker();
+        for (int slot = 0; slot < top.getSize(); slot++) {
+            var item = top.getItem(slot);
+            assertFalse(item != null && item.hasItemMeta() && "Test".equals(ChatColor.stripColor(item.getItemMeta().getDisplayName())));
+        }
+        character.setMMOClass("TEST");
+        assertEquals(Status.ASSIGNED_CLASS, ClassPickService.blocker(player));
+        assertEquals(Status.ASSIGNED_CLASS, ClassPickService.choose(player, "mage").status());
+        assertEquals("Your class is bound to your character and can't be changed.",
+                ChatColor.stripColor(ClassPickService.message(new Result(Status.ASSIGNED_CLASS, null, BigDecimal.ZERO, null))));
+        player.closeInventory(); messages(); ClassPickGui.open(player);
+        assertTrue(messages().contains("can't be changed"));
+        character.removeUnlockedClass("test");
+        assertNull(ClassPickService.blocker(player), "A released class no longer binds");
+        assertEquals("TEST", character.getMMOClass());
+    }
+
     @Test void pickerUsesAdditionalRowsForMoreThanSevenClassesAndSubclasses() {
         for (int i = 0; i < 9; i++) { playerClass("base" + i, "Base " + i, 10 + i, null); displayed.add("base" + i); }
         var top = openPicker(); assertEquals(Material.PAPER, top.getItem(19).getType());
