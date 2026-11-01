@@ -1168,6 +1168,9 @@ public class Database {
 					character.setFuel(traitId, number.doubleValue());
 				}
 			}
+			if (Boolean.TRUE.equals(entry.get("second-limb"))) {
+				character.markSecondLimb(traitId);
+			}
 		}
 	}
 
@@ -1186,6 +1189,9 @@ public class Database {
 			}
 			if (state.hasFuel()) {
 				traitStateJson.put("fuel", state.getFuel());
+			}
+			if (state.isSecondLimb()) {
+				traitStateJson.put("second-limb", true);
 			}
 			if (!traitStateJson.isEmpty()) {
 				stateJson.put(entry.getKey(), traitStateJson);

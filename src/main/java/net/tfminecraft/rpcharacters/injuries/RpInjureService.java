@@ -16,7 +16,6 @@ import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
-import net.tfminecraft.rpcharacters.loaders.InjuryProgressionLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -165,7 +164,7 @@ public final class RpInjureService {
 			return;
 		}
 
-		TraitChangeService.addTrait(target, character, trait);
+		InjuryLimits.give(target, character, trait);
 		TraitChangeService.sendGainedMessage(target, trait);
 		RPTexts.send(attacker, RPTexts.SUCCESS + "Applied " + RPTexts.WARN + ChatColor.stripColor(trait.getName())
 				+ RPTexts.SUCCESS + " to " + RPTexts.WARN + character.getName()
@@ -210,14 +209,16 @@ public final class RpInjureService {
 		}
 	}
 
+	/** Injuries the picker shows: the ones the character has, and the ones that still fit a body part. */
 	public static List<Trait> listPickerInjuries(RPCharacter character) {
 		List<Trait> out = new ArrayList<>();
-		Set<String> owned = ownedInjuryIds(character);
+		List<String> owned = InjuryLimits.ownedIds(character);
 		for (Trait trait : TraitLoader.get()) {
 			if (trait == null || trait.getTraitData() == null || !trait.getTraitData().isInjuryKey()) {
 				continue;
 			}
-			if (shouldHideHealing(trait, owned)) {
+			if (!owned.contains(trait.getId().toLowerCase(Locale.ROOT))
+					&& !InjuryLimits.canReceive(owned, trait.getId())) {
 				continue;
 			}
 			out.add(trait);
@@ -234,11 +235,7 @@ public final class RpInjureService {
 				|| !trait.getTraitData().isInjuryKey()) {
 			return false;
 		}
-		Set<String> owned = ownedInjuryIds(character);
-		if (owned.contains(trait.getId().toLowerCase(Locale.ROOT))) {
-			return false;
-		}
-		return !shouldHideHealing(trait, owned);
+		return InjuryLimits.canReceive(InjuryLimits.ownedIds(character), trait.getId());
 	}
 
 	private static List<Trait> listAvailableInjuries(RPCharacter character) {
@@ -249,14 +246,6 @@ public final class RpInjureService {
 			}
 		}
 		return out;
-	}
-
-	private static boolean shouldHideHealing(Trait trait, Set<String> owned) {
-		if (!trait.hasDuration()) {
-			return false;
-		}
-		String permanentId = InjuryProgressionLoader.getPermanentId(trait.getId());
-		return permanentId != null && owned.contains(permanentId.toLowerCase(Locale.ROOT));
 	}
 
 	private static Set<String> ownedInjuryIds(RPCharacter character) {

@@ -19,6 +19,7 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 public final class InjuryProgressionLoader implements LoaderInterface {
 
 	private static final Map<String, String> progression = new HashMap<>();
+	private static final Map<String, Integer> limits = new HashMap<>();
 
 	@Override
 	public void load(File configFile) {
@@ -30,6 +31,8 @@ public final class InjuryProgressionLoader implements LoaderInterface {
 		}
 
 		progression.clear();
+		limits.clear();
+		loadLimits(config.getConfigurationSection("limits"));
 		if (!config.isConfigurationSection("progression")) {
 			return;
 		}
@@ -75,6 +78,34 @@ public final class InjuryProgressionLoader implements LoaderInterface {
 
 			progression.put(healingId.toLowerCase(Locale.ROOT), permanentId.toLowerCase(Locale.ROOT));
 		}
+	}
+
+	private static void loadLimits(ConfigurationSection section) {
+		if (section == null) {
+			return;
+		}
+		for (String permanentId : section.getKeys(false)) {
+			if (!isPermanentInjury(permanentId)) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury limit '" + permanentId + "' is not a permanent injury and was skipped.");
+				continue;
+			}
+			int limit = section.getInt(permanentId, 0);
+			if (limit < 1) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury limit '" + permanentId + "' must be at least 1 and was skipped.");
+				continue;
+			}
+			limits.put(permanentId.toLowerCase(Locale.ROOT), limit);
+		}
+	}
+
+	/** Configured injury slots for the body part this permanent injury names, or 0 when unset. */
+	public static int getLimit(String permanentId) {
+		if (permanentId == null || permanentId.isBlank()) {
+			return 0;
+		}
+		return limits.getOrDefault(permanentId.toLowerCase(Locale.ROOT), 0);
 	}
 
 	public static String getPermanentId(String healingTraitId) {

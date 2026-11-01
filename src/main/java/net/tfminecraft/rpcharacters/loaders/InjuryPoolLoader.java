@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -106,12 +107,17 @@ public final class InjuryPoolLoader implements LoaderInterface {
 	}
 
 	public static Trait pickRandom(Set<String> ownedTraitIds) {
+		return pickRandom(traitId -> !ownsTrait(ownedTraitIds, traitId));
+	}
+
+	/** Picks a weighted random pool injury among those {@code allowed} accepts, or null when none are. */
+	public static Trait pickRandom(Predicate<String> allowed) {
 		List<String> eligible = new ArrayList<>();
 		List<Integer> eligibleWeights = new ArrayList<>();
 		long total = 0;
 
 		for (Map.Entry<String, Integer> entry : weights.entrySet()) {
-			if (ownsTrait(ownedTraitIds, entry.getKey())) {
+			if (!allowed.test(entry.getKey())) {
 				continue;
 			}
 			eligible.add(entry.getKey());

@@ -274,6 +274,12 @@ class DatabasePersistenceTest extends DatabaseFixture {
         } finally {Files.deleteIfExists(outside);}
     }
 
+    @Test void aSecondLimbIsSavedEvenWithoutOtherTraitState() throws Exception {
+        var character=character("alpha",false); character.markSecondLimb("One_Handed"); character.markSecondLimb(null);
+        db.saveCharacter(new PlayerData(owner),character); var state=(JSONObject)read(characterFile("alpha")).get("trait-state");
+        assertEquals(Set.of("one_handed"),state.keySet()); assertEquals(true,((JSONObject)state.get("one_handed")).get("second-limb"));
+    }
+
     @Test void nullableTransientMapEntriesAreNotSerializedAsValidState() throws Exception {
         var character=spy(character("alpha",false)); var kits=new LinkedHashMap<String,KitCustomiseData>(); kits.put("missing",null); kits.put("plain",new KitCustomiseData("plain",null,List.of("Lore"),null,""));
         doReturn(kits).when(character).getKitCustomisations(); var states=new LinkedHashMap<String,TraitInstanceState>(); states.put("missing",null); states.put("empty",new TraitInstanceState()); var valid=new TraitInstanceState(); valid.setFuel(5D); states.put("fuel",valid); doReturn(states).when(character).getTraitStateMap();

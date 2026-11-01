@@ -2,3 +2,11 @@ progression:
   broken_arm: one_handed
   broken_leg: one_legged
   half_blind: blind
+
+# Most injuries one body part holds at once. A body part is a permanent injury above, the healing
+# injuries that turn into it and the prosthetics that replace it (prosthetics.yml); each owned one
+# fills a slot. Left out: 2 when a prosthetic can replace it (a pair of limbs), otherwise 1.
+limits:
+  one_handed: 2
+  one_legged: 2
+  blind: 1
