@@ -3,9 +3,17 @@ progression:
   broken_leg: one_legged
   half_blind: blind
 
+# Injuries outside the limbs and eyes that share one body part, so a character holds only one of
+# them (or as many as limits below allows). Each injury can be in one group and not in progression.
+# Example, for wild magic marks that leave no room for each other:
+#   wild_magic:
+#     - manaless
+groups: {}
+
 # Most injuries one body part holds at once. A body part is a permanent injury above, the healing
-# injuries that turn into it and the prosthetics that replace it (prosthetics.yml); each owned one
-# fills a slot. Left out: 2 when a prosthetic can replace it (a pair of limbs), otherwise 1.
+# injuries that turn into it and the prosthetics that replace it (prosthetics.yml), or a group;
+# each owned one fills a slot. Left out: 2 when a prosthetic can replace it (a pair of limbs),
+# otherwise 1.
 limits:
   one_handed: 2
   one_legged: 2

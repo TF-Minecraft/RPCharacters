@@ -19,20 +19,28 @@ import net.tfminecraft.rpcharacters.utils.TraitChangeService;
  * How many injuries one body part can hold. A body part is a permanent injury, the healing injuries that turn
  * into it (injury-progression.yml) and the prosthetics that replace it (prosthetics.yml). Each one a character
  * owns fills a slot: arms have two (any two of Broken Arm, One-Handed and an arm prosthetic), eyes one (Half
- * Blind or Blind). {@code limits} in injury-progression.yml sets the slots; unset, a part a prosthetic can
- * replace is a pair of limbs (2) and any other part has 1.
+ * Blind or Blind). Injuries outside the body, such as wild magic marks, share a body part through
+ * {@code groups} in injury-progression.yml. {@code limits} there sets the slots; unset, a part a prosthetic
+ * can replace is a pair of limbs (2) and any other part, groups included, has 1.
  */
 public final class InjuryLimits {
 
 	private InjuryLimits() {
 	}
 
-	/** The permanent injury naming this trait's body part, or null for traits outside any body part. */
+	/**
+	 * The body part this trait fills a slot of: its injury group, else the permanent injury naming it. Null
+	 * for traits outside any body part.
+	 */
 	public static String bodyPartOf(String traitId) {
 		if (traitId == null || traitId.isBlank()) {
 			return null;
 		}
 		String id = traitId.toLowerCase(Locale.ROOT);
+		String group = InjuryProgressionLoader.getGroup(id);
+		if (group != null) {
+			return group;
+		}
 		String permanent = InjuryProgressionLoader.getPermanentId(id);
 		if (permanent != null) {
 			return permanent;

@@ -125,4 +125,54 @@ class InjuryLimitsTest extends PermadeathRuntimeFixture {
         character.addTrait(blind);
         assertSame(halfBlind, PermadeathService.giveRandomInjury(player, character));
     }
+
+    void groups(String yaml) throws Exception {
+        var file = folder.resolve("groups.yml");
+        Files.writeString(file, "progression:\n  half_blind: blind\n  broken_arm: one_handed\n" + yaml);
+        new InjuryProgressionLoader().load(file.toFile());
+    }
+
+    @Test void injuriesInAGroupShareOneSlot() throws Exception {
+        Trait manaless = trait("manaless", "injury", false);
+        Trait hollow = trait("hollow", "injury", true);
+        groups("groups:\n  wild_magic:\n    - Manaless\n    - hollow\n");
+        assertEquals("wild_magic", InjuryLimits.bodyPartOf("MANALESS"));
+        assertEquals("wild_magic", InjuryLimits.bodyPartOf("hollow"));
+        assertEquals(1, InjuryLimits.slotsFor("wild_magic"));
+        assertTrue(InjuryLimits.canAdd(List.of("blind", "one_handed"), "manaless"), "Other body parts don't fill the group");
+        character.addTrait(manaless);
+        assertFalse(InjuryLimits.canReceive(InjuryLimits.ownedIds(character), "hollow"));
+        pool(hollow);
+        assertNull(PermadeathService.giveRandomInjury(player, character), "The only pool injury is in the full group");
+        assertFalse(InjuryLimits.give(player, character, hollow));
+        assertEquals(List.of("manaless"), ids());
+    }
+
+    @Test void aGroupLimitAllowsMoreThanOne() throws Exception {
+        Trait manaless = trait("manaless", "injury", false);
+        Trait hollow = trait("hollow", "injury", true);
+        groups("groups:\n  wild_magic: [manaless, hollow]\nlimits:\n  wild_magic: 2\n");
+        assertEquals(2, InjuryLimits.slotsFor("wild_magic"));
+        character.addTrait(manaless);
+        assertTrue(InjuryLimits.give(player, character, hollow));
+        assertEquals(List.of("manaless", "hollow"), ids());
+    }
+
+    @Test void badGroupEntriesAreSkipped() throws Exception {
+        trait("manaless", "injury", false);
+        trait("wise", "background", false);
+        groups("groups:\n  blind:\n    - manaless\n  wild_magic:\n    - manaless\n    - wise\n    - missing\n    - half_blind\n"
+                + "  other:\n    - manaless\n  empty: []\nlimits:\n  empty: 2\n");
+        verify(logger).warning(contains("Injury group 'blind' has the name of a trait"));
+        verify(logger).warning(contains("entry 'wise' is not an injury"));
+        verify(logger).warning(contains("entry 'missing' is not an injury"));
+        verify(logger).warning(contains("entry 'half_blind' already has a body part from progression"));
+        verify(logger).warning(contains("entry 'manaless' is already in group 'wild_magic'"));
+        verify(logger).warning(contains("Injury limit 'empty' is not a permanent injury or an injury group"));
+        assertEquals("wild_magic", InjuryLimits.bodyPartOf("manaless"));
+        assertEquals("blind", InjuryLimits.bodyPartOf("half_blind"));
+        assertNull(InjuryLimits.bodyPartOf("wise"));
+        assertNull(InjuryProgressionLoader.getGroup(null));
+        assertNull(InjuryProgressionLoader.getGroup(" "));
+    }
 }

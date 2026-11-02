@@ -67,6 +67,17 @@ public class RpInjureServiceTest {
         assertFalse(RpInjureService.listPickerInjuries(f.targetCharacter).contains(bruise));
         assertTrue(RpInjureService.listPickerInjuries(f.targetCharacter).contains(f.healing), "Owned injuries still show as owned");
     }
+    @Test void aGroupedInjuryHidesTheRestOfItsGroup() throws Exception {
+        Trait manaless = f.trait("manaless", "injury", false, null);
+        Trait hollow = f.trait("hollow", "injury", false, null);
+        Files.writeString(f.folder.resolve("groups.yml"), "progression:\n  wound: maimed\ngroups:\n  wild_magic: [manaless, hollow]\n");
+        new InjuryProgressionLoader().load(f.folder.resolve("groups.yml").toFile());
+        assertTrue(RpInjureService.isAvailable(f.targetCharacter, hollow));
+        f.targetCharacter.addTrait(manaless);
+        assertFalse(RpInjureService.isAvailable(f.targetCharacter, hollow));
+        assertFalse(RpInjureService.listPickerInjuries(f.targetCharacter).contains(hollow));
+        assertTrue(RpInjureService.isAvailable(f.targetCharacter, f.healing), "Other body parts are unaffected");
+    }
     @Test void exhaustedInjuriesPreventOpeningThePicker(){f.targetCharacter.addTrait(f.healing);f.targetCharacter.addTrait(f.permanent);assertFalse(RpInjureService.begin(f.attacker,f.target));assertTrue(f.text(f.attacker).contains("no injuries left"));noSession();}
     @Test void pickerModelsOwnedHiddenAndAvailableInjuriesWithRealMetadata() throws Exception {f.progression();f.targetCharacter.addTrait(f.permanent);Trait extra=f.trait("burn","injury",true,Material.BLAZE_POWDER);f.trait("wise","background",false,null);assertFalse(RpInjureService.listPickerInjuries(f.targetCharacter).contains(f.healing));assertTrue(RpInjureService.isOwned(f.targetCharacter,f.permanent));assertFalse(RpInjureService.isOwned(f.targetCharacter,null));assertFalse(RpInjureService.isAvailable(null,f.healing));assertFalse(RpInjureService.isAvailable(f.targetCharacter,null));assertFalse(RpInjureService.isAvailable(f.targetCharacter,f.permanent));assertFalse(RpInjureService.isAvailable(f.targetCharacter,f.healing));assertTrue(RpInjureService.listPickerInjuries(null).contains(f.healing));begin();var inv=f.attacker.getOpenInventory().getTopInventory();var holder=(RpInjureGui.Holder)inv.getHolder();assertSame(inv,holder.getInventory());assertSame(f.attacker,holder.getOwner());assertEquals(RpInjureGui.Kind.PICKER,holder.getKind());assertEquals(Material.GRAY_DYE,inv.getItem(11).getType());assertNull(RpInjureGui.readTraitId(inv.getItem(11)));assertTrue(inv.getItem(11).getItemMeta().getLore().stream().anyMatch(s->s.contains("already have")));assertEquals(Material.BLAZE_POWDER,inv.getItem(10).getType());assertEquals(extra.getId(),RpInjureGui.readTraitId(inv.getItem(10)));assertEquals(Material.GRAY_STAINED_GLASS_PANE,inv.getItem(0).getType());}
     @Test void pickerDoesNotHideTheOnlyAvailableInjuryBehindSevenOwnedEntries(){TraitLoader.oList.clear();for(int i=0;i<7;i++)f.targetCharacter.addTrait(f.trait("owned"+i,"injury",false,null));Trait available=f.trait("available","injury",false,null);begin();var inv=f.attacker.getOpenInventory().getTopInventory();assertTrue(Arrays.stream(inv.getContents()).anyMatch(item->available.getId().equals(RpInjureGui.readTraitId(item))),"The only available injury must be reachable from the picker");}
