@@ -202,11 +202,13 @@ public final class FakeBubbleManager {
 		AtomicInteger idSource = viewerStates.get(viewer.getUniqueId()).getEntityIdSource();
 		int lineWidth = Math.max(50, settings.getMaxCharactersPerLine() * 6);
 		float scale = settings.getScale();
+		Location speakerLocation = speaker.getLocation();
 
 		for (int i = 0; i < layoutLines.size(); i++) {
 			LayoutLine layoutLine = layoutLines.get(i);
 			int stackIndex = layoutLines.size() - 1 - i;
-			Location spawnLoc = BubbleLayoutUtil.desiredLineLocation(speaker, stackIndex, settings, tickCounter);
+			Location spawnLoc = BubbleLayoutUtil.desiredLineLocation(speakerLocation, stackIndex, settings,
+					tickCounter);
 
 			int entityId = idSource.getAndDecrement();
 			UUID entityUuid = UUID.randomUUID();
@@ -230,29 +232,43 @@ public final class FakeBubbleManager {
 
 	private void updatePositions(Player viewer, Player speaker, SpeakerViewerStack stack,
 			SpeechBubbleSettings settings, FakeTextDisplayPackets packets) {
-		List<LayoutLine> layoutLines = stack.buildLayoutLines();
-		double lerpFactor = settings.getFollowLerpFactor();
-		boolean needRefresh = layoutLines.size() != stack.getActiveLines().size();
+		List<FakeBubbleLine> activeLines = stack.getActiveLines();
+		int lineCount = stack.lineCount();
+		if (lineCount != activeLines.size()) {
+			refreshSpeakerStack(viewer, speaker, stack, settings);
+			return;
+		}
 
-		for (int i = 0; !needRefresh && i < layoutLines.size(); i++) {
-			int stackIndex = layoutLines.size() - 1 - i;
-			Location target = BubbleLayoutUtil.desiredLineLocation(speaker, stackIndex, settings, tickCounter);
-			FakeBubbleLine line = stack.getActiveLines().get(i);
+		Location speakerLocation = speaker.getLocation();
+		double lerpFactor = settings.getFollowLerpFactor();
+		for (int i = 0; i < lineCount; i++) {
+			FakeBubbleLine line = activeLines.get(i);
+			Location target = BubbleLayoutUtil.desiredLineLocation(speakerLocation, lineCount - 1 - i, settings,
+					tickCounter);
 			Location current = line.getCurrentLocation();
 			if (!current.getWorld().equals(target.getWorld())) {
-				needRefresh = true;
-				break;
+				refreshSpeakerStack(viewer, speaker, stack, settings);
+				return;
 			}
-			Location lerped = TextDisplayHelper.lerpLocation(current, target, lerpFactor);
-			if (current.distanceSquared(lerped) > POSITION_EPSILON_SQ) {
-				line.setCurrentLocation(lerped);
-				packets.teleport(viewer, line.getEntityId(), lerped);
+			Location next = followStep(current, target, lerpFactor);
+			if (next != null) {
+				line.setCurrentLocation(next);
+				packets.teleport(viewer, line.getEntityId(), next);
 			}
 		}
+	}
 
-		if (needRefresh) {
-			refreshSpeakerStack(viewer, speaker, stack, settings);
-		}
+	/**
+	 * Returns where a line moves this tick, or {@code null} when the move is too small to send.
+	 *
+	 * <p>{@code current} is the position this viewer's client last received for the line: it is set when the
+	 * line spawns and only changes when a teleport is sent. A step of 0.001 blocks or less is not sent, so a
+	 * line resting on its target (a still speaker with bobbing off) sends nothing. A skipped step is never
+	 * lost: the next tick measures from the last sent position again, so a resting line is at most 0.001 / lerp-factor blocks off (0.003 at 0.35).
+	 */
+	static Location followStep(Location current, Location target, double lerpFactor) {
+		Location lerped = TextDisplayHelper.lerpLocation(current, target, lerpFactor);
+		return current.distanceSquared(lerped) > POSITION_EPSILON_SQ ? lerped : null;
 	}
 
 	private void clearViewer(UUID viewerId) {
@@ -341,6 +357,14 @@ public final class FakeBubbleManager {
 
 		List<FakeBubbleLine> getActiveLines() {
 			return activeLines;
+		}
+
+		int lineCount() {
+			int count = 0;
+			for (ViewerUtterance utterance : utterances) {
+				count += utterance.getLines().size();
+			}
+			return count;
 		}
 
 		List<LayoutLine> buildLayoutLines() {

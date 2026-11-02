@@ -86,4 +86,53 @@ class FakeBubbleManagerTest extends SpeechBubbleManagerTest.BubbleFixture {
     @Test void realViewerStateAndUtteranceRecordsPreserveOrderAndExactExpiry() {
         UUID viewerId=UUID.randomUUID(),speakerId=UUID.randomUUID();var state=new FakeBubbleManager.ViewerBubbleState(viewerId);assertEquals(viewerId,state.getViewerId());var stack=state.getOrCreateStack(speakerId);assertSame(stack,state.getOrCreateStack(speakerId));assertEquals(-1,state.getEntityIdSource().getAndDecrement());assertSame(stack,state.getStacks().get(speakerId));var input=new ArrayList<>(List.of("one","two"));UUID utteranceId=UUID.randomUUID();var utterance=new FakeBubbleManager.ViewerUtterance(utteranceId,input,10);input.clear();assertEquals(List.of("one","two"),utterance.getLines());assertThrows(UnsupportedOperationException.class,()->utterance.getLines().clear());assertFalse(utterance.isExpired(9));assertTrue(utterance.isExpired(10));utterance.trackEntityId(2,-9);assertEquals(List.of(0,0,-9),utterance.getEntityIds());utterance.clearEntityIds();assertTrue(utterance.getEntityIds().isEmpty());stack.getUtterances().add(utterance);var lines=stack.buildLayoutLines();assertEquals(utteranceId,lines.getFirst().utteranceId());assertEquals("one",lines.getFirst().text());assertEquals(1,lines.get(1).lineIndex());assertSame(utterance,lines.getFirst().utterance());var line=new FakeBubbleManager.FakeBubbleLine(-1,UUID.randomUUID(),utteranceId,0,new Location(world,1,2,3));stack.getActiveLines().add(line);assertEquals(-1,line.getEntityId());line.setCurrentLocation(new Location(world,4,5,6));assertEquals(4,line.getCurrentLocation().getX());assertSame(stack,state.removeStack(speakerId));assertTrue(state.getStacks().isEmpty());
     }
+
+    @Test void followStepSkipsMovesOfAThousandthOfABlockOrLess() {
+        var current=new Location(world,0,64,0,10,0);
+        assertNull(FakeBubbleManager.followStep(current,current.clone(),.35));
+        assertNull(FakeBubbleManager.followStep(current,new Location(world,0,64.002,0,90,30),.35),"a 0.0007 block step plus a turn");
+        var next=FakeBubbleManager.followStep(current,new Location(world,0,64.01,0,10,0),.5);
+        assertEquals(64.005,next.getY(),1e-12);assertNotSame(current,next);assertEquals(64,current.getY());
+    }
+
+    @Test void standingOrTurningSpeakerWithoutBobbingSendsNoTeleports() {
+        settings.setMaxCharactersPerLine(6);show("one two three");fakeManager.startTicks();
+        server.getScheduler().performTicks(100);verify(packets,never()).teleport(any(),anyInt(),any());
+        player.setRotation(170,40);server.getScheduler().performTicks(20);verify(packets,never()).teleport(any(),anyInt(),any());
+    }
+
+    @Test void bobbingOnlySendsStepsLargerThanTheThresholdFromTheLastSentPosition() {
+        settings.setBobAmplitude(.12);settings.setBobPeriodTicks(60);settings.setFollowLerpFactor(.35);show("bob");fakeManager.startTicks();
+        var spawn=ArgumentCaptor.forClass(Location.class);verify(packets).spawn(eq(viewer),eq(-1),any(),spawn.capture(),anyString(),anyFloat(),anyInt());
+        server.getScheduler().performTicks(400);
+        var moves=ArgumentCaptor.forClass(Location.class);verify(packets,atLeastOnce()).teleport(eq(viewer),eq(-1),moves.capture());
+        assertTrue(moves.getAllValues().size()<400,"steps near the top and bottom of the bob are batched");
+        var sentPositions=new ArrayList<Location>();sentPositions.add(spawn.getValue());sentPositions.addAll(moves.getAllValues());
+        double middle=64+settings.getHeightAboveHead()+settings.getFirstLineOffset();
+        for(int i=1;i<sentPositions.size();i++){var before=sentPositions.get(i-1);var after=sentPositions.get(i);
+            assertTrue(before.distance(after)>.001);assertEquals(0,after.getX());assertEquals(0,after.getZ());assertEquals(middle,after.getY(),.12);}
+    }
+
+    @Test void movingSpeakerIsFollowedAndSendingStopsOnceTheBubbleCatchesUp() {
+        show("walk");fakeManager.startTicks();server.getScheduler().performTicks(1);player.teleport(new Location(world,8,64,0));server.getScheduler().performTicks(40);
+        var moves=ArgumentCaptor.forClass(Location.class);verify(packets,atLeast(10)).teleport(eq(viewer),eq(-1),moves.capture());
+        var xs=moves.getAllValues().stream().mapToDouble(Location::getX).toArray();assertEquals(4,xs[0]);
+        for(int i=1;i<xs.length;i++)assertTrue(xs[i]>xs[i-1]);assertEquals(8,xs[xs.length-1],.002);
+        clearInvocations(packets);server.getScheduler().performTicks(40);verify(packets,never()).teleport(any(),anyInt(),any());
+    }
+
+    @Test void newUtteranceRespawnsEveryLineOnTheSpeakerRatherThanTheLaggingPosition() {
+        show("first");fakeManager.startTicks();player.teleport(new Location(world,8,64,0));server.getScheduler().performTicks(1);clearInvocations(packets);show("second");
+        var spawns=ArgumentCaptor.forClass(Location.class);verify(packets,times(2)).spawn(eq(viewer),anyInt(),any(),spawns.capture(),anyString(),anyFloat(),anyInt());
+        assertTrue(spawns.getAllValues().stream().allMatch(location->location.getX()==8));
+        clearInvocations(packets);server.getScheduler().performTicks(1);verify(packets,never()).teleport(any(),anyInt(),any());
+    }
+
+    @Test void viewerWhoStartsListeningLateGetsTheCurrentPositionAtOnce() {
+        show("first");fakeManager.startTicks();player.teleport(new Location(world,8,64,0));server.getScheduler().performTicks(1);
+        var late=server.addPlayer("Late");late.teleport(new Location(world,2,64,0));fakeManager.show(late,player,UUID.randomUUID(),"hello",channel,Long.MAX_VALUE);
+        verify(packets).spawn(eq(late),eq(-1),any(),argThat(location->location.getX()==8),eq("§ahello"),anyFloat(),anyInt());
+        clearInvocations(packets);server.getScheduler().performTicks(1);
+        verify(packets,never()).teleport(eq(late),anyInt(),any());verify(packets).teleport(eq(viewer),eq(-1),argThat(location->location.getX()==6));
+    }
 }

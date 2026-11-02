@@ -31,7 +31,8 @@ public final class ProtocolLibBridge {
 			if (manager == null) throw new IllegalStateException("ProtocolLib manager is unavailable");
 			packets = new FakeTextDisplayPackets(manager);
 			ready = true;
-			plugin.getLogger().info("ProtocolLib detected — per-viewer fake speech bubbles enabled.");
+			plugin.getLogger().info("ProtocolLib detected — per-viewer fake speech bubbles enabled"
+					+ (packets.usesDirectTeleportPackets() ? " (direct teleport packets)." : "."));
 		} catch (Exception ex) {
 			plugin.getLogger().warning(
 					"Failed to initialize ProtocolLib bridge: " + ex.getMessage()
