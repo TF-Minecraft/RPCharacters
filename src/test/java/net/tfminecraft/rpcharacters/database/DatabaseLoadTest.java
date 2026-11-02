@@ -115,6 +115,12 @@ class DatabaseLoadTest extends DatabaseFixture {
         assertSame(race,loaded.getRace()); assertEquals(List.of("strong"),loaded.getTraits().stream().map(Trait::getId).toList()); assertTrue(loaded.getPlayerClues().isEmpty()); assertEquals("aria",loaded.getSlug()); assertFalse(loaded.hasMMOClass()); assertEquals(RPCharacter.MAX_FOOD_VALUE,loaded.getFoodValue());
     }
 
+    @Test void onlyATrueSecondLimbFlagIsLoaded() throws Exception {
+        var json=characterJson("limbs"); json.put("traits",array("strong","fuel")); json.put("trait-state",obj("strong",obj("second-limb",true),"fuel",obj("second-limb","true")));
+        write(characterFile("limbs"),json); var data=new PlayerData(owner); db.loadCharacters(data); var loaded=data.getCharacters().getFirst();
+        assertTrue(loaded.isSecondLimb("STRONG")); assertFalse(loaded.isSecondLimb("fuel")); assertFalse(loaded.isSecondLimb("missing"));
+    }
+
     @Test void expiredInactiveTraitsAreRemovedWhileOtherPersistedStateSurvives() throws Exception {
         var json=characterJson("inactive"); json.put("traits",array("healing","fuel")); json.put("trait-state",obj("healing",obj("expires-at-ms",1L),"fuel",obj("duration-remaining-ms",60_000L,"fuel",7D)));
         write(characterFile("inactive"),json); var data=new PlayerData(owner); db.loadCharacters(data); var loaded=data.getCharacters().getFirst();

@@ -593,6 +593,19 @@ public class RPCharacter {
 				.setFuel(Math.max(0D, fuel));
 	}
 
+	public boolean isSecondLimb(String traitId) {
+		TraitInstanceState state = getTraitState(traitId);
+		return state != null && state.isSecondLimb();
+	}
+
+	public void markSecondLimb(String traitId) {
+		if (traitId == null) {
+			return;
+		}
+		traitState.computeIfAbsent(normalizeTraitStateKey(traitId), ignored -> new TraitInstanceState())
+				.setSecondLimb(true);
+	}
+
 	public void removeTraitState(String traitId) {
 		if (traitId == null) {
 			return;

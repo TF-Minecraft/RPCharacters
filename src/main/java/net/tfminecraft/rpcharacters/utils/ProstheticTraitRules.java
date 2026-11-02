@@ -63,7 +63,9 @@ public final class ProstheticTraitRules {
 		}
 		List<Trait> toRemove = new ArrayList<>();
 		for (Trait trait : character.getTraits()) {
-			if (injuryIdsToRemove.contains(trait.getId().toLowerCase(Locale.ROOT))) {
+			// An injury gained in play beside the prosthetic is the other limb, not the one it replaced.
+			if (injuryIdsToRemove.contains(trait.getId().toLowerCase(Locale.ROOT))
+					&& !character.isSecondLimb(trait.getId())) {
 				toRemove.add(trait);
 			}
 		}
