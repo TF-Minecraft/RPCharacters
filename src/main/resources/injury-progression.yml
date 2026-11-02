@@ -4,7 +4,8 @@ progression:
   half_blind: blind
 
 # Injuries outside the limbs and eyes that share one body part, so a character holds only one of
-# them (or as many as limits below allows). Each injury can be in one group and not in progression.
+# them (or as many as limits below allows). An injury can be in only one group, and not in
+# progression above.
 # Example, for wild magic marks that leave no room for each other:
 #   wild_magic:
 #     - manaless

@@ -162,7 +162,8 @@ class InjuryLimitsTest extends PermadeathRuntimeFixture {
         trait("manaless", "injury", false);
         trait("wise", "background", false);
         groups("groups:\n  blind:\n    - manaless\n  wild_magic:\n    - manaless\n    - wise\n    - missing\n    - half_blind\n"
-                + "  other:\n    - manaless\n  empty: []\nlimits:\n  empty: 2\n");
+                + "  other:\n    - manaless\n  empty: []\n  single: manaless\nlimits:\n  empty: 2\n");
+        verify(logger).warning(contains("Injury group 'single' is not a list of injuries"));
         verify(logger).warning(contains("Injury group 'blind' has the name of a trait"));
         verify(logger).warning(contains("entry 'wise' is not an injury"));
         verify(logger).warning(contains("entry 'missing' is not an injury"));

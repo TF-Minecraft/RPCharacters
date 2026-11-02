@@ -97,6 +97,11 @@ public final class InjuryProgressionLoader implements LoaderInterface {
 						"Injury group '" + name + "' has the name of a trait and was skipped.");
 				continue;
 			}
+			if (!section.isList(name)) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury group '" + name + "' is not a list of injuries and was skipped.");
+				continue;
+			}
 			for (String member : section.getStringList(name)) {
 				String id = member == null ? "" : member.trim().toLowerCase(Locale.ROOT);
 				Trait trait = id.isEmpty() ? null : TraitLoader.getByString(id);
