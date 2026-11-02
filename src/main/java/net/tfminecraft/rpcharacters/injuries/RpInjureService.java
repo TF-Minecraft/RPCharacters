@@ -1,11 +1,9 @@
 package net.tfminecraft.rpcharacters.injuries;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -227,7 +225,7 @@ public final class RpInjureService {
 	}
 
 	public static boolean isOwned(RPCharacter character, Trait trait) {
-		return trait != null && ownedInjuryIds(character).contains(trait.getId().toLowerCase(Locale.ROOT));
+		return trait != null && InjuryLimits.ownedIds(character).contains(trait.getId().toLowerCase(Locale.ROOT));
 	}
 
 	public static boolean isAvailable(RPCharacter character, Trait trait) {
@@ -246,19 +244,6 @@ public final class RpInjureService {
 			}
 		}
 		return out;
-	}
-
-	private static Set<String> ownedInjuryIds(RPCharacter character) {
-		Set<String> owned = new HashSet<>();
-		if (character == null || character.getTraits() == null) {
-			return owned;
-		}
-		for (Trait trait : character.getTraits()) {
-			if (trait != null && trait.getId() != null) {
-				owned.add(trait.getId().toLowerCase(Locale.ROOT));
-			}
-		}
-		return owned;
 	}
 
 	private static String validatePair(Player attacker, Player target, boolean forAccept) {

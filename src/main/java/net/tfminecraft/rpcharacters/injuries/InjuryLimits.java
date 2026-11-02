@@ -107,11 +107,11 @@ public final class InjuryLimits {
 			add(player, character, injury);
 			return true;
 		}
-		Trait healing = findOwned(character, healingToReplace(owned, injury.getId()));
-		if (healing == null) {
+		String healingId = healingToReplace(owned, injury.getId());
+		if (healingId == null) {
 			return false;
 		}
-		upgrade(player, character, healing, injury);
+		upgrade(player, character, findOwned(character, healingId), injury);
 		return true;
 	}
 
@@ -150,16 +150,11 @@ public final class InjuryLimits {
 		return ids;
 	}
 
+	/** The owned trait with this id; the id comes from {@link #ownedIds}, so it is there. */
 	private static Trait findOwned(RPCharacter character, String traitId) {
-		if (traitId == null) {
-			return null;
-		}
-		for (Trait trait : character.getTraits()) {
-			if (trait != null && traitId.equalsIgnoreCase(trait.getId())) {
-				return trait;
-			}
-		}
-		return null;
+		return character.getTraits().stream()
+				.filter(trait -> trait != null && traitId.equalsIgnoreCase(trait.getId()))
+				.findFirst().orElseThrow();
 	}
 
 	private static boolean owns(Collection<String> ownedIds, String traitId) {
