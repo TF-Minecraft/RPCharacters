@@ -80,7 +80,7 @@ public class InventoryManager {
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(c.getOwner()), 27, t(RPTexts.MUTED + "Character Info"));
 		i.setItem(10, getCharacterItem(c, false));
 		i.setItem(12, getDescriptionItem(c));
-		i.setItem(14, getTraitsItem(c));
+		i.setItem(14, getTraitsItem(c, p));
 		if (c.getStatus().equals(Status.ALIVE) && c.getOwner().equals(p)) {
 			i.setItem(16, getCluesPreviewItem(c));
 		}
@@ -546,7 +546,7 @@ public class InventoryManager {
 	public void traitsView(Player p, RPCharacter c) {
 		int visibleTraitCount = 0;
 		for(Trait t : c.getTraits()) {
-			if(Cache.backgroundTraitTypes.contains(t.getTraitData().getKey())) continue;
+			if(Cache.backgroundTraitTypes.contains(t.getTraitData().getKey()) || !shownTo(p, c, t)) continue;
 			visibleTraitCount++;
 		}
 		int rows = Math.max(3, Math.min(6, ((visibleTraitCount + 1) + 8) / 9));
@@ -555,7 +555,7 @@ public class InventoryManager {
 		int slot = 0;
 		for(Trait t : c.getTraits()) {
 			if(slot >= i.getSize() - 1) break;
-			if(Cache.backgroundTraitTypes.contains(t.getTraitData().getKey())) continue;
+			if(Cache.backgroundTraitTypes.contains(t.getTraitData().getKey()) || !shownTo(p, c, t)) continue;
 			i.setItem(slot, getTraitInfoItem(t, c));
 			slot++;
 		}
@@ -1024,12 +1024,25 @@ public class InventoryManager {
 		i.setItemMeta(meta);
 		return i;
 	}
-	/** Shown traits as legacy text: name, time left and type, without background traits. */
-	@SuppressWarnings("deprecation")
+	/**
+	 * Whether the viewer may see this trait: a hidden one (TraitData.isHidden, such as another plugin's
+	 * secret mark) only shows to the character's own player.
+	 */
+	static boolean shownTo(Player viewer, RPCharacter c, Trait trait) {
+		return !trait.getTraitData().isHidden() || viewer != null && viewer.equals(c.getOwner());
+	}
+
+	/** The character's own player's view of {@link #traitLines(RPCharacter, Player)}. */
 	public static List<String> traitLines(RPCharacter c) {
+		return traitLines(c, c.getOwner());
+	}
+
+	/** Shown traits as legacy text: name, time left and type, without background traits or hidden ones the viewer may not see. */
+	@SuppressWarnings("deprecation")
+	public static List<String> traitLines(RPCharacter c, Player viewer) {
 		List<String> lines = new ArrayList<>();
 		for(Trait trait : c.getTraits()) {
-			if(Cache.backgroundTraitTypes.contains(trait.getTraitData().getKey())) continue;
+			if(Cache.backgroundTraitTypes.contains(trait.getTraitData().getKey()) || !shownTo(viewer, c, trait)) continue;
 			String key = trait.getTraitData().getKey();
 			boolean injuryOrProsthetic = key != null
 					&& (key.equalsIgnoreCase("injury") || key.equalsIgnoreCase("prosthetic"));
@@ -1049,8 +1062,13 @@ public class InventoryManager {
 		return lines;
 	}
 
-	@SuppressWarnings("deprecation")
+	/** The character's own player's view of {@link #getTraitsItem(RPCharacter, Player)}. */
 	public ItemStack getTraitsItem(RPCharacter c) {
+		return getTraitsItem(c, c.getOwner());
+	}
+
+	@SuppressWarnings("deprecation")
+	public ItemStack getTraitsItem(RPCharacter c, Player viewer) {
 		ItemStack i = new ItemStack(Material.GOLDEN_APPLE, 1);
 		ItemMeta meta = i.getItemMeta();
 		meta.setDisplayName(t(RPTexts.MUTED + "Character Traits"));
@@ -1058,7 +1076,7 @@ public class InventoryManager {
 		lore.add(t(RPTexts.MUTED + "------------------------"));
 		lore.add(t(RPTexts.WARN + "Traits:"));
 		lore.add(RPTexts.spacer());
-		lore.addAll(traitLines(c));
+		lore.addAll(traitLines(c, viewer));
 		if (c.getStatus().equals(Status.ALIVE)) {
 			lore.addAll(PermadeathService.computeRisk(c).toLoreLines());
 		}

@@ -336,6 +336,9 @@ public final class CreationCatalogSyncService {
 	}
 
 	private static boolean shouldIncludeTraitInCatalog(Trait trait, String key) {
+		if (trait.getTraitData().isHidden()) {
+			return false;
+		}
 		if (key == null) {
 			return true;
 		}

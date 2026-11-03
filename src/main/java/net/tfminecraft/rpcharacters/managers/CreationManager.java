@@ -547,6 +547,11 @@ public class CreationManager implements Listener{
 			}
 			String stageId = action.substring("edit:".length());
 			Stage stage = StageLoader.getById(stageId);
+			if (cc.isEditing() && isClassStage(stage)
+					&& net.tfminecraft.rpcharacters.classpick.ClassUnlocks.isLockedIn(cc.getCharacter())) {
+				RPTexts.send(p, RPTexts.ERROR + "Your class is bound to your character and can't be changed.");
+				return;
+			}
 			if (cc.isEditing() && isClassStage(stage) && ClassPickService.isEnabled()) {
 				// Class picks are priced by the class picker, not the stage's lock and paid changes.
 				cc.closeEditSession();

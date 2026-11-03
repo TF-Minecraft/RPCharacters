@@ -44,6 +44,18 @@ class ClassServiceTest extends MmoServiceFixture {
         skillLevels.put("known",3);skillPoints.set(4);ClassService.migrateSkillPointsIfNeeded(player);verify(manager,never()).savePlayer(any());when(account.needsSkillPointsMigration()).thenReturn(true);ClassService.migrateSkillPointsIfNeeded(player);assertEquals(6,accountSkills.get());verify(manager).savePlayer(player);ClassService.grantSkillPoints(player,3);assertEquals(9,accountSkills.get());assertEquals(7,skillPoints.get());accountSkills.set(1);ClassService.applyFreeSkillPoints(player);assertEquals(0,skillPoints.get());
     }
 
+    @Test void classesWithTheirOwnPoolIgnoreTheSharedPoolAndKeepStaffChangesInIt(){
+        Map<String,Integer> own=new HashMap<>();when(character.getClassSkillPoints(anyString())).thenAnswer(c->own.containsKey(c.<String>getArgument(0))?OptionalInt.of(own.get(c.<String>getArgument(0))):OptionalInt.empty());doAnswer(c->{own.put(c.getArgument(0),c.getArgument(1));return null;}).when(character).setClassSkillPoints(anyString(),anyInt());
+        skillLevels.put("known",2);accountSkills.set(10);ClassService.applyFreeSkillPoints(player);assertEquals(9,skillPoints.get(),"Without its own pool the class shares the character's");
+        own.put("warrior",3);ClassService.applyFreeSkillPoints(player);assertEquals(2,skillPoints.get(),"Its own total minus what it spent; the shared 10 stay out");
+        skillPoints.set(6);Cache.skillPointsAdminDebugMessages=true;ClassService.syncSkillPoints(player,player);Cache.skillPointsAdminDebugMessages=false;
+        assertEquals(7,own.get("warrior"));assertEquals(10,accountSkills.get());verify(manager).saveCharacterNow(owner,character);verify(manager,never()).savePlayer(player);assertEquals(6,skillPoints.get());
+        texts.verify(() -> RPTexts.sendPrefixed(eq(player),argThat(message->org.bukkit.ChatColor.stripColor(message).contains("skill points: class total 3 → 7"))));
+        own.put("warrior",1);skillLevels.put("known",3);ClassService.refreshSkillPoints(player);assertEquals(2,skillLevels.get("known"));assertEquals(0,skillPoints.get());ClassService.refreshSkillPoints(null);
+        when(account.getActiveCharacter()).thenReturn(null);ClassService.applyFreeSkillPoints(player);assertEquals(9,skillPoints.get());
+        when(account.getActiveCharacter()).thenReturn(character);current.set(null);ClassService.applyFreeSkillPoints(player);assertEquals(9,skillPoints.get());
+    }
+
     @Test void migrationCannotWrapLargeSkillPoolsIntoNegativeLifetimePoints(){
         skillPoints.set(Integer.MAX_VALUE);skillLevels.put("known",2);when(account.needsSkillPointsMigration()).thenReturn(true);ClassService.migrateSkillPointsIfNeeded(player);assertEquals(Integer.MAX_VALUE,accountSkills.get(),"Representable lifetime points must saturate rather than wrap negative and erase the account pool");
     }
