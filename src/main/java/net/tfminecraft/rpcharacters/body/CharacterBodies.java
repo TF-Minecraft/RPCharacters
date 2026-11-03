@@ -55,6 +55,7 @@ public final class CharacterBodies {
     private final CharacterPackGate packs;
     private final SelectionPresentation presentation;
     private final Location room;
+    private final World spawnWorld;
     private final Set<NamespacedKey> bodyKeys;
     private final Map<UUID, Location> originalSpawns = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerData> pendingAccounts = new HashMap<>();
@@ -111,6 +112,7 @@ public final class CharacterBodies {
         leases = new BodyLeaseStore(data.resolve("body-leases"));
         World mainWorld = Bukkit.getWorld(config.getString("spawn-world", Bukkit.getWorlds().getFirst().getName()));
         if (mainWorld == null) throw new IOException("Character body spawn world is not loaded");
+        spawnWorld = mainWorld;
         migration = new CharacterBodyMigration(data.resolve("body-migrations"),
                 plugin.getDataFolder().toPath().resolve("character-body-heirs.yml"),
                 config.getString("heirs-sha256", ""), store, mainWorld.getSpawnLocation());
@@ -497,7 +499,7 @@ public final class CharacterBodies {
         try {
             progress.ensureFresh(account, character);
             migration.ensureBody(account, character);
-            BodyRecord body = store.read(owner, UUID.fromString(character.getId())).orElseThrow();
+            BodyRecord body = inLoadedWorld(store.read(owner, UUID.fromString(character.getId())).orElseThrow());
             Location destination = body.body().location();
             if (destination.getWorld().equals(room.getWorld())) throw new IOException("Character body points to the selection room");
             destination.getWorld().getChunkAtAsync(destination).whenComplete((chunk, error) ->
@@ -513,6 +515,16 @@ public final class CharacterBodies {
             requests.remove(owner);
             fail(player, "loading the selected body", error);
         }
+    }
+
+    /** A body saved in a world that has since gone (a closed dungeon instance) resumes at the spawn world's spawn. */
+    private BodyRecord inLoadedWorld(BodyRecord stored) {
+        BodySnapshot placed = stored.body().inLoadedWorld(spawnWorld.getSpawnLocation());
+        if (placed == stored.body()) return stored;
+        plugin.getLogger().warning("Character " + stored.characterId() + " of " + stored.ownerId() + " was saved in world "
+                + stored.body().worldName() + ", which is not loaded; resuming in " + placed.worldName());
+        return new BodyRecord(stored.ownerId(), stored.characterId(), stored.rev(), stored.dataVersion(), stored.savedAt(),
+                stored.reason(), placed);
     }
 
     private void activate(PlayerData account, RPCharacter character, BodyRecord body, Location destination) {

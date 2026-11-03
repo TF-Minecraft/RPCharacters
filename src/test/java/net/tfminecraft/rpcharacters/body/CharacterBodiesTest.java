@@ -120,7 +120,7 @@ class CharacterBodiesTest {
         when(player.getPersistentDataContainer()).thenReturn(mock(PersistentDataContainer.class));
         when(player.getActivePotionEffects()).thenReturn(List.of());
         account=new PlayerData(player); a=character(first); b=character(second); account.addCharacter(a); account.addCharacter(b);
-        snapshot=mock(BodySnapshot.class); when(snapshot.withLocation(any())).thenReturn(snapshot); when(snapshot.withFullHealth()).thenReturn(snapshot); when(snapshot.location()).thenReturn(spawn);
+        snapshot=mock(BodySnapshot.class); when(snapshot.withLocation(any())).thenReturn(snapshot); when(snapshot.withFullHealth()).thenReturn(snapshot); when(snapshot.location()).thenReturn(spawn); when(snapshot.inLoadedWorld(any())).thenReturn(snapshot);
         var snapshots=mockStatic(BodySnapshot.class); mocks.add(snapshots);
         snapshots.when(()->BodySnapshot.capture(eq(player),anySet())).thenReturn(snapshot);
         bukkit=mockStatic(Bukkit.class); mocks.add(bukkit);
@@ -615,6 +615,14 @@ class CharacterBodiesTest {
     @Test void failedChunkLoadDoesNotApplyBody() throws Exception {
         ready();when(world.getChunkAtAsync(any(Location.class))).thenReturn(CompletableFuture.failedFuture(new IOException("chunk")));
         bodies.select(account,a);drain();verify(snapshot,never()).apply(any(),anySet());verify(player).kickPlayer(contains("needs attention"));
+    }
+    @Test void bodyInAClosedDungeonResumesAtItsFallbackInsteadOfKicking() throws Exception {
+        BodySnapshot moved=mock(BodySnapshot.class);Location fallback=new Location(world,100,65,-40);
+        when(snapshot.worldName()).thenReturn("syrindell_1");when(snapshot.inLoadedWorld(spawn)).thenReturn(moved);
+        when(moved.location()).thenReturn(fallback);when(moved.worldName()).thenReturn("world");
+        ready();bodies.select(account,a);drain();
+        verify(player,never()).kickPlayer(anyString());verify(player).teleport(fallback);verify(moved).apply(player,Set.of(NamespacedKey.fromString("accessory:test")));
+        verify(snapshot,never()).apply(any(),anySet());assertTrue(bodies.hasLiveBody(player));
     }
     @Test void roomDestinationAndChangedRevisionAreRefused() throws Exception {
         ready();when(snapshot.location()).thenReturn(room);bodies.select(account,a);verify(player).kickPlayer(contains("needs attention"));
