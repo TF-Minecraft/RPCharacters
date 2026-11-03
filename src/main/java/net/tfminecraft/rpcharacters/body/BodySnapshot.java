@@ -236,6 +236,16 @@ public final class BodySnapshot {
         return at(world, data.getAsJsonObject("location"));
     }
 
+    /**
+     * This body, or, when its saved world no longer exists (a closed dungeon instance), the same body moved to
+     * its respawn point or else {@code fallback}. Vanilla does the same for a player whose dimension is gone.
+     */
+    public BodySnapshot inLoadedWorld(Location fallback) {
+        if (Bukkit.getWorld(worldName()) != null) return this;
+        Location respawn = loaded(data.get("respawn"));
+        return withLocation(respawn != null ? respawn : fallback);
+    }
+
     /** Validates everything before the first change, so a bad body leaves the player untouched. Never teleports. */
     public void apply(Player player, Set<NamespacedKey> bodyKeys) throws IOException {
         apply(player, bodyKeys, BodyPdcCodec.PAPER);

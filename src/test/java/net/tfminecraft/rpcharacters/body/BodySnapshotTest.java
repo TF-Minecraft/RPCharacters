@@ -335,6 +335,24 @@ class BodySnapshotTest {
     }
 
     @Test
+    void bodyInAMissingWorldMovesToItsRespawnPointOrTheFallback() throws Exception {
+        Location fallback = new Location(world, 7, 80, 9);
+        JsonObject json = full();
+        json.getAsJsonObject("location").addProperty("world", "syrindell_1");
+        BodySnapshot stranded = BodySnapshot.deserialize(BodyJson.GSON.toJson(json));
+
+        Location bed = stranded.inLoadedWorld(fallback).location();
+        assertEquals(new Location(world, 4, 70, 9), new Location(bed.getWorld(), bed.getX(), bed.getY(), bed.getZ()));
+        assertEquals("syrindell_1", stranded.worldName());
+        json.add("respawn", com.google.gson.JsonNull.INSTANCE);
+        BodySnapshot noBed = BodySnapshot.deserialize(BodyJson.GSON.toJson(json));
+        assertEquals(fallback, noBed.inLoadedWorld(fallback).location());
+
+        BodySnapshot home = BodySnapshot.deserialize(BodyJson.GSON.toJson(full()));
+        assertSame(home, home.inLoadedWorld(fallback));
+    }
+
+    @Test
     void pointsInMissingWorldsFallBackLikeVanilla() throws Exception {
         JsonObject json = full();
         json.getAsJsonObject("respawn").addProperty("world", "gone");
