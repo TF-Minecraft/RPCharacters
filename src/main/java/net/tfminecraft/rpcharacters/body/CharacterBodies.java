@@ -517,7 +517,7 @@ public final class CharacterBodies {
         }
     }
 
-    /** A body saved in a world that has since gone (a closed dungeon instance) resumes at its respawn point or spawn. */
+    /** A body saved in a world that has since gone (a closed dungeon instance) resumes at the spawn world's spawn. */
     private BodyRecord inLoadedWorld(BodyRecord stored) {
         BodySnapshot placed = stored.body().inLoadedWorld(spawnWorld.getSpawnLocation());
         if (placed == stored.body()) return stored;

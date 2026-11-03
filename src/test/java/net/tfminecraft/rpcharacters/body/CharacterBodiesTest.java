@@ -617,11 +617,11 @@ class CharacterBodiesTest {
         bodies.select(account,a);drain();verify(snapshot,never()).apply(any(),anySet());verify(player).kickPlayer(contains("needs attention"));
     }
     @Test void bodyInAClosedDungeonResumesAtItsFallbackInsteadOfKicking() throws Exception {
-        BodySnapshot moved=mock(BodySnapshot.class);Location bed=new Location(world,100,65,-40);
+        BodySnapshot moved=mock(BodySnapshot.class);Location fallback=new Location(world,100,65,-40);
         when(snapshot.worldName()).thenReturn("syrindell_1");when(snapshot.inLoadedWorld(spawn)).thenReturn(moved);
-        when(moved.location()).thenReturn(bed);when(moved.worldName()).thenReturn("world");
+        when(moved.location()).thenReturn(fallback);when(moved.worldName()).thenReturn("world");
         ready();bodies.select(account,a);drain();
-        verify(player,never()).kickPlayer(anyString());verify(player).teleport(bed);verify(moved).apply(player,Set.of(NamespacedKey.fromString("accessory:test")));
+        verify(player,never()).kickPlayer(anyString());verify(player).teleport(fallback);verify(moved).apply(player,Set.of(NamespacedKey.fromString("accessory:test")));
         verify(snapshot,never()).apply(any(),anySet());assertTrue(bodies.hasLiveBody(player));
     }
     @Test void roomDestinationAndChangedRevisionAreRefused() throws Exception {

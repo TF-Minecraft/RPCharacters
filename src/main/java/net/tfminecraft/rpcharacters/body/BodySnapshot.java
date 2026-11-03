@@ -238,12 +238,11 @@ public final class BodySnapshot {
 
     /**
      * This body, or, when its saved world no longer exists (a closed dungeon instance), the same body moved to
-     * its respawn point or else {@code fallback}. Vanilla does the same for a player whose dimension is gone.
+     * {@code spawn}. Vanilla sends a player whose dimension is gone to the world spawn, not to their bed: a saved
+     * bed point is the block itself and may no longer be safe.
      */
-    public BodySnapshot inLoadedWorld(Location fallback) {
-        if (Bukkit.getWorld(worldName()) != null) return this;
-        Location respawn = loaded(data.get("respawn"));
-        return withLocation(respawn != null ? respawn : fallback);
+    public BodySnapshot inLoadedWorld(Location spawn) {
+        return Bukkit.getWorld(worldName()) != null ? this : withLocation(spawn);
     }
 
     /** Validates everything before the first change, so a bad body leaves the player untouched. Never teleports. */
