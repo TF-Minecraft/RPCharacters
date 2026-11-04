@@ -28,6 +28,7 @@ import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
 import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 
 public class CommandTabCompleter implements TabCompleter {
@@ -79,7 +80,7 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
-			} else if (ClassPickReset.canUse(sender)) {
+			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)) {
 				completions.add("admin");
 			}
 			completions.add("strikes");
@@ -111,6 +112,10 @@ public class CommandTabCompleter implements TabCompleter {
 		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)
 				&& PrisonSwitch.canUse(sender)) {
 			return completePrison(args);
+		}
+		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(HiddenCharacterAdminCommand.SUBCOMMAND)
+				&& HiddenCharacterAdminCommand.canUse(sender)) {
+			return completeHide(args);
 		}
 		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
 				&& (args[1].equalsIgnoreCase("strikes") || args[1].equalsIgnoreCase("tutorial"))) {
@@ -177,6 +182,9 @@ public class CommandTabCompleter implements TabCompleter {
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
+				}
+				if (HiddenCharacterAdminCommand.canUse(sender)) {
+					completions.add(HiddenCharacterAdminCommand.SUBCOMMAND);
 				}
 				if (PrisonSwitch.canUse(sender)) {
 					completions.add(PrisonSwitch.SUBCOMMAND);
@@ -319,6 +327,15 @@ public class CommandTabCompleter implements TabCompleter {
 	}
 
 	/** {@code admin prison <player> [character] [on|off]}. */
+	/** {@code /rpcharacter admin hide <player> [on|off]}. */
+	private List<String> completeHide(String[] args) {
+		String last = args[args.length - 1];
+		if (args.length == 3) {
+			return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList()), last);
+		}
+		return args.length == 4 ? filter(List.of("on", "off"), last) : Collections.emptyList();
+	}
+
 	private List<String> completePrison(String[] args) {
 		String last = args[args.length - 1];
 		if (args.length == 3) {

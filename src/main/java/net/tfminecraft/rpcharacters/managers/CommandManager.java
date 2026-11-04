@@ -38,6 +38,7 @@ import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand;
 import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterListing;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
@@ -87,6 +88,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)) {
 			return PrisonSwitch.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(HiddenCharacterAdminCommand.SUBCOMMAND)) {
+			return HiddenCharacterAdminCommand.handle(sender, args, 2);
 		}
 		if (args.length >= 1 && args[0].equalsIgnoreCase("admin")) {
 			return handleAdmin(sender, args);
@@ -753,7 +758,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|hide> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -772,7 +777,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND)) {
 			return net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|hide> ...");
 		return true;
 	}
 
