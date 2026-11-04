@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -35,7 +36,7 @@ import net.tfminecraft.tlibs.character.Characters;
 public final class PlushieCommand implements CommandExecutor, TabCompleter {
 
 	public static final String PERMISSION = "rpchar.plushie.give";
-	private static final List<String> SLOTS = List.of("base", "extra_1", "extra_2");
+	private static final List<String> SLOTS = WardrobeSlots.swappable();
 	private final Set<UUID> pending = new HashSet<>();
 
 	@Override
@@ -58,7 +59,7 @@ public final class PlushieCommand implements CommandExecutor, TabCompleter {
 			}
 		}
 		if (nameLength == 0 || outfit < 1 || outfit > SLOTS.size()) {
-			sender.sendMessage("Usage: /" + label + " <character name or UUID> [1|2|3]");
+			sender.sendMessage("Usage: /" + label + " <character name or UUID> [1-" + SLOTS.size() + "]");
 			return true;
 		}
 		String name = String.join(" ", Arrays.copyOf(args, nameLength)).trim();
@@ -167,6 +168,6 @@ public final class PlushieCommand implements CommandExecutor, TabCompleter {
 	@Override
 	public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
 		if (!sender.hasPermission(PERMISSION) || args.length < 2) return List.of();
-		return List.of("1", "2", "3").stream().filter(number -> number.startsWith(args[args.length - 1])).toList();
+		return IntStream.rangeClosed(1, SLOTS.size()).mapToObj(String::valueOf).filter(number -> number.startsWith(args[args.length - 1])).toList();
 	}
 }

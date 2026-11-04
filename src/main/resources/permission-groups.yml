@@ -1,5 +1,8 @@
 # Tier order controls which rank is shown on locked character slots ("requires at least …").
 # visible defaults to true; set visible: false for staff/helper groups players cannot acquire.
+# wardrobe-skin-slots: swappable skins per character, 1 to 5 (base + Skin 2 … Skin 5).
+# TFMCWebBridge's player-meta.rpc ladder sends the website the same character and wardrobe
+# numbers: keep both files in step.
 defaults:
   name-colour-stops: 0
   character-switch-cooldown-days: 4
@@ -14,7 +17,7 @@ groups:
     name-colour-stops: 1
     character-switch-cooldown-days: 3
     max-alive-characters: 3
-    wardrobe-skin-slots: 1
+    wardrobe-skin-slots: 2
   gilded:
     tier: 2
     permission: rpchar.group.gilded
@@ -22,7 +25,7 @@ groups:
     name-colour-stops: 2
     character-switch-cooldown-days: 2
     max-alive-characters: 4
-    wardrobe-skin-slots: 2
+    wardrobe-skin-slots: 3
   ascended:
     tier: 3
     permission: rpchar.group.ascended
@@ -30,7 +33,7 @@ groups:
     name-colour-stops: 20
     character-switch-cooldown-days: 1
     max-alive-characters: 5
-    wardrobe-skin-slots: 3
+    wardrobe-skin-slots: 5
   legacy:
     tier: 4
     permission: rpchar.group.legacy
@@ -38,11 +41,15 @@ groups:
     name-colour-stops: 20
     character-switch-cooldown-days: 1
     max-alive-characters: 5
-    wardrobe-skin-slots: 3
-  # Example staff-only group (not shown on locked slots):
-  # helper:
-  #   tier: 100
-  #   visible: false
-  #   permission: rpchar.group.helper
-  #   display-name: "Helper"
-  #   max-alive-characters: 10
+    wardrobe-skin-slots: 5
+  # Staff and helpers: hidden, so never named on locked slots or wardrobe frames.
+  # Grant rpchar.group.staff to the base LuckPerms group of every staff and helper
+  # track (staff_player, helper_player, helper+_player) so it holds on and off duty.
+  staff:
+    tier: 100
+    visible: false
+    permission: rpchar.group.staff
+    display-name: "Staff"
+    character-switch-cooldown-days: 0
+    max-alive-characters: 8
+    wardrobe-skin-slots: 5

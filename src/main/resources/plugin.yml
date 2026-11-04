@@ -10,7 +10,7 @@ softdepend: [ProtocolLib, PlaceholderAPI, LuckPerms, WorldGuard, SimpleFactions,
 commands:
   plushie:
     description: Create a plushie from a character's wardrobe outfit
-    usage: /plushie <character name or UUID> [1|2|3]
+    usage: /plushie <character name or UUID> [1-5]
     permission: rpchar.plushie.give
   class:
     description: Choose your character's base class
