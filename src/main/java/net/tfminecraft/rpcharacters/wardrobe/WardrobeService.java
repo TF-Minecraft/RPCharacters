@@ -206,7 +206,8 @@ public final class WardrobeService {
 		String active = snapshot.getActiveSlot();
 		if (active != null && !active.isBlank()) {
 			WardrobeSlotData slot = snapshot.getSlot(active);
-			if (slot != null && slot.canApply()) {
+			// A cache from before a rank drop may still name a slot that is now locked.
+			if (slot != null && slot.isUnlocked() && slot.canApply()) {
 				SkinApplyHelper.apply(
 					player,
 					slot.getTextureValue(),

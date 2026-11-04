@@ -85,7 +85,7 @@ public final class WardrobeSlots {
 		} else {
 			number = s;
 		}
-		if (number.isEmpty() || number.length() > 2 || !number.chars().allMatch(c -> c >= '0' && c <= '9')) {
+		if (number.length() != 1 || number.charAt(0) < '0' || number.charAt(0) > '9') {
 			return null;
 		}
 		// extraN is the Nth extra (index N); a skin number counts base as 1.

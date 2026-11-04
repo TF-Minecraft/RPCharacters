@@ -60,7 +60,7 @@ class WardrobeSlotsTest {
 			assertEquals("extra_4", WardrobeSlots.normalize(alias), alias);
 		}
 		for (String bad : Arrays.asList("", "masked", "extra", "extra0", "extra5", "extra_5", "extra_x", "0", "6",
-				"skin", "skin_", "skin0", "skin6", "skin_x", "100", "-1", "custom")) {
+				"skin", "skin_", "skin0", "skin6", "skin_x", "100", "-1", "custom", "05", "skin_01", "extra03", "extra_03")) {
 			assertNull(WardrobeSlots.normalize(bad), bad);
 		}
 	}
