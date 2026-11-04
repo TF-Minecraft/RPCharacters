@@ -31,12 +31,8 @@ public final class WardrobeGui {
 
 	public static final String TITLE_RAW = RPTexts.MUTED + "Wardrobe";
 
-	private static final int[] BUTTON_SLOTS = { 11, 13, 15 };
-	private static final String[] SLOT_IDS = {
-		WardrobeSnapshot.SLOT_BASE,
-		WardrobeSnapshot.SLOT_EXTRA_1,
-		WardrobeSnapshot.SLOT_EXTRA_2
-	};
+	/** Middle row of the 27-slot menu, one button per swappable slot (base, Skin 2 … Skin 5). */
+	private static final int[] BUTTON_SLOTS = { 11, 12, 13, 14, 15 };
 
 	private WardrobeGui() {}
 
@@ -94,8 +90,9 @@ public final class WardrobeGui {
 			RPTexts.formatGui(TITLE_RAW)
 		);
 		holder.setInventory(inv);
-		for (int i = 0; i < SLOT_IDS.length; i++) {
-			inv.setItem(BUTTON_SLOTS[i], buildButton(snapshot, SLOT_IDS[i]));
+		List<String> slotIds = WardrobeSlots.swappable();
+		for (int i = 0; i < slotIds.size() && i < BUTTON_SLOTS.length; i++) {
+			inv.setItem(BUTTON_SLOTS[i], buildButton(snapshot, slotIds.get(i)));
 		}
 		player.openInventory(inv);
 	}
@@ -163,6 +160,9 @@ public final class WardrobeGui {
 			meta.setDisplayName(RPTexts.formatGui(RPTexts.ERROR + "LOCKED"));
 			lore.add(RPTexts.formatGui(RPTexts.MUTED + label));
 			lore.add(getUnlockRequirementLore(minSlotsFor(slotId)));
+			if (data != null && data.isFilled()) {
+				lore.add(RPTexts.formatGui(RPTexts.MUTED + "Your saved skin stays here"));
+			}
 		} else if (filled) {
 			meta.setDisplayName(RPTexts.formatGui(RPTexts.SUCCESS + label));
 			if (active) {
@@ -196,27 +196,13 @@ public final class WardrobeGui {
 		if (data != null) {
 			return data.isUnlocked();
 		}
-		int swappable = snapshot.getSwappableSlots();
-		if (WardrobeSnapshot.SLOT_BASE.equals(slotId)) {
-			return true;
-		}
-		if (WardrobeSnapshot.SLOT_EXTRA_1.equals(slotId)) {
-			return swappable >= 2;
-		}
-		if (WardrobeSnapshot.SLOT_EXTRA_2.equals(slotId)) {
-			return swappable >= 3;
-		}
-		return false;
+		// The website lists every slot; this only covers an older site without the newer ones.
+		int index = WardrobeSlots.indexOf(slotId);
+		return index >= 0 && index < snapshot.getSwappableSlots();
 	}
 
 	static int minSlotsFor(String slotId) {
-		if (WardrobeSnapshot.SLOT_EXTRA_2.equals(slotId)) {
-			return 3;
-		}
-		if (WardrobeSnapshot.SLOT_EXTRA_1.equals(slotId)) {
-			return 2;
-		}
-		return 1;
+		return WardrobeSlots.requiredSkins(slotId);
 	}
 
 	/**
