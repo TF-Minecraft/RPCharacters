@@ -38,6 +38,7 @@ import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterListing;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
 import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
@@ -715,35 +716,27 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have permission to use this command.");
 					return true;
 				}
-				if (args.length < 2) {
-					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Usage: /rpcharacter sethidden <slug> [clear]");
-					return true;
-				}
 				PlayerData pd = PlayerManager.get(p);
 				if (pd == null) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Player data not loaded.");
 					return true;
 				}
-				String slug = args[1];
-				RPCharacter character = pd.getCharacterBySlug(slug);
+				// Without a slug, the character being played now.
+				RPCharacter character = args.length < 2 ? pd.getActiveCharacter() : pd.getCharacterBySlug(args[1]);
 				if (character == null) {
-					RPTexts.sendPrefixed(p, RPTexts.ERROR + "No character with id " + RPTexts.WARN + slug
-							+ RPTexts.ERROR + ".");
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + (args.length < 2
+							? "Usage: /rpcharacter sethidden [slug] [clear]"
+							: "No character with id " + RPTexts.WARN + args[1] + RPTexts.ERROR + "."));
 					return true;
 				}
 				boolean forceClear = args.length >= 3 && args[2].equalsIgnoreCase("clear");
-				if (forceClear) {
-					character.setHidden(false);
-					RPCharacters.getPlayerManager().savePlayer(p);
-					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
-							+ RPTexts.MUTED + " is no longer hidden.");
-					return true;
-				}
-				character.setHidden(!character.isHidden());
+				character.setHidden(!forceClear && !character.isHidden());
 				RPCharacters.getPlayerManager().savePlayer(p);
+				HiddenCharacterListing.refresh(p);
 				if (character.isHidden()) {
 					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
-							+ RPTexts.MUTED + " is now hidden from TAB/list.");
+							+ RPTexts.MUTED + " is now hidden. While you play it, other players do not see you"
+							+ " in TAB or /players; you stay visible in the world.");
 				} else {
 					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
 							+ RPTexts.MUTED + " is no longer hidden.");
