@@ -161,6 +161,8 @@ class CommandManagerTest {
         assertFalse(run(carry)); carried.verify(() -> net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(player, carry, 2));
         var prisons = boundary(PrisonSwitch.class); String[] prison = {"admin", "Prison", "Iris"}; assertFalse(run(prison));
         prisons.verify(() -> PrisonSwitch.handle(player, prison, 2));
+        var hides = boundary(net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand.class); String[] hide = {"admin", "Hide", "Iris", "on"}; assertFalse(run(hide));
+        hides.verify(() -> net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand.handle(player, hide, 2));
         String[] directKill = {"permakill", "Iris"}; assertFalse(run(directKill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, directKill, 1, "permakill"));
         String[] directInjure = {"injure", "Iris", "permanent"}; assertFalse(run(directInjure)); death.verify(() -> PermadeathAdminCommands.handleInjure(eq(player), same(directInjure), eq(1), anyString()));
         run("reload"); verify(plugin).reloadConfigs(player);
@@ -414,13 +416,16 @@ class CommandManagerTest {
     }
 
     @Test void hiddenCharactersValidateOwnershipToggleAndPersist() {
-        run("sethidden", "hero"); message("permission"); grant(Cache.personaCharacterHiddenPermission, true); run("sethidden"); message("Usage:");
+        run("sethidden", "hero"); message("permission"); grant(Cache.personaCharacterHiddenPermission, true); when(data.getActiveCharacter()).thenReturn(null); run("sethidden"); message("Usage:");
         players.when(() -> PlayerManager.get(player)).thenReturn(null); run("sethidden", "hero"); message("not loaded"); players.when(() -> PlayerManager.get(player)).thenReturn(data);
         run("sethidden", "missing"); message("No character with id missing"); when(data.getCharacterBySlug("hero")).thenReturn(character);
         final boolean[] hidden = {false}; when(character.isHidden()).thenAnswer(call -> hidden[0]); doAnswer(call -> { hidden[0] = call.getArgument(0); return null; }).when(character).setHidden(anyBoolean());
         run("sethidden", "hero"); assertTrue(hidden[0]); message("now hidden");
         run("sethidden", "hero"); assertFalse(hidden[0]); message("no longer hidden");
-        hidden[0] = true; run("sethidden", "hero", "clear"); assertFalse(hidden[0]); message("no longer hidden"); verify(playerManager, times(3)).savePlayer(player);
+        hidden[0] = true; run("sethidden", "hero", "clear"); assertFalse(hidden[0]); message("no longer hidden");
+        // No slug toggles the character being played; clearing an unhidden one keeps it unhidden.
+        when(data.getActiveCharacter()).thenReturn(character); run("sethidden"); assertTrue(hidden[0]); message("other players do not see you");
+        run("sethidden", "hero", "clear"); run("sethidden", "hero", "clear"); assertFalse(hidden[0]); verify(playerManager, times(6)).savePlayer(player);
     }
 
     PlayerCommandPreprocessEvent preprocess(String input) {
