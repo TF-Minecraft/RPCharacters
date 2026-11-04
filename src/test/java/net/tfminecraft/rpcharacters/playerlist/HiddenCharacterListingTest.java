@@ -3,6 +3,8 @@ package net.tfminecraft.rpcharacters.playerlist;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -29,7 +31,14 @@ import org.bukkit.event.player.PlayerShowEntityEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
+
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.event.EventBus;
+import net.luckperms.api.event.user.UserDataRecalculateEvent;
+import net.luckperms.api.model.user.User;
 
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
@@ -219,6 +228,57 @@ class HiddenCharacterListingTest {
 		assertTrue(inTab(viewer, target));
 		show(viewer, target);
 		verify(viewer).listPlayer(target);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void permissionChangesUpdateThatViewerAtOnce() {
+		org.bukkit.plugin.Plugin owner = mock(org.bukkit.plugin.Plugin.class);
+		var scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class);
+		List<Runnable> ticks = new ArrayList<>();
+		doAnswer(call -> { ticks.add(call.getArgument(1)); return null; }).when(scheduler).runTask(eq(owner), any(Runnable.class));
+		bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+		LuckPerms luckPerms = mock(LuckPerms.class);
+		EventBus bus = mock(EventBus.class);
+		when(luckPerms.getEventBus()).thenReturn(bus);
+		try (MockedStatic<LuckPermsProvider> provider = mockStatic(LuckPermsProvider.class)) {
+			provider.when(LuckPermsProvider::get).thenThrow(new IllegalStateException("LuckPerms not loaded"));
+			HiddenCharacterListing.hookPermissionChanges(owner);
+			provider.when(LuckPermsProvider::get).thenReturn(luckPerms);
+			HiddenCharacterListing.hookPermissionChanges(owner);
+		}
+		ArgumentCaptor<java.util.function.Consumer<UserDataRecalculateEvent>> handler = ArgumentCaptor.forClass(java.util.function.Consumer.class);
+		verify(bus).subscribe(eq(owner), eq(UserDataRecalculateEvent.class), handler.capture());
+		java.util.function.Consumer<Player> recalculated = player -> {
+			UUID id = player.getUniqueId();
+			UserDataRecalculateEvent event = mock(UserDataRecalculateEvent.class);
+			User user = mock(User.class);
+			when(user.getUniqueId()).thenReturn(id);
+			when(event.getUser()).thenReturn(user);
+			handler.getValue().accept(event);
+			ticks.remove(0).run();
+		};
+
+		recalculated.accept(viewer); // nobody hidden yet: nothing to do
+		verify(viewer, never()).unlistPlayer(any(Player.class));
+		verify(viewer, never()).listPlayer(any(Player.class));
+		startHidden();
+		assertFalse(inTab(viewer, target));
+		when(viewer.hasPermission(HIDDEN)).thenReturn(true);
+		recalculated.accept(viewer);
+		assertTrue(inTab(viewer, target), "Granted mid-session: listed again without a rejoin");
+		when(viewer.hasPermission(HIDDEN)).thenReturn(false);
+		recalculated.accept(viewer);
+		assertFalse(inTab(viewer, target), "Revoked mid-session: unlisted again without a rejoin");
+
+		// A viewer who already left, and a hidden player who already left, are skipped.
+		bukkit.when(() -> Bukkit.getPlayer(viewer.getUniqueId())).thenReturn(null);
+		recalculated.accept(viewer);
+		bukkit.when(() -> Bukkit.getPlayer(viewer.getUniqueId())).thenReturn(viewer);
+		bukkit.when(() -> Bukkit.getPlayer(target.getUniqueId())).thenReturn(null);
+		when(viewer.hasPermission(HIDDEN)).thenReturn(true);
+		recalculated.accept(viewer);
+		assertFalse(inTab(viewer, target));
 	}
 
 	@Test

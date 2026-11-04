@@ -15,7 +15,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerShowEntityEvent;
+import org.bukkit.plugin.Plugin;
 
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.event.user.UserDataRecalculateEvent;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.lifecycle.CharacterTransitions;
@@ -36,8 +39,8 @@ import net.tfminecraft.tlibs.character.CharacterSessionStartEvent;
  * cannot be applied yet waits for the {@link PlayerShowEntityEvent} that makes
  * them visible, which fires after Paper sent the TAB entry and in the same tick.
  * <p>
- * Work runs only on joins, quits, character sessions, the staff toggle and
- * player show events. Nothing runs per tick, and while nobody plays a hidden
+ * Work runs only on joins, quits, character sessions, the staff toggle,
+ * LuckPerms permission recalculations and player show events. Nothing runs per tick, and while nobody plays a hidden
  * character every handler returns after one empty-set check.
  */
 public final class HiddenCharacterListing implements Listener {
@@ -117,6 +120,36 @@ public final class HiddenCharacterListing implements Listener {
 
 	private static boolean idle() {
 		return CONCEALED.isEmpty() && UNLISTED.isEmpty();
+	}
+
+	/**
+	 * A viewer who gains or loses the hidden-character permission while online
+	 * sees the change at once instead of on their next join. LuckPerms may fire
+	 * this off the main thread, so the work runs on the next tick.
+	 */
+	public static void hookPermissionChanges(Plugin plugin) {
+		try {
+			LuckPermsProvider.get().getEventBus().subscribe(plugin, UserDataRecalculateEvent.class,
+					event -> {
+						UUID viewer = event.getUser().getUniqueId();
+						Bukkit.getScheduler().runTask(plugin, () -> reconcileViewer(viewer));
+					});
+		} catch (IllegalStateException | NoClassDefFoundError unavailable) {
+			// Without LuckPerms, a permission change applies on the viewer's next join.
+		}
+	}
+
+	static void reconcileViewer(UUID viewerId) {
+		Player viewer = Bukkit.getPlayer(viewerId);
+		if (viewer == null || idle()) {
+			return;
+		}
+		for (UUID id : List.copyOf(CONCEALED)) {
+			Player target = Bukkit.getPlayer(id);
+			if (target != null) {
+				apply(viewer, target);
+			}
+		}
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
