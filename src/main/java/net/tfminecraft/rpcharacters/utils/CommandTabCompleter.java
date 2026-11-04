@@ -326,7 +326,6 @@ public class CommandTabCompleter implements TabCompleter {
 		return Collections.emptyList();
 	}
 
-	/** {@code admin prison <player> [character] [on|off]}. */
 	/** {@code /rpcharacter admin hide <player> [on|off]}. */
 	private List<String> completeHide(String[] args) {
 		String last = args[args.length - 1];
@@ -336,6 +335,7 @@ public class CommandTabCompleter implements TabCompleter {
 		return args.length == 4 ? filter(List.of("on", "off"), last) : Collections.emptyList();
 	}
 
+	/** {@code admin prison <player> [character] [on|off]}. */
 	private List<String> completePrison(String[] args) {
 		String last = args[args.length - 1];
 		if (args.length == 3) {
