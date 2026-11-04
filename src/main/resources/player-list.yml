@@ -2,7 +2,9 @@
 # Names are each player's safe character display (%rpcharacters_display_safe%).
 # Hovering a name shows the account, rank and ping; clicking opens the
 # character sheet, using the profile-view.yml permission and cooldown. Masks do
-# not hide sheets here: the list is out of character.
+# not hide sheets here: the list is out of character. Players on a character
+# hidden with /rpcharacter sethidden are left out of this list and TAB, except
+# for holders of the persona.yml character-hidden permission.
 
 permission: rpchar.playerlist
 
