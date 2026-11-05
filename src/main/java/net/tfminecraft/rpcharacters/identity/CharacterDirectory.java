@@ -21,6 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
 import org.json.simple.JSONArray;
@@ -44,6 +45,11 @@ public final class CharacterDirectory {
 	private final Set<UUID> unavailable = new HashSet<>();
 	/** Characters saved with the legacy {@code active} flag, which predates session timestamps. */
 	private final Set<CharacterRef> flaggedActive = new HashSet<>();
+	/**
+	 * Each live character's last snapshot, reused while nothing it was built from has changed. Keyed by
+	 * object identity and weakly, so characters of players who left drop out on their own.
+	 */
+	private final Map<RPCharacter, LiveSnapshot> live = new WeakHashMap<>();
 	private final Consumer<String> warn;
 
 	private CharacterDirectory(Consumer<String> warn) {
@@ -144,12 +150,22 @@ public final class CharacterDirectory {
 		Objects.requireNonNull(ownerId, "ownerId");
 		CharacterInfo info;
 		try {
-			info = snapshot(ownerId, character);
+			info = liveSnapshot(ownerId, character);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid live character: " + error.getMessage());
 			return;
 		}
 		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()), character.getDeathId());
+	}
+
+	/** {@link #snapshot}, reusing the last one while every value it read is unchanged. */
+	private CharacterInfo liveSnapshot(UUID ownerId, RPCharacter character) {
+		LiveSnapshot last = live.get(character);
+		if (last != null && last.matches(ownerId, character)) return last.info();
+		CharacterInfo info = snapshot(ownerId, character);
+		// It succeeded, so the character, its trait list and every trait in it are present.
+		live.put(character, new LiveSnapshot(ownerId, character, info));
+		return info;
 	}
 
 	/** Updates from a snapshot taken earlier, such as when a save finished off the main thread. */

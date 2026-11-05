@@ -38,19 +38,25 @@ public final class CharacterIdentityService implements CharacterIdentity {
      */
     private void refreshOwner(UUID ownerId) {
         CharacterTransitions.requireMainThread();
+        List<PlayerData> online = PlayerManager.getOnlineData();
         Set<String> ids = new HashSet<>();
-        for (PlayerData data : PlayerManager.getOnlineData()) {
+        for (PlayerData data : online) {
             if (!ownerId.equals(data.getUniqueId())) continue;
             for (RPCharacter character : data.getCharacters()) {
                 if (character.getId() != null) ids.add(character.getId().toLowerCase(Locale.ROOT));
             }
         }
-        for (PlayerData data : PlayerManager.getOnlineData()) {
-            if (ownerId.equals(data.getUniqueId()) || data.getCharacters().stream().anyMatch(
-                    character -> character.getId() != null && ids.contains(character.getId().toLowerCase(Locale.ROOT)))) {
-                refresh(data);
-            }
+        for (PlayerData data : online) {
+            if (ownerId.equals(data.getUniqueId()) || sharesId(data, ids)) refresh(data);
         }
+    }
+
+    private static boolean sharesId(PlayerData data, Set<String> ids) {
+        if (ids.isEmpty()) return false;
+        for (RPCharacter character : data.getCharacters()) {
+            if (character.getId() != null && ids.contains(character.getId().toLowerCase(Locale.ROOT))) return true;
+        }
+        return false;
     }
 
     /** Overlays every loaded account holding this character, so live duplicates still quarantine. */
@@ -58,8 +64,16 @@ public final class CharacterIdentityService implements CharacterIdentity {
         CharacterTransitions.requireMainThread();
         String id = characterId.toString();
         for (PlayerData data : PlayerManager.getOnlineData()) {
-            if (data.getCharacters().stream().anyMatch(character -> id.equalsIgnoreCase(character.getId()))) refresh(data);
+            if (holds(data, id)) refresh(data);
         }
+    }
+
+    // Plain loops: these run for every lookup, and stream pipelines here cost more than the compares.
+    private static boolean holds(PlayerData data, String id) {
+        for (RPCharacter character : data.getCharacters()) {
+            if (id.equalsIgnoreCase(character.getId())) return true;
+        }
+        return false;
     }
 
     private void refresh(PlayerData data) {

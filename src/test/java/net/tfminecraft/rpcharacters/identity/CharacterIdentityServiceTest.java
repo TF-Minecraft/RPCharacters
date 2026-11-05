@@ -395,6 +395,83 @@ class CharacterIdentityServiceTest {
         assertEquals("Renamed", service.characters(other.getUniqueId()).orElseThrow().getFirst().name());
     }
 
+    @Test
+    void liveSnapshotsAreReusedUntilAnyValueTheyReadChangesAndAlwaysMatchAFreshSnapshot() {
+        UUID owner = player.getUniqueId();
+        UUID id = UUID.fromString(alice.getId());
+        Race elf = mock(Race.class);
+        when(elf.getId()).thenReturn("elf");
+        Race human = mock(Race.class);
+        when(human.getId()).thenReturn("human");
+        Trait strong = mock(Trait.class);
+        when(strong.getId()).thenReturn("STRONG");
+        Trait swift = mock(Trait.class);
+        when(swift.getId()).thenReturn("swift");
+        List<Runnable> edits = List.of(
+                () -> alice.setName("&cRenamed"),
+                () -> alice.setStatus(Status.MISSING),
+                () -> alice.setStatus(Status.ALIVE),
+                () -> alice.setRace(elf),
+                () -> when(elf.getId()).thenReturn("high_elf"),
+                () -> alice.setRace(human),
+                () -> alice.setRace(null),
+                () -> alice.setTraits(new ArrayList<>(List.of(strong))),
+                () -> alice.getTraits().add(swift),
+                () -> when(swift.getId()).thenReturn("nimble"),
+                () -> alice.getTraits().remove(strong),
+                () -> alice.setOnlinePlaytimeSeconds(60),
+                () -> alice.addOnlinePlaytimeSeconds(60),
+                () -> alice.setLastPlayedAt(Instant.ofEpochMilli(1000)),
+                () -> alice.setLastPlayedAt(Instant.ofEpochMilli(2000)),
+                () -> alice.setLastPlayedAt(null));
+        CharacterInfo previous = service.info(id).orElseThrow();
+        assertSame(previous, service.info(id).orElseThrow());
+        for (Runnable edit : edits) {
+            edit.run();
+            CharacterInfo now = service.info(id).orElseThrow();
+            assertEquals(CharacterDirectory.snapshot(owner, alice), now);
+            assertNotEquals(previous, now);
+            // Unchanged values reuse the snapshot; every lookup method sees the same one.
+            assertSame(now, service.info(id).orElseThrow());
+            assertSame(now, service.characters(owner).orElseThrow().getFirst());
+            assertSame(now, service.lastPlayed(owner).orElseThrow());
+            previous = now;
+        }
+        assertEquals(List.of(previous), service.findByName("Renamed"));
+        assertEquals(Set.of("nimble"), previous.traits());
+        // An unchanged edit (same name again) keeps the reused snapshot.
+        alice.setName("Renamed");
+        assertSame(previous, service.info(id).orElseThrow());
+    }
+
+    @Test
+    void aLiveCharacterThatBreaksAfterBeingSnapshottedStillQuarantinesItsAccount() {
+        UUID id = UUID.fromString(alice.getId());
+        assertTrue(service.info(id).isPresent());
+        List<Trait> broken = new ArrayList<>();
+        broken.add(null);
+        alice.setTraits(broken);
+        assertTrue(service.info(id).isEmpty());
+        assertTrue(service.characters(player.getUniqueId()).isEmpty());
+        alice.setTraits(null);
+        assertTrue(service.info(id).isEmpty());
+    }
+
+    @Test
+    void characterLookupsCatchALiveDuplicateWhoseIdDiffersOnlyInCase() {
+        UUID id = UUID.fromString(alice.getId());
+        assertTrue(service.info(id).isPresent());
+        PlayerMock other = server.addPlayer("Other");
+        PlayerData otherData = new PlayerData(other);
+        loaded.put(other, otherData);
+        RPCharacter duplicate = new RPCharacter(other);
+        duplicate.setId(alice.getId().toUpperCase(java.util.Locale.ROOT));
+        duplicate.setName("Different owner");
+        otherData.addCharacter(duplicate);
+        assertTrue(service.info(id).isEmpty());
+        assertTrue(service.characters(other.getUniqueId()).isEmpty());
+    }
+
     private void install() throws Exception {
         directory = CharacterDirectory.load(root, ignored -> {});
         runtime = new CharacterTransitions(database, directory);
