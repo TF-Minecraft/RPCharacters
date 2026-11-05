@@ -46,8 +46,9 @@ public final class CharacterDirectory {
 	/** Characters saved with the legacy {@code active} flag, which predates session timestamps. */
 	private final Set<CharacterRef> flaggedActive = new HashSet<>();
 	/**
-	 * Each live character's last snapshot, reused while nothing it was built from has changed. Keyed by
-	 * object identity and weakly, so characters of players who left drop out on their own.
+	 * Each live character's last snapshot, reused while nothing it was built from has changed. Weak keys,
+	 * so characters of players who left drop out on their own; RPCharacter keeps Object's identity
+	 * equals and hashCode, which keeps each key findable while its fields change.
 	 */
 	private final Map<RPCharacter, LiveSnapshot> live = new WeakHashMap<>();
 	private final Consumer<String> warn;
@@ -163,8 +164,9 @@ public final class CharacterDirectory {
 		LiveSnapshot last = live.get(character);
 		if (last != null && last.matches(ownerId, character)) return last.info();
 		CharacterInfo info = snapshot(ownerId, character);
-		// It succeeded, so the character, its trait list and every trait in it are present.
-		live.put(character, new LiveSnapshot(ownerId, character, info));
+		LiveSnapshot next = LiveSnapshot.capture(ownerId, character, info);
+		if (next == null) live.remove(character);
+		else live.put(character, next);
 		return info;
 	}
 

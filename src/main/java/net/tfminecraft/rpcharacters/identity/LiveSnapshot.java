@@ -28,8 +28,19 @@ final class LiveSnapshot {
 	private final Instant lastPlayedAt;
 	private final CharacterInfo info;
 
-	/** Records the values {@code info} was just built from; the build succeeded, so none is missing. */
-	LiveSnapshot(UUID ownerId, RPCharacter character, CharacterInfo info) {
+	/**
+	 * Records the values {@code info} was just built from, or null if reading them again fails. Getters
+	 * of real characters are plain field reads, so this only guards odd test doubles.
+	 */
+	static LiveSnapshot capture(UUID ownerId, RPCharacter character, CharacterInfo info) {
+		try {
+			return new LiveSnapshot(ownerId, character, info);
+		} catch (RuntimeException unreadable) {
+			return null;
+		}
+	}
+
+	private LiveSnapshot(UUID ownerId, RPCharacter character, CharacterInfo info) {
 		this.ownerId = ownerId;
 		this.id = character.getId();
 		this.name = character.getName();
@@ -49,8 +60,19 @@ final class LiveSnapshot {
 		return info;
 	}
 
-	/** True when every value the snapshot read still matches, so it would come out the same. */
+	/**
+	 * True when every value the snapshot read still matches, so it would come out the same. A read that
+	 * fails counts as a change: the caller then rebuilds, and the rebuild reports the failure as before.
+	 */
 	boolean matches(UUID ownerId, RPCharacter character) {
+		try {
+			return unchanged(ownerId, character);
+		} catch (RuntimeException unreadable) {
+			return false;
+		}
+	}
+
+	private boolean unchanged(UUID ownerId, RPCharacter character) {
 		if (!this.ownerId.equals(ownerId) || character.getOnlinePlaytimeSeconds() != playtimeSeconds
 				|| character.getStatus() != status || !Objects.equals(character.getId(), id)
 				|| !Objects.equals(character.getName(), name)

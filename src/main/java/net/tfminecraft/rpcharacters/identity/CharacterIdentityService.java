@@ -52,7 +52,6 @@ public final class CharacterIdentityService implements CharacterIdentity {
     }
 
     private static boolean sharesId(PlayerData data, Set<String> ids) {
-        if (ids.isEmpty()) return false;
         for (RPCharacter character : data.getCharacters()) {
             if (character.getId() != null && ids.contains(character.getId().toLowerCase(Locale.ROOT))) return true;
         }

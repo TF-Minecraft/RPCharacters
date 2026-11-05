@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -62,6 +63,7 @@ class CharacterIdentityServiceTest {
     private MockedStatic<MaskService> masks;
     private final Map<Player, PlayerData> loaded = new LinkedHashMap<>();
     private final List<AutoCloseable> boundaries = new ArrayList<>();
+    private final List<String> warnings = new ArrayList<>();
 
     @BeforeEach
     void setup() throws Exception {
@@ -445,16 +447,82 @@ class CharacterIdentityServiceTest {
     }
 
     @Test
-    void aLiveCharacterThatBreaksAfterBeingSnapshottedStillQuarantinesItsAccount() {
+    void aLiveCharacterThatBreaksAfterBeingSnapshottedQuarantinesItsAccountWithTheSameWarning() throws Exception {
+        UUID owner = player.getUniqueId();
         UUID id = UUID.fromString(alice.getId());
         assertTrue(service.info(id).isPresent());
         List<Trait> broken = new ArrayList<>();
         broken.add(null);
         alice.setTraits(broken);
+        String nullTrait = invalidLiveCharacter(owner, alice);
         assertTrue(service.info(id).isEmpty());
-        assertTrue(service.characters(player.getUniqueId()).isEmpty());
+        assertTrue(service.characters(owner).isEmpty());
+        assertEquals(nullTrait, warnings.getLast());
+
+        install();
+        alice.setTraits(new ArrayList<>());
+        assertTrue(service.info(id).isPresent());
         alice.setTraits(null);
+        String nullList = invalidLiveCharacter(owner, alice);
         assertTrue(service.info(id).isEmpty());
+        assertEquals(nullList, warnings.getLast());
+    }
+
+    @Test
+    void aGetterThatFailsOnLaterReadsIsReportedOrToleratedAsAFreshSnapshotWouldBe() {
+        UUID owner = UUID.randomUUID();
+        RPCharacter odd = mock(RPCharacter.class);
+        UUID oddId = UUID.randomUUID();
+        when(odd.getId()).thenReturn(oddId.toString());
+        when(odd.getName()).thenReturn("Odd");
+        when(odd.getStatus()).thenReturn(Status.ALIVE);
+        when(odd.getTraits()).thenReturn(List.of());
+        directory.upsert(owner, odd);
+        assertEquals("Odd", directory.info(oddId).orElseThrow().name());
+        // A failing read while checking the reused snapshot rebuilds it, and the rebuild reports the failure.
+        when(odd.getName()).thenThrow(new IllegalStateException("name unavailable"));
+        directory.upsert(owner, odd);
+        assertTrue(directory.characters(owner).isEmpty());
+        assertEquals("Character directory unavailable for " + owner + ": Invalid live character: name unavailable",
+                warnings.getLast());
+
+        UUID other = UUID.randomUUID();
+        RPCharacter flaky = mock(RPCharacter.class);
+        UUID flakyId = UUID.randomUUID();
+        when(flaky.getId()).thenReturn(flakyId.toString());
+        when(flaky.getName()).thenReturn("Flaky").thenThrow(new IllegalStateException("second read"));
+        when(flaky.getStatus()).thenReturn(Status.ALIVE);
+        when(flaky.getTraits()).thenReturn(List.of());
+        // Only the snapshot itself reads the name successfully; failing to record it only skips reuse.
+        int before = warnings.size();
+        directory.upsert(other, flaky);
+        assertEquals("Flaky", directory.info(flakyId).orElseThrow().name());
+        assertEquals(before, warnings.size());
+    }
+
+    @Test
+    void idCaseAndOwnerChangesRebuildExactlyAsWithoutReuse() {
+        UUID owner = player.getUniqueId();
+        UUID id = UUID.fromString(alice.getId());
+        CharacterInfo before = service.info(id).orElseThrow();
+        alice.setId(alice.getId().toUpperCase(Locale.ROOT));
+        CharacterInfo after = service.info(id).orElseThrow();
+        assertEquals(CharacterDirectory.snapshot(owner, alice), after);
+        assertNotSame(before, after);
+        assertSame(after, service.info(id).orElseThrow());
+
+        // The same character object under another owner: identical to a directory without reuse.
+        CharacterDirectory reference = reference();
+        UUID other = UUID.randomUUID();
+        RPCharacter moved = character("Moved", false);
+        UUID movedId = UUID.fromString(moved.getId());
+        for (UUID holder : List.of(other, owner, other)) {
+            directory.upsert(holder, moved);
+            reference.upsert(holder, CharacterDirectory.snapshot(holder, moved), false, null);
+            assertEquals(reference.info(movedId), directory.info(movedId));
+            assertEquals(reference.characters(other), directory.characters(other));
+        }
+        assertTrue(directory.info(movedId).isEmpty());
     }
 
     @Test
@@ -465,7 +533,7 @@ class CharacterIdentityServiceTest {
         PlayerData otherData = new PlayerData(other);
         loaded.put(other, otherData);
         RPCharacter duplicate = new RPCharacter(other);
-        duplicate.setId(alice.getId().toUpperCase(java.util.Locale.ROOT));
+        duplicate.setId(alice.getId().toUpperCase(Locale.ROOT));
         duplicate.setName("Different owner");
         otherData.addCharacter(duplicate);
         assertTrue(service.info(id).isEmpty());
@@ -473,9 +541,24 @@ class CharacterIdentityServiceTest {
     }
 
     private void install() throws Exception {
-        directory = CharacterDirectory.load(root, ignored -> {});
+        directory = CharacterDirectory.load(root, warnings::add);
         runtime = new CharacterTransitions(database, directory);
         service = new CharacterIdentityService(directory, runtime);
+    }
+
+    /** A directory fed fresh snapshots only, as every update was before snapshots were reused. */
+    private CharacterDirectory reference() {
+        try {
+            return CharacterDirectory.load(root.resolve("reference-absent"), ignored -> {});
+        } catch (java.io.IOException error) {
+            throw new AssertionError(error);
+        }
+    }
+
+    /** The warning the directory gives for a live character whose snapshot fails, built from that failure. */
+    private static String invalidLiveCharacter(UUID owner, RPCharacter character) {
+        RuntimeException error = assertThrows(RuntimeException.class, () -> CharacterDirectory.snapshot(owner, character));
+        return "Character directory unavailable for " + owner + ": Invalid live character: " + error.getMessage();
     }
 
     private RPCharacter character(String name, boolean active) {
