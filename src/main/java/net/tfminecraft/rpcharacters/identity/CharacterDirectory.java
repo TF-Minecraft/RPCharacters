@@ -163,7 +163,7 @@ public final class CharacterDirectory {
 	private CharacterInfo liveSnapshot(UUID ownerId, RPCharacter character) {
 		LiveSnapshot last = live.get(character);
 		if (last != null && last.matches(ownerId, character)) return last.info();
-		// Values first, so an edit landing between the two reads can only cost a rebuild, never a stale reuse.
+		// Values first, so an edit landing between the two reads costs a rebuild instead of a stale reuse.
 		LiveSnapshot next = LiveSnapshot.read(ownerId, character);
 		CharacterInfo info = snapshot(ownerId, character);
 		if (next == null) live.remove(character);
