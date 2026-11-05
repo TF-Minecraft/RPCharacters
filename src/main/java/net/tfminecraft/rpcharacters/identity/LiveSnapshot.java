@@ -26,21 +26,21 @@ final class LiveSnapshot {
 	private final String[] traitIds;
 	private final int playtimeSeconds;
 	private final Instant lastPlayedAt;
-	private final CharacterInfo info;
+	private CharacterInfo info;
 
 	/**
-	 * Records the values {@code info} was just built from, or null if reading them again fails. Getters
-	 * of real characters are plain field reads, so this only guards odd test doubles.
+	 * The values a snapshot reads, recorded before it is built, or null if reading them fails (the
+	 * snapshot then reports the failure itself). Getters of real characters are plain field reads.
 	 */
-	static LiveSnapshot capture(UUID ownerId, RPCharacter character, CharacterInfo info) {
+	static LiveSnapshot read(UUID ownerId, RPCharacter character) {
 		try {
-			return new LiveSnapshot(ownerId, character, info);
+			return new LiveSnapshot(ownerId, character);
 		} catch (RuntimeException unreadable) {
 			return null;
 		}
 	}
 
-	private LiveSnapshot(UUID ownerId, RPCharacter character, CharacterInfo info) {
+	private LiveSnapshot(UUID ownerId, RPCharacter character) {
 		this.ownerId = ownerId;
 		this.id = character.getId();
 		this.name = character.getName();
@@ -53,7 +53,12 @@ final class LiveSnapshot {
 		for (int i = 0; i < traitIds.length; i++) traitIds[i] = traits.get(i).getId();
 		this.playtimeSeconds = character.getOnlinePlaytimeSeconds();
 		this.lastPlayedAt = character.getLastPlayedAt();
+	}
+
+	/** Attaches the snapshot built after these values were read; called once. */
+	LiveSnapshot built(CharacterInfo info) {
 		this.info = Objects.requireNonNull(info, "info");
+		return this;
 	}
 
 	CharacterInfo info() {

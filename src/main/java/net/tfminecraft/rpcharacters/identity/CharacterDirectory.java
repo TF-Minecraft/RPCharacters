@@ -163,10 +163,11 @@ public final class CharacterDirectory {
 	private CharacterInfo liveSnapshot(UUID ownerId, RPCharacter character) {
 		LiveSnapshot last = live.get(character);
 		if (last != null && last.matches(ownerId, character)) return last.info();
+		// Values first, so an edit landing between the two reads can only cost a rebuild, never a stale reuse.
+		LiveSnapshot next = LiveSnapshot.read(ownerId, character);
 		CharacterInfo info = snapshot(ownerId, character);
-		LiveSnapshot next = LiveSnapshot.capture(ownerId, character, info);
 		if (next == null) live.remove(character);
-		else live.put(character, next);
+		else live.put(character, next.built(info));
 		return info;
 	}
 

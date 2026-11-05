@@ -450,10 +450,12 @@ class CharacterIdentityServiceTest {
     void aLiveCharacterThatBreaksAfterBeingSnapshottedQuarantinesItsAccountWithTheSameWarning() throws Exception {
         UUID owner = player.getUniqueId();
         UUID id = UUID.fromString(alice.getId());
+        Trait strong = mock(Trait.class);
+        when(strong.getId()).thenReturn("strong");
+        alice.setTraits(new ArrayList<>(List.of(strong)));
         assertTrue(service.info(id).isPresent());
-        List<Trait> broken = new ArrayList<>();
-        broken.add(null);
-        alice.setTraits(broken);
+        // Same list size, so only the per-trait check sees the change.
+        alice.getTraits().set(0, null);
         String nullTrait = invalidLiveCharacter(owner, alice);
         assertTrue(service.info(id).isEmpty());
         assertTrue(service.characters(owner).isEmpty());
@@ -486,17 +488,26 @@ class CharacterIdentityServiceTest {
         assertEquals("Character directory unavailable for " + owner + ": Invalid live character: name unavailable",
                 warnings.getLast());
 
+        // A trait list whose indexed reads fail: the snapshot only iterates it, so it still succeeds as
+        // before, and the failed recording only skips reuse.
+        RPCharacter listed = character("Listed", false);
+        Trait swift = mock(Trait.class);
+        when(swift.getId()).thenReturn("swift");
+        listed.setTraits(new ArrayList<>(List.of(swift)) {
+            @Override
+            public Trait get(int index) {
+                throw new IllegalStateException("no indexed reads");
+            }
+        });
         UUID other = UUID.randomUUID();
-        RPCharacter flaky = mock(RPCharacter.class);
-        UUID flakyId = UUID.randomUUID();
-        when(flaky.getId()).thenReturn(flakyId.toString());
-        when(flaky.getName()).thenReturn("Flaky").thenThrow(new IllegalStateException("second read"));
-        when(flaky.getStatus()).thenReturn(Status.ALIVE);
-        when(flaky.getTraits()).thenReturn(List.of());
-        // Only the snapshot itself reads the name successfully; failing to record it only skips reuse.
+        UUID listedId = UUID.fromString(listed.getId());
         int before = warnings.size();
-        directory.upsert(other, flaky);
-        assertEquals("Flaky", directory.info(flakyId).orElseThrow().name());
+        directory.upsert(other, listed);
+        CharacterInfo first = directory.info(listedId).orElseThrow();
+        assertEquals(CharacterDirectory.snapshot(other, listed), first);
+        directory.upsert(other, listed);
+        assertEquals(first, directory.info(listedId).orElseThrow());
+        assertNotSame(first, directory.info(listedId).orElseThrow());
         assertEquals(before, warnings.size());
     }
 
@@ -512,15 +523,18 @@ class CharacterIdentityServiceTest {
         assertSame(after, service.info(id).orElseThrow());
 
         // The same character object under another owner: identical to a directory without reuse.
-        CharacterDirectory reference = reference();
+        List<String> referenceWarnings = new ArrayList<>();
+        CharacterDirectory reference = reference(referenceWarnings);
         UUID other = UUID.randomUUID();
         RPCharacter moved = character("Moved", false);
         UUID movedId = UUID.fromString(moved.getId());
+        int start = warnings.size();
         for (UUID holder : List.of(other, owner, other)) {
             directory.upsert(holder, moved);
             reference.upsert(holder, CharacterDirectory.snapshot(holder, moved), false, null);
             assertEquals(reference.info(movedId), directory.info(movedId));
             assertEquals(reference.characters(other), directory.characters(other));
+            assertEquals(referenceWarnings, warnings.subList(start, warnings.size()));
         }
         assertTrue(directory.info(movedId).isEmpty());
     }
@@ -547,9 +561,9 @@ class CharacterIdentityServiceTest {
     }
 
     /** A directory fed fresh snapshots only, as every update was before snapshots were reused. */
-    private CharacterDirectory reference() {
+    private CharacterDirectory reference(List<String> warned) {
         try {
-            return CharacterDirectory.load(root.resolve("reference-absent"), ignored -> {});
+            return CharacterDirectory.load(root.resolve("reference-absent"), warned::add);
         } catch (java.io.IOException error) {
             throw new AssertionError(error);
         }
