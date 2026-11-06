@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -62,6 +63,7 @@ class CharacterIdentityServiceTest {
     private MockedStatic<MaskService> masks;
     private final Map<Player, PlayerData> loaded = new LinkedHashMap<>();
     private final List<AutoCloseable> boundaries = new ArrayList<>();
+    private final List<String> warnings = new ArrayList<>();
 
     @BeforeEach
     void setup() throws Exception {
@@ -395,10 +397,182 @@ class CharacterIdentityServiceTest {
         assertEquals("Renamed", service.characters(other.getUniqueId()).orElseThrow().getFirst().name());
     }
 
+    @Test
+    void liveSnapshotsAreReusedUntilAnyValueTheyReadChangesAndAlwaysMatchAFreshSnapshot() {
+        UUID owner = player.getUniqueId();
+        UUID id = UUID.fromString(alice.getId());
+        Race elf = mock(Race.class);
+        when(elf.getId()).thenReturn("elf");
+        Race human = mock(Race.class);
+        when(human.getId()).thenReturn("human");
+        Trait strong = mock(Trait.class);
+        when(strong.getId()).thenReturn("STRONG");
+        Trait swift = mock(Trait.class);
+        when(swift.getId()).thenReturn("swift");
+        List<Runnable> edits = List.of(
+                () -> alice.setName("&cRenamed"),
+                () -> alice.setStatus(Status.MISSING),
+                () -> alice.setStatus(Status.ALIVE),
+                () -> alice.setRace(elf),
+                () -> when(elf.getId()).thenReturn("high_elf"),
+                () -> alice.setRace(human),
+                () -> alice.setRace(null),
+                () -> alice.setTraits(new ArrayList<>(List.of(strong))),
+                () -> alice.getTraits().add(swift),
+                () -> when(swift.getId()).thenReturn("nimble"),
+                () -> alice.getTraits().remove(strong),
+                () -> alice.setOnlinePlaytimeSeconds(60),
+                () -> alice.addOnlinePlaytimeSeconds(60),
+                () -> alice.setLastPlayedAt(Instant.ofEpochMilli(1000)),
+                () -> alice.setLastPlayedAt(Instant.ofEpochMilli(2000)),
+                () -> alice.setLastPlayedAt(null));
+        CharacterInfo previous = service.info(id).orElseThrow();
+        assertSame(previous, service.info(id).orElseThrow());
+        for (Runnable edit : edits) {
+            edit.run();
+            CharacterInfo now = service.info(id).orElseThrow();
+            assertEquals(CharacterDirectory.snapshot(owner, alice), now);
+            assertNotEquals(previous, now);
+            // Unchanged values reuse the snapshot; every lookup method sees the same one.
+            assertSame(now, service.info(id).orElseThrow());
+            assertSame(now, service.characters(owner).orElseThrow().getFirst());
+            assertSame(now, service.lastPlayed(owner).orElseThrow());
+            previous = now;
+        }
+        assertEquals(List.of(previous), service.findByName("Renamed"));
+        assertEquals(Set.of("nimble"), previous.traits());
+        // An unchanged edit (same name again) keeps the reused snapshot.
+        alice.setName("Renamed");
+        assertSame(previous, service.info(id).orElseThrow());
+    }
+
+    @Test
+    void aLiveCharacterThatBreaksAfterBeingSnapshottedQuarantinesItsAccountWithTheSameWarning() throws Exception {
+        UUID owner = player.getUniqueId();
+        UUID id = UUID.fromString(alice.getId());
+        Trait strong = mock(Trait.class);
+        when(strong.getId()).thenReturn("strong");
+        alice.setTraits(new ArrayList<>(List.of(strong)));
+        assertTrue(service.info(id).isPresent());
+        // Same list size, so only the per-trait check sees the change.
+        alice.getTraits().set(0, null);
+        String nullTrait = invalidLiveCharacter(owner, alice);
+        assertTrue(service.info(id).isEmpty());
+        assertTrue(service.characters(owner).isEmpty());
+        assertEquals(nullTrait, warnings.getLast());
+
+        install();
+        alice.setTraits(new ArrayList<>());
+        assertTrue(service.info(id).isPresent());
+        alice.setTraits(null);
+        String nullList = invalidLiveCharacter(owner, alice);
+        assertTrue(service.info(id).isEmpty());
+        assertEquals(nullList, warnings.getLast());
+    }
+
+    @Test
+    void aGetterThatFailsOnLaterReadsIsReportedOrToleratedAsAFreshSnapshotWouldBe() {
+        UUID owner = UUID.randomUUID();
+        RPCharacter odd = mock(RPCharacter.class);
+        UUID oddId = UUID.randomUUID();
+        when(odd.getId()).thenReturn(oddId.toString());
+        when(odd.getName()).thenReturn("Odd");
+        when(odd.getStatus()).thenReturn(Status.ALIVE);
+        when(odd.getTraits()).thenReturn(List.of());
+        directory.upsert(owner, odd);
+        assertEquals("Odd", directory.info(oddId).orElseThrow().name());
+        // A failing read while checking the reused snapshot rebuilds it, and the rebuild reports the failure.
+        when(odd.getName()).thenThrow(new IllegalStateException("name unavailable"));
+        directory.upsert(owner, odd);
+        assertTrue(directory.characters(owner).isEmpty());
+        assertEquals("Character directory unavailable for " + owner + ": Invalid live character: name unavailable",
+                warnings.getLast());
+
+        // A trait list whose indexed reads fail: the snapshot only iterates it, so it still succeeds as
+        // before, and the failed recording only skips reuse.
+        RPCharacter listed = character("Listed", false);
+        Trait swift = mock(Trait.class);
+        when(swift.getId()).thenReturn("swift");
+        listed.setTraits(new ArrayList<>(List.of(swift)) {
+            @Override
+            public Trait get(int index) {
+                throw new IllegalStateException("no indexed reads");
+            }
+        });
+        UUID other = UUID.randomUUID();
+        UUID listedId = UUID.fromString(listed.getId());
+        int before = warnings.size();
+        directory.upsert(other, listed);
+        CharacterInfo first = directory.info(listedId).orElseThrow();
+        assertEquals(CharacterDirectory.snapshot(other, listed), first);
+        directory.upsert(other, listed);
+        assertEquals(first, directory.info(listedId).orElseThrow());
+        assertNotSame(first, directory.info(listedId).orElseThrow());
+        assertEquals(before, warnings.size());
+    }
+
+    @Test
+    void idCaseAndOwnerChangesRebuildExactlyAsWithoutReuse() {
+        UUID owner = player.getUniqueId();
+        UUID id = UUID.fromString(alice.getId());
+        CharacterInfo before = service.info(id).orElseThrow();
+        alice.setId(alice.getId().toUpperCase(Locale.ROOT));
+        CharacterInfo after = service.info(id).orElseThrow();
+        assertEquals(CharacterDirectory.snapshot(owner, alice), after);
+        assertNotSame(before, after);
+        assertSame(after, service.info(id).orElseThrow());
+
+        // The same character object under another owner: identical to a directory without reuse.
+        List<String> referenceWarnings = new ArrayList<>();
+        CharacterDirectory reference = reference(referenceWarnings);
+        UUID other = UUID.randomUUID();
+        RPCharacter moved = character("Moved", false);
+        UUID movedId = UUID.fromString(moved.getId());
+        int start = warnings.size();
+        for (UUID holder : List.of(other, owner, other)) {
+            directory.upsert(holder, moved);
+            reference.upsert(holder, CharacterDirectory.snapshot(holder, moved), false, null);
+            assertEquals(reference.info(movedId), directory.info(movedId));
+            assertEquals(reference.characters(other), directory.characters(other));
+            assertEquals(referenceWarnings, warnings.subList(start, warnings.size()));
+        }
+        assertTrue(directory.info(movedId).isEmpty());
+    }
+
+    @Test
+    void characterLookupsCatchALiveDuplicateWhoseIdDiffersOnlyInCase() {
+        UUID id = UUID.fromString(alice.getId());
+        assertTrue(service.info(id).isPresent());
+        PlayerMock other = server.addPlayer("Other");
+        PlayerData otherData = new PlayerData(other);
+        loaded.put(other, otherData);
+        RPCharacter duplicate = new RPCharacter(other);
+        duplicate.setId(alice.getId().toUpperCase(Locale.ROOT));
+        duplicate.setName("Different owner");
+        otherData.addCharacter(duplicate);
+        assertTrue(service.info(id).isEmpty());
+        assertTrue(service.characters(other.getUniqueId()).isEmpty());
+    }
+
     private void install() throws Exception {
-        directory = CharacterDirectory.load(root, ignored -> {});
+        directory = CharacterDirectory.load(root, warnings::add);
         runtime = new CharacterTransitions(database, directory);
         service = new CharacterIdentityService(directory, runtime);
+    }
+
+    /** A directory fed fresh snapshots only, as every update was before snapshots were reused. */
+    private CharacterDirectory reference(List<String> warned) {
+        try {
+            return CharacterDirectory.load(root.resolve("reference-absent"), warned::add);
+        } catch (java.io.IOException error) {
+            throw new AssertionError(error);
+        }
+    }
+
+    /** The warning the directory gives for a live character whose snapshot fails, built from that failure. */
+    private static String invalidLiveCharacter(UUID owner, RPCharacter character) {
+        RuntimeException error = assertThrows(RuntimeException.class, () -> CharacterDirectory.snapshot(owner, character));
+        return "Character directory unavailable for " + owner + ": Invalid live character: " + error.getMessage();
     }
 
     private RPCharacter character(String name, boolean active) {
