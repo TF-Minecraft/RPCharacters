@@ -16,6 +16,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
@@ -109,6 +110,10 @@ public class CommandTabCompleter implements TabCompleter {
 				&& ClassPickReset.canUse(sender)) {
 			return filter(List.of("confirm"), args[2]);
 		}
+		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(ClassPickAdminCommand.SUBCOMMAND)
+				&& ClassPickAdminCommand.canUse(sender)) {
+			return completeClassPicks(args);
+		}
 		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)
 				&& PrisonSwitch.canUse(sender)) {
 			return completePrison(args);
@@ -182,6 +187,7 @@ public class CommandTabCompleter implements TabCompleter {
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
+					completions.add(ClassPickAdminCommand.SUBCOMMAND);
 				}
 				if (HiddenCharacterAdminCommand.canUse(sender)) {
 					completions.add(HiddenCharacterAdminCommand.SUBCOMMAND);
@@ -323,6 +329,24 @@ public class CommandTabCompleter implements TabCompleter {
 			), args[3]);
 		}
 
+		return Collections.emptyList();
+	}
+
+	/** {@code /rpcharacter admin classpicks <player> [reset|freesubclass|paid <count>]}. */
+	private List<String> completeClassPicks(String[] args) {
+		if (args.length == 3) {
+			List<String> names = new ArrayList<>();
+			for (Player online : Bukkit.getOnlinePlayers()) {
+				names.add(online.getName());
+			}
+			return filter(names, args[2]);
+		}
+		if (args.length == 4) {
+			return filter(ClassPickAdminCommand.ACTIONS, args[3]);
+		}
+		if (args.length == 5 && args[3].equalsIgnoreCase("paid")) {
+			return filter(List.of("0", "1", "2"), args[4]);
+		}
 		return Collections.emptyList();
 	}
 

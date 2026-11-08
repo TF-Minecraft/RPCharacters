@@ -173,7 +173,8 @@ class ClassPickTest {
         character.setMMOClass("berserker"); var spellbladePick = ClassPickService.option("spellblade");
         assertEquals(BigDecimal.ZERO, ClassPickService.price(character, spellbladePick), "A reset subclass holder's sibling is the free subclass pick");
         assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, magePick));
-        character.setMMOClass("warrior"); character.setSubclassPicked(true); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick));
+        character.setMMOClass("spellblade"); character.setSubclassPicked(true); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, berserkerPick), "A used subclass makes its sibling a class change");
+        character.setMMOClass("warrior"); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, berserkerPick), "Back on a base class, its first subclass is free again");
         assertEquals(BigDecimal.ZERO, ClassPickService.price(new RPCharacter(player), magePick), "A character without a class picks its first one free");
         character.setMMOClass("mage"); ClassPickService.configure(settings(true, true)); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, magePick));
         assertEquals("Free", ClassPickService.priceText(BigDecimal.ZERO)); assertEquals("200 denars", ClassPickService.priceText(new BigDecimal("200.00")));
@@ -195,6 +196,29 @@ class ClassPickTest {
         wallet.set(Account.POUCH, 15_000); var paid = ClassPickService.choose(player, "mage");
         assertEquals(Status.CHOSEN, paid.status()); assertEquals(new BigDecimal("100.00"), paid.cost()); assertEquals(1, character.getPaidChangeCount("class_selection_stage"));
         assertEquals(new BigDecimal("1000.00"), ClassPickService.price(character, ClassPickService.option("warrior")), "Each paid change raises the next price");
+        character.setPaidChangeCount("class_selection_stage", Integer.MAX_VALUE); character.setPaidClassPicks(Integer.MAX_VALUE); wallet.set(Account.POUCH, 1_000_000);
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "warrior").status()); assertEquals(700_000, wallet.get(Account.POUCH), "A maximum count pays the last price");
+        assertEquals(Integer.MAX_VALUE, character.getPaidChangeCount("class_selection_stage"), "The count saturates instead of wrapping to the first price"); assertEquals(Integer.MAX_VALUE, character.getPaidClassPicks());
+    }
+
+    @Test void aMoveToAnotherClassCostsOneChangeAndItsFirstSubclassIsFree() {
+        displayed.add("paladin"); var paladin = playerClass("paladin", "Paladin", 5, null); var crusader = playerClass("crusader", "Crusader", 6, null);
+        when(paladin.getSubclasses()).thenReturn(List.of(new Subclass(crusader, 2))); level.set(2); wallet.set(Account.BANK, 100_000);
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "berserker").status()); assertEquals(100_000, wallet.get(Account.BANK), "The first subclass is free");
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "paladin").status()); assertEquals(80_000, wallet.get(Account.BANK), "The class move is one paid change");
+        assertTrue(ClassPickService.freeSubclassOpen(character));
+        var crusaderPick = ClassPickService.choose(player, "crusader");
+        assertEquals(Status.CHOSEN, crusaderPick.status()); assertNull(crusaderPick.paidFrom()); assertEquals(80_000, wallet.get(Account.BANK), "The new class's first subclass is free");
+        assertEquals("CRUSADER", character.getMMOClass()); assertEquals(1, character.getPaidClassPicks()); assertFalse(ClassPickService.freeSubclassOpen(character));
+        assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, ClassPickService.option("berserker")), "Another class's subclass is never free");
+    }
+
+    @Test void aCharacterStuckOnABaseClassAfterAnEarlierSubclassGetsItsSubclassFree() {
+        level.set(2); character.setSubclassPicked(true); wallet.set(Account.BANK, 100_000);
+        var result = ClassPickService.choose(player, "berserker");
+        assertEquals(Status.CHOSEN, result.status()); assertNull(result.paidFrom()); assertEquals(100_000, wallet.get(Account.BANK)); assertEquals(0, character.getPaidClassPicks());
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "spellblade").status()); assertEquals(80_000, wallet.get(Account.BANK), "A sibling switch is still a paid change");
+        character.setMMOClass("missing"); assertTrue(ClassPickService.freeSubclassOpen(character), "An unknown class counts as a base class");
     }
 
     @Test void freeSubclassPickAppliesSavesAndAnnouncesTheChange() {
@@ -258,7 +282,8 @@ class ClassPickTest {
 
     @Test void pricingLoreDescribesFreeAndPaidPicks() {
         assertEquals(List.of("Head", "First subclass: Free", "Other picks: 200 denars"), ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
-        character.setSubclassPicked(true); assertEquals(List.of("Head", "Other picks: 200 denars"), ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
+        character.setSubclassPicked(true); assertEquals(List.of("Head", "First subclass: Free", "Other picks: 200 denars"), ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
+        character.setMMOClass("berserker"); assertEquals(List.of("Head", "Other picks: 200 denars"), ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
         ClassPickService.configure(settings(true, true)); assertEquals(List.of("Head", "Class picks: Free"), ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
     }
 
