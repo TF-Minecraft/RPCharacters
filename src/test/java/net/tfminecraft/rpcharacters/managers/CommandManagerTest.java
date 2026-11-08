@@ -157,6 +157,8 @@ class CommandManagerTest {
         String[] tutorial = {"admin", "tutorial", "reset"}; assertFalse(run(tutorial)); tutorials.verify(() -> TutorialCommands.handleAdmin(player, tutorial, 2));
         var resets = boundary(ClassPickReset.class); String[] reset = {"admin", "ResetClasses", "confirm"}; assertFalse(run(reset));
         resets.verify(() -> ClassPickReset.handle(player, reset, 2));
+        var picks = boundary(net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand.class); String[] pick = {"admin", "ClassPicks", "Iris", "reset"}; assertFalse(run(pick));
+        picks.verify(() -> net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand.handle(player, pick, 2));
         var carried = boundary(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.class); String[] carry = {"admin", "CarryExp", "Iris", "40"};
         assertFalse(run(carry)); carried.verify(() -> net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(player, carry, 2));
         var prisons = boundary(PrisonSwitch.class); String[] prison = {"admin", "Prison", "Iris"}; assertFalse(run(prison));
