@@ -119,8 +119,10 @@ class CommandTabCompleterTest {
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
         assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "hide", "prison"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses", "hide", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses", "classpicks", "hide", "prison"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
+        assertEquals(List.of("Iris"), complete("admin", "classpicks", "I")); assertEquals(List.of("reset", "freesubclass", "paid"), complete("admin", "CLASSPICKS", "Iris", ""));
+        assertEquals(List.of("0", "1", "2"), complete("admin", "classpicks", "Iris", "PAID", "")); assertEquals(List.of(), complete("admin", "classpicks", "Iris", "reset", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));
         grant(Cache.personaTempaliasPermission, true); assertEquals(List.of("clear"), complete("tempalias", ""));
@@ -131,9 +133,9 @@ class CommandTabCompleterTest {
     @Test void adminSuggestionsDisappearWithoutPermission() {
         for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate", "setclass", "skipcooldown", "addtrait", "removetrait", "menu", "injure", "permakill"))
             assertEquals(List.of(), complete(verb, ""), verb);
-        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "prison", "")); assertEquals(List.of(), complete("admin", "hide", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses"), complete("admin", ""));
-        grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "prison"), complete("admin", ""));
+        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "classpicks", "")); assertEquals(List.of(), complete("admin", "prison", "")); assertEquals(List.of(), complete("admin", "hide", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses", "classpicks"), complete("admin", ""));
+        grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "classpicks", "prison"), complete("admin", ""));
     }
 
     @Test void prisonCompletionOffersPlayersTheirLivingCharactersAndTheSwitch() {

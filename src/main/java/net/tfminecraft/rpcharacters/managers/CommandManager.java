@@ -16,6 +16,7 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.loaders.ChatLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
@@ -84,6 +85,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(ClassPickReset.SUBCOMMAND)) {
 			return ClassPickReset.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(ClassPickAdminCommand.SUBCOMMAND)) {
+			return ClassPickAdminCommand.handle(sender, args, 2);
 		}
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)) {
@@ -758,7 +763,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|hide> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -777,7 +782,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND)) {
 			return net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|hide> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide> ...");
 		return true;
 	}
 

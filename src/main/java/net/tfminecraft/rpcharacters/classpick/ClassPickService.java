@@ -40,9 +40,11 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * Class and subclass picks for the active character, in place of MMOCore class points. A
- * character's first class and first subclass are free. Other picks are class changes, priced like
- * the class creation stage: free while its lock window is open, then the class paid-change rule
- * (change-cost when there is no rule). Infinite points make every pick free.
+ * character's first class is free, and so is its first subclass after each base class pick: a
+ * move to another class costs one class change, not a second one for its subclass. Other picks
+ * are class changes, priced like the class creation stage: free while its lock window is open,
+ * then the class paid-change rule (change-cost when there is no rule). Infinite points make every
+ * pick free.
  */
 public final class ClassPickService {
 
@@ -157,16 +159,29 @@ public final class ClassPickService {
 				: null;
 	}
 
-	/** Free for the first class, the first subclass in the current class family, and on infinite points. */
+	/** Free for the first class, a free subclass pick in the current class family, and on infinite points. */
 	public static BigDecimal price(RPCharacter character, Option option) {
 		if (settings.infinitePoints() || !character.hasMMOClass()) {
 			return BigDecimal.ZERO;
 		}
-		if (option.isSubclass() && !character.hasPickedSubclass()
+		if (option.isSubclass() && freeSubclassOpen(character)
 				&& option.base().getId().equalsIgnoreCase(baseClassId(character))) {
 			return BigDecimal.ZERO;
 		}
 		return changePrice(character);
+	}
+
+	/**
+	 * True while the character's next subclass pick is free: it has never picked one, staff reset
+	 * its picks, or it is on a base class now. A character only gets back to a base class through
+	 * a class change, so a later subclass of that class must not be priced as a second change.
+	 */
+	public static boolean freeSubclassOpen(RPCharacter character) {
+		if (!character.hasPickedSubclass()) {
+			return true;
+		}
+		Option current = option(character.getMMOClass());
+		return current == null || !current.isSubclass();
 	}
 
 	/** The character's class, or the base class of its subclass. */
@@ -403,7 +418,7 @@ public final class ClassPickService {
 			lines.add(RPTexts.MUTED + "Class picks: " + RPTexts.WARN + "Free");
 			return lines;
 		}
-		if (!character.hasPickedSubclass()) {
+		if (freeSubclassOpen(character)) {
 			lines.add(RPTexts.MUTED + "First subclass: " + RPTexts.WARN + "Free");
 		}
 		Stage stage = classStage();
