@@ -196,6 +196,9 @@ class ClassPickTest {
         wallet.set(Account.POUCH, 15_000); var paid = ClassPickService.choose(player, "mage");
         assertEquals(Status.CHOSEN, paid.status()); assertEquals(new BigDecimal("100.00"), paid.cost()); assertEquals(1, character.getPaidChangeCount("class_selection_stage"));
         assertEquals(new BigDecimal("1000.00"), ClassPickService.price(character, ClassPickService.option("warrior")), "Each paid change raises the next price");
+        character.setPaidChangeCount("class_selection_stage", Integer.MAX_VALUE); character.setPaidClassPicks(Integer.MAX_VALUE); wallet.set(Account.POUCH, 1_000_000);
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "warrior").status()); assertEquals(700_000, wallet.get(Account.POUCH), "A maximum count pays the last price");
+        assertEquals(Integer.MAX_VALUE, character.getPaidChangeCount("class_selection_stage"), "The count saturates instead of wrapping to the first price"); assertEquals(Integer.MAX_VALUE, character.getPaidClassPicks());
     }
 
     @Test void aMoveToAnotherClassCostsOneChangeAndItsFirstSubclassIsFree() {

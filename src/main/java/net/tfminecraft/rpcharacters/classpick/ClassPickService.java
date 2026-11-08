@@ -310,12 +310,17 @@ public final class ClassPickService {
 	/** Counts a kept paid pick and clears its hold. */
 	private static void countPaid(RPCharacter character) {
 		character.setPendingClassPick(null);
-		character.setPaidClassPicks(character.getPaidClassPicks() + 1);
+		character.setPaidClassPicks(saturatedIncrement(character.getPaidClassPicks()));
 		PaidChangeRule rule = PaidChangeService.ruleFor(classStage());
 		if (rule != null) {
 			// Shared with paid class-stage edits, so the next change costs the next price.
-			character.setPaidChangeCount(rule.getStageId(), character.getPaidChangeCount(rule.getStageId()) + 1);
+			// Saturates, so a staff-set maximum never wraps back to the first price.
+			character.setPaidChangeCount(rule.getStageId(), saturatedIncrement(character.getPaidChangeCount(rule.getStageId())));
 		}
+	}
+
+	private static int saturatedIncrement(int count) {
+		return count == Integer.MAX_VALUE ? count : count + 1;
 	}
 
 	/**
