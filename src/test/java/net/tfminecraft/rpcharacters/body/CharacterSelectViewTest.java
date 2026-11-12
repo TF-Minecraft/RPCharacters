@@ -713,7 +713,7 @@ class CharacterSelectViewTest {
 		verify(actions, never()).play(any());
 		assertEquals("Switch to Thalrix?", text(ui.last().base().title()));
 		assertEquals("⚠ Switching starts your 7-day character switch cooldown.\n"
-				+ "For 7 days after you play Thalrix, you can't switch to another character, including Miras, or create a new one.",
+				+ "For 7 days after you switch to Thalrix, you can't switch to another character, including Miras, or create a new one.",
 				ui.last().bodyText());
 		assertEquals(List.of("Switch", "Back"), labels());
 		assertEquals(2, columns());
@@ -746,7 +746,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.open(player, data, actions);
 		click("▶ Play");
 		assertEquals("⚠ Switching starts your 1-day character switch cooldown.\n"
-				+ "For 1 day after you play Wren, you can't switch to another character or create a new one.", ui.last().bodyText());
+				+ "For 1 day after you switch to Wren, you can't switch to another character or create a new one.", ui.last().bodyText());
 	}
 
 	@Test

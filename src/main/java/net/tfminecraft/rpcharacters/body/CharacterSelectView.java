@@ -435,7 +435,7 @@ public final class CharacterSelectView {
 		if (session.notice != null) body.add(text(Component.text(session.notice, WARN)));
 		body.add(text(Component.text("⚠ Switching starts your " + cooldown.hyphenated() + " character switch cooldown.",
 				WARN, TextDecoration.BOLD)));
-		body.add(text(Component.text("For " + cooldown.length() + " after you play " + name + ", you can't switch to "
+		body.add(text(Component.text("For " + cooldown.length() + " after you switch to " + name + ", you can't switch to "
 				+ others + " or create a new one.", MUTED)));
 		if (!jailed.isEmpty()) body.add(text(Component.text(listed(jailed) + (jailed.size() == 1 ? " is" : " are")
 				+ " in prison, so you can still switch to them during the cooldown.", MUTED)));
@@ -790,8 +790,8 @@ public final class CharacterSelectView {
 
 	/**
 	 * Re-resolves by id so a stale button can't play a character that has since changed. A switch that
-	 * starts the cooldown opens the warning page first, unless the player {@code accepted} exactly the
-	 * terms it would start now; changed terms (a rank change while the page was open) are shown again.
+	 * starts the cooldown opens the warning page first, unless the player {@code accepted} the cooldown
+	 * length it would start now; a changed length (a rank change while the page was open) is shown again.
 	 */
 	private static void play(Session session, String characterId, SwitchCooldown accepted) {
 		RPCharacter character = session.data.getCharacterById(characterId);
