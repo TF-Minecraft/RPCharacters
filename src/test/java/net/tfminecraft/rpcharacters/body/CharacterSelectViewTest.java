@@ -199,6 +199,7 @@ class CharacterSelectViewTest {
 		};
 		assertFalse(owner.needsDiscordLink());
 		owner.linkDiscord();
+		assertNull(owner.switchCooldown(null), "selector owners without a cooldown never warn");
 	}
 	private static java.util.stream.Stream<Component> components(Component c) {
 		return java.util.stream.Stream.concat(java.util.stream.Stream.of(c), c.children().stream().flatMap(CharacterSelectViewTest::components));
