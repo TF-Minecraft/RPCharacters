@@ -578,6 +578,31 @@ class CharacterBodiesTest {
         when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(true);assertNull(bodies.blockReason(account,b));
         when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(false);when(a.getStatus()).thenReturn(Status.DEAD);assertNull(bodies.blockReason(account,b));
     }
+    @Test void switchWarningFollowsTheCooldownRuleAndTheRanksLength() throws Exception {
+        ready();when(a.getName()).thenReturn("Aria");
+        groups.when(()->PermissionGroupService.getCharacterSwitchCooldownDays(player)).thenReturn(7);
+        var fromAria=new CharacterSelectView.SwitchCooldown(7,"Aria");
+        assertNull(actions.switchCooldown(a));assertEquals(fromAria,actions.switchCooldown(b));assertEquals(fromAria,actions.switchCooldown(null));
+        when(b.isPrisonSwitch()).thenReturn(true);assertNull(actions.switchCooldown(b));when(b.isPrisonSwitch()).thenReturn(false);
+        when(a.getName()).thenReturn(" ");assertEquals(new CharacterSelectView.SwitchCooldown(7,null),actions.switchCooldown(b));when(a.getName()).thenReturn("Aria");
+        // A dead previous character still starts the cooldown (as entered() does), but is not named.
+        when(a.getStatus()).thenReturn(Status.DEAD);assertEquals(new CharacterSelectView.SwitchCooldown(7,null),actions.switchCooldown(b));when(a.getStatus()).thenReturn(Status.ALIVE);
+        when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(true);assertNull(actions.switchCooldown(b));when(player.hasPermission("rpcharacters.no_cooldown")).thenReturn(false);
+        groups.when(()->PermissionGroupService.getCharacterSwitchCooldownDays(player)).thenReturn(0);assertNull(actions.switchCooldown(b));
+        groups.when(()->PermissionGroupService.getCharacterSwitchCooldownDays(player)).thenReturn(1);
+        assertEquals(new CharacterSelectView.SwitchCooldown(1,"Aria"),actions.switchCooldown(b));
+        tag=new BodyTag.Room(null);assertNull(actions.switchCooldown(b));assertNull(actions.switchCooldown(null));
+        tag=new BodyTag.Live(first,1);assertNull(actions.switchCooldown(b));
+        tags.when(()->BodyTag.read(player)).thenThrow(new IOException("unreadable"));assertNull(actions.switchCooldown(b));
+    }
+    @Test void leavingAPrisonCharacterWarnsFromTheCharacterPlayedBeforePrison() throws Exception {
+        ready();UUID third=UUID.randomUUID();RPCharacter c=character(third);account.addCharacter(c);
+        when(b.getName()).thenReturn("Bram");when(a.isPrisonSwitch()).thenReturn(true);account.setLastFreeCharacterId(second.toString());
+        groups.when(()->PermissionGroupService.getCharacterSwitchCooldownDays(player)).thenReturn(7);
+        assertEquals(new BodyTag.Room(first),tag);
+        assertEquals(new CharacterSelectView.SwitchCooldown(7,"Bram"),actions.switchCooldown(c));
+        assertNull(actions.switchCooldown(b));assertNull(actions.switchCooldown(a));
+    }
     void backToRoom() {bodies.requestSelection(player);countdown(5);drain();}
     @Test void prisonCharacterSwitchesInAndOutFreelyButCannotCarryTheCooldownToAnotherCharacter() throws Exception {
         UUID third=UUID.randomUUID();RPCharacter c=character(third);account.addCharacter(c);when(store.read(owner,third)).thenReturn(Optional.of(record(third,1)));
