@@ -771,6 +771,50 @@ class CharacterSelectViewTest {
 	}
 
 	@Test
+	void changedTermsAreShownAgainBeforeSwitchingAndDroppedTermsSwitchAtOnce() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		var cooldown = new java.util.concurrent.atomic.AtomicReference<>(new CharacterSelectView.SwitchCooldown(1, "Miras"));
+		when(actions.switchCooldown(wren)).thenAnswer(call -> cooldown.get());
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().contains("for 1 day."));
+		cooldown.set(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		click("Switch");
+		verify(actions, never()).play(any());
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Your cooldown has changed. Check it before switching.\n"
+				+ "⚠ Switching starts your 7-day character switch cooldown."), ui.last().bodyText());
+		click("Switch");
+		verify(actions).play(wren);
+
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		cooldown.set(null);
+		click("Switch");
+		verify(actions, times(2)).play(wren);
+	}
+
+	@Test
+	void theWarningSaysPrisonMarkedCharactersStayOpen() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		RPCharacter aria = character("aria", "Aria", Status.ALIVE);
+		when(aria.isPrisonSwitch()).thenReturn(true);
+		when(wren.getLastPlayedAt()).thenReturn(Instant.now());
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().endsWith("for 7 days.\nAria is in prison, so you can still switch to them."), ui.last().bodyText());
+
+		RPCharacter bram = character("bram", "Bram", Status.ALIVE);
+		when(bram.isPrisonSwitch()).thenReturn(true);
+		RPCharacter gone = character("gone", "Gone", Status.DEAD);
+		when(gone.isPrisonSwitch()).thenReturn(true);
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().matches("(?s).*\n(Aria, Bram|Bram, Aria) are in prison, so you can still switch to them\\."), ui.last().bodyText());
+	}
+
+	@Test
 	void aRefreshKeepsTheWarningUsableAndADeathBeforeConfirmIsReported() {
 		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
 		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(3, "Miras"));

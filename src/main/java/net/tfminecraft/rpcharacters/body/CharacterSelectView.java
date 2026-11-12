@@ -326,7 +326,7 @@ public final class CharacterSelectView {
 			SwitchCooldown cooldown = reason == null ? session.actions.switchCooldown(selected) : null;
 			if (cooldown != null) action += "\nStarts your " + cooldown.hyphenated() + " character switch cooldown";
 			buttons.add(button(label, action + "\n" + details(player.getUniqueId(), selected), 110, session,
-					s -> play(s, id, false)));
+					s -> play(s, id, null)));
 		}
 		else {
 			String createBlock = createBlockReason(player, data);
@@ -424,14 +424,20 @@ public final class CharacterSelectView {
 		String name = name(character);
 		String others = cooldown.leaving() == null ? "another character"
 				: "another character (" + cooldown.leaving() + " included)";
+		// Prison-marked characters never fall under the cooldown, so the warning must not promise otherwise.
+		List<String> jailed = alive(session.data).stream()
+				.filter(c -> c.isPrisonSwitch() && !c.getId().equalsIgnoreCase(id)).map(CharacterSelectView::name).toList();
 		List<DialogBody> body = new ArrayList<>();
+		if (session.notice != null) body.add(text(Component.text(session.notice, WARN)));
 		body.add(text(Component.text("⚠ Switching starts your " + cooldown.hyphenated() + " character switch cooldown.",
 				WARN, TextDecoration.BOLD)));
 		body.add(text(Component.text("Once you play " + name + ", you can't switch to " + others + " or create a new one for "
 				+ cooldown.length() + ".", MUTED)));
+		if (!jailed.isEmpty()) body.add(text(Component.text(String.join(", ", jailed)
+				+ (jailed.size() == 1 ? " is" : " are") + " in prison, so you can still switch to them.", MUTED)));
 		List<ActionButton> buttons = List.of(
 				button(Component.text("Switch", WARN, TextDecoration.BOLD), "Play as " + name + " and start the cooldown",
-						100, session, s -> play(s, id, true)),
+						100, session, s -> play(s, id, cooldown)),
 				button(Component.text("Back", TEAL, TextDecoration.BOLD), "Back to your characters", 100, session,
 						s -> navigate(s, v -> v.confirming = null)));
 		show(session, Component.text("Switch to " + name + "?", PALE, TextDecoration.BOLD), body, buttons, null,
@@ -774,9 +780,10 @@ public final class CharacterSelectView {
 
 	/**
 	 * Re-resolves by id so a stale button can't play a character that has since changed. A switch that
-	 * starts the cooldown opens the warning page first unless the player {@code confirmed} it there.
+	 * starts the cooldown opens the warning page first, unless the player {@code accepted} exactly the
+	 * terms it would start now; changed terms (a rank change while the page was open) are shown again.
 	 */
-	private static void play(Session session, String characterId, boolean confirmed) {
+	private static void play(Session session, String characterId, SwitchCooldown accepted) {
 		RPCharacter character = session.data.getCharacterById(characterId);
 		session.confirming = null;
 		if (character == null || character.getStatus() != Status.ALIVE) {
@@ -788,8 +795,12 @@ public final class CharacterSelectView {
 			notice(session, reason);
 			return;
 		}
-		if (!confirmed && session.actions.switchCooldown(character) != null) {
-			navigate(session, v -> v.confirming = characterId);
+		SwitchCooldown current = session.actions.switchCooldown(character);
+		if (current != null && !current.equals(accepted)) {
+			session.revision++;
+			session.confirming = characterId;
+			session.notice = accepted == null ? null : "Your cooldown has changed. Check it before switching.";
+			render(session);
 			return;
 		}
 		end(session);
