@@ -109,7 +109,7 @@ public final class CharacterSelectView {
 		}
 
 		/** "7-day", before the word cooldown. */
-		String span() {
+		String hyphenated() {
 			return days + "-day";
 		}
 	}
@@ -308,7 +308,7 @@ public final class CharacterSelectView {
 			else {
 				SwitchCooldown cooldown = session.actions.switchCooldown(null);
 				if (cooldown != null) body.add(text(Component.text("Playing your new character starts your "
-						+ cooldown.span() + " character switch cooldown.", WARN)));
+						+ cooldown.hyphenated() + " character switch cooldown.", WARN)));
 			}
 		} else {
 			reason = session.actions.blockReason(selected);
@@ -324,7 +324,7 @@ public final class CharacterSelectView {
 					: Component.text("▶ Play", DIM);
 			String action = reason == null ? "Play as " + name(selected) : reason;
 			SwitchCooldown cooldown = reason == null ? session.actions.switchCooldown(selected) : null;
-			if (cooldown != null) action += "\nStarts your " + cooldown.span() + " switch cooldown";
+			if (cooldown != null) action += "\nStarts your " + cooldown.hyphenated() + " character switch cooldown";
 			buttons.add(button(label, action + "\n" + details(player.getUniqueId(), selected), 110, session,
 					s -> play(s, id, false)));
 		}
@@ -422,12 +422,12 @@ public final class CharacterSelectView {
 		}
 		String id = character.getId();
 		String name = name(character);
-		String others = cooldown.leaving() == null ? "any other character"
-				: "any other character, " + cooldown.leaving() + " included,";
+		String others = cooldown.leaving() == null ? "another character"
+				: "another character (" + cooldown.leaving() + " included)";
 		List<DialogBody> body = new ArrayList<>();
-		body.add(text(Component.text("⚠ Switching starts your " + cooldown.span() + " character switch cooldown.",
+		body.add(text(Component.text("⚠ Switching starts your " + cooldown.hyphenated() + " character switch cooldown.",
 				WARN, TextDecoration.BOLD)));
-		body.add(text(Component.text("Once you play " + name + ", you can't switch to " + others + " for "
+		body.add(text(Component.text("Once you play " + name + ", you can't switch to " + others + " or create a new one for "
 				+ cooldown.length() + ".", MUTED)));
 		List<ActionButton> buttons = List.of(
 				button(Component.text("Switch", WARN, TextDecoration.BOLD), "Play as " + name + " and start the cooldown",

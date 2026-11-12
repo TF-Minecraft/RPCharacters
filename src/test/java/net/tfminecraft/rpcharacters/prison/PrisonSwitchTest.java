@@ -58,12 +58,24 @@ class PrisonSwitchTest {
         account.setLastFreeCharacterId("a"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", a));
         assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", c)); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", null));
         account.setLastFreeCharacterId("b"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", c));
-        for (String last : List.of("a", "b", "gone")) for (RPCharacter target : List.of(a, b, c)) {
-            PlayerData copy = new PlayerData(UUID.randomUUID()); copy.addCharacter(a); copy.addCharacter(b); copy.addCharacter(c);
-            boolean warns = PrisonSwitch.cooldownStartsFrom(copy, last, target) != null;
-            PrisonSwitch.entered(copy, last, target);
-            assertEquals(warns, copy.getLastCharacterSwitchAtMs() != null, last + " -> " + target.getId());
+    }
+
+    @Test void theWarningRuleAndEnteredAgreeForEveryStartingState() {
+        List<String> ids = Arrays.asList(null, "a", "b", "gone");
+        int cases = 0, warned = 0;
+        for (boolean prisonB : List.of(false, true)) for (Status statusA : List.of(Status.ALIVE, Status.DEAD)) {
+            b.setPrisonSwitch(prisonB); when(a.getStatus()).thenReturn(statusA);
+            for (String lastFree : ids) for (String last : ids) for (RPCharacter target : List.of(a, b, c)) {
+                PlayerData copy = new PlayerData(UUID.randomUUID()); copy.addCharacter(a); copy.addCharacter(b); copy.addCharacter(c);
+                copy.setLastFreeCharacterId(lastFree);
+                boolean warns = PrisonSwitch.cooldownStartsFrom(copy, last, target) != null;
+                PrisonSwitch.entered(copy, last, target);
+                assertEquals(warns, copy.getLastCharacterSwitchAtMs() != null,
+                        "prisonB=" + prisonB + " a=" + statusA + " lastFree=" + lastFree + " last=" + last + " -> " + target.getId());
+                cases++; if (warns) warned++;
+            }
         }
+        assertEquals(192, cases); assertTrue(warned > 0 && warned < cases);
     }
 
     @Test void idsMatchWhateverCaseTheyWereStoredIn() {

@@ -706,14 +706,14 @@ class CharacterSelectViewTest {
 		RPCharacter thalrix = character("thalrix", "Thalrix", Status.ALIVE);
 		when(actions.switchCooldown(thalrix)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
 		CharacterSelectView.open(player, data, actions);
-		assertEquals("Play as Thalrix\nStarts your 7-day switch cooldown",
+		assertEquals("Play as Thalrix\nStarts your 7-day character switch cooldown",
 				String.join("\n", text(button("▶ Play").tooltip()).lines().limit(2).toList()));
 
 		click("▶ Play");
 		verify(actions, never()).play(any());
 		assertEquals("Switch to Thalrix?", text(ui.last().base().title()));
 		assertEquals("⚠ Switching starts your 7-day character switch cooldown.\n"
-				+ "Once you play Thalrix, you can't switch to any other character, Miras included, for 7 days.",
+				+ "Once you play Thalrix, you can't switch to another character (Miras included) or create a new one for 7 days.",
 				ui.last().bodyText());
 		assertEquals(List.of("Switch", "Back"), labels());
 		assertEquals(2, columns());
@@ -746,7 +746,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.open(player, data, actions);
 		click("▶ Play");
 		assertEquals("⚠ Switching starts your 1-day character switch cooldown.\n"
-				+ "Once you play Wren, you can't switch to any other character for 1 day.", ui.last().bodyText());
+				+ "Once you play Wren, you can't switch to another character or create a new one for 1 day.", ui.last().bodyText());
 	}
 
 	@Test
@@ -768,6 +768,32 @@ class CharacterSelectViewTest {
 		CharacterSelectView.refreshAll();
 		assertEquals("Choose your character", text(ui.last().base().title()));
 		verify(actions, never()).play(any());
+	}
+
+	@Test
+	void aRefreshKeepsTheWarningUsableAndADeathBeforeConfirmIsReported() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(3, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		ActionButton beforeRefresh = button("Switch");
+		CharacterSelectView.refreshAll();
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		ui.click(beforeRefresh, player);
+		verify(actions, never()).play(any());
+
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		click("Switch");
+		verify(actions, never()).play(any());
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("That character can no longer be played.\n"));
+
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		CharacterSelectView.refreshAll();
+		click("Switch");
+		verify(actions).play(wren);
 	}
 
 	@Test
