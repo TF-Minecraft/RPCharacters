@@ -406,6 +406,9 @@ public final class CharacterBodies {
                 return viewer == player && data == account && isReadyToChoose(player);
             }
             public String blockReason(RPCharacter character) { return CharacterBodies.this.blockReason(account, character); }
+            public CharacterSelectView.SwitchCooldown switchCooldown(RPCharacter character) {
+                return CharacterBodies.this.switchCooldown(account, character);
+            }
             public void play(RPCharacter character) { select(account, character); }
             public void create() {
                 CreationManager.initiateCreation(player);
@@ -487,6 +490,27 @@ public final class CharacterBodies {
             return "You can switch in " + (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m. You can resume your current character.";
         }
         return null;
+    }
+
+    /**
+     * The cooldown entering {@code character} (null: a character not created yet) would start, by the
+     * same rule {@link PrisonSwitch#entered} applies; null when it starts none or the player has none.
+     */
+    CharacterSelectView.SwitchCooldown switchCooldown(PlayerData account, RPCharacter character) {
+        Player player = account.getPlayer();
+        if (player == null || player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)) return null;
+        int days = PermissionGroupService.getCharacterSwitchCooldownDays(player);
+        if (days <= 0) return null;
+        BodyTag currentTag;
+        try { currentTag = BodyTag.read(player); }
+        catch (IOException error) { return null; }
+        if (!(currentTag instanceof BodyTag.Room tag) || tag.lastCharacterId() == null) return null;
+        String from = PrisonSwitch.cooldownStartsFrom(account, tag.lastCharacterId().toString(), character);
+        if (from == null) return null;
+        RPCharacter leaving = account.getCharacterById(from);
+        boolean named = leaving != null && leaving.getStatus() == Status.ALIVE
+                && leaving.getName() != null && !leaving.getName().isBlank();
+        return new CharacterSelectView.SwitchCooldown(days, named ? leaving.getName() : null);
     }
 
     public void select(PlayerData account, RPCharacter character) {

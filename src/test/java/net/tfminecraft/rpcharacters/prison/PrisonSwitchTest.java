@@ -46,6 +46,26 @@ class PrisonSwitchTest {
         PrisonSwitch.entered(account, "a", b); assertNotNull(account.getLastCharacterSwitchAtMs()); assertEquals("b", account.getLastFreeCharacterId());
     }
 
+    @Test void cooldownStartsFromNamesTheCharacterLeftExactlyWhenEnteringRecordsASwitch() {
+        assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", b)); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", null));
+        assertNull(PrisonSwitch.cooldownStartsFrom(account, "a", a)); assertNull(PrisonSwitch.cooldownStartsFrom(account, null, b));
+        assertNull(PrisonSwitch.cooldownStartsFrom(account, null, null));
+        // A dead or missing previous character still starts it, as entered() records it.
+        when(a.getStatus()).thenReturn(Status.DEAD); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", b));
+        assertEquals("gone", PrisonSwitch.cooldownStartsFrom(account, "gone", b));
+        b.setPrisonSwitch(true); assertNull(PrisonSwitch.cooldownStartsFrom(account, "a", b));
+        // From prison the anchor is the character entered before it, and going back there is free.
+        account.setLastFreeCharacterId("a"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", a));
+        assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", c)); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", null));
+        account.setLastFreeCharacterId("b"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", c));
+        for (String last : List.of("a", "b", "gone")) for (RPCharacter target : List.of(a, b, c)) {
+            PlayerData copy = new PlayerData(UUID.randomUUID()); copy.addCharacter(a); copy.addCharacter(b); copy.addCharacter(c);
+            boolean warns = PrisonSwitch.cooldownStartsFrom(copy, last, target) != null;
+            PrisonSwitch.entered(copy, last, target);
+            assertEquals(warns, copy.getLastCharacterSwitchAtMs() != null, last + " -> " + target.getId());
+        }
+    }
+
     @Test void idsMatchWhateverCaseTheyWereStoredIn() {
         RPCharacter upper = character("D1", "Dara"); account.addCharacter(upper);
         assertFalse(PrisonSwitch.cooldownApplies(account, "d1", upper)); assertFalse(PrisonSwitch.cooldownApplies(account, "a", a));

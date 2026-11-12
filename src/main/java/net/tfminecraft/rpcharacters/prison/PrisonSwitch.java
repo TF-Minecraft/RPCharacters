@@ -57,16 +57,31 @@ public final class PrisonSwitch {
 		return from != null && from.getStatus() == Status.ALIVE;
 	}
 
+	/**
+	 * Id of the character a move into {@code target} would start the switch cooldown from, or null when
+	 * entering it starts none. A null {@code target} stands for a character that does not exist yet.
+	 * {@link #entered} starts the cooldown exactly when this is not null.
+	 */
+	public static String cooldownStartsFrom(PlayerData account, String lastId, RPCharacter target) {
+		if (lastId == null) {
+			return null;
+		}
+		if (target != null && (target.isPrisonSwitch() || target.getId().equalsIgnoreCase(lastId))) {
+			return null;
+		}
+		String anchor = cooldownAnchor(account, lastId);
+		return anchor == null || (target != null && anchor.equalsIgnoreCase(target.getId())) ? null : anchor;
+	}
+
 	/** Records an entered character: only a move between unmarked characters starts the cooldown. */
 	public static void entered(PlayerData account, String lastId, RPCharacter target) {
-		String anchor = cooldownAnchor(account, lastId);
 		if (target.isPrisonSwitch() || target.getId().equalsIgnoreCase(lastId)) {
 			if (account.getLastFreeCharacterId() == null) {
-				account.setLastFreeCharacterId(anchor);
+				account.setLastFreeCharacterId(cooldownAnchor(account, lastId));
 			}
 			return;
 		}
-		if (lastId != null && anchor != null && !anchor.equalsIgnoreCase(target.getId())) {
+		if (cooldownStartsFrom(account, lastId, target) != null) {
 			account.recordCharacterSwitch();
 		}
 		account.setLastFreeCharacterId(target.getId());
