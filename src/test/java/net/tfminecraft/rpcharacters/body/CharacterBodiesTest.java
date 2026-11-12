@@ -595,6 +595,14 @@ class CharacterBodiesTest {
         tag=new BodyTag.Live(first,1);assertNull(actions.switchCooldown(b));
         tags.when(()->BodyTag.read(player)).thenThrow(new IOException("unreadable"));assertNull(actions.switchCooldown(b));
     }
+    @Test void leavingAPrisonCharacterWarnsFromTheCharacterPlayedBeforePrison() throws Exception {
+        ready();UUID third=UUID.randomUUID();RPCharacter c=character(third);account.addCharacter(c);
+        when(b.getName()).thenReturn("Bram");when(a.isPrisonSwitch()).thenReturn(true);account.setLastFreeCharacterId(second.toString());
+        groups.when(()->PermissionGroupService.getCharacterSwitchCooldownDays(player)).thenReturn(7);
+        assertEquals(new BodyTag.Room(first),tag);
+        assertEquals(new CharacterSelectView.SwitchCooldown(7,"Bram"),actions.switchCooldown(c));
+        assertNull(actions.switchCooldown(b));assertNull(actions.switchCooldown(a));
+    }
     void backToRoom() {bodies.requestSelection(player);countdown(5);drain();}
     @Test void prisonCharacterSwitchesInAndOutFreelyButCannotCarryTheCooldownToAnotherCharacter() throws Exception {
         UUID third=UUID.randomUUID();RPCharacter c=character(third);account.addCharacter(c);when(store.read(owner,third)).thenReturn(Optional.of(record(third,1)));

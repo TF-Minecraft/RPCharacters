@@ -484,7 +484,7 @@ public final class CharacterBodies {
         // Prison-marked characters switch freely; the cooldown counts from the last unmarked character.
         if (currentTag instanceof BodyTag.Room tag && tag.lastCharacterId() != null
                 && PrisonSwitch.cooldownApplies(account, tag.lastCharacterId().toString(), character)
-                && !player.hasPermission("rpcharacters.no_cooldown")
+                && !player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)
                 && PermissionGroupService.hasCharacterSwitchCooldown(player, account)) {
             long minutes = PermissionGroupService.getRemainingCooldownMinutes(player, account);
             return "You can switch in " + (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m. You can resume your current character.";

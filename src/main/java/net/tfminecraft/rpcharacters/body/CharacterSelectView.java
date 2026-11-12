@@ -128,6 +128,8 @@ public final class CharacterSelectView {
 	static final int BUST_ROWS = 14;
 	static final int TAB_NAME = 11;
 	static final String NO_COOLDOWN_PERMISSION = "rpcharacters.no_cooldown";
+	/** Shown when Switch was clicked on a warning whose cooldown length has since changed. */
+	static final String TERMS_CHANGED = "Your cooldown has changed. Check it before switching.";
 	public static final String LOADING = "Loading portrait…";
 	public static final String NO_PORTRAIT = "No portrait";
 	public static final TextColor TEAL = TextColor.color(0x66F0E2);
@@ -413,17 +415,19 @@ public final class CharacterSelectView {
 	/** Warns before a switch that starts the cooldown; one confirmation, since it is no permanent loss. */
 	private static void renderSwitchWarning(Session session) {
 		RPCharacter character = session.data.getCharacterById(session.confirming);
-		SwitchCooldown cooldown = character == null || character.getStatus() != Status.ALIVE ? null
-				: session.actions.switchCooldown(character);
+		SwitchCooldown cooldown = character == null || character.getStatus() != Status.ALIVE
+				|| session.actions.blockReason(character) != null ? null : session.actions.switchCooldown(character);
 		if (cooldown == null) {
+			// Nothing left to confirm here; the roster shows why the character can't be played, if it can't.
 			session.confirming = null;
+			if (TERMS_CHANGED.equals(session.notice)) session.notice = null;
 			renderRoster(session);
 			return;
 		}
 		String id = character.getId();
 		String name = name(character);
 		String others = cooldown.leaving() == null ? "another character"
-				: "another character (" + cooldown.leaving() + " included)";
+				: "another character, including " + cooldown.leaving() + ",";
 		// Prison-marked characters never fall under the cooldown, so the warning must not promise otherwise.
 		List<String> jailed = alive(session.data).stream()
 				.filter(c -> c.isPrisonSwitch() && !c.getId().equalsIgnoreCase(id)).map(CharacterSelectView::name).toList();
@@ -431,10 +435,10 @@ public final class CharacterSelectView {
 		if (session.notice != null) body.add(text(Component.text(session.notice, WARN)));
 		body.add(text(Component.text("⚠ Switching starts your " + cooldown.hyphenated() + " character switch cooldown.",
 				WARN, TextDecoration.BOLD)));
-		body.add(text(Component.text("Once you play " + name + ", you can't switch to " + others + " or create a new one for "
-				+ cooldown.length() + ".", MUTED)));
-		if (!jailed.isEmpty()) body.add(text(Component.text(String.join(", ", jailed)
-				+ (jailed.size() == 1 ? " is" : " are") + " in prison, so you can still switch to them.", MUTED)));
+		body.add(text(Component.text("For " + cooldown.length() + " after you play " + name + ", you can't switch to "
+				+ others + " or create a new one.", MUTED)));
+		if (!jailed.isEmpty()) body.add(text(Component.text(listed(jailed) + (jailed.size() == 1 ? " is" : " are")
+				+ " in prison, so you can still switch to them during the cooldown.", MUTED)));
 		List<ActionButton> buttons = List.of(
 				button(Component.text("Switch", WARN, TextDecoration.BOLD), "Play as " + name + " and start the cooldown",
 						100, session, s -> play(s, id, cooldown)),
@@ -442,6 +446,12 @@ public final class CharacterSelectView {
 						s -> navigate(s, v -> v.confirming = null)));
 		show(session, Component.text("Switch to " + name + "?", PALE, TextDecoration.BOLD), body, buttons, null,
 				buttons.size());
+	}
+
+	/** "Aria", "Aria and Bram", "Aria, Bram and Cole". */
+	static String listed(List<String> names) {
+		if (names.size() < 2) return String.join("", names);
+		return String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
 	}
 
 	private static ActionButton leave(Session session) {
@@ -796,10 +806,11 @@ public final class CharacterSelectView {
 			return;
 		}
 		SwitchCooldown current = session.actions.switchCooldown(character);
-		if (current != null && !current.equals(accepted)) {
+		// Only the length is agreed to; a renamed or fallen character left behind is no reason to ask again.
+		if (current != null && (accepted == null || current.days() != accepted.days())) {
 			session.revision++;
 			session.confirming = characterId;
-			session.notice = accepted == null ? null : "Your cooldown has changed. Check it before switching.";
+			session.notice = accepted == null ? null : TERMS_CHANGED;
 			render(session);
 			return;
 		}
