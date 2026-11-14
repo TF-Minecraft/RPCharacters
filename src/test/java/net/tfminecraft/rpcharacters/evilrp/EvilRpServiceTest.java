@@ -54,6 +54,22 @@ class EvilRpServiceTest extends EvilRpFixture {
         assertTrue(message(player).contains("2/3 strikes")); assertTrue(EvilRpService.isInSession(player));
     }
 
+    @Test void everyRecordedPlayFiresAnEventThatSaysWhetherItStartedTheSession() {
+        List<EvilRpPlayEvent> fired = new ArrayList<>();
+        server.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler public void on(EvilRpPlayEvent event) { fired.add(event); }
+        }, MockBukkit.createMockPlugin());
+        assertTrue(EvilRpService.recordPlay(player));
+        assertTrue(EvilRpService.recordPlay(player));
+        assertEquals(2, fired.size());
+        assertSame(player, fired.get(0).getPlayer()); assertSame(character, fired.get(0).getCharacter());
+        assertTrue(fired.get(0).isSessionStarted(), "The first play starts the session");
+        assertFalse(fired.get(1).isSessionStarted(), "A play during the session only resets it");
+        assertSame(EvilRpPlayEvent.getHandlerList(), fired.get(1).getHandlers());
+        players.when(() -> PlayerManager.get(player)).thenReturn(null);
+        assertFalse(EvilRpService.recordPlay(player)); assertEquals(2, fired.size(), "No character, no event");
+    }
+
     @Test void shownTutorialAvoidsDuplicateChatAndFurtherPlayResetsSession() {
         tutorial.when(() -> TutorialService.show(eq(player), eq(TutorialService.EVIL_RP), anyMap())).thenReturn(true);
         assertTrue(EvilRpService.recordPlay(player)); assertNull(player.nextMessage());
