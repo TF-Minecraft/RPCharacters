@@ -81,3 +81,24 @@ mercenary:
         - "§7This character is a mercenary, willing to wage war for coin."
         - " "
         - "#d6cf69Unlocks: #d6cf69Mercenary §7type Evil RP"
+occultist:
+    name: "#9b5cd6Occultist"
+    key: evil
+    required-account-playtime: 24
+    dependency:
+        type: trait
+        mode: one-or-more
+        depends-on:
+            - ambitious
+            - deceitful
+            - callous
+    mutually-exclusive:
+        - content
+        - honest
+        - just
+        - compassionate
+    description:
+        - "#d6cf69[#d65c5cEvil#d6cf69]"
+        - "§7This character is an occultist, drawn to rites best left forgotten."
+        - " "
+        - "#d6cf69Unlocks: #9b5cd6Occultist §7type Evil RP"
