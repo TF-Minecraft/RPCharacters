@@ -61,6 +61,7 @@ public final class EvilRpService {
 		boolean continuing = isInSession(character.getEvilRpSessionEndsAtMs(), now);
 		character.setEvilRpSessionEndsAtMs(now + EvilRpLoader.getSessionMs());
 		RPCharacters.getPlayerManager().savePlayer(player);
+		Bukkit.getPluginManager().callEvent(new EvilRpPlayEvent(player, character, !continuing));
 
 		// Chat rather than the action bar, which the MMOCore HUD redraws every tick.
 		int minutes = EvilRpLoader.getSessionMinutes();
