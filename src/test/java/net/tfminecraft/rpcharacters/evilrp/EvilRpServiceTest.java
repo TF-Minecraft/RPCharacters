@@ -66,6 +66,7 @@ class EvilRpServiceTest extends EvilRpFixture {
         assertTrue(fired.get(0).isSessionStarted(), "The first play starts the session");
         assertFalse(fired.get(1).isSessionStarted(), "A play during the session only resets it");
         assertSame(EvilRpPlayEvent.getHandlerList(), fired.get(1).getHandlers());
+        assertTrue(EvilRpService.recordPlay(player, false)); assertEquals(2, fired.size(), "A staff-started session is not announced");
         players.when(() -> PlayerManager.get(player)).thenReturn(null);
         assertFalse(EvilRpService.recordPlay(player)); assertEquals(2, fired.size(), "No character, no event");
     }

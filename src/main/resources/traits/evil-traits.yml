@@ -89,9 +89,9 @@ occultist:
         type: trait
         mode: one-or-more
         depends-on:
-            - ambitious
             - deceitful
             - callous
+            - cynical
     mutually-exclusive:
         - content
         - honest
