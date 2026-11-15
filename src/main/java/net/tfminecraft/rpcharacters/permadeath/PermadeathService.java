@@ -14,6 +14,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
+import net.tfminecraft.rpcharacters.injuries.InjuryLimits;
 import net.tfminecraft.rpcharacters.loaders.InjuryPoolLoader;
 import net.tfminecraft.rpcharacters.loaders.InjuryProgressionLoader;
 import net.tfminecraft.rpcharacters.loaders.PermadeathZoneLoader;
@@ -77,7 +78,7 @@ public final class PermadeathService {
 			return;
 		}
 
-		Trait picked = InjuryPoolLoader.pickRandom(collectOwnedTraitIds(character));
+		Trait picked = pickHealingInjury(character);
 		if (picked == null) {
 			RPCharacters.plugin.getLogger().warning(
 					"Injury pool empty or misconfigured for " + player.getName()
@@ -85,7 +86,7 @@ public final class PermadeathService {
 			return;
 		}
 
-		TraitChangeService.addTrait(player, character, picked);
+		InjuryLimits.give(player, character, picked);
 		TraitChangeService.sendGainedMessage(player, picked);
 		PermadeathTitles.showInjury(player, picked);
 	}
@@ -128,13 +129,19 @@ public final class PermadeathService {
 
 	/** Adds a random healing injury from the pool. Returns it, or null when none are left. */
 	public static Trait giveRandomInjury(Player player, RPCharacter character) {
-		Trait picked = InjuryPoolLoader.pickRandom(collectOwnedTraitIds(character));
+		Trait picked = pickHealingInjury(character);
 		if (picked == null) {
 			return null;
 		}
-		TraitChangeService.addTrait(player, character, picked);
+		InjuryLimits.give(player, character, picked);
 		TraitChangeService.sendGainedMessage(player, picked);
 		return picked;
+	}
+
+	/** A random pool injury whose body part still has room, so no body part goes past its limit. */
+	private static Trait pickHealingInjury(RPCharacter character) {
+		List<String> owned = InjuryLimits.ownedIds(character);
+		return InjuryPoolLoader.pickRandom(traitId -> InjuryLimits.canAdd(owned, traitId));
 	}
 
 	/**
@@ -152,8 +159,7 @@ public final class PermadeathService {
 			if (permanent == null) {
 				continue;
 			}
-			TraitChangeService.removeTrait(player, character, healing);
-			TraitChangeService.addTrait(player, character, permanent);
+			InjuryLimits.upgrade(player, character, healing, permanent);
 			TraitChangeService.sendGainedMessage(player, permanent);
 			return permanent;
 		}
@@ -165,11 +171,11 @@ public final class PermadeathService {
 	}
 
 	private static Trait giveRandomPermanentInjury(Player player, RPCharacter character) {
-		Set<String> owned = collectOwnedTraitIds(character);
+		List<String> owned = InjuryLimits.ownedIds(character);
 		Set<String> targets = new LinkedHashSet<>(InjuryProgressionLoader.getProgressionMap().values());
 		List<Trait> eligible = new ArrayList<>();
 		for (String traitId : targets) {
-			if (ownsTraitId(owned, traitId)) {
+			if (!InjuryLimits.canReceive(owned, traitId)) {
 				continue;
 			}
 			Trait trait = TraitLoader.getByString(traitId);
@@ -181,7 +187,7 @@ public final class PermadeathService {
 			return null;
 		}
 		Trait picked = eligible.get(ThreadLocalRandom.current().nextInt(eligible.size()));
-		TraitChangeService.addTrait(player, character, picked);
+		InjuryLimits.give(player, character, picked);
 		TraitChangeService.sendGainedMessage(player, picked);
 		return picked;
 	}
@@ -339,12 +345,12 @@ public final class PermadeathService {
 			return;
 		}
 
-		TraitChangeService.removeTrait(player, character, healing);
 		if (ownsTraitId(character, permanentId)) {
+			TraitChangeService.removeTrait(player, character, healing);
 			return;
 		}
 
-		TraitChangeService.addTrait(player, character, permanent);
+		InjuryLimits.upgrade(player, character, healing, permanent);
 		TraitChangeService.sendGainedMessage(player, permanent);
 	}
 

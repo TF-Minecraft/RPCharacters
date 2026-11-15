@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -70,6 +71,10 @@ final class EstateBook {
 
     boolean unreadable(UUID deathId) {
         return unreadable.contains(deathId);
+    }
+
+    Instant now() {
+        return clock.instant();
     }
 
     Optional<EstateRecord> get(UUID deathId) {

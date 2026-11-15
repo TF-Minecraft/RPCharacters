@@ -2,7 +2,6 @@ package net.tfminecraft.rpcharacters.wardrobe;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -207,7 +206,8 @@ public final class WardrobeService {
 		String active = snapshot.getActiveSlot();
 		if (active != null && !active.isBlank()) {
 			WardrobeSlotData slot = snapshot.getSlot(active);
-			if (slot != null && slot.canApply()) {
+			// A cache from before a rank drop may still name a slot that is now locked.
+			if (slot != null && slot.isUnlocked() && slot.canApply()) {
 				SkinApplyHelper.apply(
 					player,
 					slot.getTextureValue(),
@@ -245,7 +245,8 @@ public final class WardrobeService {
 		String slotKey = normalizeSwappable(slot);
 		if (slotKey == null) {
 			if (callback != null) {
-				callback.done("Unknown skin slot. Use base, extra_1, or extra_2.");
+				callback.done("Unknown skin slot. Use base, extra_1 to extra_" + (WardrobeSlots.MAX_SWAPPABLE - 1)
+					+ ", or a skin number from 1 to " + WardrobeSlots.MAX_SWAPPABLE + ".");
 			}
 			return;
 		}
@@ -338,49 +339,11 @@ public final class WardrobeService {
 	}
 
 	public static String labelForSlot(String slot) {
-		if (slot == null) {
-			return "Skin";
-		}
-		switch (slot.trim().toLowerCase(Locale.ROOT)) {
-			case WardrobeSnapshot.SLOT_BASE:
-				return "Base";
-			case WardrobeSnapshot.SLOT_EXTRA_1:
-				return "Skin 2";
-			case WardrobeSnapshot.SLOT_EXTRA_2:
-				return "Skin 3";
-			case WardrobeSnapshot.SLOT_MASKED:
-				return "Masked";
-			default:
-				return slot;
-		}
+		return WardrobeSlots.label(slot);
 	}
 
 	public static String normalizeSwappable(String raw) {
-		if (raw == null) {
-			return null;
-		}
-		String s = raw.trim().toLowerCase(Locale.ROOT);
-		switch (s) {
-			case "base":
-			case "1":
-			case "skin1":
-			case "skin_1":
-				return WardrobeSnapshot.SLOT_BASE;
-			case "extra_1":
-			case "extra1":
-			case "2":
-			case "skin2":
-			case "skin_2":
-				return WardrobeSnapshot.SLOT_EXTRA_1;
-			case "extra_2":
-			case "extra2":
-			case "3":
-			case "skin3":
-			case "skin_3":
-				return WardrobeSnapshot.SLOT_EXTRA_2;
-			default:
-				return null;
-		}
+		return WardrobeSlots.normalize(raw);
 	}
 
 	@FunctionalInterface

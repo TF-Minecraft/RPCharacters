@@ -199,6 +199,7 @@ class CharacterSelectViewTest {
 		};
 		assertFalse(owner.needsDiscordLink());
 		owner.linkDiscord();
+		assertNull(owner.switchCooldown(null), "selector owners without a cooldown never warn");
 	}
 	private static java.util.stream.Stream<Component> components(Component c) {
 		return java.util.stream.Stream.concat(java.util.stream.Stream.of(c), c.children().stream().flatMap(CharacterSelectViewTest::components));
@@ -699,6 +700,248 @@ class CharacterSelectViewTest {
 		verify(actions, never()).create();
 		assertNotNull(CharacterSelectView.session(OWNER));
 		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void aSwitchThatStartsTheCooldownWarnsOnceAndOnlyConfirmPlays() {
+		RPCharacter thalrix = character("thalrix", "Thalrix", Status.ALIVE);
+		when(actions.switchCooldown(thalrix)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		assertEquals("Play as Thalrix\nStarts your 7-day character switch cooldown",
+				String.join("\n", text(button("▶ Play").tooltip()).lines().limit(2).toList()));
+
+		click("▶ Play");
+		verify(actions, never()).play(any());
+		assertEquals("Switch to Thalrix?", text(ui.last().base().title()));
+		assertEquals("⚠ Switching starts your 7-day character switch cooldown.\n"
+				+ "For 7 days after you switch to Thalrix, you can't switch to another character, including Miras, or create a new one.",
+				ui.last().bodyText());
+		assertEquals(List.of("Switch", "Back"), labels());
+		assertEquals(2, columns());
+		assertEquals("Play as Thalrix and start the cooldown", text(button("Switch").tooltip()));
+		ActionButton staleSwitch = button("Switch");
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		ui.click(staleSwitch, player);
+		verify(actions, never()).play(any());
+
+		click("▶ Play");
+		when(actions.blockReason(thalrix)).thenReturn("Your current roleplay situation must finish first.");
+		click("Switch");
+		verify(actions, never()).play(any());
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Your current roleplay situation must finish first.\n"));
+
+		when(actions.blockReason(thalrix)).thenReturn(null);
+		click("▶ Play");
+		click("Switch");
+		verify(actions).play(thalrix);
+		verify(player).closeDialog();
+		assertNull(CharacterSelectView.session(OWNER));
+	}
+
+	@Test
+	void theWarningNamesNobodyForADeadCharacterAndUsesOneDay() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(1, null));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertEquals("⚠ Switching starts your 1-day character switch cooldown.\n"
+				+ "For 1 day after you switch to Wren, you can't switch to another character or create a new one.", ui.last().bodyText());
+	}
+
+	@Test
+	void theWarningPageStepsBackWhenItNoLongerApplies() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		var cooldown = new java.util.concurrent.atomic.AtomicReference<>(new CharacterSelectView.SwitchCooldown(3, "Miras"));
+		when(actions.switchCooldown(wren)).thenAnswer(call -> cooldown.get());
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		cooldown.set(null);
+		CharacterSelectView.refreshAll();
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertEquals("Play as Wren", text(button("▶ Play").tooltip()).lines().findFirst().orElseThrow());
+
+		cooldown.set(new CharacterSelectView.SwitchCooldown(3, "Miras"));
+		click("▶ Play");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		CharacterSelectView.refreshAll();
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		verify(actions, never()).play(any());
+	}
+
+	@Test
+	void changedTermsAreShownAgainBeforeSwitchingAndDroppedTermsSwitchAtOnce() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		var cooldown = new java.util.concurrent.atomic.AtomicReference<>(new CharacterSelectView.SwitchCooldown(1, "Miras"));
+		when(actions.switchCooldown(wren)).thenAnswer(call -> cooldown.get());
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().contains("For 1 day after"));
+		assertFalse(ui.last().bodyText().contains(CharacterSelectView.TERMS_CHANGED));
+		cooldown.set(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		click("Switch");
+		verify(actions, never()).play(any());
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Your cooldown has changed. Check it before switching.\n"
+				+ "⚠ Switching starts your 7-day character switch cooldown."), ui.last().bodyText());
+		// A refresh keeps the re-asked page and its notice, and its new Switch still works.
+		CharacterSelectView.refreshAll();
+		assertTrue(ui.last().bodyText().startsWith(CharacterSelectView.TERMS_CHANGED + "\n"), ui.last().bodyText());
+		click("Switch");
+		verify(actions).play(wren);
+
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		cooldown.set(null);
+		click("Switch");
+		verify(actions, times(2)).play(wren);
+	}
+
+	@Test
+	void onlyALengthChangeAsksAgainAndBackFromTheReaskedPageClearsItsNotice() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		var cooldown = new java.util.concurrent.atomic.AtomicReference<>(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		when(actions.switchCooldown(wren)).thenAnswer(call -> cooldown.get());
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		cooldown.set(new CharacterSelectView.SwitchCooldown(7, null));
+		click("Switch");
+		verify(actions).play(wren);
+
+		cooldown.set(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		cooldown.set(new CharacterSelectView.SwitchCooldown(3, "Miras"));
+		click("Switch");
+		assertTrue(ui.last().bodyText().startsWith(CharacterSelectView.TERMS_CHANGED + "\n"), ui.last().bodyText());
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertFalse(ui.last().bodyText().contains(CharacterSelectView.TERMS_CHANGED), ui.last().bodyText());
+		verify(actions, times(1)).play(wren);
+	}
+
+	@Test
+	void aWarningThatStopsApplyingDropsItsChangedNoticeButKeepsOtherNotices() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		var cooldown = new java.util.concurrent.atomic.AtomicReference<>(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		when(actions.switchCooldown(wren)).thenAnswer(call -> cooldown.get());
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		cooldown.set(new CharacterSelectView.SwitchCooldown(2, "Miras"));
+		click("Switch");
+		cooldown.set(null);
+		CharacterSelectView.refreshAll();
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertFalse(ui.last().bodyText().contains(CharacterSelectView.TERMS_CHANGED), ui.last().bodyText());
+
+		cooldown.set(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		click("▶ Play");
+		CharacterSelectView.notice(player, "Staff marked Aria for prison.");
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Staff marked Aria for prison.\n"), ui.last().bodyText());
+		cooldown.set(null);
+		CharacterSelectView.refreshAll();
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("Staff marked Aria for prison.\n"), ui.last().bodyText());
+	}
+
+	@Test
+	void aBlockThatAppearsWhileTheWarningIsOpenReturnsToTheRoster() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		when(actions.blockReason(wren)).thenReturn("Your current roleplay situation must finish first.");
+		CharacterSelectView.refreshAll();
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().contains("Your current roleplay situation must finish first."), ui.last().bodyText());
+		assertEquals(CharacterSelectView.DIM, button("▶ Play").label().color());
+		verify(actions, never()).play(any());
+	}
+
+	@Test
+	void theWarningSaysPrisonMarkedCharactersStayOpen() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		RPCharacter aria = character("aria", "Aria", Status.ALIVE);
+		when(aria.isPrisonSwitch()).thenReturn(true);
+		when(wren.getLastPlayedAt()).thenReturn(Instant.now());
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().endsWith("or create a new one.\nAria is in prison, so you can still switch to them during the cooldown."), ui.last().bodyText());
+
+		RPCharacter bram = character("bram", "Bram", Status.ALIVE);
+		when(bram.isPrisonSwitch()).thenReturn(true);
+		RPCharacter gone = character("gone", "Gone", Status.DEAD);
+		when(gone.isPrisonSwitch()).thenReturn(true);
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		assertTrue(ui.last().bodyText().endsWith("or create a new one.\nAria and Bram are in prison, so you can still switch to them during the cooldown."), ui.last().bodyText());
+	}
+
+	@Test
+	void listedJoinsNamesWithCommasAndAFinalAnd() {
+		assertEquals("", CharacterSelectView.listed(List.of()));
+		assertEquals("Aria", CharacterSelectView.listed(List.of("Aria")));
+		assertEquals("Aria and Bram", CharacterSelectView.listed(List.of("Aria", "Bram")));
+		assertEquals("Aria, Bram and Cole", CharacterSelectView.listed(List.of("Aria", "Bram", "Cole")));
+	}
+
+	@Test
+	void aRefreshKeepsTheWarningUsableAndADeathBeforeConfirmIsReported() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(3, "Miras"));
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		ActionButton beforeRefresh = button("Switch");
+		CharacterSelectView.refreshAll();
+		assertEquals("Switch to Wren?", text(ui.last().base().title()));
+		ui.click(beforeRefresh, player);
+		verify(actions, never()).play(any());
+
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		click("Switch");
+		verify(actions, never()).play(any());
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertTrue(ui.last().bodyText().startsWith("That character can no longer be played.\n"));
+
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		CharacterSelectView.refreshAll();
+		click("Switch");
+		verify(actions).play(wren);
+	}
+
+	@Test
+	void resumingOrAWarningFreeSwitchPlaysAtOnceAndBlockedPlayShowsNoCooldownLine() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		CharacterSelectView.open(player, data, actions);
+		click("▶ Play");
+		verify(actions).play(wren);
+
+		when(actions.switchCooldown(wren)).thenReturn(new CharacterSelectView.SwitchCooldown(7, "Miras"));
+		when(actions.blockReason(wren)).thenReturn("You can switch in 1d 0h 0m. You can resume your current character.");
+		CharacterSelectView.open(player, data, actions);
+		assertFalse(text(button("▶ Play").tooltip()).contains("switch cooldown"));
+	}
+
+	@Test
+	void newCharacterPageSaysPlayingItStartsTheCooldownUnlessCreationIsBlocked() {
+		character("wren", "Wren", Status.ALIVE);
+		when(actions.switchCooldown(null)).thenReturn(new CharacterSelectView.SwitchCooldown(5, "Wren"));
+		CharacterSelectView.open(player, data, actions);
+		link("New character");
+		assertTrue(ui.last().bodyText().endsWith("Review your choices before you begin.\n"
+				+ "Playing your new character starts your 5-day character switch cooldown."), ui.last().bodyText());
+
+		groups.when(() -> PermissionGroupService.hasCharacterSwitchCooldown(player, data)).thenReturn(true);
+		groups.when(() -> PermissionGroupService.getRemainingCooldownMinutes(player, data)).thenReturn(60);
+		CharacterSelectView.open(player, data, actions);
+		link("New character");
+		assertFalse(ui.last().bodyText().contains("Playing your new character"), ui.last().bodyText());
 	}
 
 	@Test

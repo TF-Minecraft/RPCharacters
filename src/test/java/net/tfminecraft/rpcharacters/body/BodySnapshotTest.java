@@ -335,6 +335,21 @@ class BodySnapshotTest {
     }
 
     @Test
+    void bodyInAMissingWorldMovesToTheSpawnEvenWithABed() throws Exception {
+        Location spawn = new Location(world, 7, 80, 9);
+        JsonObject json = full();
+        json.getAsJsonObject("location").addProperty("world", "syrindell_1");
+        BodySnapshot stranded = BodySnapshot.deserialize(BodyJson.GSON.toJson(json));
+
+        BodySnapshot moved = stranded.inLoadedWorld(spawn);
+        assertEquals(spawn, moved.location());
+        assertEquals("syrindell_1", stranded.worldName());
+
+        BodySnapshot home = BodySnapshot.deserialize(BodyJson.GSON.toJson(full()));
+        assertSame(home, home.inLoadedWorld(spawn));
+    }
+
+    @Test
     void pointsInMissingWorldsFallBackLikeVanilla() throws Exception {
         JsonObject json = full();
         json.getAsJsonObject("respawn").addProperty("world", "gone");

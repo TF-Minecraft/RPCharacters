@@ -14,8 +14,6 @@ import org.json.simple.parser.JSONParser;
 public final class WardrobeSnapshot {
 
 	public static final String SLOT_BASE = "base";
-	public static final String SLOT_EXTRA_1 = "extra_1";
-	public static final String SLOT_EXTRA_2 = "extra_2";
 	public static final String SLOT_MASKED = "masked";
 
 	private final String characterId;

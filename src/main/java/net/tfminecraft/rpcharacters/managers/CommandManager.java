@@ -16,6 +16,7 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
+import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand;
 import net.tfminecraft.rpcharacters.loaders.ChatLoader;
@@ -39,6 +40,8 @@ import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.injuries.RpInjureService;
 import net.tfminecraft.rpcharacters.identity.TempAliasService;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterListing;
 import net.tfminecraft.rpcharacters.persona.CharacterSlotService;
 import net.tfminecraft.rpcharacters.evilrp.EvilRpCommands;
 import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
@@ -85,8 +88,16 @@ public class CommandManager implements Listener, CommandExecutor{
 			return ClassPickReset.handle(sender, args, 2);
 		}
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(ClassPickAdminCommand.SUBCOMMAND)) {
+			return ClassPickAdminCommand.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)) {
 			return PrisonSwitch.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(HiddenCharacterAdminCommand.SUBCOMMAND)) {
+			return HiddenCharacterAdminCommand.handle(sender, args, 2);
 		}
 		if (args.length >= 1 && args[0].equalsIgnoreCase("admin")) {
 			return handleAdmin(sender, args);
@@ -617,7 +628,7 @@ public class CommandManager implements Listener, CommandExecutor{
 				RPTexts.sendPrefixed(p, RPTexts.ERROR + "Error with command format");
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("placeclue")) {
-				if (!Permissions.isAdmin(sender)) {
+				if (!Permissions.canPlaceClues(sender)) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
 					return true;
 				}
@@ -630,7 +641,38 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Clue text cannot be empty.");
 					return true;
 				}
+				if (CreationManager.activeCreators.containsKey(p)) {
+					RPTexts.send(p, RPTexts.ERROR + "You are busy creating a character");
+					return true;
+				}
+				PlayerData placer = PlayerManager.get(p);
+				if (placer == null || !placer.hasActiveCharacter()) {
+					RPTexts.send(p, RPTexts.ERROR + "You have no active character");
+					return true;
+				}
 				RPCharacters.getPlaceClueManager().startAwaiting(p, text);
+				return true;
+			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("removeclue")) {
+				if (!Permissions.canPlaceClues(sender)) {
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have access to this command");
+					return true;
+				}
+				if (args.length != 1) {
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Usage: /rpcharacter removeclue");
+					return true;
+				}
+				int removed = SpawnedClueManager.get().clearPlacedByOwnerNear(p.getLocation(),
+						PlaceClueManager.REMOVE_RADIUS, p.getUniqueId());
+				if (removed == 0) {
+					RPTexts.sendPrefixed(p, RPTexts.MUTED + "You have no placed clues within "
+							+ (int) PlaceClueManager.REMOVE_RADIUS + " blocks.");
+					return true;
+				}
+				net.tfminecraft.rpcharacters.database.Database.log(p, "Removed " + removed + " placed clue(s) near "
+						+ p.getWorld().getName() + " " + p.getLocation().getBlockX() + ","
+						+ p.getLocation().getBlockY() + "," + p.getLocation().getBlockZ());
+				RPTexts.sendPrefixed(p, RPTexts.MUTED + "Removed " + RPTexts.WARN + removed
+						+ RPTexts.MUTED + " of your placed clue(s) nearby.");
 				return true;
 			} else if (cmd.getName().equalsIgnoreCase(cmd1) && args[0].equalsIgnoreCase("clearclues")) {
 				if (!Permissions.isAdmin(sender)) {
@@ -685,35 +727,27 @@ public class CommandManager implements Listener, CommandExecutor{
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "You do not have permission to use this command.");
 					return true;
 				}
-				if (args.length < 2) {
-					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Usage: /rpcharacter sethidden <slug> [clear]");
-					return true;
-				}
 				PlayerData pd = PlayerManager.get(p);
 				if (pd == null) {
 					RPTexts.sendPrefixed(p, RPTexts.ERROR + "Player data not loaded.");
 					return true;
 				}
-				String slug = args[1];
-				RPCharacter character = pd.getCharacterBySlug(slug);
+				// Without a slug, the character being played now.
+				RPCharacter character = args.length < 2 ? pd.getActiveCharacter() : pd.getCharacterBySlug(args[1]);
 				if (character == null) {
-					RPTexts.sendPrefixed(p, RPTexts.ERROR + "No character with id " + RPTexts.WARN + slug
-							+ RPTexts.ERROR + ".");
+					RPTexts.sendPrefixed(p, RPTexts.ERROR + (args.length < 2
+							? "Usage: /rpcharacter sethidden [slug] [clear]"
+							: "No character with id " + RPTexts.WARN + args[1] + RPTexts.ERROR + "."));
 					return true;
 				}
 				boolean forceClear = args.length >= 3 && args[2].equalsIgnoreCase("clear");
-				if (forceClear) {
-					character.setHidden(false);
-					RPCharacters.getPlayerManager().savePlayer(p);
-					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
-							+ RPTexts.MUTED + " is no longer hidden.");
-					return true;
-				}
-				character.setHidden(!character.isHidden());
+				character.setHidden(!forceClear && !character.isHidden());
 				RPCharacters.getPlayerManager().savePlayer(p);
+				HiddenCharacterListing.refresh(p);
 				if (character.isHidden()) {
 					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
-							+ RPTexts.MUTED + " is now hidden from TAB/list.");
+							+ RPTexts.MUTED + " is now hidden. While you play it, other players do not see you"
+							+ " in TAB or /players; you stay visible in the world.");
 				} else {
 					RPTexts.sendPrefixed(p, RPTexts.MUTED + "Character " + RPTexts.WARN + character.getSlug()
 							+ RPTexts.MUTED + " is no longer hidden.");
@@ -730,7 +764,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|assignclass|releaseclass> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide|assignclass|releaseclass> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -752,7 +786,7 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (ClassUnlockCommand.isSubcommand(args[1])) {
 			return ClassUnlockCommand.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|carryexp|prison|assignclass|releaseclass> ...");
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide|assignclass|releaseclass> ...");
 		return true;
 	}
 

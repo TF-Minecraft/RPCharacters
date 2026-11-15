@@ -334,6 +334,9 @@ public class RPCharacters extends JavaPlugin{
 		getCommand(GraveCommand.COMMAND).setExecutor(graveCommand);
 		getCommand(GraveCommand.COMMAND).setTabCompleter(graveCommand);
 		getCommand(PlayerListCommand.COMMAND).setExecutor(playerListCommand);
+		getServer().getPluginManager().registerEvents(
+				new net.tfminecraft.rpcharacters.playerlist.HiddenCharacterListing(), this);
+		net.tfminecraft.rpcharacters.playerlist.HiddenCharacterListing.hookPermissionChanges(this);
 		ChatRecipientResolverRegistry.register(
 				net.tfminecraft.rpcharacters.party.PartyManager.PARTY_RESOLVER_ID,
 				partyChatRecipientResolver);

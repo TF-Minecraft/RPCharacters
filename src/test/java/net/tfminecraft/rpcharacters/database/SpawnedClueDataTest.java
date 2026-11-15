@@ -40,6 +40,14 @@ class SpawnedClueDataTest {
         assertEquals(clue.getAnchor(),actual.getAnchor());assertEquals(clue.getTargetCenter(),actual.getTargetCenter());assertEquals(.45,actual.getPotency());
         assertEquals(clue.getSpawnedAtMs(),actual.getSpawnedAtMs());assertEquals(clue.getDiscoveredByCharacter(),actual.getDiscoveredByCharacter());
         assertEquals(2,actual.getFootTrafficEventsThisHour());assertEquals(12345,actual.getFootTrafficWindowStartMs());
+        assertFalse(actual.isPlaced());assertFalse(((JSONObject)stored().getFirst()).containsKey("placed"));
+    }
+
+    @Test void placedFlagRoundTripsAndOlderRowsLoadAsNotPlaced() throws Exception {
+        var placed=clue(System.currentTimeMillis()+3600000);placed.setPlaced(true);SpawnedClueDatabase.saveAll(List.of(placed));
+        assertEquals(true,((JSONObject)stored().getFirst()).get("placed"));assertTrue(SpawnedClueDatabase.loadAll().getFirst().isPlaced());
+        var data=stored();((JSONObject)data.getFirst()).remove("placed");write(data);assertFalse(SpawnedClueDatabase.loadAll().getFirst().isPlaced());
+        ((JSONObject)data.getFirst()).put("placed","yes");write(data);assertFalse(SpawnedClueDatabase.loadAll().getFirst().isPlaced());
     }
 
     @Test void legacyRowsEstimatePotencyAndIgnoreInvalidOptionalIdentifiers() throws Exception {

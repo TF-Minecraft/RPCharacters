@@ -211,6 +211,21 @@ public class SpawnedClueManager implements Listener {
 		return toRemove.size();
 	}
 
+	/** Removes only clues {@code owner} placed by hand; Thievery clues they left behind stay. */
+	public int clearPlacedByOwnerNear(Location center, double radius, UUID owner) {
+		if (owner == null) return 0;
+		List<SpawnedClue> toRemove = new ArrayList<>();
+		for (SpawnedClue clue : getCluesNear(center, radius)) {
+			if (clue.isPlaced() && owner.equals(clue.getOwnerUuid())) {
+				toRemove.add(clue);
+			}
+		}
+		for (SpawnedClue clue : toRemove) {
+			remove(clue);
+		}
+		return toRemove.size();
+	}
+
 	public int clearLinkedToBlock(Location block) {
 		List<SpawnedClue> toRemove = new ArrayList<>(getCluesLinkedToBlock(block));
 		for (SpawnedClue clue : toRemove) {

@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 
@@ -53,7 +55,16 @@ public final class CharacterProgressService {
 
 	/** Registers this service, so progression pools are per character from now on. */
 	public CharacterProgressService(Path root) {
-		this.store = new ProgressStore(root);
+		this(new ProgressStore(root));
+	}
+
+	/** With checkpoints written by {@code writer}, which runs tasks one at a time in order. */
+	CharacterProgressService(Path root, Executor writer) {
+		this(new ProgressStore(root, writer));
+	}
+
+	private CharacterProgressService(ProgressStore store) {
+		this.store = store;
 		active = this;
 	}
 
@@ -61,7 +72,9 @@ public final class CharacterProgressService {
 		return active;
 	}
 
+	/** Waits for every queued checkpoint, then forgets the loaded accounts. */
 	public void close() {
+		store.close();
 		applied.clear();
 		pendingCheckpoints.clear();
 		pendingPromptCheckpoints.clear();
@@ -249,10 +262,23 @@ public final class CharacterProgressService {
 	}
 
 	/**
-	 * Saves the live character's MMOCore progress and pools as the next revision. Call before the
-	 * character is deactivated or MMOCore attribute bases are cleared, and for checkpoints.
+	 * Saves the live character's MMOCore progress and pools as the next revision on this thread, throwing
+	 * if it cannot be written. Call before the character is deactivated or MMOCore attribute bases are
+	 * cleared. Waits for the character's queued checkpoints first.
 	 */
 	public void save(PlayerData account, RPCharacter character) throws IOException {
+		store.replace(capture(account, character));
+	}
+
+	/**
+	 * Captures the live character like {@link #save} and queues its files for the progress writer
+	 * thread, so checkpoints never wait for the disk. The future fails on that thread if the write does.
+	 */
+	public CompletableFuture<Void> queueSave(PlayerData account, RPCharacter character) throws IOException {
+		return store.queueReplace(capture(account, character));
+	}
+
+	private CharacterProgress capture(PlayerData account, RPCharacter character) throws IOException {
 		requireMainThread();
 		Player player = requireLive(account, character);
 		if (!holds(account, character)) {
@@ -267,10 +293,13 @@ public final class CharacterProgressService {
 		CharacterProgress progress = character.getProgress();
 		ClassService.trackCharacterProgress(mmo, progress);
 		progress.setMmo(MmoProgressCodec.capture(mmo));
-		store.replace(progress);
+		return progress;
 	}
 
-	/** Best-effort save of the player's live character; failures are logged and retried by the next save. */
+	/**
+	 * Best-effort save of the player's live character, written off the main thread ({@link #queueSave});
+	 * failures are logged and retried by the next save.
+	 */
 	public static void checkpoint(Player player) {
 		CharacterProgressService service = active;
 		if (service == null || player == null) {
@@ -281,12 +310,22 @@ public final class CharacterProgressService {
 		if (character == null || !service.holds(account, character) || ClassService.isApplying(player.getUniqueId())) {
 			return;
 		}
+		String id = character.getId();
 		try {
-			service.save(account, character);
+			service.queueSave(account, character).whenComplete((ignored, failure) -> {
+				if (failure != null) {
+					warnCheckpoint(id, failure);
+				}
+			});
 		} catch (IOException | RuntimeException failure) {
-			RPCharacters.plugin.getLogger().log(Level.WARNING,
-					"Could not checkpoint the progress of character " + character.getId(), failure);
+			warnCheckpoint(id, failure);
 		}
+	}
+
+	// Also called on the progress writer thread, so a failure during shutdown is still logged.
+	private static void warnCheckpoint(String characterId, Throwable failure) {
+		RPCharacters.plugin.getLogger().log(Level.WARNING,
+				"Could not checkpoint the progress of character " + characterId, failure);
 	}
 
 	/**

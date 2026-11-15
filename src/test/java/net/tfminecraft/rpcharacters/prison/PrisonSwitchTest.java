@@ -46,6 +46,38 @@ class PrisonSwitchTest {
         PrisonSwitch.entered(account, "a", b); assertNotNull(account.getLastCharacterSwitchAtMs()); assertEquals("b", account.getLastFreeCharacterId());
     }
 
+    @Test void cooldownStartsFromNamesTheCharacterLeftExactlyWhenEnteringRecordsASwitch() {
+        assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", b)); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", null));
+        assertNull(PrisonSwitch.cooldownStartsFrom(account, "a", a)); assertNull(PrisonSwitch.cooldownStartsFrom(account, null, b));
+        assertNull(PrisonSwitch.cooldownStartsFrom(account, null, null));
+        // A dead or missing previous character still starts it, as entered() records it.
+        when(a.getStatus()).thenReturn(Status.DEAD); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "a", b));
+        assertEquals("gone", PrisonSwitch.cooldownStartsFrom(account, "gone", b));
+        b.setPrisonSwitch(true); assertNull(PrisonSwitch.cooldownStartsFrom(account, "a", b));
+        // From prison the anchor is the character entered before it, and going back there is free.
+        account.setLastFreeCharacterId("a"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", a));
+        assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", c)); assertEquals("a", PrisonSwitch.cooldownStartsFrom(account, "b", null));
+        account.setLastFreeCharacterId("b"); assertNull(PrisonSwitch.cooldownStartsFrom(account, "b", c));
+    }
+
+    @Test void theWarningRuleAndEnteredAgreeForEveryStartingState() {
+        List<String> ids = Arrays.asList(null, "a", "b", "gone");
+        int cases = 0, warned = 0;
+        for (boolean prisonB : List.of(false, true)) for (Status statusA : List.of(Status.ALIVE, Status.DEAD)) {
+            b.setPrisonSwitch(prisonB); when(a.getStatus()).thenReturn(statusA);
+            for (String lastFree : ids) for (String last : ids) for (RPCharacter target : List.of(a, b, c)) {
+                PlayerData copy = new PlayerData(UUID.randomUUID()); copy.addCharacter(a); copy.addCharacter(b); copy.addCharacter(c);
+                copy.setLastFreeCharacterId(lastFree);
+                boolean warns = PrisonSwitch.cooldownStartsFrom(copy, last, target) != null;
+                PrisonSwitch.entered(copy, last, target);
+                assertEquals(warns, copy.getLastCharacterSwitchAtMs() != null,
+                        "prisonB=" + prisonB + " a=" + statusA + " lastFree=" + lastFree + " last=" + last + " -> " + target.getId());
+                cases++; if (warns) warned++;
+            }
+        }
+        assertEquals(192, cases); assertTrue(warned > 0 && warned < cases);
+    }
+
     @Test void idsMatchWhateverCaseTheyWereStoredIn() {
         RPCharacter upper = character("D1", "Dara"); account.addCharacter(upper);
         assertFalse(PrisonSwitch.cooldownApplies(account, "d1", upper)); assertFalse(PrisonSwitch.cooldownApplies(account, "a", a));

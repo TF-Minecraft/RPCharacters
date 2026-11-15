@@ -38,7 +38,8 @@ import net.tfminecraft.rpcharacters.profile.ProfileManager;
 /**
  * The online player list and character sheet dialogs. Names are the safe
  * character display; hovering shows the account, rank and ping; clicking opens
- * the character sheet through the normal profile view rules.
+ * the character sheet through the normal profile view rules. Players on a
+ * hidden character are left out ({@link HiddenCharacterListing}).
  */
 public final class PlayerListDialogs {
 
@@ -74,7 +75,8 @@ public final class PlayerListDialogs {
 					.width(buttonWidth)
 					.action(DialogAction.customClick((response, audience) -> {
 						Player target = Bukkit.getPlayer(subject);
-						if (audience instanceof Player clicker && target != null && clicker.canSee(target)) {
+						if (audience instanceof Player clicker && target != null && clicker.canSee(target)
+								&& !HiddenCharacterListing.isConcealedFrom(clicker, target)) {
 							ProfileManager.showProfileSheet(clicker, target);
 						}
 					}, CALLBACKS))
@@ -106,7 +108,8 @@ public final class PlayerListDialogs {
 		UUID targetId = target.getUniqueId();
 		skin.thenAccept(image -> Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
 			Player current = Bukkit.getPlayer(targetId);
-			if (!viewer.isOnline() || current == null || !viewer.canSee(current)) {
+			if (!viewer.isOnline() || current == null || !viewer.canSee(current)
+					|| HiddenCharacterListing.isConcealedFrom(viewer, current)) {
 				return;
 			}
 			BufferedImage front = image == null ? null : SkinPortrait.front(image, texture.slim());
@@ -151,7 +154,8 @@ public final class PlayerListDialogs {
 	static List<Player> visiblePlayers(Player viewer, PlayerListSettings settings) {
 		List<Player> online = new ArrayList<>();
 		for (Player player : Bukkit.getOnlinePlayers()) {
-			if (player.equals(viewer) || viewer.canSee(player)) {
+			if (player.equals(viewer)
+					|| (viewer.canSee(player) && !HiddenCharacterListing.isConcealedFrom(viewer, player))) {
 				online.add(player);
 			}
 		}
@@ -194,6 +198,12 @@ public final class PlayerListDialogs {
 				.append(Component.newline())
 				.append(GuiText.component((tag.isEmpty() ? "§7No rank" : tag)
 						+ "§r§8  |  " + pingColour(ping) + ping + "ms"));
+		if (HiddenCharacterListing.isConcealed(player)) {
+			// Only holders of the hidden permission (and the player) see this entry.
+			tooltip.append(Component.newline())
+					.append(GuiText.component("§8Hidden character: §7"
+							+ DisplayIdentityService.resolveCharacterName(player)));
+		}
 		if (canViewProfile) {
 			tooltip.append(Component.newline())
 					.append(Component.text("Click to view their character", NamedTextColor.DARK_GRAY));

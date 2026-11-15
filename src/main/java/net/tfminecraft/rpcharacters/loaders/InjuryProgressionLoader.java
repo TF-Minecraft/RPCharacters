@@ -19,6 +19,9 @@ import net.tfminecraft.rpcharacters.RPCharacters;
 public final class InjuryProgressionLoader implements LoaderInterface {
 
 	private static final Map<String, String> progression = new HashMap<>();
+	/** Injury id to the group it shares a body part with. */
+	private static final Map<String, String> groups = new HashMap<>();
+	private static final Map<String, Integer> limits = new HashMap<>();
 
 	@Override
 	public void load(File configFile) {
@@ -30,11 +33,17 @@ public final class InjuryProgressionLoader implements LoaderInterface {
 		}
 
 		progression.clear();
-		if (!config.isConfigurationSection("progression")) {
+		groups.clear();
+		limits.clear();
+		loadProgression(config.getConfigurationSection("progression"));
+		loadGroups(config.getConfigurationSection("groups"));
+		loadLimits(config.getConfigurationSection("limits"));
+	}
+
+	private static void loadProgression(ConfigurationSection section) {
+		if (section == null) {
 			return;
 		}
-
-		ConfigurationSection section = config.getConfigurationSection("progression");
 		for (String healingId : section.getKeys(false)) {
 			String permanentId = section.getString(healingId);
 			if (permanentId == null || permanentId.isBlank()) {
@@ -75,6 +84,79 @@ public final class InjuryProgressionLoader implements LoaderInterface {
 
 			progression.put(healingId.toLowerCase(Locale.ROOT), permanentId.toLowerCase(Locale.ROOT));
 		}
+	}
+
+	private static void loadGroups(ConfigurationSection section) {
+		if (section == null) {
+			return;
+		}
+		for (String name : section.getKeys(false)) {
+			String group = name.toLowerCase(Locale.ROOT);
+			if (TraitLoader.getByString(group) != null) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury group '" + name + "' has the name of a trait and was skipped.");
+				continue;
+			}
+			if (!section.isList(name)) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury group '" + name + "' is not a list of injuries and was skipped.");
+				continue;
+			}
+			for (String member : section.getStringList(name)) {
+				String id = member == null ? "" : member.trim().toLowerCase(Locale.ROOT);
+				Trait trait = id.isEmpty() ? null : TraitLoader.getByString(id);
+				if (trait == null || !trait.getTraitData().isInjuryKey()) {
+					RPCharacters.plugin.getLogger().warning(
+							"Injury group '" + name + "' entry '" + member + "' is not an injury and was skipped.");
+				} else if (progression.containsKey(id) || progression.containsValue(id)) {
+					RPCharacters.plugin.getLogger().warning(
+							"Injury group '" + name + "' entry '" + member
+									+ "' already has a body part from progression and was skipped.");
+				} else if (groups.containsKey(id)) {
+					RPCharacters.plugin.getLogger().warning(
+							"Injury group '" + name + "' entry '" + member + "' is already in group '"
+									+ groups.get(id) + "' and was skipped.");
+				} else {
+					groups.put(id, group);
+				}
+			}
+		}
+	}
+
+	private static void loadLimits(ConfigurationSection section) {
+		if (section == null) {
+			return;
+		}
+		for (String bodyPart : section.getKeys(false)) {
+			if (!isPermanentInjury(bodyPart) && !groups.containsValue(bodyPart.toLowerCase(Locale.ROOT))) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury limit '" + bodyPart + "' is not a permanent injury or an injury group and was skipped.");
+				continue;
+			}
+			int limit = section.getInt(bodyPart, 0);
+			if (limit < 1) {
+				RPCharacters.plugin.getLogger().warning(
+						"Injury limit '" + bodyPart + "' must be at least 1 and was skipped.");
+				continue;
+			}
+			limits.put(bodyPart.toLowerCase(Locale.ROOT), limit);
+		}
+	}
+
+	/** Configured injury slots for this body part (a permanent injury or an injury group), or 0 when unset. */
+	public static int getLimit(String bodyPart) {
+		if (bodyPart == null || bodyPart.isBlank()) {
+			return 0;
+		}
+		return limits.getOrDefault(bodyPart.toLowerCase(Locale.ROOT), 0);
+	}
+
+	/** The injury group this injury shares a body part with, or null. */
+	public static String getGroup(String traitId) {
+		if (traitId == null || traitId.isBlank()) {
+			return null;
+		}
+		return groups.get(traitId.toLowerCase(Locale.ROOT));
 	}
 
 	public static String getPermanentId(String healingTraitId) {

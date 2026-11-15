@@ -158,7 +158,7 @@ class PlushieCommandTest {
 		verify(console).sendMessage(contains("in game"));
 		when(player.hasPermission(PlushieCommand.PERMISSION)).thenReturn(true);
 		run();
-		for (String number : List.of("0", "-1", "4", "999999999999999999999")) run("Grinkle", number);
+		for (String number : List.of("0", "-1", "6", "999999999999999999999")) run("Grinkle", number);
 		run("Unknown");
 		verify(player).sendMessage("Character not found: Unknown");
 		when(identity.findByName("Grinkle")).thenReturn(List.of(GRINKLE, GRINKLE));
@@ -239,7 +239,7 @@ class PlushieCommandTest {
 
 	@Test void outfitCompletionIsPermissionScoped() {
 		assertEquals(List.of(), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle"}));
-		assertEquals(List.of("1", "2", "3"), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle", ""}));
+		assertEquals(List.of("1", "2", "3", "4", "5"), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle", ""}));
 		assertEquals(List.of("2"), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle", "2"}));
 		when(player.hasPermission(PlushieCommand.PERMISSION)).thenReturn(false);
 		assertEquals(List.of(), command.onTabComplete(player, null, "plushie", new String[] {"Grinkle", ""}));

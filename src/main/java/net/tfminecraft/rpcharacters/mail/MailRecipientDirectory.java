@@ -44,6 +44,15 @@ public final class MailRecipientDirectory {
 
 	private MailRecipientDirectory() {}
 
+	/**
+	 * Hidden characters (staff event characters) are never offered as recipients,
+	 * so the mail list cannot reveal them. Their own mail setting is kept for when
+	 * they are unhidden.
+	 */
+	static boolean listedForMail(RPCharacter character) {
+		return character.isMailListed() && !character.isHidden();
+	}
+
 	public static void scanFromDisk() {
 		scanFromDisk(new File("plugins/RPCharacters/data/characterdata"));
 	}
@@ -92,7 +101,7 @@ public final class MailRecipientDirectory {
 		if (ownerUuid == null || character == null || character.getId() == null) {
 			return;
 		}
-		if (character.getStatus() != Status.ALIVE || !character.isMailListed()) {
+		if (character.getStatus() != Status.ALIVE || !listedForMail(character)) {
 			ENTRIES.remove(character.getId());
 			return;
 		}
@@ -307,7 +316,7 @@ public final class MailRecipientDirectory {
 				if (character == null || character.getId() == null) {
 					continue;
 				}
-				if (!character.isMailListed()) {
+				if (!listedForMail(character)) {
 					targets.remove(character.getId());
 					continue;
 				}
@@ -361,7 +370,8 @@ public final class MailRecipientDirectory {
 				return;
 			}
 		}
-		if (status != Status.ALIVE || "false".equalsIgnoreCase(String.valueOf(json.get("mail-listed")))) {
+		if (status != Status.ALIVE || "false".equalsIgnoreCase(String.valueOf(json.get("mail-listed")))
+				|| "true".equalsIgnoreCase(String.valueOf(json.get("hidden")))) {
 			ENTRIES.remove(characterId);
 			return;
 		}
@@ -422,7 +432,7 @@ public final class MailRecipientDirectory {
 		PlayerData pd = PlayerManager.get(entry.ownerUuid);
 		if (pd != null) {
 			RPCharacter character = pd.getCharacterById(entry.characterId);
-			if (character != null && (character.getStatus() != Status.ALIVE || !character.isMailListed())) {
+			if (character != null && (character.getStatus() != Status.ALIVE || !listedForMail(character))) {
 				return null;
 			}
 		}

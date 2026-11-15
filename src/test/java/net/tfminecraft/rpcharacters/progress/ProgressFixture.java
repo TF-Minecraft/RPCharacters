@@ -103,6 +103,7 @@ abstract class ProgressFixture {
         account.getCharacters().add(character); return character;
     }
     CharacterProgress progress(String id) { return new CharacterProgress(account.getUniqueId(), id, CharacterProgress.FRESH, MmoProgressCodec.fresh()); }
-    void enable() throws java.io.IOException { service = new CharacterProgressService(root.resolve("progress")); service.recordLegacyActive(account,account.getActiveCharacter()); }
+    /** Checkpoints are written on the calling thread here; ProgressQueueTest covers the writer thread. */
+    void enable() throws java.io.IOException { service = new CharacterProgressService(root.resolve("progress"), Runnable::run); service.recordLegacyActive(account,account.getActiveCharacter()); }
     void play(RPCharacter character) throws Exception { account.getCharacters().forEach(c -> c.setActiveState(false)); character.setActiveState(true); service.activate(account, character); }
 }

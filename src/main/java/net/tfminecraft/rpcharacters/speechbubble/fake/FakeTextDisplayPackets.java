@@ -45,9 +45,20 @@ public final class FakeTextDisplayPackets {
 	private static final byte TEXT_FLAG_SHADOW = 0x01;
 
 	private final ProtocolManager protocolManager;
+	private TeleportPacketFactory teleportFactory;
 
 	public FakeTextDisplayPackets(ProtocolManager protocolManager) {
+		this(protocolManager, TeleportPacketFactory.detect());
+	}
+
+	FakeTextDisplayPackets(ProtocolManager protocolManager, TeleportPacketFactory teleportFactory) {
 		this.protocolManager = protocolManager;
+		this.teleportFactory = teleportFactory;
+	}
+
+	/** True while teleports are built straight from the server's packet records instead of ProtocolLib's builder. */
+	public boolean usesDirectTeleportPackets() {
+		return teleportFactory != null;
 	}
 
 	public void spawn(Player viewer, int entityId, UUID entityUuid, Location location, String text, float scale,
@@ -89,6 +100,21 @@ public final class FakeTextDisplayPackets {
 	}
 
 	private PacketContainer createTeleportPacket(int entityId, Location location) {
+		TeleportPacketFactory factory = teleportFactory;
+		if (factory != null) {
+			try {
+				Object handle = factory.create(entityId, location.getX(), location.getY(), location.getZ(),
+						location.getYaw(), location.getPitch());
+				return new PacketContainer(PacketType.Play.Server.ENTITY_TELEPORT, handle);
+			} catch (RuntimeException ex) {
+				// Fall back for good: ProtocolLib's builder is slower but works on every layout.
+				teleportFactory = null;
+				if (RPCharacters.plugin != null) {
+					RPCharacters.plugin.getLogger().warning(
+							"Direct teleport packets failed, using ProtocolLib's builder: " + ex.getMessage());
+				}
+			}
+		}
 		PacketContainer packet = protocolManager.createPacket(PacketType.Play.Server.ENTITY_TELEPORT, true);
 		packet.getIntegers().write(0, entityId);
 		writeEntityPosition(packet, location);

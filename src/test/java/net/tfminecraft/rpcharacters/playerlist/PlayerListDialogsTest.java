@@ -227,6 +227,26 @@ class PlayerListDialogsTest {
 			}
 		}
 
+		@Test void hiddenCharactersAreLeftOutForPlayersMarkedForStaffAndRecheckedOnClickAndSheet() {
+			Player viewer = player("Viewer", 20), haldorim = player("Haldorim", 20); when(viewer.canSee(haldorim)).thenReturn(true); when(viewer.hasPermission("profile")).thenReturn(true);
+			var scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class); java.util.List<Runnable> tasks = new java.util.ArrayList<>(); doAnswer(c -> { tasks.add(c.getArgument(1)); return null; }).when(scheduler).runTask(nullable(org.bukkit.plugin.Plugin.class), any(Runnable.class));
+			net.tfminecraft.rpcharacters.Cache.playerList = new PlayerListSettings("list", false, false, "Players", "Online: {online}", "Players", Map.of());
+			try (DialogCapture ui = new DialogCapture(); var bukkit = mockStatic(org.bukkit.Bukkit.class, CALLS_REAL_METHODS); var lp = mockStatic(LuckPermsProvider.class); var identities = mockStatic(net.tfminecraft.rpcharacters.identity.DisplayIdentityService.class); var hidden = mockStatic(HiddenCharacterListing.class); var profiles = mockStatic(net.tfminecraft.rpcharacters.profile.ProfileManager.class)) {
+				lp.when(LuckPermsProvider::get).thenThrow(new IllegalStateException()); bukkit.when(org.bukkit.Bukkit::getScheduler).thenReturn(scheduler); bukkit.when(org.bukkit.Bukkit::getOnlinePlayers).thenReturn(List.of(viewer, haldorim));
+				for (Player p : List.of(viewer, haldorim)) { UUID id = p.getUniqueId(); String name = p.getName(); identities.when(() -> net.tfminecraft.rpcharacters.identity.DisplayIdentityService.resolveDisplaySafe(p)).thenReturn(name); bukkit.when(() -> org.bukkit.Bukkit.getPlayer(id)).thenReturn(p); }
+				identities.when(() -> net.tfminecraft.rpcharacters.identity.DisplayIdentityService.resolveCharacterName(haldorim)).thenReturn("Haldorim the Grey");
+				hidden.when(() -> HiddenCharacterListing.isConcealedFrom(viewer, haldorim)).thenReturn(true);
+				PlayerListDialogs.openList(viewer); assertEquals("Online: 1", ui.last().bodyText()); assertEquals(List.of(" Viewer"), ui.last().buttons().stream().map(b -> text(b.label())).toList());
+				// Holders of the hidden permission still see the entry, marked with the real character.
+				hidden.when(() -> HiddenCharacterListing.isConcealedFrom(viewer, haldorim)).thenReturn(false); hidden.when(() -> HiddenCharacterListing.isConcealed(haldorim)).thenReturn(true);
+				PlayerListDialogs.openList(viewer); var entry = ui.last().buttons().getFirst(); assertEquals(" Haldorim", text(entry.label()));
+				assertTrue(text(entry.tooltip()).contains("Hidden character: Haldorim the Grey\nClick to view their character"));
+				// Hidden after the list opened: the click and a pending sheet are both refused.
+				hidden.when(() -> HiddenCharacterListing.isConcealedFrom(viewer, haldorim)).thenReturn(true); ui.click(entry, viewer); profiles.verifyNoInteractions();
+				int shown = ui.opened.size(); PlayerListDialogs.openCharacterSheet(viewer, haldorim, List.of("Details")); tasks.removeFirst().run(); assertEquals(shown, ui.opened.size());
+			}
+		}
+
 		@Test void delayedSheetDoesNotShowToDisconnectedViewerOrForHiddenOrDisconnectedTarget() {
 			Player viewer = player("Viewer", 10), target = player("Target", 10); when(viewer.canSee(target)).thenReturn(true);
 			var scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class); java.util.List<Runnable> tasks = new java.util.ArrayList<>(); doAnswer(c -> { tasks.add(c.getArgument(1)); return null; }).when(scheduler).runTask(nullable(org.bukkit.plugin.Plugin.class), any(Runnable.class));

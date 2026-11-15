@@ -93,11 +93,14 @@ class CommandTabCompleterTest {
     @Test void rootSuggestionsRespectPermissionsAndPrefixAndAreFreshCopies() {
         List<String> basic = complete(""); assertFalse(basic.contains("create")); assertFalse(basic.contains("next")); assertTrue(basic.containsAll(List.of("wardrobe", "party", "mail", "strikes")));
         assertFalse(basic.contains("admin")); assertFalse(basic.contains("tempalias")); assertFalse(basic.contains("sethidden"));
+        assertFalse(basic.contains("placeclue")); assertFalse(basic.contains("removeclue"));
+        grant(Permissions.PLACE_CLUE, true); assertTrue(complete("").containsAll(List.of("placeclue", "removeclue"))); assertFalse(complete("").contains("clearclues"));
+        assertEquals(List.of(), complete("placeclue", "")); grant(Permissions.PLACE_CLUE, false);
         basic.clear(); assertFalse(complete((String) null).isEmpty());
         grant("rpchar.class.reset", true); assertTrue(complete("").contains("admin")); assertFalse(complete("").contains("reload"));
         admin(); grant(Cache.personaTempaliasPermission, true); grant(Cache.personaCharacterHiddenPermission, true);
         assertTrue(complete("").containsAll(List.of("admin", "reload", "catalog", "pending", "wipe", "reclaimkit", "resetkit", "stage", "setclass",
-            "seteighteen", "skipcooldown", "addtrait", "removetrait", "clearclues", "placeclue", "adminmode", "discordgate", "setworldspawn", "tempalias", "sethidden")));
+            "seteighteen", "skipcooldown", "addtrait", "removetrait", "clearclues", "placeclue", "removeclue", "adminmode", "discordgate", "setworldspawn", "tempalias", "sethidden")));
         Locale.setDefault(Locale.forLanguageTag("tr-TR")); assertEquals(List.of("injure"), complete("INJ"));
     }
 
@@ -115,9 +118,11 @@ class CommandTabCompleterTest {
         for (String verb : List.of("menu", "clues", "setclass", "seteighteen", "resetkit", "reclaimkit", "skipcooldown", "addtrait", "removetrait", "injure", "discordgate"))
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
-        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "prison"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "resetclasses", "prison"), complete("admin", ""));
+        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "hide", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "resetclasses", "classpicks", "hide", "prison"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
+        assertEquals(List.of("Iris"), complete("admin", "classpicks", "I")); assertEquals(List.of("reset", "freesubclass", "paid"), complete("admin", "CLASSPICKS", "Iris", ""));
+        assertEquals(List.of("0", "1", "2"), complete("admin", "classpicks", "Iris", "PAID", "")); assertEquals(List.of(), complete("admin", "classpicks", "Iris", "reset", ""));
         assertEquals(List.of("5", "10", "25", "50"), complete("clearclues", "")); assertEquals(List.of(), complete("placeclue", ""));
         assertEquals(List.of("on", "off"), complete("adminmode", ""));
         grant(Cache.personaTempaliasPermission, true); assertEquals(List.of("clear"), complete("tempalias", ""));
@@ -128,10 +133,10 @@ class CommandTabCompleterTest {
     @Test void adminSuggestionsDisappearWithoutPermission() {
         for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate", "setclass", "skipcooldown", "addtrait", "removetrait", "menu", "injure", "permakill"))
             assertEquals(List.of(), complete(verb, ""), verb);
-        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "prison", ""));
+        assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "classpicks", "")); assertEquals(List.of(), complete("admin", "prison", "")); assertEquals(List.of(), complete("admin", "hide", ""));
         assertEquals(List.of(), complete("admin", "unlockclass", "")); assertEquals(List.of(), complete("admin", "lockclass", "Iris", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses"), complete("admin", ""));
-        grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses", "classpicks"), complete("admin", ""));
+        grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "classpicks", "prison"), complete("admin", ""));
     }
 
     @Test void prisonCompletionOffersPlayersTheirLivingCharactersAndTheSwitch() {
@@ -158,6 +163,15 @@ class CommandTabCompleterTest {
         assertEquals(List.of(), complete("admin", "lockclass", "offline", ""));
         assertEquals(List.of(), complete("admin", "lockclass", "Iris", "BLOOD_MAGE", ""));
         field.set(core, null); assertEquals(List.of(), complete("admin", "unlockclass", "Iris", ""));
+    }
+
+    @Test void hideCompletionOffersOnlinePlayersThenOnOff() {
+        grant(Cache.personaCharacterHiddenPermission, true);
+        assertEquals(List.of("admin"), complete("adm"));
+        assertEquals(List.of("hide"), complete("admin", ""));
+        assertEquals(List.of("Iris"), complete("admin", "hide", "I"));
+        assertEquals(List.of("on", "off"), complete("admin", "HIDE", "Iris", ""));
+        assertEquals(List.of(), complete("admin", "hide", "Iris", "on", ""));
     }
 
     @Test void hiddenCharacterSuggestionsWaitForPlayerDataToLoad() {

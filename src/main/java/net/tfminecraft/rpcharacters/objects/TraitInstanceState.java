@@ -5,6 +5,8 @@ public final class TraitInstanceState {
 	/** Wall-clock time the trait's duration runs out, so it counts down while the player is offline too. */
 	private long expiresAtMs = -1L;
 	private double fuel = -1D;
+	/** A permanent injury gained in play beside a fitted prosthetic: the other limb, which that prosthetic doesn't replace. */
+	private boolean secondLimb;
 
 	public boolean hasDuration() {
 		return expiresAtMs >= 0L;
@@ -47,7 +49,15 @@ public final class TraitInstanceState {
 		this.fuel = fuel;
 	}
 
+	public boolean isSecondLimb() {
+		return secondLimb;
+	}
+
+	public void setSecondLimb(boolean secondLimb) {
+		this.secondLimb = secondLimb;
+	}
+
 	public boolean isEmpty() {
-		return !hasDuration() && !hasFuel();
+		return !hasDuration() && !hasFuel() && !secondLimb;
 	}
 }

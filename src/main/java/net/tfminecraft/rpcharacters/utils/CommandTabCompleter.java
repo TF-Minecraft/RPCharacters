@@ -16,6 +16,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
 import net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand;
 import net.tfminecraft.rpcharacters.enums.Status;
@@ -29,6 +30,7 @@ import net.tfminecraft.rpcharacters.command.CharCommand;
 import net.tfminecraft.rpcharacters.persona.PermissionGroupService;
 import net.tfminecraft.rpcharacters.party.PartyCommand;
 import net.tfminecraft.rpcharacters.prison.PrisonSwitch;
+import net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand;
 import net.tfminecraft.rpcharacters.wardrobe.WardrobeCommand;
 
 public class CommandTabCompleter implements TabCompleter {
@@ -60,6 +62,7 @@ public class CommandTabCompleter implements TabCompleter {
 			completions.add("wardrobe");
 			completions.add("party");
 			if (Permissions.isAdmin(sender) || sender.hasPermission("rpchar.injure")) completions.add("injure");
+			if (Permissions.canPlaceClues(sender)) completions.addAll(List.of("placeclue", "removeclue"));
 			PERSONA_SUBCOMMANDS.stream().filter(sub -> canUsePersona(sender, sub)).forEach(completions::add);
 			if (Permissions.isAdmin(sender)) {
 				completions.add("admin");
@@ -76,11 +79,10 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("addtrait");
 				completions.add("removetrait");
 				completions.add("clearclues");
-				completions.add("placeclue");
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
-			} else if (ClassPickReset.canUse(sender)) {
+			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)) {
 				completions.add("admin");
 			}
 			completions.add("strikes");
@@ -109,9 +111,17 @@ public class CommandTabCompleter implements TabCompleter {
 				&& ClassPickReset.canUse(sender)) {
 			return filter(List.of("confirm"), args[2]);
 		}
+		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(ClassPickAdminCommand.SUBCOMMAND)
+				&& ClassPickAdminCommand.canUse(sender)) {
+			return completeClassPicks(args);
+		}
 		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)
 				&& PrisonSwitch.canUse(sender)) {
 			return completePrison(args);
+		}
+		if (sub.equals("admin") && args.length >= 3 && args[1].equalsIgnoreCase(HiddenCharacterAdminCommand.SUBCOMMAND)
+				&& HiddenCharacterAdminCommand.canUse(sender)) {
+			return completeHide(args);
 		}
 		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
 				&& ClassUnlockCommand.isSubcommand(args[1])) {
@@ -184,6 +194,10 @@ public class CommandTabCompleter implements TabCompleter {
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
+					completions.add(ClassPickAdminCommand.SUBCOMMAND);
+				}
+				if (HiddenCharacterAdminCommand.canUse(sender)) {
+					completions.add(HiddenCharacterAdminCommand.SUBCOMMAND);
 				}
 				if (PrisonSwitch.canUse(sender)) {
 					completions.add(PrisonSwitch.SUBCOMMAND);
@@ -198,7 +212,7 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("10");
 				completions.add("25");
 				completions.add("50");
-			} else if (args[0].equalsIgnoreCase("placeclue") && Permissions.isAdmin(sender)) {
+			} else if (args[0].equalsIgnoreCase("placeclue") && Permissions.canPlaceClues(sender)) {
 				// text is free-form; no tab completions
 			} else if (args[0].equalsIgnoreCase("adminmode") && Permissions.isAdmin(sender)) {
 				completions.add("on");
@@ -323,6 +337,33 @@ public class CommandTabCompleter implements TabCompleter {
 		}
 
 		return Collections.emptyList();
+	}
+
+	/** {@code /rpcharacter admin classpicks <player> [reset|freesubclass|paid <count>]}. */
+	private List<String> completeClassPicks(String[] args) {
+		if (args.length == 3) {
+			List<String> names = new ArrayList<>();
+			for (Player online : Bukkit.getOnlinePlayers()) {
+				names.add(online.getName());
+			}
+			return filter(names, args[2]);
+		}
+		if (args.length == 4) {
+			return filter(ClassPickAdminCommand.ACTIONS, args[3]);
+		}
+		if (args.length == 5 && args[3].equalsIgnoreCase("paid")) {
+			return filter(List.of("0", "1", "2"), args[4]);
+		}
+		return Collections.emptyList();
+	}
+
+	/** {@code /rpcharacter admin hide <player> [on|off]}. */
+	private List<String> completeHide(String[] args) {
+		String last = args[args.length - 1];
+		if (args.length == 3) {
+			return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList()), last);
+		}
+		return args.length == 4 ? filter(List.of("on", "off"), last) : Collections.emptyList();
 	}
 
 	/** {@code admin prison <player> [character] [on|off]}. */

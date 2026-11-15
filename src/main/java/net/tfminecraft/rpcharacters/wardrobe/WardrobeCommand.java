@@ -54,7 +54,8 @@ public final class WardrobeCommand {
 		if (slot == null) {
 			RPTexts.send(
 				player,
-				RPTexts.ERROR + "Usage: /" + label + " wardrobe [base|extra_1|extra_2|name]"
+				RPTexts.ERROR + "Usage: /" + label + " wardrobe [base|extra_1-extra_"
+					+ (WardrobeSlots.MAX_SWAPPABLE - 1) + "|1-" + WardrobeSlots.MAX_SWAPPABLE + "|name]"
 			);
 			return true;
 		}
@@ -96,11 +97,7 @@ public final class WardrobeCommand {
 			return null;
 		}
 		String match = null;
-		for (String id : List.of(
-			WardrobeSnapshot.SLOT_BASE,
-			WardrobeSnapshot.SLOT_EXTRA_1,
-			WardrobeSnapshot.SLOT_EXTRA_2
-		)) {
+		for (String id : WardrobeSlots.swappable()) {
 			WardrobeSlotData slot = snapshot.getSlot(id);
 			if (slot == null
 				|| !slot.isUnlocked()
@@ -131,15 +128,9 @@ public final class WardrobeCommand {
 		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		List<String> options = new ArrayList<>();
 		if (snapshot == null) {
-			options.add(WardrobeSnapshot.SLOT_BASE);
-			options.add(WardrobeSnapshot.SLOT_EXTRA_1);
-			options.add(WardrobeSnapshot.SLOT_EXTRA_2);
+			options.addAll(WardrobeSlots.swappable());
 		} else {
-			for (String id : List.of(
-				WardrobeSnapshot.SLOT_BASE,
-				WardrobeSnapshot.SLOT_EXTRA_1,
-				WardrobeSnapshot.SLOT_EXTRA_2
-			)) {
+			for (String id : WardrobeSlots.swappable()) {
 				WardrobeSlotData slot = snapshot.getSlot(id);
 				if (slot != null
 					&& slot.isUnlocked()

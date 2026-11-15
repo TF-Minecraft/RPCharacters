@@ -157,7 +157,9 @@ abstract class WardrobeFixture {
     void drain(){int count=0;while(!async.isEmpty()||!main.isEmpty()){assertTrue(count++<20,"Unexpected task loop");while(!async.isEmpty())async.removeFirst().run();while(!main.isEmpty())main.removeFirst().run();}}
     public static final class WardrobePlayer extends PlayerMock {
         private org.bukkit.inventory.InventoryView defaultView;
+        int healthUpdates;
         WardrobePlayer(ServerMock server,String name){super(server,name);}
+        @Override public void sendHealthUpdate(){healthUpdates++;}
         @Override public org.bukkit.inventory.InventoryView getOpenInventory(){
             var current=super.getOpenInventory();
             if(current.getTopInventory()!=null)return current;

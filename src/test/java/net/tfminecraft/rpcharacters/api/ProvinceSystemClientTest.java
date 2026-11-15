@@ -53,11 +53,11 @@ class ProvinceSystemClientTest {
             assertFalse(fetchWardrobeSkin(invalid, "char", "base").ok);
             assertFalse(fetchWardrobeSkin("owner", invalid, "base").ok);
         }
-        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1")) {
+        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1", "extra_5")) {
             assertFalse(fetchWardrobeSkin("owner", "char", invalid).ok);
         }
         gateway.verifyNoInteractions();
-        for (String slot : List.of("base", "extra_1", "extra_2")) {
+        for (String slot : List.of("base", "extra_1", "extra_2", "extra_3", "extra_4")) {
             assertTrue(fetchWardrobeSkin(" owner ", " char ", slot).ok);
             gateway.verify(() -> GatewayClient.request("GET", "/characters/plugin/wardrobe/owner/char/slots/" + slot, null));
         }
@@ -81,13 +81,13 @@ class ProvinceSystemClientTest {
             assertFalse(requestPlushieSkin(invalid, "char", "base", null).ok);
             assertFalse(requestPlushieSkin("owner", invalid, "base", null).ok);
         }
-        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1")) {
+        for (String invalid : Arrays.asList(null, "", "masked", "../base", "1", "extra_5")) {
             assertFalse(requestPlushieSkin("owner", "char", invalid, null).ok);
         }
         assertFalse(requestPlushieSkin("owner", "char", "base", "bad-source").ok);
         gateway.verifyNoInteractions();
         String source = "a".repeat(64);
-        for (String slot : List.of("base", "extra_1", "extra_2")) {
+        for (String slot : List.of("base", "extra_1", "extra_2", "extra_3", "extra_4")) {
             assertTrue(requestPlushieSkin(" owner ", " char ", slot, null).ok);
             gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wardrobe/owner/char/slots/" + slot + "/plushie", "{}"));
         }

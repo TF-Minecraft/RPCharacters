@@ -9,6 +9,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import net.tfminecraft.rpcharacters.wardrobe.WardrobeSlots;
+
 /**
  * Characters plugin routes via TFMCWeb {@link GatewayClient}.
  */
@@ -302,7 +304,7 @@ public final class ProvinceSystemClient {
 	public static SimpleResult fetchWardrobeSkin(String playerUuid, String characterId, String slot) {
 		String uuid = sanitizePathSegment(playerUuid);
 		String cid = sanitizePathSegment(characterId);
-		if (uuid == null || cid == null || slot == null || !List.of("base", "extra_1", "extra_2").contains(slot)) {
+		if (uuid == null || cid == null || slot == null || !WardrobeSlots.swappable().contains(slot)) {
 			return SimpleResult.fail("invalid player, character or outfit");
 		}
 		return request("GET", "/characters/plugin/wardrobe/" + uuid + "/" + cid + "/slots/" + slot, null);
@@ -312,7 +314,7 @@ public final class ProvinceSystemClient {
 	public static SimpleResult requestPlushieSkin(String playerUuid, String characterId, String slot, String source) {
 		String uuid = sanitizePathSegment(playerUuid);
 		String cid = sanitizePathSegment(characterId);
-		if (uuid == null || cid == null || slot == null || !List.of("base", "extra_1", "extra_2").contains(slot)
+		if (uuid == null || cid == null || slot == null || !WardrobeSlots.swappable().contains(slot)
 				|| (source != null && !source.matches("[a-f0-9]{64}"))) {
 			return SimpleResult.fail("invalid player, character, outfit or source");
 		}

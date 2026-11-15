@@ -200,4 +200,35 @@ class FakeTextDisplayPacketsTest {
         verify(logger).warning(contains("Viewer: Disconnected")); RPCharacters.plugin = null;
         assertDoesNotThrow(() -> packets.destroy(viewer, List.of(-2))); verify(logger, times(1)).warning(anyString());
     }
+
+    @Test void directTeleportSendsTheServerRecordWithoutProtocolLibsBuilder() {
+        assertFalse(packets.usesDirectTeleportPackets(), "MockBukkit has no NMS teleport record");
+        packets = new FakeTextDisplayPackets(protocol, TeleportPacketFactory.forPacketClass(TeleportPacketFactoryTest.Teleport.class));
+        assertTrue(packets.usesDirectTeleportPackets());
+        var arguments = new ArrayList<List<?>>();
+        try (var containers = mockConstruction(PacketContainer.class, (container, context) -> arguments.add(context.arguments()))) {
+            packets.teleport(viewer, -7, location);
+            assertEquals(1, containers.constructed().size());
+            verify(protocol).sendServerPacket(viewer, containers.constructed().getFirst());
+        }
+        assertEquals(List.of(PacketType.Play.Server.ENTITY_TELEPORT, new TeleportPacketFactoryTest.Teleport(-7,
+                new TeleportPacketFactoryTest.Change(new TeleportPacketFactoryTest.Vec(1.25, 64.5, -3.75),
+                        new TeleportPacketFactoryTest.Vec(0, 0, 0), 90f, -45f), Set.of(), false)), arguments.getFirst());
+        verify(protocol, never()).createPacket(any(PacketType.class), anyBoolean());
+        assertTrue(created.isEmpty()); assertTrue(packets.usesDirectTeleportPackets());
+    }
+
+    @Test void directTeleportFailureFallsBackToProtocolLibForGood() {
+        doubleFields = 0;
+        packets = new FakeTextDisplayPackets(protocol, TeleportPacketFactory.forPacketClass(TeleportPacketFactoryTest.Exploding.class));
+        packets.teleport(viewer, -7, location);
+        assertFalse(packets.usesDirectTeleportPackets()); verify(logger).warning(contains("Direct teleport packets failed"));
+        assertEquals(PacketType.Play.Server.ENTITY_TELEPORT, sent.getFirst().type); assertEquals(List.of(-7), sent.getFirst().integers);
+        assertEquals(List.of(new Vector(1.25, 64.5, -3.75), new Vector()), sent.getFirst().vectors);
+        packets.teleport(viewer, -8, location); assertEquals(2, sent.size()); verify(logger, times(1)).warning(anyString());
+        RPCharacters.plugin = null;
+        packets = new FakeTextDisplayPackets(protocol, TeleportPacketFactory.forPacketClass(TeleportPacketFactoryTest.Exploding.class));
+        assertDoesNotThrow(() -> packets.teleport(viewer, -9, location)); assertEquals(3, sent.size());
+        verify(logger, times(1)).warning(anyString());
+    }
 }

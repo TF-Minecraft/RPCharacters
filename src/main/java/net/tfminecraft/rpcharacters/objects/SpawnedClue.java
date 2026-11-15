@@ -35,6 +35,8 @@ public class SpawnedClue {
 	private final Map<UUID, Long> discoveredByCharacter = new HashMap<>();
 	private int footTrafficEventsThisHour;
 	private long footTrafficWindowStartMs;
+	/** Placed by hand with /rpcharacter placeclue, not left behind by Thievery. */
+	private boolean placed;
 
 	public SpawnedClue(UUID id, String world, double x, double y, double z, String clueText,
 			long expiresAtMs, UUID ownerUuid) {
@@ -207,6 +209,14 @@ public class SpawnedClue {
 
 	public void setFootTrafficWindowStartMs(long footTrafficWindowStartMs) {
 		this.footTrafficWindowStartMs = footTrafficWindowStartMs;
+	}
+
+	public boolean isPlaced() {
+		return placed;
+	}
+
+	public void setPlaced(boolean placed) {
+		this.placed = placed;
 	}
 
 	public boolean isExpired() {

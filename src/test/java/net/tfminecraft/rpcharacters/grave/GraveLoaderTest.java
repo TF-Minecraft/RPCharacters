@@ -99,6 +99,13 @@ class GraveLoaderTest {
         assertTrue(GraveLoader.keepOutOfGrave(3, new ItemStack(Material.SAND)));
     }
 
+    @Test void insuranceBindingIsOptInAndResetsOnReload() throws Exception {
+        load(""); assertFalse(GraveLoader.isInsuranceRequireTicketAtDeath());
+        load("insurance: {require-ticket-at-death: true}\n"); assertTrue(GraveLoader.isInsuranceRequireTicketAtDeath());
+        load(""); assertFalse(GraveLoader.isInsuranceRequireTicketAtDeath());
+        assertEquals("&eYou have no grave to recover.", GraveLoader.getMessageInsuranceNoGrave());
+    }
+
     @Test void invalidMaterialAndDurationsUseDefaultsAndInsuranceCanBeDisabled() throws Exception {
         load("material: NOT_A_MATERIAL\nsnapshot-interval-ticks: -1\nexpire-seconds: -1\ninsurance: {item: ' '}\n");
         assertEquals(Material.CHEST, GraveLoader.getMaterial()); assertEquals(1, GraveLoader.getSnapshotIntervalTicks()); assertEquals(0, GraveLoader.getExpireSeconds());

@@ -18,6 +18,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.kyori.adventure.text.Component;
@@ -54,6 +55,7 @@ public final class CharacterBodies {
     private final CharacterPackGate packs;
     private final SelectionPresentation presentation;
     private final Location room;
+    private final World spawnWorld;
     private final Set<NamespacedKey> bodyKeys;
     private final Map<UUID, Location> originalSpawns = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerData> pendingAccounts = new HashMap<>();
@@ -110,6 +112,7 @@ public final class CharacterBodies {
         leases = new BodyLeaseStore(data.resolve("body-leases"));
         World mainWorld = Bukkit.getWorld(config.getString("spawn-world", Bukkit.getWorlds().getFirst().getName()));
         if (mainWorld == null) throw new IOException("Character body spawn world is not loaded");
+        spawnWorld = mainWorld;
         migration = new CharacterBodyMigration(data.resolve("body-migrations"),
                 plugin.getDataFolder().toPath().resolve("character-body-heirs.yml"),
                 config.getString("heirs-sha256", ""), store, mainWorld.getSpawnLocation());
@@ -403,6 +406,9 @@ public final class CharacterBodies {
                 return viewer == player && data == account && isReadyToChoose(player);
             }
             public String blockReason(RPCharacter character) { return CharacterBodies.this.blockReason(account, character); }
+            public CharacterSelectView.SwitchCooldown switchCooldown(RPCharacter character) {
+                return CharacterBodies.this.switchCooldown(account, character);
+            }
             public void play(RPCharacter character) { select(account, character); }
             public void create() {
                 CreationManager.initiateCreation(player);
@@ -478,12 +484,33 @@ public final class CharacterBodies {
         // Prison-marked characters switch freely; the cooldown counts from the last unmarked character.
         if (currentTag instanceof BodyTag.Room tag && tag.lastCharacterId() != null
                 && PrisonSwitch.cooldownApplies(account, tag.lastCharacterId().toString(), character)
-                && !player.hasPermission("rpcharacters.no_cooldown")
+                && !player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)
                 && PermissionGroupService.hasCharacterSwitchCooldown(player, account)) {
             long minutes = PermissionGroupService.getRemainingCooldownMinutes(player, account);
             return "You can switch in " + (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m. You can resume your current character.";
         }
         return null;
+    }
+
+    /**
+     * The cooldown entering {@code character} (null: a character not created yet) would start, by the
+     * same rule {@link PrisonSwitch#entered} applies; null when it starts none or the player has none.
+     */
+    CharacterSelectView.SwitchCooldown switchCooldown(PlayerData account, RPCharacter character) {
+        Player player = account.getPlayer();
+        if (player == null || player.hasPermission(CharacterSelectView.NO_COOLDOWN_PERMISSION)) return null;
+        int days = PermissionGroupService.getCharacterSwitchCooldownDays(player);
+        if (days <= 0) return null;
+        BodyTag currentTag;
+        try { currentTag = BodyTag.read(player); }
+        catch (IOException error) { return null; }
+        if (!(currentTag instanceof BodyTag.Room tag) || tag.lastCharacterId() == null) return null;
+        String from = PrisonSwitch.cooldownStartsFrom(account, tag.lastCharacterId().toString(), character);
+        if (from == null) return null;
+        RPCharacter leaving = account.getCharacterById(from);
+        boolean named = leaving != null && leaving.getStatus() == Status.ALIVE
+                && leaving.getName() != null && !leaving.getName().isBlank();
+        return new CharacterSelectView.SwitchCooldown(days, named ? leaving.getName() : null);
     }
 
     public void select(PlayerData account, RPCharacter character) {
@@ -496,7 +523,7 @@ public final class CharacterBodies {
         try {
             progress.ensureFresh(account, character);
             migration.ensureBody(account, character);
-            BodyRecord body = store.read(owner, UUID.fromString(character.getId())).orElseThrow();
+            BodyRecord body = inLoadedWorld(store.read(owner, UUID.fromString(character.getId())).orElseThrow());
             Location destination = body.body().location();
             if (destination.getWorld().equals(room.getWorld())) throw new IOException("Character body points to the selection room");
             destination.getWorld().getChunkAtAsync(destination).whenComplete((chunk, error) ->
@@ -512,6 +539,16 @@ public final class CharacterBodies {
             requests.remove(owner);
             fail(player, "loading the selected body", error);
         }
+    }
+
+    /** A body saved in a world that has since gone (a closed dungeon instance) resumes at the spawn world's spawn. */
+    private BodyRecord inLoadedWorld(BodyRecord stored) {
+        BodySnapshot placed = stored.body().inLoadedWorld(spawnWorld.getSpawnLocation());
+        if (placed == stored.body()) return stored;
+        plugin.getLogger().warning("Character " + stored.characterId() + " of " + stored.ownerId() + " was saved in world "
+                + stored.body().worldName() + ", which is not loaded; resuming in " + placed.worldName());
+        return new BodyRecord(stored.ownerId(), stored.characterId(), stored.rev(), stored.dataVersion(), stored.savedAt(),
+                stored.reason(), placed);
     }
 
     private void activate(PlayerData account, RPCharacter character, BodyRecord body, Location destination) {
@@ -857,20 +894,42 @@ public final class CharacterBodies {
         progress.close();
     }
 
+    /** Every five minutes: live progress is queued for the progress writer, so the tick never waits for the disk. */
     public void checkpoint() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID owner = player.getUniqueId();
             if (selecting.contains(owner) && !live.containsKey(owner) && !failed.contains(owner)) hideFromSelf(player);
         }
+        BukkitScheduler scheduler = Bukkit.getScheduler();
         for (PlayerData account : PlayerManager.getOnlineData()) {
             BodyTag.Live body = live.get(account.getUniqueId());
             if (body == null || failed.contains(account.getUniqueId())) continue;
             RPCharacter character = account.getCharacterById(body.characterId().toString());
             if (character == null || character.getStatus() != Status.ALIVE) continue;
-            try { progress.save(account, character); }
-            catch (IOException | RuntimeException error) { fail(account.getPlayer(), "saving character progression", error); }
+            Player player = account.getPlayer();
+            try {
+                progress.queueSave(account, character).whenComplete((ignored, error) -> {
+                    if (error != null) failCheckpoint(scheduler, player, body, error);
+                });
+            } catch (IOException | RuntimeException error) {
+                fail(player, "saving character progression", error);
+            }
         }
         CharacterSelectView.refreshAll();
+    }
+
+    /**
+     * On the progress writer: a queued checkpoint failed. The session it was taken in fails on the main thread, as
+     * a failed save always has; once the plugin is disabling there is only the log.
+     */
+    private void failCheckpoint(BukkitScheduler scheduler, Player player, BodyTag.Live body, Throwable error) {
+        try {
+            scheduler.runTask(plugin, () -> {
+                if (live.get(player.getUniqueId()) == body) fail(player, "saving character progression", error);
+            });
+        } catch (RuntimeException disabled) {
+            plugin.getLogger().log(Level.SEVERE, "Failed saving character progression for " + player.getUniqueId(), error);
+        }
     }
 
     private void fail(Player player, String operation, Throwable error) {

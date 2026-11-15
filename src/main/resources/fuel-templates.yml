@@ -1,5 +1,5 @@
 arcane_fuel:
-  item: m.miscellanea.arcane_fuel
+  item: m.utils.arcane_fuel
   amount-per-item: 50
   burn-rate: 1
   burn-interval: 1h
