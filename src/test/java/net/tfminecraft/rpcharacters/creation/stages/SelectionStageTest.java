@@ -29,7 +29,7 @@ import org.mockito.*;
 
 class SelectionStageTest extends StageFixture {
     @Test void raceAndTraitConfigurationFilterOptionsAndCopyBaseMetadata() {
-        Race human=race("human","race"),elf=race("elf","other");trait("lasting","injury",2,false);trait("temporary","injury",1,true);trait("other","physical",1,false);
+        Race human=race("human","race"),elf=race("elf","other");trait("lasting","injury",2,false);trait("temporary","injury",1,true);trait("other","physical",1,false);var hidden=trait("hidden","injury",0,false);when(hidden.getTraitData().isHidden()).thenReturn(true);
         Stage base=base();base.setRepeat(true);base.setRevision(3);base.setLockTimeMs(1000);base.setPlatform("game");SelectionStage races=new SelectionStage(base,config("target","race","key","race","min-select",1,"max-select",1));
         assertEquals(List.of("human"),races.getOptions().stream().map(SelectableItem::getId).toList());assertEquals("race",races.getTarget());assertEquals("race",races.getKey());assertEquals(27,races.getSize());assertEquals(1,races.getMinSelections());assertEquals(1,races.getMaxSelections());assertFalse(races.hasPoints());assertFalse(races.isActive());assertEquals(0,races.getSelections());assertTrue(races.shouldRepeat());assertEquals(3,races.getRevision());assertEquals(1000,races.getLockTimeMs());assertEquals("game",races.getPlatform());
         var filtered=new SelectionStage(base,config("target","trait","key","injury","filter","PERMANENT-ONLY","points",5,"gui-size",54,"slots",List.of(10,11)));

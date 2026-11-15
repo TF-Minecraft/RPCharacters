@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
+import net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand;
 import net.tfminecraft.rpcharacters.enums.Status;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
@@ -123,6 +124,10 @@ public class CommandTabCompleter implements TabCompleter {
 			return completeHide(args);
 		}
 		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
+				&& ClassUnlockCommand.isSubcommand(args[1])) {
+			return filter(ClassUnlockCommand.tabComplete(args), args[args.length - 1]);
+		}
+		if (sub.equals("admin") && args.length >= 3 && Permissions.isAdmin(sender)
 				&& (args[1].equalsIgnoreCase("strikes") || args[1].equalsIgnoreCase("tutorial"))) {
 			return completeAdminEvilRp(args);
 		}
@@ -184,6 +189,8 @@ public class CommandTabCompleter implements TabCompleter {
 					completions.add("strikes");
 					completions.add("tutorial");
 					completions.add(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND);
+					completions.add(ClassUnlockCommand.UNLOCK);
+					completions.add(ClassUnlockCommand.LOCK);
 				}
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);

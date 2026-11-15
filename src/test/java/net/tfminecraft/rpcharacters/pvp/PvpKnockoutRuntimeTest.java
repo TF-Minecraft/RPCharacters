@@ -79,6 +79,30 @@ class PvpKnockoutRuntimeTest {
         victim.disconnect(); server.getScheduler().performTicks(1); manager.shutdown();
     }
 
+    @Test void movedDownedPlayersAreHeldAtTheirNewSpot() {
+        manager.start(); Location original = victim.getLocation();
+        assertFalse(manager.moveDowned(victim, original.clone().add(3, 0, 0)));
+        hit(victim, 30);
+        assertFalse(manager.moveDowned(victim, null));
+        Location altar = original.clone().add(4, 1, 0); altar.setYaw(0);
+        assertTrue(manager.moveDowned(victim, altar));
+        assertEquals(altar.getX(), victim.getLocation().getX()); assertEquals(altar.getY(), victim.getLocation().getY());
+        victim.teleport(original); server.getScheduler().performTicks(1);
+        assertEquals(altar.getX(), victim.getLocation().getX()); assertEquals(altar.getZ(), victim.getLocation().getZ());
+        assertTrue(manager.moveDowned(victim, altar));
+        assertFalse(manager.moveDowned(victim, new Location(null, 0, 0, 0)));
+        World other = server.addSimpleWorld("other");
+        Location elsewhere = new Location(other, altar.getX(), altar.getY(), altar.getZ());
+        assertTrue(manager.moveDowned(victim, elsewhere));
+        assertSame(other, victim.getLocation().getWorld());
+        PlayerMock refusing = spy(victim);
+        doReturn(false).when(refusing).teleport(any(Location.class));
+        assertFalse(manager.moveDowned(refusing, altar));
+        server.getScheduler().performTicks(1);
+        assertSame(other, victim.getLocation().getWorld());
+        manager.shutdown();
+    }
+
     @Test void ordinaryDamageMobsCreationAndPendingDeathNeverTriggerKnockout() {
         verify(hit(mock(Zombie.class), 30), never()).setCancelled(true);
         verify(hit(victim, 1), never()).setCancelled(true);

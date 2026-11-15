@@ -197,6 +197,30 @@ public final class PvpKnockoutManager implements Listener {
 		return isKnockedOut(player);
 	}
 
+	/**
+	 * Moves a knocked-out player and keeps them down at the new spot, for plugins that drag or
+	 * carry the body. Returns false when the player is not knocked out.
+	 */
+	public boolean moveDowned(Player player, Location to) {
+		if (to == null || to.getWorld() == null || !isKnockedOut(player)) {
+			return false;
+		}
+		Location dest = to.clone();
+		dest.setYaw(player.getLocation().getYaw());
+		dest.setPitch(player.getLocation().getPitch());
+		// Only a move that really happened becomes the new freeze spot; a refused teleport keeps the old one.
+		if (!player.teleport(dest)) {
+			return false;
+		}
+		// A teleport listener may have ended the knockout meanwhile.
+		Knockout knockout = knockouts.get(player.getUniqueId());
+		if (knockout != null) {
+			// Where the teleport really ended: a listener may have redirected it.
+			knockout.location = player.getLocation().clone();
+		}
+		return knockout != null;
+	}
+
 	private boolean isKnockedOut(Player player) {
 		Knockout knockout = knockouts.get(player.getUniqueId());
 		return knockout != null && !knockout.isOver(player.getUniqueId(), System.currentTimeMillis())
@@ -289,7 +313,8 @@ public final class PvpKnockoutManager implements Listener {
 
 	private void enforceFreeze(Player player, Location freezeAt) {
 		Location here = player.getLocation();
-		if (here.getX() == freezeAt.getX()
+		if (here.getWorld() == freezeAt.getWorld()
+				&& here.getX() == freezeAt.getX()
 				&& here.getY() == freezeAt.getY()
 				&& here.getZ() == freezeAt.getZ()) {
 			return;
@@ -301,7 +326,7 @@ public final class PvpKnockoutManager implements Listener {
 	}
 
 	private static final class Knockout {
-		private final Location location;
+		private Location location;
 		private final long untilMs;
 		/** Held down by a winner's decision rather than for a fixed time. */
 		private final boolean deciding;

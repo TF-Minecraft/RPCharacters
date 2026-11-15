@@ -212,7 +212,8 @@ public final class RpInjureService {
 		List<Trait> out = new ArrayList<>();
 		List<String> owned = InjuryLimits.ownedIds(character);
 		for (Trait trait : TraitLoader.get()) {
-			if (trait == null || trait.getTraitData() == null || !trait.getTraitData().isInjuryKey()) {
+			if (trait == null || trait.getTraitData() == null || !trait.getTraitData().isInjuryKey()
+					|| trait.getTraitData().isHidden()) {
 				continue;
 			}
 			if (!owned.contains(trait.getId().toLowerCase(Locale.ROOT))

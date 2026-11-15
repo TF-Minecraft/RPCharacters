@@ -27,6 +27,7 @@ public class TraitData {
 	private Material icon;
 	private boolean blockOffhand;
 	private boolean canLootGraves;
+	private boolean hidden;
 	
 	public TraitData(ConfigurationSection config) {
 		key = config.getString("key");
@@ -76,6 +77,7 @@ public class TraitData {
 		}
 		blockOffhand = config.getBoolean("block-offhand", false);
 		canLootGraves = config.getBoolean("can-loot-graves", false);
+		hidden = config.getBoolean("hidden", false);
 		if (config.contains("icon")) {
 			String raw = config.getString("icon");
 			if (raw != null && !raw.isBlank()) {
@@ -201,5 +203,13 @@ public class TraitData {
 
 	public boolean canLootGraves() {
 		return canLootGraves;
+	}
+
+	/**
+	 * A trait kept off the website: neither the creation catalog nor a character's roster entry lists it
+	 * (hidden content, such as the mark another plugin's secret path leaves). The game still shows it.
+	 */
+	public boolean isHidden() {
+		return hidden;
 	}
 }

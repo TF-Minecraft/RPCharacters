@@ -84,6 +84,12 @@ class InventoryManagerItemsTest extends InventoryFixture {
         assertEquals("char-1", tag(result, "character_id"));
         when(character.getStatus()).thenReturn(Status.DEAD);
         assertFalse(lore(manager.getTraitsItem(character)).contains("Risk boundary"));
+        var secret = trait("manaless", "injury"); when(secret.getTraitData().isHidden()).thenReturn(true);
+        when(character.getTraits()).thenReturn(List.of(secret, ordinary));
+        var owner = org.mockito.Mockito.mock(org.bukkit.entity.Player.class); when(character.getOwner()).thenReturn(owner);
+        assertTrue(lore(manager.getTraitsItem(character)).contains("manaless"), "Its own player sees it");
+        assertFalse(lore(manager.getTraitsItem(character, null)).contains("manaless"), "Nobody else does");
+        assertFalse(lore(manager.getTraitsItem(character, org.mockito.Mockito.mock(org.bukkit.entity.Player.class))).contains("manaless"));
     }
 
     @Test void traitDetailsShowResolvedEffectsFuelDurationAndNoEffectFallback() {

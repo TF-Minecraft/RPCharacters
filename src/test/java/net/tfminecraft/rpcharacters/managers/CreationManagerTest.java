@@ -706,6 +706,31 @@ class CreationManagerTest {
     }
 
     @Test
+    void aCharacterBoundToAHiddenClassCannotEditItsClassStage() {
+        active();
+        when(creation.isEditing()).thenReturn(true);
+        SelectionStage stage = mock(SelectionStage.class);
+        when(stage.getTarget()).thenReturn("class");
+        stages.when(() -> StageLoader.getById("class_stage")).thenReturn(stage);
+        try (var unlocks = mockStatic(net.tfminecraft.rpcharacters.classpick.ClassUnlocks.class);
+                var gui = mockStatic(ClassPickGui.class)) {
+            unlocks.when(() -> net.tfminecraft.rpcharacters.classpick.ClassUnlocks.isLockedIn(any())).thenReturn(true);
+            manager.selectionClick(summary("edit:class_stage"));
+            gui.verifyNoInteractions();
+            verify(creation, never()).closeEditSession();
+            verify(creation, never()).jumpToStageForEdit(anyString());
+            // The direct /rpcharacter edit path refuses it too.
+            CreationManager.activeCreators.clear();
+            entries.when(() -> SummaryEditSupport.resolveStageId("class")).thenReturn("class_stage");
+            players.when(() -> PlayerManager.get(player)).thenReturn(data);
+            when(data.hasActiveCharacter()).thenReturn(true);
+            CreationManager.initiateEditEntry(player, "class");
+            message("Your class is bound to your character and can't be changed.");
+            assertFalse(CreationManager.activeCreators.containsKey(player));
+        }
+    }
+
+    @Test
     void summaryAndSelectionRoutingIgnoreEmptyBottomAndOrdinaryInventories() {
         InventoryClickEvent summary = summary(null);
         manager.selectionClick(summary);

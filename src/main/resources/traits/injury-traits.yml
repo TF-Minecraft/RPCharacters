@@ -81,3 +81,20 @@ blind:
   description:
     - "§7This character is blind."
     - "§7There is no prosthetic for blindness."
+
+manaless:
+  name: "#8a0303Manaless"
+  key: injury
+  # Only given by Magic's hidden blood path (the devotee's mark), and kept off the website.
+  hidden: true
+  gained-message: "#8a0303Something of you stays on the stone. The mana in you drains away, and it will not come back"
+  attribute-modifiers:
+    - strength.-2
+    - dexterity.-2
+    - constitution.-2
+    - intelligence.-2
+    - wisdom.-2
+    - charisma.-2
+  description:
+    - "§7Something was taken from this character that will not grow back."
+    - "§7It can hold no mana, and it is weaker in every way."

@@ -75,6 +75,11 @@ class InventoryManagerViewsTest extends InventoryFixture {
         assertEquals("visible",name(top().getItem(0))); assertEquals("char-1",tag(top().getItem(26),"character_id"));
         var many=new ArrayList<Trait>(); many.add(hidden); for(int i=0;i<60;i++) many.add(trait("trait"+i,"physical"));
         when(character.getTraits()).thenReturn(many); manager.traitsView(player,character); assertEquals(54,top().getSize()); assertEquals("trait52",name(top().getItem(52))); assertEquals("Back",name(top().getItem(53)));
+        var secret=trait("manaless","injury"); when(secret.getTraitData().isHidden()).thenReturn(true);
+        when(character.getTraits()).thenReturn(List.of(secret,visible)); when(character.getOwner()).thenReturn(player);
+        manager.traitsView(player,character); assertEquals("manaless",name(top().getItem(0)),"Its own player sees it");
+        manager.traitsView(other,character);
+        assertEquals("visible",name(other.getOpenInventory().getTopInventory().getItem(0)),"Nobody else does");
         when(data.getCharacters(Status.DEAD)).thenReturn(List.of(character)); manager.deadView(player,player); assertFilled(top()); assertEquals("char-1",tag(top().getItem(0),"character_id")); assertEquals("Back",name(top().getItem(26)));
         when(data.getCharacters(Status.DEAD)).thenReturn(List.of()); manager.deadView(player,player); assertEquals(Material.GRAY_STAINED_GLASS_PANE,top().getItem(0).getType());
     }

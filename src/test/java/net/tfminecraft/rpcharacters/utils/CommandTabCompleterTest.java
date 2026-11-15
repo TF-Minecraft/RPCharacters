@@ -118,8 +118,8 @@ class CommandTabCompleterTest {
         for (String verb : List.of("menu", "clues", "setclass", "seteighteen", "resetkit", "reclaimkit", "skipcooldown", "addtrait", "removetrait", "injure", "discordgate"))
             assertEquals(List.of("Iris"), complete(verb, "IR"), verb);
         assertEquals(List.of("name", "race"), complete("edit", ""));
-        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "hide", "prison"), complete("admin", ""));
-        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "resetclasses", "classpicks", "hide", "prison"), complete("admin", ""));
+        assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "hide", "prison"), complete("admin", ""));
+        grant("rpchar.class.reset", true); assertEquals(List.of("injure", "permakill", "strikes", "tutorial", "carryexp", "assignclass", "releaseclass", "resetclasses", "classpicks", "hide", "prison"), complete("admin", ""));
         assertEquals(List.of("confirm"), complete("admin", "RESETCLASSES", "c")); assertEquals(List.of(), complete("admin", "resetclasses", "confirm", ""));
         assertEquals(List.of("Iris"), complete("admin", "classpicks", "I")); assertEquals(List.of("reset", "freesubclass", "paid"), complete("admin", "CLASSPICKS", "Iris", ""));
         assertEquals(List.of("0", "1", "2"), complete("admin", "classpicks", "Iris", "PAID", "")); assertEquals(List.of(), complete("admin", "classpicks", "Iris", "reset", ""));
@@ -134,6 +134,7 @@ class CommandTabCompleterTest {
         for (String verb : List.of("catalog", "pending", "wipe", "stage", "seteighteen", "resetkit", "reclaimkit", "admin", "clearclues", "placeclue", "adminmode", "discordgate", "setclass", "skipcooldown", "addtrait", "removetrait", "menu", "injure", "permakill"))
             assertEquals(List.of(), complete(verb, ""), verb);
         assertEquals(List.of(), complete("admin", "strikes", "")); assertEquals(List.of(), complete("admin", "resetclasses", "")); assertEquals(List.of(), complete("admin", "classpicks", "")); assertEquals(List.of(), complete("admin", "prison", "")); assertEquals(List.of(), complete("admin", "hide", ""));
+        assertEquals(List.of(), complete("admin", "unlockclass", "")); assertEquals(List.of(), complete("admin", "lockclass", "Iris", ""));
         grant("rpchar.class.reset", true); assertEquals(List.of("resetclasses", "classpicks"), complete("admin", ""));
         grant(PrisonSwitch.PERMISSION, true); assertEquals(List.of("resetclasses", "classpicks", "prison"), complete("admin", ""));
     }
@@ -144,6 +145,24 @@ class CommandTabCompleterTest {
         assertEquals(List.of("hero", "on", "off"), complete("admin", "prison", "Iris", ""));
         assertEquals(List.of("on", "off"), complete("admin", "PRISON", "Iris", "hero", ""));
         assertEquals(List.of(), complete("admin", "prison", "Iris", "hero", "on", ""));
+    }
+
+    @Test void classUnlockCompletionOffersPlayersThenLockedOrUnlockedClasses() throws Exception {
+        admin(); var core = mock(net.Indyuce.mmocore.MMOCore.class); var classes = mock(net.Indyuce.mmocore.manager.ClassManager.class);
+        var field = net.Indyuce.mmocore.MMOCore.class.getField("classManager"); field.setAccessible(true); field.set(core, classes);
+        var warrior = mock(net.Indyuce.mmocore.api.player.profess.PlayerClass.class); when(warrior.getId()).thenReturn("WARRIOR");
+        var blood = mock(net.Indyuce.mmocore.api.player.profess.PlayerClass.class); when(blood.getId()).thenReturn("BLOOD_MAGE");
+        when(classes.getAll()).thenReturn(List.of(warrior, blood));
+        RPCharacter active = new RPCharacter(iris); active.setStatus(Status.ALIVE); active.addUnlockedClass("blood_mage");
+        when(data.getActiveCharacter()).thenReturn(active);
+        assertEquals(List.of("Iris"), complete("admin", "UnlockClass", "I"));
+        net.Indyuce.mmocore.MMOCore.plugin = null; assertEquals(List.of(), complete("admin", "unlockclass", "Iris", ""));
+        net.Indyuce.mmocore.MMOCore.plugin = core; assertEquals(List.of("WARRIOR"), complete("admin", "unlockclass", "Iris", ""));
+        assertEquals(List.of("WARRIOR", "BLOOD_MAGE"), complete("admin", "unlockclass", "offline", ""));
+        assertEquals(List.of("BLOOD_MAGE"), complete("admin", "lockclass", "Iris", "b"));
+        assertEquals(List.of(), complete("admin", "lockclass", "offline", ""));
+        assertEquals(List.of(), complete("admin", "lockclass", "Iris", "BLOOD_MAGE", ""));
+        field.set(core, null); assertEquals(List.of(), complete("admin", "unlockclass", "Iris", ""));
     }
 
     @Test void hideCompletionOffersOnlinePlayersThenOnOff() {

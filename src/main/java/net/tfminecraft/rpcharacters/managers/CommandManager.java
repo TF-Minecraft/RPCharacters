@@ -18,6 +18,7 @@ import net.tfminecraft.rpcharacters.Cache;
 import net.tfminecraft.rpcharacters.classpick.ClassPickGui;
 import net.tfminecraft.rpcharacters.classpick.ClassPickAdminCommand;
 import net.tfminecraft.rpcharacters.classpick.ClassPickReset;
+import net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand;
 import net.tfminecraft.rpcharacters.loaders.ChatLoader;
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
@@ -763,7 +764,7 @@ public class CommandManager implements Listener, CommandExecutor{
 			return true;
 		}
 		if (args.length < 2) {
-			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide> ...");
+			RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide|assignclass|releaseclass> ...");
 			return true;
 		}
 		if (args[1].equalsIgnoreCase("injure")) {
@@ -782,7 +783,10 @@ public class CommandManager implements Listener, CommandExecutor{
 		if (args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.mmocore.CarriedExperience.SUBCOMMAND)) {
 			return net.tfminecraft.rpcharacters.mmocore.CarriedExperience.handle(sender, args, 2);
 		}
-		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide> ...");
+		if (ClassUnlockCommand.isSubcommand(args[1])) {
+			return ClassUnlockCommand.handle(sender, args, 2);
+		}
+		RPTexts.send(sender, RPTexts.ERROR + "Usage: /rpcharacter admin <injure|permakill|strikes|tutorial|resetclasses|classpicks|carryexp|prison|hide|assignclass|releaseclass> ...");
 		return true;
 	}
 
