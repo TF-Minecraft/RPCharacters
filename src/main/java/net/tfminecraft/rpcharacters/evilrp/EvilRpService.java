@@ -53,6 +53,14 @@ public final class EvilRpService {
 	 * it to full length. Returns false when there is no living active character.
 	 */
 	public static boolean recordPlay(Player player) {
+		return recordPlay(player, true);
+	}
+
+	/**
+	 * As {@link #recordPlay(Player)}; announce false (a staff-started session) records it without
+	 * firing {@link EvilRpPlayEvent}, so listeners only ever count real evil plays.
+	 */
+	public static boolean recordPlay(Player player, boolean announce) {
 		RPCharacter character = activeCharacter(player);
 		if (character == null) {
 			return false;
@@ -61,6 +69,9 @@ public final class EvilRpService {
 		boolean continuing = isInSession(character.getEvilRpSessionEndsAtMs(), now);
 		character.setEvilRpSessionEndsAtMs(now + EvilRpLoader.getSessionMs());
 		RPCharacters.getPlayerManager().savePlayer(player);
+		if (announce) {
+			Bukkit.getPluginManager().callEvent(new EvilRpPlayEvent(player, character, !continuing));
+		}
 
 		// Chat rather than the action bar, which the MMOCore HUD redraws every tick.
 		int minutes = EvilRpLoader.getSessionMinutes();

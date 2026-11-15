@@ -137,7 +137,7 @@ public final class EvilRpCommands {
 				}
 			}
 			case "startsession" -> {
-				if (!EvilRpService.recordPlay(player)) {
+				if (!EvilRpService.recordPlay(player, false)) {
 					RPTexts.send(sender, RPTexts.ERROR + player.getName() + " has no living active character.");
 					return true;
 				}
