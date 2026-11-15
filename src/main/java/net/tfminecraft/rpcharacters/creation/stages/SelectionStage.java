@@ -83,6 +83,10 @@ public class SelectionStage extends Stage{
 				if(isPermanentOnlyFilter() && t.getTraitData().hasDuration()) {
 					continue;
 				}
+				// Hidden traits (given by other plugins) are never offered, and so never picked or shed here.
+				if(t.getTraitData().isHidden()) {
+					continue;
+				}
 				options.add(new SelectableItem(t));
 			}
 		} else if(this.target.equalsIgnoreCase("class")) {
@@ -271,7 +275,7 @@ public class SelectionStage extends Stage{
 			if (target.equalsIgnoreCase("trait") && key != null) {
 				List<Trait> toRemove = new ArrayList<>();
 				for (Trait trait : cc.getCharacter().getTraits()) {
-					if (trait.getTraitData().getKey().equalsIgnoreCase(key)
+					if (trait.getTraitData().getKey().equalsIgnoreCase(key) && !trait.getTraitData().isHidden()
 							&& (!isPermanentOnlyFilter() || !trait.getTraitData().hasDuration())) {
 						toRemove.add(trait);
 					}

@@ -212,7 +212,12 @@ public final class PvpKnockoutManager implements Listener {
 		if (!player.teleport(dest)) {
 			return false;
 		}
-		knockouts.get(player.getUniqueId()).location = to.clone();
+		// A teleport listener may have ended the knockout meanwhile.
+		Knockout knockout = knockouts.get(player.getUniqueId());
+		if (knockout == null) {
+			return false;
+		}
+		knockout.location = to.clone();
 		return true;
 	}
 

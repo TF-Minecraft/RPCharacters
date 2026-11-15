@@ -184,7 +184,7 @@ public final class RosterSyncService {
 			row.put("name", c.getName() != null ? c.getName() : "");
 			row.put("status", c.getStatus() != null ? c.getStatus().toString() : "ALIVE");
 			row.put("race", c.getRace() != null ? c.getRace().getId() : null);
-			row.put("class", c.hasMMOClass() ? c.getMMOClass() : null);
+			row.put("class", c.hasMMOClass() && !onHiddenClass(c) ? c.getMMOClass() : null);
 			if (c.getCreatedAtEpochSeconds() > 0) {
 				row.put("created_at", String.valueOf(c.getCreatedAtEpochSeconds()));
 			}
@@ -265,7 +265,7 @@ public final class RosterSyncService {
 				row.put("race_name", raceName);
 			}
 		}
-		if (c.hasMMOClass()) {
+		if (c.hasMMOClass() && !onHiddenClass(c)) {
 			String className = resolveClassName(c.getMMOClass());
 			if (className != null && !className.isBlank()) {
 				row.put("class_name", className);
@@ -489,5 +489,11 @@ public final class RosterSyncService {
 			return "";
 		}
 		return ChatColor.stripColor(raw);
+	}
+
+	/** A hidden class (unlocked for this character by another plugin) never reaches the website. */
+	static boolean onHiddenClass(RPCharacter c) {
+		String current = c.getMMOClass();
+		return current != null && c.getUnlockedClasses().stream().anyMatch(current::equalsIgnoreCase);
 	}
 }
