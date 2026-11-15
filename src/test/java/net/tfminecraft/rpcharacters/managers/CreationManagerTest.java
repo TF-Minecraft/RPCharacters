@@ -719,6 +719,14 @@ class CreationManagerTest {
             gui.verifyNoInteractions();
             verify(creation, never()).closeEditSession();
             verify(creation, never()).jumpToStageForEdit(anyString());
+            // The direct /rpcharacter edit path refuses it too.
+            CreationManager.activeCreators.clear();
+            entries.when(() -> SummaryEditSupport.resolveStageId("class")).thenReturn("class_stage");
+            players.when(() -> PlayerManager.get(player)).thenReturn(data);
+            when(data.hasActiveCharacter()).thenReturn(true);
+            CreationManager.initiateEditEntry(player, "class");
+            message("Your class is bound to your character and can't be changed.");
+            assertFalse(CreationManager.activeCreators.containsKey(player));
         }
     }
 

@@ -115,12 +115,19 @@ class ClassUnlocksTest {
         assertTrue(ClassUnlocks.assign(iris, "blood-mage"));
         assertEquals("BLOOD_MAGE", character.getMMOClass()); assertTrue(ClassUnlocks.isLockedIn(character));
         service.verify(() -> ClassService.applyClass(iris, "BLOOD_MAGE"));
-        verify(saves).savePlayer(iris); assertTrue(logged("Assigned class BLOOD_MAGE to Hero"));
+        verify(saves, atLeastOnce()).saveCharacterNow(iris.getUniqueId(), character); assertTrue(logged("Assigned class BLOOD_MAGE to Hero"));
         service.when(() -> ClassService.isOnClass(iris, "BLOOD_MAGE")).thenReturn(true);
         assertTrue(ClassUnlocks.assign(iris, "BLOOD_MAGE"), "Already in it: nothing to do");
         service.verify(() -> ClassService.applyClass(any(), anyString()), times(1));
         assertTrue(ClassUnlocks.lock(iris, "blood_mage")); assertFalse(ClassUnlocks.isLockedIn(character), "Released: it may change class again");
         assertFalse(ClassUnlocks.assign(iris, "missing")); assertFalse(ClassUnlocks.assign(null, "BLOOD_MAGE"));
+    }
+
+    @Test void assignReportsASaveThatFailed() {
+        character.setMMOClass("MAGE"); character.addUnlockedClass("BLOOD_MAGE");
+        when(saves.saveCharacterNow(iris.getUniqueId(), character)).thenReturn(false);
+        assertFalse(ClassUnlocks.assign(iris, "blood_mage"));
+        assertTrue(logged("but the save failed"));
     }
 
     @Test void aClassMmoCoreWontApplyLeavesTheOldClassButKeepsTheRecordForARetry() {

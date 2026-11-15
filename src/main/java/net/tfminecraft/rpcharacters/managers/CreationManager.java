@@ -165,6 +165,10 @@ public class CreationManager implements Listener{
 			RPTexts.send(p, RPTexts.ERROR + "You have no active character to edit.");
 			return;
 		}
+		if (isClassStage(stage) && net.tfminecraft.rpcharacters.classpick.ClassUnlocks.isLockedIn(pd.getActiveCharacter())) {
+			RPTexts.send(p, RPTexts.ERROR + "Your class is bound to your character and can't be changed.");
+			return;
+		}
 		if (stage != null && !StageEditLock.canEdit(p, stage, pd.getActiveCharacter())
 				&& !PaidChangeService.canPayToOpen(stage)) {
 			RPTexts.send(p, RPTexts.ERROR + "That choice is locked and can no longer be edited.");

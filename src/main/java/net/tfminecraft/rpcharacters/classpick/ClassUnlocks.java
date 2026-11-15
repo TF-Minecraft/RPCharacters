@@ -79,7 +79,11 @@ public final class ClassUnlocks {
 		}
 		PlayerData pd = PlayerManager.get(player);
 		CharacterLifecycle.notifyClassChange(player, pd.getUniqueId(), character, oldClassId, character.getMMOClass());
-		RPCharacters.getPlayerManager().savePlayer(player);
+		if (!RPCharacters.getPlayerManager().saveCharacterNow(player.getUniqueId(), character)) {
+			LOG.warning("[RPCharacters] Assigned class " + id + " to " + character.getName() + " (" + character.getId()
+					+ ") of " + player.getName() + " but the save failed; assign it again.");
+			return false;
+		}
 		LOG.info("[RPCharacters] Assigned class " + id + " to " + character.getName() + " (" + character.getId()
 				+ ") of " + player.getName() + ".");
 		return true;

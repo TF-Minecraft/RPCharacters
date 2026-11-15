@@ -215,7 +215,8 @@ public final class PvpKnockoutManager implements Listener {
 		// A teleport listener may have ended the knockout meanwhile.
 		Knockout knockout = knockouts.get(player.getUniqueId());
 		if (knockout != null) {
-			knockout.location = to.clone();
+			// Where the teleport really ended: a listener may have redirected it.
+			knockout.location = player.getLocation().clone();
 		}
 		return knockout != null;
 	}
