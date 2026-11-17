@@ -1,0 +1,116 @@
+package net.tfminecraft.rpcharacters.blind;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Reads the blocks around a blind character: what a cane tap outlines and what the
+ * warnings call out. Works on {@link Probe} so it runs without a world.
+ */
+public final class Surroundings {
+
+	/** What a block is, for a blind character's purposes. */
+	public enum Kind {
+		/** Something to stand on or walk into. */
+		SOLID,
+		/** Air, plants, open space. */
+		OPEN,
+		/** Doors, trapdoors and gates. */
+		DOOR,
+		/** Lava, fire, cactus and the like. */
+		HAZARD
+	}
+
+	/** What a tap marker shows, most important first. */
+	public enum Marker {
+		HAZARD, DROP, DOOR, WALL
+	}
+
+	public record Spot(Marker marker, int x, int y, int z) {}
+
+	@FunctionalInterface
+	public interface Probe {
+		Kind kind(int x, int y, int z);
+	}
+
+	private Surroundings() {}
+
+	/**
+	 * The markers a cane tap shows within {@code radius} of the feet block, nearest and most
+	 * important first, at most {@code max}. Walls and drops are only marked where they border
+	 * floor the character could walk on, so open fields stay quiet.
+	 */
+	public static List<Spot> tap(Probe probe, int fx, int fy, int fz, int radius, int max) {
+		List<Spot> spots = new ArrayList<>();
+		for (int dx = -radius; dx <= radius; dx++) {
+			for (int dz = -radius; dz <= radius; dz++) {
+				if (dx * dx + dz * dz > radius * radius || (dx == 0 && dz == 0)) continue;
+				classify(probe, fx + dx, fy, fz + dz).ifPresent(spots::add);
+			}
+		}
+		spots.sort(Comparator.comparing(Spot::marker)
+				.thenComparingInt(s -> (s.x() - fx) * (s.x() - fx) + (s.z() - fz) * (s.z() - fz)));
+		return spots.size() > max ? List.copyOf(spots.subList(0, max)) : List.copyOf(spots);
+	}
+
+	private static Optional<Spot> classify(Probe probe, int x, int fy, int z) {
+		for (int y = fy - 1; y <= fy + 1; y++) {
+			if (probe.kind(x, y, z) == Kind.HAZARD) return Optional.of(new Spot(Marker.HAZARD, x, y, z));
+		}
+		for (int y = fy; y <= fy + 1; y++) {
+			if (probe.kind(x, y, z) == Kind.DOOR) return Optional.of(new Spot(Marker.DOOR, x, y, z));
+		}
+		if (floor(probe, x, fy, z).isPresent() || !bordersFloor(probe, x, fy, z)) return Optional.empty();
+		if (probe.kind(x, fy, z) == Kind.SOLID && probe.kind(x, fy + 1, z) == Kind.SOLID) {
+			return Optional.of(new Spot(Marker.WALL, x, fy, z));
+		}
+		if (depth(probe, x, fy, z, 2) >= 2) return Optional.of(new Spot(Marker.DROP, x, fy, z));
+		return Optional.empty();
+	}
+
+	private static boolean bordersFloor(Probe probe, int x, int fy, int z) {
+		return floor(probe, x + 1, fy, z).isPresent() || floor(probe, x - 1, fy, z).isPresent()
+				|| floor(probe, x, fy, z + 1).isPresent() || floor(probe, x, fy, z - 1).isPresent();
+	}
+
+	/** The y a character could stand at in this column, within one step of {@code fy}. */
+	static Optional<Integer> floor(Probe probe, int x, int fy, int z) {
+		for (int y = fy + 1; y >= fy - 1; y--) {
+			if (probe.kind(x, y - 1, z) == Kind.SOLID && probe.kind(x, y, z) == Kind.OPEN
+					&& probe.kind(x, y + 1, z) == Kind.OPEN) {
+				return Optional.of(y);
+			}
+		}
+		return Optional.empty();
+	}
+
+	/** How many open blocks lie below the feet level in this column, counting up to {@code limit}. */
+	static int depth(Probe probe, int x, int fy, int z, int limit) {
+		int open = 0;
+		while (open < limit && probe.kind(x, fy - 1 - open, z) == Kind.OPEN) open++;
+		return open;
+	}
+
+	/**
+	 * What lies ahead in the walking direction (unit steps {@code dx}, {@code dz}), up to
+	 * {@code lookAhead} blocks: a hazard, or a drop at least {@code dropDepth} deep.
+	 * The first thing found wins; a wall stops the look.
+	 */
+	public static Optional<Marker> ahead(Probe probe, double x, int fy, double z, double dx, double dz,
+			int lookAhead, int dropDepth) {
+		for (int step = 1; step <= lookAhead; step++) {
+			int bx = (int) Math.floor(x + dx * step);
+			int bz = (int) Math.floor(z + dz * step);
+			for (int y = fy - 1; y <= fy + 1; y++) {
+				if (probe.kind(bx, y, bz) == Kind.HAZARD) return Optional.of(Marker.HAZARD);
+			}
+			if (probe.kind(bx, fy, bz) == Kind.SOLID && probe.kind(bx, fy + 1, bz) == Kind.SOLID) return Optional.empty();
+			if (floor(probe, bx, fy, bz).isEmpty() && depth(probe, bx, fy, bz, dropDepth) >= dropDepth) {
+				return Optional.of(Marker.DROP);
+			}
+		}
+		return Optional.empty();
+	}
+}

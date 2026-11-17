@@ -385,6 +385,7 @@ public class RPCharacters extends JavaPlugin{
 		PvpStrikeService.shutdown();
 		ArmourDonning.shutdown();
 		LastSolidTracker.get().shutdown();
+		net.tfminecraft.rpcharacters.blind.BlindAid.shutdown();
 		GraveManager.get().saveAll();
 		PaidChangeListener.settleAll();
 		save();
@@ -459,6 +460,7 @@ public class RPCharacters extends JavaPlugin{
 		getServer().getPluginManager().registerEvents(new GraveInsuranceListener(), this);
 		getServer().getPluginManager().registerEvents(new EvilRpListener(), this);
 		getServer().getPluginManager().registerEvents(new JoinUnstuckListener(), this);
+		net.tfminecraft.rpcharacters.blind.BlindAid.create(this);
 	}
 	public void startManagers() {
 		playerManager.start();
@@ -478,6 +480,7 @@ public class RPCharacters extends JavaPlugin{
 		PvpStrikeService.start();
 		ArmourDonning.start();
 		LastSolidTracker.get().start();
+		net.tfminecraft.rpcharacters.blind.BlindAid.start();
 	}
 	public void loadConfigs() {
 		configLoader.load(new File(getDataFolder(), "config.yml"));
@@ -530,6 +533,7 @@ public class RPCharacters extends JavaPlugin{
 		graveLoader.load(new File(getDataFolder(), "graves.yml"));
 		tutorialLoader.load(new File(getDataFolder(), "tutorials.yml"));
 		evilRpLoader.load(new File(getDataFolder(), "evil-rp.yml"));
+		net.tfminecraft.rpcharacters.blind.BlindAid.load(new File(getDataFolder(), "blind.yml"));
 		WorldGuardBridge.init();
 		permadeathDependencyListener.registerSimpleFactionsIfPresent();
 		net.tfminecraft.rpcharacters.catalog.CreationCatalogSyncService.pushAsync(this);
@@ -583,7 +587,8 @@ public class RPCharacters extends JavaPlugin{
 				"party.yml",
 				"graves.yml",
 				"tutorials.yml",
-				"evil-rp.yml"
+				"evil-rp.yml",
+				"blind.yml"
 				};
 		for(String s : files) {
 			File newConfigFile = new File(getDataFolder(), s);
