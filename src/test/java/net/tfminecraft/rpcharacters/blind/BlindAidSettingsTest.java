@@ -54,4 +54,17 @@ class BlindAidSettingsTest {
         assertFalse(s.warnEnabled()); assertEquals(1, s.warnLookAhead()); assertEquals(1, s.warnDropDepth()); assertEquals(0, s.warnCooldownMillis());
         assertEquals("§aD", s.warnDropMessage()); assertEquals("H", s.warnHazardMessage()); assertEquals("y", s.warnSound());
     }
+
+    @Test void capsRadiiAndFallsBackFromMalformedSoundKeys() throws Exception {
+        var c = new YamlConfiguration();
+        c.loadFromString("""
+            sound-sense: {radius: 500}
+            cane-tap: {radius: 80, sound: "BLOCK WOOD HIT"}
+            warnings: {sound: "Bad:Key"}
+            """);
+        BlindAidSettings s = BlindAidSettings.from(c);
+        assertEquals(32, s.senseRadius()); assertEquals(16, s.tapRadius());
+        assertEquals("minecraft:block.wood.hit", s.tapSound()); assertEquals("minecraft:block.note_block.bass", s.warnSound());
+        assertEquals("minecraft:x", BlindAidSettings.sound("minecraft:x", "d")); assertEquals("d", BlindAidSettings.sound(null, "d"));
+    }
 }

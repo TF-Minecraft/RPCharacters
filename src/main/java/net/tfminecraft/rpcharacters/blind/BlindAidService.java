@@ -52,6 +52,8 @@ import org.bukkit.util.Vector;
 public final class BlindAidService implements Listener {
 
 	static final NamespacedKey STRIDE_KEY = new NamespacedKey("rpcharacters", "blind_stride");
+	/** Faster than anyone walks (sprinting with Speed II is about 0.4 blocks a tick); more is a teleport. */
+	static final double MAX_STEP_PER_TICK = 0.6;
 
 	private final Plugin plugin;
 	private final Supplier<BlindAidSettings> settings;
@@ -119,10 +121,11 @@ public final class BlindAidService implements Listener {
 			Location here = p.getLocation();
 			double walked = v.last != null && v.last.getWorld() == here.getWorld()
 					? Math.hypot(here.getX() - v.last.getX(), here.getZ() - v.last.getZ()) : 0;
+			if (walked > MAX_STEP_PER_TICK * s.checkTicks()) walked = 0; // a teleport, not walking
 			v.last = here;
 			stride(p, s, p.getCurrentInput());
 			if (walked > 0 && striding(p)) {
-				p.setExhaustion(p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked);
+				p.setExhaustion(Math.min(40f, p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked));
 			}
 			if (s.warnEnabled() && walked > 0.05) warn(p, v, s);
 			sense(p, v, s, seen);
@@ -228,8 +231,7 @@ public final class BlindAidService implements Listener {
 		List<Entity> markers = new ArrayList<>();
 		for (Surroundings.Spot spot : Surroundings.tap(probes.apply(world), at.getBlockX(), at.getBlockY(),
 				at.getBlockZ(), s.tapRadius(), s.tapMaxMarkers())) {
-			BlockData data = spot.marker() == Surroundings.Marker.DROP ? Material.WHITE_CARPET.createBlockData()
-					: world.getBlockAt(spot.x(), spot.y(), spot.z()).getBlockData();
+			BlockData data = markerBlock(spot.marker()).createBlockData();
 			Color colour = colour(spot.marker());
 			BlockDisplay display = world.spawn(new Location(world, spot.x(), spot.y(), spot.z()), BlockDisplay.class, d -> {
 				d.setVisibleByDefault(false);
@@ -242,8 +244,22 @@ public final class BlindAidService implements Listener {
 			markers.add(display);
 		}
 		v.markers = markers;
-		p.playSound(at, s.tapSound(), 1f, 1f);
 		Bukkit.getScheduler().runTaskLater(plugin, () -> removeMarkers(markers), s.tapTicks());
+		p.playSound(at, s.tapSound(), 1f, 1f);
+	}
+
+	/**
+	 * What a marker is drawn as: always a plain block model, so its glow outline shows. Fluids and
+	 * block-entity blocks (lava, chests, signs) would draw nothing. Drops are a flat plate where the
+	 * floor would be.
+	 */
+	static Material markerBlock(Surroundings.Marker marker) {
+		return switch (marker) {
+			case HAZARD -> Material.ORANGE_STAINED_GLASS;
+			case DROP -> Material.WHITE_CARPET;
+			case DOOR -> Material.YELLOW_STAINED_GLASS;
+			case WALL -> Material.WHITE_STAINED_GLASS;
+		};
 	}
 
 	static Color colour(Surroundings.Marker marker) {

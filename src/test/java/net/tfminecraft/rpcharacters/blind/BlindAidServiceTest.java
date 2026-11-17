@@ -193,15 +193,21 @@ class BlindAidServiceTest {
     @Test void stridingDrainsHungerByDistanceWalked() {
         Body b = new Body(true);
         service.tick();
-        b.at = new Location(world, 3.5, 64, 4.5, -90, 0);       // 5 blocks
+        b.at = new Location(world, 2.5, 64, 2.0, -90, 0);       // 2.5 blocks
         service.tick();
-        assertEquals(0.5f, b.exhaustion, 1e-5);
-        b.sprint = false; b.at = new Location(world, 6.5, 64, 4.5, -90, 0);
+        assertEquals(0.25f, b.exhaustion, 1e-5);
+        b.sprint = false; b.at = new Location(world, 4.5, 64, 2.0, -90, 0);
         service.tick();
-        assertEquals(0.5f, b.exhaustion, 1e-5, "no drain after letting go");
+        assertEquals(0.25f, b.exhaustion, 1e-5, "no drain after letting go");
         b.at = new Location(otherWorld, 0, 64, 0, -90, 0); b.sprint = true;
         service.tick();
-        assertEquals(0.5f, b.exhaustion, 1e-5, "a world change is not walking");
+        assertEquals(0.25f, b.exhaustion, 1e-5, "a world change is not walking");
+        b.at = new Location(otherWorld, 900, 64, 0, -90, 0);
+        service.tick();
+        assertEquals(0.25f, b.exhaustion, 1e-5, "a teleport in the same world is not walking");
+        b.exhaustion = 39.9f; b.at = new Location(otherWorld, 902, 64, 0, -90, 0);
+        service.tick();
+        assertEquals(40f, b.exhaustion, 1e-5, "capped like vanilla");
     }
 
     @Test void playersWithoutASpeedAttributeAreLeftAlone() {
@@ -343,6 +349,13 @@ class BlindAidServiceTest {
         service.onInteract(click(b.p, Action.RIGHT_CLICK_AIR, new ItemStack(Material.STICK)));
         verify(b.p, never()).playSound(any(Location.class), anyString(), anyFloat(), anyFloat());
         verify(sighted.p, never()).playSound(any(Location.class), anyString(), anyFloat(), anyFloat());
+    }
+
+    @Test void markerBlocksAlwaysDrawAnOutline() {
+        assertEquals(Material.ORANGE_STAINED_GLASS, BlindAidService.markerBlock(Surroundings.Marker.HAZARD));
+        assertEquals(Material.WHITE_CARPET, BlindAidService.markerBlock(Surroundings.Marker.DROP));
+        assertEquals(Material.YELLOW_STAINED_GLASS, BlindAidService.markerBlock(Surroundings.Marker.DOOR));
+        assertEquals(Material.WHITE_STAINED_GLASS, BlindAidService.markerBlock(Surroundings.Marker.WALL));
     }
 
     @Test void markerColours() {

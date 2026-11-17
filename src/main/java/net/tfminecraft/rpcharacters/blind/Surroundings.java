@@ -39,8 +39,9 @@ public final class Surroundings {
 
 	/**
 	 * The markers a cane tap shows within {@code radius} of the feet block, nearest and most
-	 * important first, at most {@code max}. Walls and drops are only marked where they border
-	 * floor the character could walk on, so open fields stay quiet.
+	 * important first, at most {@code max}. Everything is only marked where it is on or next to
+	 * floor the character could walk on, so open fields and the middle of a lava lake stay quiet,
+	 * and hazards take at most half of the markers.
 	 */
 	public static List<Spot> tap(Probe probe, int fx, int fy, int fz, int radius, int max) {
 		List<Spot> spots = new ArrayList<>();
@@ -52,17 +53,26 @@ public final class Surroundings {
 		}
 		spots.sort(Comparator.comparing(Spot::marker)
 				.thenComparingInt(s -> (s.x() - fx) * (s.x() - fx) + (s.z() - fz) * (s.z() - fz)));
-		return spots.size() > max ? List.copyOf(spots.subList(0, max)) : List.copyOf(spots);
+		int hazardRoom = Math.max(1, max / 2);
+		List<Spot> chosen = new ArrayList<>();
+		for (Spot spot : spots) {
+			if (chosen.size() == max) break;
+			if (spot.marker() == Marker.HAZARD && hazardRoom-- <= 0) continue;
+			chosen.add(spot);
+		}
+		return List.copyOf(chosen);
 	}
 
 	private static Optional<Spot> classify(Probe probe, int x, int fy, int z) {
+		boolean onFloor = floor(probe, x, fy, z).isPresent();
+		if (!onFloor && !bordersFloor(probe, x, fy, z)) return Optional.empty();
 		for (int y = fy - 1; y <= fy + 1; y++) {
 			if (probe.kind(x, y, z) == Kind.HAZARD) return Optional.of(new Spot(Marker.HAZARD, x, y, z));
 		}
 		for (int y = fy; y <= fy + 1; y++) {
 			if (probe.kind(x, y, z) == Kind.DOOR) return Optional.of(new Spot(Marker.DOOR, x, y, z));
 		}
-		if (floor(probe, x, fy, z).isPresent() || !bordersFloor(probe, x, fy, z)) return Optional.empty();
+		if (onFloor) return Optional.empty();
 		if (probe.kind(x, fy, z) == Kind.SOLID && probe.kind(x, fy + 1, z) == Kind.SOLID) {
 			return Optional.of(new Spot(Marker.WALL, x, fy, z));
 		}
@@ -95,19 +105,24 @@ public final class Surroundings {
 
 	/**
 	 * What lies ahead in the walking direction (unit steps {@code dx}, {@code dz}), up to
-	 * {@code lookAhead} blocks: a hazard, or a drop at least {@code dropDepth} deep.
+	 * {@code lookAhead} blocks: a hazard, or a drop at least {@code dropDepth} deep. The look
+	 * follows the ground one step up or down at a time, so stairs and slopes are not drops.
 	 * The first thing found wins; a wall stops the look.
 	 */
 	public static Optional<Marker> ahead(Probe probe, double x, int fy, double z, double dx, double dz,
 			int lookAhead, int dropDepth) {
+		int level = fy;
 		for (int step = 1; step <= lookAhead; step++) {
 			int bx = (int) Math.floor(x + dx * step);
 			int bz = (int) Math.floor(z + dz * step);
-			for (int y = fy - 1; y <= fy + 1; y++) {
+			for (int y = level - 1; y <= level + 1; y++) {
 				if (probe.kind(bx, y, bz) == Kind.HAZARD) return Optional.of(Marker.HAZARD);
 			}
-			if (probe.kind(bx, fy, bz) == Kind.SOLID && probe.kind(bx, fy + 1, bz) == Kind.SOLID) return Optional.empty();
-			if (floor(probe, bx, fy, bz).isEmpty() && depth(probe, bx, fy, bz, dropDepth) >= dropDepth) {
+			if (probe.kind(bx, level, bz) == Kind.SOLID && probe.kind(bx, level + 1, bz) == Kind.SOLID) return Optional.empty();
+			Optional<Integer> ground = floor(probe, bx, level, bz);
+			if (ground.isPresent()) {
+				level = ground.get();
+			} else if (depth(probe, bx, level, bz, dropDepth) >= dropDepth) {
 				return Optional.of(Marker.DROP);
 			}
 		}

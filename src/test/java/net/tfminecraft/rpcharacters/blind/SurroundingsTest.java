@@ -56,6 +56,24 @@ class SurroundingsTest {
         assertEquals(List.of(new Spot(Marker.HAZARD, -1, 65, 0), new Spot(Marker.DOOR, 1, 65, 0)), spots);
     }
 
+    @Test void lavaLakesAreOnlyMarkedAtTheShoreAndHazardsLeaveRoomForTheRest() {
+        for (int x = -9; x <= -2; x++) for (int z = -9; z <= 9; z++) set(x, 63, z, Kind.HAZARD);
+        for (int z = -4; z <= 4; z++) column(3, z, 64, 65, Kind.SOLID);
+        List<Spot> spots = Surroundings.tap(probe, 0, 64, 0, 6, 60);
+        assertTrue(spots.stream().filter(s -> s.marker() == Marker.HAZARD).allMatch(s -> s.x() == -2), "only the shore row");
+        List<Spot> few = Surroundings.tap(probe, 0, 64, 0, 6, 4);
+        assertEquals(2, few.stream().filter(s -> s.marker() == Marker.HAZARD).count());
+        assertEquals(2, few.stream().filter(s -> s.marker() == Marker.WALL).count());
+        assertEquals(1, Surroundings.tap(probe, 0, 64, 0, 6, 1).size());
+    }
+
+    @Test void aheadFollowsStairsDownWithoutCallingThemDrops() {
+        for (int step = 1; step <= 4; step++) column(step, 0, 64 - step, 63, Kind.OPEN);
+        assertEquals(Optional.empty(), Surroundings.ahead(probe, 0.5, 64, 0.5, 1, 0, 3, 3));
+        set(3, 61, 0, Kind.HAZARD);
+        assertEquals(Optional.of(Marker.HAZARD), Surroundings.ahead(probe, 0.5, 64, 0.5, 1, 0, 3, 3), "hazards are found at the stair's level");
+    }
+
     @Test void floorAndDepthHelpers() {
         assertEquals(Optional.of(64), Surroundings.floor(probe, 0, 64, 0));
         column(0, 0, 60, 63, Kind.OPEN);
