@@ -119,15 +119,16 @@ public final class BlindAidService implements Listener {
 			}
 			Viewer v = viewers.computeIfAbsent(p.getUniqueId(), id -> new Viewer());
 			Location here = p.getLocation();
-			double walked = v.last != null && v.last.getWorld() == here.getWorld()
+			double moved = v.last != null && v.last.getWorld() == here.getWorld()
 					? Math.hypot(here.getX() - v.last.getX(), here.getZ() - v.last.getZ()) : 0;
-			if (walked > MAX_STEP_PER_TICK * s.checkTicks()) walked = 0; // a teleport, not walking
+			// More than anyone walks is a teleport, a mount or lag: no hunger for it, but still warn.
+			double walked = moved > MAX_STEP_PER_TICK * s.checkTicks() ? 0 : moved;
 			v.last = here;
 			stride(p, s, p.getCurrentInput());
 			if (walked > 0 && striding(p)) {
 				p.setExhaustion(Math.min(40f, p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked));
 			}
-			if (s.warnEnabled() && walked > 0.05) warn(p, v, s);
+			if (s.warnEnabled() && moved > 0.05) warn(p, v, s);
 			sense(p, v, s, seen);
 		}
 		lastSeen = seen;
