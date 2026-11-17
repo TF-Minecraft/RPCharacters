@@ -131,9 +131,7 @@ public final class BlindAidService implements Listener {
 			boolean strode = v.strode || striding(p);
 			stride(p, s, p.getCurrentInput());
 			v.strode = striding(p);
-			if (walked > 0 && strode) {
-				p.setExhaustion(Math.min(40f, p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked));
-			}
+			if (strode) charge(p, s, walked);
 			if (s.warnEnabled() && moved > 0.05) warn(p, v, s, mx / moved, mz / moved);
 			sense(p, v, s, seen);
 		}
@@ -307,8 +305,22 @@ public final class BlindAidService implements Listener {
 	/** A teleport is not walking: the next check measures from where the player landed. */
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onTeleport(PlayerTeleportEvent e) {
-		Viewer v = viewers.get(e.getPlayer().getUniqueId());
-		if (v != null) v.last = e.getTo().clone();
+		Player p = e.getPlayer();
+		Viewer v = viewers.get(p.getUniqueId());
+		if (v == null) return;
+		Location from = e.getFrom();
+		if (v.last != null && v.last.getWorld() == from.getWorld() && (v.strode || striding(p))) {
+			BlindAidSettings s = settings.get();
+			double walked = Math.hypot(from.getX() - v.last.getX(), from.getZ() - v.last.getZ());
+			if (walked <= MAX_STEP_PER_TICK * s.checkTicks()) charge(p, s, walked); // walked before the teleport
+		}
+		v.last = e.getTo().clone();
+	}
+
+	/** Stride hunger for {@code walked} blocks, capped at 40 like vanilla exhaustion. */
+	private static void charge(Player p, BlindAidSettings s, double walked) {
+		if (walked <= 0) return;
+		p.setExhaustion(Math.min(40f, p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked));
 	}
 
 	@EventHandler

@@ -247,6 +247,26 @@ class BlindAidServiceTest {
         assertNull(service.viewer(sighted.p));
     }
 
+    @Test void distanceWalkedBeforeATeleportStillCostsHunger() {
+        Body b = new Body(true);
+        service.tick();                                          // striding from (0.5, 0.5)
+        Location walkedTo = new Location(world, 1.5, 64, 0.5, -90, 0);
+        service.onTeleport(new PlayerTeleportEvent(b.p, walkedTo, new Location(world, 50.5, 64, 0.5)));
+        assertEquals(0.1f, b.exhaustion, 1e-5, "the block walked before the teleport is charged");
+        b.at = new Location(world, 50.5, 64, 0.5, -90, 0);
+        service.tick();
+        assertEquals(0.1f, b.exhaustion, 1e-5);
+        service.onTeleport(new PlayerTeleportEvent(b.p, new Location(world, 80.5, 64, 0.5), new Location(world, 90.5, 64, 0.5)));
+        assertEquals(0.1f, b.exhaustion, 1e-5, "a jump too big to have been walked is not charged");
+        service.onTeleport(new PlayerTeleportEvent(b.p, new Location(otherWorld, 90.5, 64, 0.5), new Location(world, 0.5, 64, 0.5)));
+        b.sprint = false; service.tick();                        // stride off: nothing charged on the next teleport
+        b.at = new Location(world, 1.5, 64, 0.5); service.tick();
+        service.onTeleport(new PlayerTeleportEvent(b.p, new Location(world, 2.5, 64, 0.5), new Location(world, 9.5, 64, 0.5)));
+        assertEquals(0.1f, b.exhaustion, 1e-5);
+        service.viewer(b.p).last = null;
+        assertDoesNotThrow(() -> service.onTeleport(new PlayerTeleportEvent(b.p, b.at, b.at)));
+    }
+
     @Test void aChangedBonusReplacesTheActiveModifier() {
         Body b = new Body(true);
         service.tick(); assertEquals(0.25, b.modifier.getAmount());
