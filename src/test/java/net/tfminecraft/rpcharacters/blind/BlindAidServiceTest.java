@@ -81,6 +81,7 @@ class BlindAidServiceTest {
         World w = mock(World.class);
         Block block = mock(Block.class); when(block.getBlockData()).thenReturn(mock(BlockData.class));
         when(w.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(block);
+        when(w.isChunkLoaded(anyInt(), anyInt())).thenReturn(true);
         when(w.spawn(any(Location.class), eq(BlockDisplay.class), any(Consumer.class))).thenAnswer(call -> {
             BlockDisplay display = mock(BlockDisplay.class);
             ((Consumer<BlockDisplay>) call.getArgument(2)).accept(display);
@@ -198,16 +199,47 @@ class BlindAidServiceTest {
         assertEquals(0.25f, b.exhaustion, 1e-5);
         b.sprint = false; b.at = new Location(world, 4.5, 64, 2.0, -90, 0);
         service.tick();
-        assertEquals(0.25f, b.exhaustion, 1e-5, "no drain after letting go");
+        assertEquals(0.45f, b.exhaustion, 1e-5, "stride was on when this stretch began");
+        b.at = new Location(world, 6.5, 64, 2.0, -90, 0);
+        service.tick();
+        assertEquals(0.45f, b.exhaustion, 1e-5, "no drain after letting go");
         b.at = new Location(otherWorld, 0, 64, 0, -90, 0); b.sprint = true;
         service.tick();
-        assertEquals(0.25f, b.exhaustion, 1e-5, "a world change is not walking");
+        assertEquals(0.45f, b.exhaustion, 1e-5, "a world change is not walking");
         b.at = new Location(otherWorld, 900, 64, 0, -90, 0);
         service.tick();
-        assertEquals(0.25f, b.exhaustion, 1e-5, "a teleport in the same world is not walking");
+        assertEquals(0.45f, b.exhaustion, 1e-5, "a teleport in the same world is not walking");
         b.exhaustion = 39.9f; b.at = new Location(otherWorld, 902, 64, 0, -90, 0);
         service.tick();
         assertEquals(40f, b.exhaustion, 1e-5, "capped like vanilla");
+    }
+
+    @Test void releasingSprintBetweenChecksStillCostsHunger() {
+        Body b = new Body(true);
+        service.tick();                                          // striding from here
+        b.at = new Location(world, 2.5, 64, 0.5, -90, 0);
+        service.onInput(new PlayerInputEvent(b.p, input(true, false, false)));
+        assertNull(b.modifier);
+        b.sprint = false;
+        service.tick();
+        assertEquals(0.2f, b.exhaustion, 1e-5, "the 2 blocks walked while striding are charged");
+        b.at = new Location(world, 4.5, 64, 0.5, -90, 0);
+        service.tick();
+        assertEquals(0.2f, b.exhaustion, 1e-5, "walking without stride is free");
+        service.onInput(new PlayerInputEvent(b.p, input(true, true, false)));
+        b.at = new Location(world, 5.5, 64, 0.5, -90, 0);
+        service.onInput(new PlayerInputEvent(b.p, input(true, false, false)));
+        service.tick();
+        assertEquals(0.3f, b.exhaustion, 1e-5, "a short burst between checks is charged too");
+    }
+
+    @Test void aChangedBonusReplacesTheActiveModifier() {
+        Body b = new Body(true);
+        service.tick(); assertEquals(0.25, b.modifier.getAmount());
+        settings.set(with("stride: {speed-bonus: 0.1}"));
+        service.tick(); assertEquals(0.1, b.modifier.getAmount());
+        service.tick();
+        verify(b.speed, times(2)).addTransientModifier(any());
     }
 
     @Test void playersWithoutASpeedAttributeAreLeftAlone() {
@@ -337,6 +369,16 @@ class BlindAidServiceTest {
         for (BlockDisplay d : spawned.subList(count, spawned.size())) verify(d).remove();
     }
 
+    @Test void tapSkipsMarkersInUnloadedChunks() {
+        Body b = new Body(true);
+        for (int z = -8; z <= 8; z++) for (int y = 64; y <= 65; y++) blocks.put("3," + y + "," + z, Kind.SOLID);
+        when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(false);
+        service.tick();
+        service.onInteract(click(b.p, Action.RIGHT_CLICK_AIR, new ItemStack(Material.STICK)));
+        assertTrue(spawned.isEmpty());
+        verify(b.p).playSound(any(Location.class), eq("minecraft:block.wood.hit"), eq(1f), eq(1f));
+    }
+
     @Test void tapIgnoresLeftClicksOtherItemsSightedPlayersAndTheSwitch() {
         Body b = new Body(true); Body sighted = new Body(false);
         service.onInteract(click(b.p, Action.RIGHT_CLICK_AIR, new ItemStack(Material.STICK)));  // not a viewer yet
@@ -385,11 +427,20 @@ class BlindAidServiceTest {
         verify(b.p).sendActionBar("§6Something dangerous is just ahead.");
     }
 
-    @Test void noWarningStandingStillLookingUpOnSafeGroundOrWithWarningsOff() {
+    @Test void warningsLookWhereThePlayerWalksNotWhereTheyFace() {
+        Body b = new Body(true);
+        blocks.put("0,64,3", Kind.HAZARD);                       // to the south
+        service.tick();
+        b.at = new Location(world, 0.5, 64, 1.5, -90, 0);        // facing east, walking south
+        service.tick();
+        verify(b.p).sendActionBar("\u00a76Something dangerous is just ahead.");
+    }
+
+    @Test void noWarningStandingStillWalkingAwayOnSafeGroundOrWithWarningsOff() {
         Body b = new Body(true);
         blocks.put("2,64,0", Kind.HAZARD);
         service.tick(); service.tick();                          // standing still
-        b.at = new Location(world, 0.5, 64, 0.6, -90, -90);      // looking straight up
+        b.at = new Location(world, 0.5, 64, 0.6, -90, 0);        // facing the hazard, walking away from it
         service.tick();
         blocks.clear();
         b.at = new Location(world, 0.5, 64, 1.6, -90, 0);        // safe ground

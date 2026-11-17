@@ -42,7 +42,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.Vector;
 
 /**
  * Help for blind characters, who keep the Blindness fog: walking faster with a cane while
@@ -73,6 +72,8 @@ public final class BlindAidService implements Listener {
 		Set<UUID> glowing = new HashSet<>();
 		long tapReadyAt;
 		long warnReadyAt;
+		/** Stride was on at some point since the last check, so the distance walked costs hunger. */
+		boolean strode;
 		List<Entity> markers = new ArrayList<>();
 	}
 
@@ -119,16 +120,20 @@ public final class BlindAidService implements Listener {
 			}
 			Viewer v = viewers.computeIfAbsent(p.getUniqueId(), id -> new Viewer());
 			Location here = p.getLocation();
-			double moved = v.last != null && v.last.getWorld() == here.getWorld()
-					? Math.hypot(here.getX() - v.last.getX(), here.getZ() - v.last.getZ()) : 0;
+			boolean sameWorld = v.last != null && v.last.getWorld() == here.getWorld();
+			double mx = sameWorld ? here.getX() - v.last.getX() : 0;
+			double mz = sameWorld ? here.getZ() - v.last.getZ() : 0;
+			double moved = Math.hypot(mx, mz);
 			// More than anyone walks is a teleport, a mount or lag: no hunger for it, but still warn.
 			double walked = moved > MAX_STEP_PER_TICK * s.checkTicks() ? 0 : moved;
 			v.last = here;
+			boolean strode = v.strode || striding(p);
 			stride(p, s, p.getCurrentInput());
-			if (walked > 0 && striding(p)) {
+			v.strode = striding(p);
+			if (walked > 0 && strode) {
 				p.setExhaustion(Math.min(40f, p.getExhaustion() + s.strideExhaustionPerBlock() * (float) walked));
 			}
-			if (s.warnEnabled() && moved > 0.05) warn(p, v, s);
+			if (s.warnEnabled() && moved > 0.05) warn(p, v, s, mx / moved, mz / moved);
 			sense(p, v, s, seen);
 		}
 		lastSeen = seen;
@@ -142,12 +147,16 @@ public final class BlindAidService implements Listener {
 		boolean want = s.strideEnabled() && input.isForward() && input.isSprint() && !input.isSneak()
 				&& p.getFoodLevel() >= s.strideMinFood() && !p.isFlying() && !p.isGliding() && !p.isSwimming()
 				&& !p.isInsideVehicle() && holdsCane(p, s);
-		boolean has = speed.getModifier(STRIDE_KEY) != null;
-		if (want && !has) {
+		AttributeModifier current = speed.getModifier(STRIDE_KEY);
+		if (current != null && (!want || current.getAmount() != s.strideBonus())) {
+			speed.removeModifier(STRIDE_KEY);
+			current = null;
+		}
+		if (want && current == null) {
 			speed.addTransientModifier(new AttributeModifier(STRIDE_KEY, s.strideBonus(),
 					AttributeModifier.Operation.MULTIPLY_SCALAR_1));
-		} else if (!want && has) {
-			speed.removeModifier(STRIDE_KEY);
+			Viewer v = viewers.get(p.getUniqueId());
+			if (v != null) v.strode = true;
 		}
 	}
 
@@ -232,6 +241,7 @@ public final class BlindAidService implements Listener {
 		List<Entity> markers = new ArrayList<>();
 		for (Surroundings.Spot spot : Surroundings.tap(probes.apply(world), at.getBlockX(), at.getBlockY(),
 				at.getBlockZ(), s.tapRadius(), s.tapMaxMarkers())) {
+			if (!world.isChunkLoaded(spot.x() >> 4, spot.z() >> 4)) continue;
 			BlockData data = markerBlock(spot.marker()).createBlockData();
 			Color colour = colour(spot.marker());
 			BlockDisplay display = world.spawn(new Location(world, spot.x(), spot.y(), spot.z()), BlockDisplay.class, d -> {
@@ -278,15 +288,13 @@ public final class BlindAidService implements Listener {
 
 	// ------------------------------------------------------------------ warnings
 
-	private void warn(Player p, Viewer v, BlindAidSettings s) {
+	/** Looks ahead in the direction walked since the last check ({@code dx}, {@code dz}, a unit vector). */
+	private void warn(Player p, Viewer v, BlindAidSettings s, double dx, double dz) {
 		long now = clock.getAsLong();
 		if (now < v.warnReadyAt) return;
 		Location at = p.getLocation();
-		Vector look = at.getDirection().setY(0);
-		if (look.lengthSquared() < 1.0E-4) return;
-		look.normalize();
 		Optional<Surroundings.Marker> ahead = Surroundings.ahead(probes.apply(at.getWorld()), at.getX(), at.getBlockY(),
-				at.getZ(), look.getX(), look.getZ(), s.warnLookAhead(), s.warnDropDepth());
+				at.getZ(), dx, dz, s.warnLookAhead(), s.warnDropDepth());
 		if (ahead.isEmpty()) return;
 		p.sendActionBar(ahead.get() == Surroundings.Marker.DROP ? s.warnDropMessage() : s.warnHazardMessage());
 		p.playSound(at, s.warnSound(), 1f, 0.6f);

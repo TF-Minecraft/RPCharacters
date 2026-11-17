@@ -107,14 +107,19 @@ public final class Surroundings {
 	 * What lies ahead in the walking direction (unit steps {@code dx}, {@code dz}), up to
 	 * {@code lookAhead} blocks: a hazard, or a drop at least {@code dropDepth} deep. The look
 	 * follows the ground one step up or down at a time, so stairs and slopes are not drops.
-	 * The first thing found wins; a wall stops the look.
+	 * The first thing found wins; a wall stops the look. The line is followed in tenth-of-a-block
+	 * steps, so every column it crosses is looked at, diagonals included.
 	 */
 	public static Optional<Marker> ahead(Probe probe, double x, int fy, double z, double dx, double dz,
 			int lookAhead, int dropDepth) {
 		int level = fy;
-		for (int step = 1; step <= lookAhead; step++) {
-			int bx = (int) Math.floor(x + dx * step);
-			int bz = (int) Math.floor(z + dz * step);
+		int lastX = (int) Math.floor(x), lastZ = (int) Math.floor(z);
+		for (int tenth = 1; tenth <= lookAhead * 10; tenth++) {
+			int bx = (int) Math.floor(x + dx * tenth / 10.0);
+			int bz = (int) Math.floor(z + dz * tenth / 10.0);
+			if (bx == lastX && bz == lastZ) continue;
+			lastX = bx;
+			lastZ = bz;
 			for (int y = level - 1; y <= level + 1; y++) {
 				if (probe.kind(bx, y, bz) == Kind.HAZARD) return Optional.of(Marker.HAZARD);
 			}

@@ -74,6 +74,12 @@ class SurroundingsTest {
         assertEquals(Optional.of(Marker.HAZARD), Surroundings.ahead(probe, 0.5, 64, 0.5, 1, 0, 3, 3), "hazards are found at the stair's level");
     }
 
+    @Test void aheadLooksAtEveryColumnADiagonalCrosses() {
+        double d = Math.sqrt(0.5);
+        column(1, 1, 58, 63, Kind.OPEN);                         // only crossed between the (1,0) and (2,1) samples
+        assertEquals(Optional.of(Marker.DROP), Surroundings.ahead(probe, 0.9, 64, 0.1, d, d, 3, 3));
+    }
+
     @Test void floorAndDepthHelpers() {
         assertEquals(Optional.of(64), Surroundings.floor(probe, 0, 64, 0));
         column(0, 0, 60, 63, Kind.OPEN);
