@@ -1,0 +1,63 @@
+# Help for characters with the Blind trait. They keep the Blindness fog; these give
+# them other ways to find their way. Changes load on /rpcharacter reload, except check-ticks,
+# which needs a restart.
+enabled: true
+
+# Trait ids that count as blind.
+traits:
+  - blind
+
+# Items that count as a cane (TLibs item paths). ArmourShop skins keep the item,
+# so a skinned cane still counts.
+cane-items:
+  - m.props.walking_cane
+  - m.props.forearm_crutch
+  - m.props.forearm_crutch_slim
+
+# How often (in ticks) stride, outlines and warnings are checked.
+check-ticks: 5
+
+# Holding sprint while walking forward with a cane in either hand. Vanilla sprint is
+# blocked while blind; this gives a smaller speed bonus instead (no sprint jump).
+stride:
+  enabled: true
+  # 0.25 = +25% walking speed (vanilla sprint is +30%).
+  speed-bonus: 0.25
+  # Food needed, like vanilla sprinting.
+  min-food: 7
+  # Hunger drain per block walked while striding (vanilla sprint: 0.1).
+  exhaustion-per-block: 0.1
+
+# Creatures that move nearby show as an outline only the blind character sees.
+# Outlines show through the fog. Sneaking, standing still and invisibility hide you.
+sound-sense:
+  enabled: true
+  # At most 32.
+  radius: 10
+  # Only creatures the character has a line of sight to (no hearing through walls).
+  line-of-sight: true
+  # Blocks moved between checks to count as moving.
+  min-move: 0.2
+
+# Right-click with a cane: walls, drops, doors and hazards nearby get a coloured
+# outline for a few seconds (hazards orange, drops red, doors yellow, walls white).
+cane-tap:
+  enabled: true
+  # At most 16.
+  radius: 8
+  seconds: 3
+  cooldown-seconds: 5
+  # Hazards take at most half of these.
+  max-markers: 60
+  sound: "minecraft:block.wood.hit"
+
+# A sound and an action-bar line when walking toward a drop or a hazard.
+warnings:
+  enabled: true
+  look-ahead: 3
+  # Blocks of fall that count as a drop.
+  drop-depth: 3
+  cooldown-seconds: 3
+  drop-message: "&cThe ground falls away ahead."
+  hazard-message: "&6Something dangerous is just ahead."
+  sound: "minecraft:block.note_block.bass"
