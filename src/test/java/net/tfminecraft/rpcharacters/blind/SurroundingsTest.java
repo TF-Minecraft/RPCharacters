@@ -80,6 +80,24 @@ class SurroundingsTest {
         assertEquals(Optional.of(Marker.DROP), Surroundings.ahead(probe, 0.9, 64, 0.1, d, d, 3, 3));
     }
 
+    @Test void aheadVisitsTheCornerColumnTheLineCrossesFirst() {
+        double d = Math.sqrt(0.5);
+        column(1, 0, 58, 63, Kind.OPEN);                         // crossed before (1,1)
+        assertEquals(Optional.of(Marker.DROP), Surroundings.ahead(probe, 0.95, 64, 0.94, d, d, 3, 3));
+        blocks.clear();
+        column(1, 0, 64, 65, Kind.SOLID); column(2, 2, 58, 63, Kind.OPEN);
+        assertEquals(Optional.empty(), Surroundings.ahead(probe, 0.95, 64, 0.94, d, d, 3, 3), "a wall in that column stops the look");
+    }
+
+    @Test void aheadWalksStraightAlongEitherAxisAndNotAtAllWithoutADirection() {
+        column(0, -3, 58, 63, Kind.OPEN);
+        assertEquals(Optional.of(Marker.DROP), Surroundings.ahead(probe, 0.5, 64, 0.5, 0, -1, 3, 3));
+        column(-3, 0, 58, 63, Kind.OPEN);
+        assertEquals(Optional.of(Marker.DROP), Surroundings.ahead(probe, 0.5, 64, 0.5, -1, 0, 3, 3));
+        assertEquals(Optional.empty(), Surroundings.ahead(probe, 0.5, 64, 0.5, 0, 0, 3, 3));
+        assertEquals(Optional.empty(), Surroundings.ahead(probe, 0.5, 64, 0.5, 0, -1, 2, 3), "beyond the look-ahead");
+    }
+
     @Test void floorAndDepthHelpers() {
         assertEquals(Optional.of(64), Surroundings.floor(probe, 0, 64, 0));
         column(0, 0, 60, 63, Kind.OPEN);

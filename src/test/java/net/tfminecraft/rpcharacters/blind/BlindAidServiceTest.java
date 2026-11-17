@@ -39,6 +39,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
@@ -231,6 +232,19 @@ class BlindAidServiceTest {
         service.onInput(new PlayerInputEvent(b.p, input(true, false, false)));
         service.tick();
         assertEquals(0.3f, b.exhaustion, 1e-5, "a short burst between checks is charged too");
+    }
+
+    @Test void aTeleportIsNotWalking() {
+        Body b = new Body(true);
+        service.tick();
+        Location to = new Location(world, 2.5, 64, 0.5, -90, 0);
+        service.onTeleport(new PlayerTeleportEvent(b.p, b.at.clone(), to));
+        b.at = to;
+        service.tick();
+        assertEquals(0f, b.exhaustion, 1e-6, "a short teleport while striding costs no hunger");
+        Body sighted = new Body(false);
+        assertDoesNotThrow(() -> service.onTeleport(new PlayerTeleportEvent(sighted.p, sighted.at, to)));
+        assertNull(service.viewer(sighted.p));
     }
 
     @Test void aChangedBonusReplacesTheActiveModifier() {

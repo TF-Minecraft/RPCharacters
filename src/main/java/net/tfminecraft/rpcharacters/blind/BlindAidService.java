@@ -39,6 +39,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -302,6 +303,13 @@ public final class BlindAidService implements Listener {
 	}
 
 	// ------------------------------------------------------------------ clean-up
+
+	/** A teleport is not walking: the next check measures from where the player landed. */
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onTeleport(PlayerTeleportEvent e) {
+		Viewer v = viewers.get(e.getPlayer().getUniqueId());
+		if (v != null) v.last = e.getTo().clone();
+	}
 
 	@EventHandler
 	public void onQuit(PlayerQuitEvent e) {

@@ -107,19 +107,28 @@ public final class Surroundings {
 	 * What lies ahead in the walking direction (unit steps {@code dx}, {@code dz}), up to
 	 * {@code lookAhead} blocks: a hazard, or a drop at least {@code dropDepth} deep. The look
 	 * follows the ground one step up or down at a time, so stairs and slopes are not drops.
-	 * The first thing found wins; a wall stops the look. The line is followed in tenth-of-a-block
-	 * steps, so every column it crosses is looked at, diagonals included.
+	 * The first thing found wins; a wall stops the look. Every column the line crosses is looked
+	 * at, in order (grid traversal); at an exact corner the x-side column comes first.
 	 */
 	public static Optional<Marker> ahead(Probe probe, double x, int fy, double z, double dx, double dz,
 			int lookAhead, int dropDepth) {
 		int level = fy;
-		int lastX = (int) Math.floor(x), lastZ = (int) Math.floor(z);
-		for (int tenth = 1; tenth <= lookAhead * 10; tenth++) {
-			int bx = (int) Math.floor(x + dx * tenth / 10.0);
-			int bz = (int) Math.floor(z + dz * tenth / 10.0);
-			if (bx == lastX && bz == lastZ) continue;
-			lastX = bx;
-			lastZ = bz;
+		int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
+		int stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
+		double nextX = dx == 0 ? Double.POSITIVE_INFINITY : (dx > 0 ? bx + 1 - x : x - bx) / Math.abs(dx);
+		double nextZ = dz == 0 ? Double.POSITIVE_INFINITY : (dz > 0 ? bz + 1 - z : z - bz) / Math.abs(dz);
+		while (true) {
+			double reached;
+			if (nextX <= nextZ) {
+				reached = nextX;
+				bx += stepX;
+				nextX += 1 / Math.abs(dx);
+			} else {
+				reached = nextZ;
+				bz += stepZ;
+				nextZ += 1 / Math.abs(dz);
+			}
+			if (reached > lookAhead) break;
 			for (int y = level - 1; y <= level + 1; y++) {
 				if (probe.kind(bx, y, bz) == Kind.HAZARD) return Optional.of(Marker.HAZARD);
 			}
