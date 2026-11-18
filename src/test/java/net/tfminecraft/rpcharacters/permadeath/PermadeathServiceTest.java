@@ -114,7 +114,16 @@ class PermadeathServiceTest extends PermadeathRuntimeFixture {
 
     @Test void aPlayerWhoJoinsOnTheDeathScreenStillHasToRespawnFirst() throws Exception {
         pool(healing);when(player.isDead()).thenReturn(true);PermadeathService.syncDeathOnJoin(player);die();assertTrue(character.getTraits().isEmpty());
-        when(player.isDead()).thenReturn(false);PermadeathService.syncDeathOnJoin(player);die();assertEquals(List.of(healing),character.getTraits());
+        respawned();die();assertEquals(List.of(healing),character.getTraits());
+    }
+
+    @Test void joiningAliveOrQuittingClearsAStaleDeathMark() throws Exception {
+        pool(healing);die();character.removeTrait(healing);PermadeathService.syncDeathOnJoin(player);die();assertEquals(List.of(healing),character.getTraits());
+        character.removeTrait(healing);PermadeathService.clearPendingPermadeathRespawn(player);die();assertEquals(List.of(healing),character.getTraits());
+    }
+
+    @Test void aRepeatDeathStillEndsThePvpStart() {
+        die();PvpStartSessions.begin(List.of(player.getUniqueId()),System.currentTimeMillis(),60_000);die();assertFalse(PvpStartSessions.isActive(player.getUniqueId(),System.currentTimeMillis()));
     }
 
     @Test void emptyPoolWarnsWithoutChangingTheCharacter() {

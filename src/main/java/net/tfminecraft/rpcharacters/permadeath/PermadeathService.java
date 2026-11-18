@@ -42,13 +42,14 @@ public final class PermadeathService {
 	}
 
 	public static void handleDeath(Player player, Location deathLocation) {
-		// MMOCore regen gives a body on the death screen a sliver of health, and then repeating
-		// damage (outside the world border) kills it again. Only the first death counts.
+		// Every death ends the player's PvP start, whatever happens below.
+		boolean inPvpStart = PvpStartSessions.consume(player.getUniqueId(), System.currentTimeMillis());
+		// One death can fire this twice: a vehicle passenger killed by the hit VehicleFramework
+		// re-deals inside the damage event dies again when Paper finishes the outer hit.
+		// Only the first death until the player respawns counts.
 		if (!diedAwaitingRespawn.add(player.getUniqueId())) {
 			return;
 		}
-		// Every death ends the player's PvP start, whatever happens below.
-		boolean inPvpStart = PvpStartSessions.consume(player.getUniqueId(), System.currentTimeMillis());
 		if (ignoreNextZoneDeath.remove(player.getUniqueId())) {
 			return;
 		}
@@ -270,6 +271,8 @@ public final class PermadeathService {
 		pendingPermadeathRespawn.remove(uuid);
 		pendingPermakillSounds.remove(uuid);
 		ignoreNextZoneDeath.remove(uuid);
+		// A player who quits on the death screen gets the mark back on join (syncDeathOnJoin).
+		diedAwaitingRespawn.remove(uuid);
 	}
 
 	public static void markPendingPermakillSounds(Player player) {
