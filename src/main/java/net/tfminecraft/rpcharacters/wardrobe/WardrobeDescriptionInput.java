@@ -25,7 +25,7 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  */
 public final class WardrobeDescriptionInput implements Listener {
 
-	static final long TIMEOUT_MILLIS = 3L * 60L * 1000L;
+	static final long TIMEOUT_MILLIS = 60L * 1000L;
 
 	private record Pending(String characterId, String slot, long startedAt) {}
 

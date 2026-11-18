@@ -91,6 +91,11 @@ public final class WardrobeSlotData {
 		return textureSignature;
 	}
 
+	public WardrobeSlotData withDescription(String newDescription) {
+		return new WardrobeSlotData(slot, unlocked, filled, signed, applyPending, model, displayName,
+			textureValue, textureSignature, newDescription);
+	}
+
 	/** What others read while this skin is worn, or null to use the character description. */
 	public String getDescription() {
 		return description;

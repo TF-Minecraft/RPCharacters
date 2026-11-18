@@ -20,6 +20,8 @@ public final class WardrobeDescriptions {
 	static final String COOLDOWN_FIELD = "wardrobe_description";
 	static final String DESCRIPTION_COMMAND = "/rpcharacter description";
 	static final String WARDROBE_COMMAND = "/rpcharacter wardrobe";
+	/** The website keeps at most this many characters, colour codes included. */
+	static final int MAX_RAW_LENGTH = 1024;
 
 	private WardrobeDescriptions() {}
 
@@ -78,6 +80,12 @@ public final class WardrobeDescriptions {
 				RPTexts.send(player, error);
 				return false;
 			}
+			if (text.length() > MAX_RAW_LENGTH) {
+				RPTexts.send(player, RPTexts.ERROR + "That description is too long with its colour codes.");
+				return false;
+			}
+			// Applied before the website call, like /rpcharacter description, so repeats wait.
+			applyCooldown(player);
 		}
 		String label = WardrobeService.labelForSlot(WardrobeCache.get(player), slotId);
 		boolean clearing = text == null;
@@ -91,7 +99,6 @@ public final class WardrobeDescriptions {
 					+ RPTexts.WARN + label + RPTexts.SUCCESS + ".");
 				return;
 			}
-			applyCooldown(player);
 			RPTexts.send(player, RPTexts.SUCCESS + "Description saved. Others read it while you wear "
 				+ RPTexts.WARN + label + RPTexts.SUCCESS + ".");
 		});

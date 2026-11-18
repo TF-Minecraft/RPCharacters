@@ -311,8 +311,12 @@ public final class WardrobeService {
 					callback.done("Could not save the description. Try again in a moment.");
 					return;
 				}
-				if (updated != null && characterId.equalsIgnoreCase(updated.getCharacterId())) {
-					WardrobeCache.put(playerId, updated);
+				// Change only this skin's text, so a pull or equip still in flight keeps the rest.
+				WardrobeSnapshot cached = WardrobeCache.get(playerId);
+				WardrobeSlotData saved = updated != null && characterId.equalsIgnoreCase(updated.getCharacterId())
+					? updated.getSlot(slot) : null;
+				if (saved != null && cached != null && characterId.equalsIgnoreCase(cached.getCharacterId())) {
+					WardrobeCache.put(playerId, cached.withDescription(slot, saved.getDescription()));
 				} else {
 					refreshActiveAsync(online);
 				}

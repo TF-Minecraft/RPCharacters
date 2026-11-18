@@ -45,6 +45,16 @@ public final class WardrobeSnapshot {
 		this.descriptions = descriptions;
 	}
 
+	/** A copy where one skin's description is replaced; everything else is unchanged. */
+	public WardrobeSnapshot withDescription(String slot, String description) {
+		Map<String, WardrobeSlotData> copy = new LinkedHashMap<>(slots);
+		WardrobeSlotData current = getSlot(slot);
+		if (current != null) {
+			copy.put(current.getSlot(), current.withDescription(description));
+		}
+		return new WardrobeSnapshot(characterId, activeSlot, swappableSlots, copy, descriptions);
+	}
+
 	/** True once the website stores skin descriptions; until then the feature stays hidden. */
 	public boolean supportsDescriptions() {
 		return descriptions;

@@ -85,7 +85,7 @@ class WardrobeDescriptionsTest extends WardrobeFixture {
     }
 
     @Test void commandSavesAndClearsThroughTheWebsiteAndUpdatesTheCache() {
-        cache(wardrobe("extra_1", true, null, null));
+        cache(wardrobe("base", true, null, null));
         client.when(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()))
             .thenReturn(ok(response(TEXT)));
         WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "skin2", "A", "hooded", "figure",
@@ -94,6 +94,8 @@ class WardrobeDescriptionsTest extends WardrobeFixture {
         client.verify(() -> ProvinceSystemClient.setWardrobeDescription(player.getUniqueId().toString(), "alpha", "extra_1", TEXT));
         assertTrue(said("Description saved"));
         assertEquals(TEXT, WardrobeCache.get(player).getSlot("extra_1").getDescription());
+        assertEquals("base", WardrobeCache.get(player).getActiveSlot(), "Only the skin's text changes in the cache");
+        assertEquals("extra_1-value", WardrobeCache.get(player).getSlot("extra_1").getTextureValue());
         client.when(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()))
             .thenReturn(ok(response(null)));
         WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1", "clear"});
@@ -115,7 +117,12 @@ class WardrobeDescriptionsTest extends WardrobeFixture {
         assertTrue(said("Unknown skin"));
         cache(wardrobe("extra_1", false, null, null));
         WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1", TEXT});
+        assertTrue(said("Usage: /rp wardrobe [base"), "Before the site deploy the word is not a command");
+        assertFalse(WardrobeDescriptions.canDescribe(player, "extra_1"));
         assertTrue(said("not available yet"));
+        cache(wardrobe("extra_1", true, null, null));
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1", "&b&lx".repeat(250)});
+        assertTrue(said("too long with its colour codes"));
         cache(wardrobe("extra_1", true, null, null));
         player.setOp(false);
         WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1", TEXT});
@@ -174,6 +181,13 @@ class WardrobeDescriptionsTest extends WardrobeFixture {
         input.onChat(chat("cancel"));
         drain();
         assertTrue(said("Description unchanged"));
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1"});
+        assertTrue(WardrobeDescriptionInput.isPending(player));
+        WardrobeGui.openNow(player);
+        assertFalse(WardrobeDescriptionInput.isPending(player), "Using the wardrobe again ends the prompt");
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "extra_1"});
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe"});
+        assertFalse(WardrobeDescriptionInput.isPending(player));
         WardrobeGui.openNow(player);
         listener.onWardrobeGuiClick(click(11, ClickType.SHIFT_LEFT));
         assertTrue(said("Base uses your character description"));

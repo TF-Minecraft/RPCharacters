@@ -31,6 +31,8 @@ public final class WardrobeCommand {
 			return true;
 		}
 		Player player = (Player) sender;
+		// Any wardrobe command ends a description prompt left open from the menu.
+		WardrobeDescriptionInput.cancel(player);
 		PlayerData pd = PlayerManager.get(player);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			RPTexts.send(player, RPTexts.ERROR + "You need an active character.");
@@ -53,7 +55,7 @@ public final class WardrobeCommand {
 			return true;
 		}
 
-		if (DESCRIBE.equalsIgnoreCase(args[1])) {
+		if (DESCRIBE.equalsIgnoreCase(args[1]) && snapshot.supportsDescriptions()) {
 			return handleDescribe(player, label, snapshot, args);
 		}
 

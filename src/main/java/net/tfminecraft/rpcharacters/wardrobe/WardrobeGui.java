@@ -84,6 +84,7 @@ public final class WardrobeGui {
 		if (player == null || !player.isOnline() || snapshot == null) {
 			return;
 		}
+		WardrobeDescriptionInput.cancel(player);
 		WardrobeGuiHolder holder = new WardrobeGuiHolder(player);
 		Inventory inv = Bukkit.createInventory(
 			holder,
