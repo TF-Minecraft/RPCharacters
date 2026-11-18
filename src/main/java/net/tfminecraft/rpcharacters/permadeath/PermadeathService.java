@@ -35,11 +35,18 @@ public final class PermadeathService {
 	private static final ConcurrentHashMap<UUID, Boolean> pendingPermadeathRespawn = new ConcurrentHashMap<>();
 	private static final Set<UUID> pendingPermakillSounds = ConcurrentHashMap.newKeySet();
 	private static final Set<UUID> ignoreNextZoneDeath = ConcurrentHashMap.newKeySet();
+	/** Players who died and have not respawned yet. */
+	private static final Set<UUID> diedAwaitingRespawn = ConcurrentHashMap.newKeySet();
 
 	private PermadeathService() {
 	}
 
 	public static void handleDeath(Player player, Location deathLocation) {
+		// MMOCore regen gives a body on the death screen a sliver of health, and then repeating
+		// damage (outside the world border) kills it again. Only the first death counts.
+		if (!diedAwaitingRespawn.add(player.getUniqueId())) {
+			return;
+		}
 		// Every death ends the player's PvP start, whatever happens below.
 		boolean inPvpStart = PvpStartSessions.consume(player.getUniqueId(), System.currentTimeMillis());
 		if (ignoreNextZoneDeath.remove(player.getUniqueId())) {
@@ -92,6 +99,7 @@ public final class PermadeathService {
 	}
 
 	public static void handlePlayerRespawn(Player player, PlayerRespawnEvent event) {
+		diedAwaitingRespawn.remove(player.getUniqueId());
 		boolean permadeathRespawn = consumePendingPermadeathRespawn(player);
 		if (permadeathRespawn) {
 			Location spawn = WorldSpawnService.getSpawn();
@@ -108,6 +116,15 @@ public final class PermadeathService {
 		if (permadeathRespawn) {
 			RPCharacters.getPlayerManager().releaseFreeze(player);
 			RPCharacters.getPlayerManager().reevaluateFreeze(player);
+		}
+	}
+
+	/** A player who left on the death screen joins dead and still has to respawn. */
+	public static void syncDeathOnJoin(Player player) {
+		if (player.isDead()) {
+			diedAwaitingRespawn.add(player.getUniqueId());
+		} else {
+			diedAwaitingRespawn.remove(player.getUniqueId());
 		}
 	}
 
