@@ -57,6 +57,7 @@ public final class PermadeathZoneListener implements Listener {
 
 	@EventHandler
 	public void onPlayerJoin(PlayerJoinEvent event) {
+		PermadeathService.syncDeathOnJoin(event.getPlayer());
 		syncFromLocation(event.getPlayer(), event.getPlayer().getLocation());
 	}
 

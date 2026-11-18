@@ -35,6 +35,8 @@ public final class PermadeathService {
 	private static final ConcurrentHashMap<UUID, Boolean> pendingPermadeathRespawn = new ConcurrentHashMap<>();
 	private static final Set<UUID> pendingPermakillSounds = ConcurrentHashMap.newKeySet();
 	private static final Set<UUID> ignoreNextZoneDeath = ConcurrentHashMap.newKeySet();
+	/** Players who died and have not respawned yet. */
+	private static final Set<UUID> diedAwaitingRespawn = ConcurrentHashMap.newKeySet();
 
 	private PermadeathService() {
 	}
@@ -42,6 +44,12 @@ public final class PermadeathService {
 	public static void handleDeath(Player player, Location deathLocation) {
 		// Every death ends the player's PvP start, whatever happens below.
 		boolean inPvpStart = PvpStartSessions.consume(player.getUniqueId(), System.currentTimeMillis());
+		// One death can fire this twice: a vehicle passenger killed by the hit VehicleFramework
+		// re-deals inside the damage event dies again when Paper finishes the outer hit.
+		// Only the first death until the player respawns counts.
+		if (!diedAwaitingRespawn.add(player.getUniqueId())) {
+			return;
+		}
 		if (ignoreNextZoneDeath.remove(player.getUniqueId())) {
 			return;
 		}
@@ -92,6 +100,7 @@ public final class PermadeathService {
 	}
 
 	public static void handlePlayerRespawn(Player player, PlayerRespawnEvent event) {
+		diedAwaitingRespawn.remove(player.getUniqueId());
 		boolean permadeathRespawn = consumePendingPermadeathRespawn(player);
 		if (permadeathRespawn) {
 			Location spawn = WorldSpawnService.getSpawn();
@@ -108,6 +117,15 @@ public final class PermadeathService {
 		if (permadeathRespawn) {
 			RPCharacters.getPlayerManager().releaseFreeze(player);
 			RPCharacters.getPlayerManager().reevaluateFreeze(player);
+		}
+	}
+
+	/** A player who left on the death screen joins dead and still has to respawn. */
+	public static void syncDeathOnJoin(Player player) {
+		if (player.isDead()) {
+			diedAwaitingRespawn.add(player.getUniqueId());
+		} else {
+			diedAwaitingRespawn.remove(player.getUniqueId());
 		}
 	}
 
@@ -253,6 +271,8 @@ public final class PermadeathService {
 		pendingPermadeathRespawn.remove(uuid);
 		pendingPermakillSounds.remove(uuid);
 		ignoreNextZoneDeath.remove(uuid);
+		// A player who quits on the death screen gets the mark back on join (syncDeathOnJoin).
+		diedAwaitingRespawn.remove(uuid);
 	}
 
 	public static void markPendingPermakillSounds(Player player) {

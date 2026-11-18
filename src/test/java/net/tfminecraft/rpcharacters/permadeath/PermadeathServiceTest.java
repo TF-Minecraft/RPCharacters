@@ -107,6 +107,25 @@ class PermadeathServiceTest extends PermadeathRuntimeFixture {
         pool(healing);die();assertEquals(List.of(healing),character.getTraits());assertTrue(text().contains("You gained"));verify(player).sendTitle(contains("wound"),eq(" "),eq(10),eq(400),eq(20));verify(manager).savePlayer(player);
     }
 
+    @Test void aBodyKilledAgainOnTheDeathScreenGetsNoSecondConsequence() throws Exception {
+        pool(healing);progression(healing,permanent);die();die();assertEquals(List.of(healing),character.getTraits(),"A second death before respawning must not upgrade the injury it just gave");
+        respawned();die();assertEquals(List.of(permanent),character.getTraits());
+    }
+
+    @Test void aPlayerWhoJoinsOnTheDeathScreenStillHasToRespawnFirst() throws Exception {
+        pool(healing);when(player.isDead()).thenReturn(true);PermadeathService.syncDeathOnJoin(player);die();assertTrue(character.getTraits().isEmpty());
+        respawned();die();assertEquals(List.of(healing),character.getTraits());
+    }
+
+    @Test void joiningAliveOrQuittingClearsAStaleDeathMark() throws Exception {
+        pool(healing);die();character.removeTrait(healing);PermadeathService.syncDeathOnJoin(player);die();assertEquals(List.of(healing),character.getTraits());
+        character.removeTrait(healing);PermadeathService.clearPendingPermadeathRespawn(player);die();assertEquals(List.of(healing),character.getTraits());
+    }
+
+    @Test void aRepeatDeathStillEndsThePvpStart() {
+        die();PvpStartSessions.begin(List.of(player.getUniqueId()),System.currentTimeMillis(),60_000);die();assertFalse(PvpStartSessions.isActive(player.getUniqueId(),System.currentTimeMillis()));
+    }
+
     @Test void emptyPoolWarnsWithoutChangingTheCharacter() {
         die();assertTrue(character.getTraits().isEmpty());verify(logger).warning(contains("Injury pool empty or misconfigured for Aria"));verify(manager,never()).savePlayer(any());
     }
@@ -131,7 +150,7 @@ class PermadeathServiceTest extends PermadeathRuntimeFixture {
     }
 
     @Test void zeroRiskDoesNotPermakillAndMaximumRiskDoes() throws Exception {
-        character.addTrait(permanent);pool(healing);die();assertEquals(Status.ALIVE,character.getStatus());assertTrue(character.getTraits().contains(healing));chance(100);die();
+        character.addTrait(permanent);pool(healing);die();assertEquals(Status.ALIVE,character.getStatus());assertTrue(character.getTraits().contains(healing));chance(100);respawned();die();
         assertEquals(Status.DEAD,character.getStatus());assertTrue(PermadeathService.isAwaitingPermakillRespawn(player));assertTrue(text().contains("permadeath zone"));zones.verify(()->PermadeathZoneListener.clearZoneTracking(player));verify(manager).releaseFreeze(player);
     }
 
@@ -146,12 +165,12 @@ class PermadeathServiceTest extends PermadeathRuntimeFixture {
     }
 
     @Test void startedBattlesAndHandledPvpDeathsSkipZoneConsequences() {
-        battles.when(()->PermadeathBattleExemption.isInStartedBattle(player)).thenReturn(true);die();strikes.verifyNoInteractions();battles.when(()->PermadeathBattleExemption.isInStartedBattle(player)).thenReturn(false);
+        battles.when(()->PermadeathBattleExemption.isInStartedBattle(player)).thenReturn(true);die();strikes.verifyNoInteractions();battles.when(()->PermadeathBattleExemption.isInStartedBattle(player)).thenReturn(false);respawned();
         PvpStartSessions.begin(List.of(player.getUniqueId()),System.currentTimeMillis(),60_000);strikes.when(()->PvpStrikeService.handleDeath(player,true)).thenReturn(true);die();strikes.verify(()->PvpStrikeService.handleDeath(player,true));area.verifyNoInteractions();assertTrue(character.getTraits().isEmpty());
     }
 
     @Test void deathsOutsideZonesOrBeforePlayerDataLoadsAreIgnored() {
-        area.when(()->PermadeathAreaLookup.getPermadeathZoneAt(eq(player),any(Location.class))).thenReturn(null);die();assertTrue(character.getTraits().isEmpty());inZone();loaded.clear();die();loaded.put(player,new PlayerData(player));die();verify(manager,never()).savePlayer(any());
+        area.when(()->PermadeathAreaLookup.getPermadeathZoneAt(eq(player),any(Location.class))).thenReturn(null);die();assertTrue(character.getTraits().isEmpty());inZone();loaded.clear();respawned();die();loaded.put(player,new PlayerData(player));respawned();die();verify(manager,never()).savePlayer(any());
     }
 
     @Test void randomHealingInjuriesExcludeAlreadyOwnedEntriesAcrossLocales() throws Exception {
@@ -269,6 +288,7 @@ abstract class PermadeathRuntimeFixture {
     void chance(int chance) throws Exception {var path=folder.resolve("zones.yml");Files.writeString(path,"permadeath-chance-per-injury: "+chance+"\n");new PermadeathZoneLoader().load(path.toFile());}
     void inZone(){var zone=new PermadeathZoneDefinition("danger","Danger");area.when(()->PermadeathAreaLookup.getPermadeathZoneAt(eq(player),any(Location.class))).thenReturn(zone);}
     void die(){PermadeathService.handleDeath(player,player.getLocation());}
+    void respawned(){PermadeathService.handlePlayerRespawn(player,respawn());}
     void runTask(){assertFalse(tasks.isEmpty());tasks.removeFirst().run();}
     String text(){return ChatColor.stripColor(String.join("\n",messages));}
     PlayerRespawnEvent respawn(){return new PlayerRespawnEvent(player,new Location(world,9,65,9),false);}
