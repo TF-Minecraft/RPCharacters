@@ -241,6 +241,95 @@ class WardrobeDescriptionsTest extends WardrobeFixture {
         assertTrue(WardrobeCommand.tabComplete(player, new String[]{"wardrobe", "describe", ""}).isEmpty());
     }
 
+    @Test void guardsCoverMissingCharactersLoadingEmptySlotsAndCooldowns() {
+        active.set(null);
+        assertFalse(WardrobeDescriptions.canDescribe(player, "extra_1"));
+        assertTrue(said("active character"));
+        WardrobeDescriptionInput.begin(player, "extra_1");
+        assertFalse(WardrobeDescriptionInput.isPending(player));
+        var errors = new ArrayList<String>();
+        WardrobeService.setDescription(player, "extra_1", TEXT, errors::add);
+        assertEquals(List.of("You need an active character."), errors);
+        active.set(character);
+        assertFalse(WardrobeDescriptions.canDescribe(player, "extra_1"));
+        assertTrue(said("still loading"));
+        cache(wardrobe("base", true, null, null));
+        assertFalse(WardrobeDescriptions.canDescribe(player, "extra_2"));
+        assertTrue(said("empty or locked"));
+        assertFalse(WardrobeDescriptionInput.isPending(null));
+        assertNull(WardrobeService.wornSlot(null, false));
+        assertNull(WardrobeService.wornDescribableSlot(null));
+        active.set(otherCharacter("beta"));
+        assertNull(WardrobeService.wornDescribableSlot(player), "A cache from the previous character is ignored");
+        active.set(character);
+
+        // Masked by name, and a player without the cooldown bypass waits between saves.
+        client.when(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()))
+            .thenReturn(ok("broken"));
+        player.setOp(false);
+        player.addAttachment(plugin, net.tfminecraft.rpcharacters.Cache.personaSetPermission, true);
+        net.tfminecraft.rpcharacters.persona.PersonaCooldownManager.get().clear(player);
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "masked", TEXT});
+        async.removeFirst().run();
+        main.removeFirst().run();
+        client.verify(() -> ProvinceSystemClient.setWardrobeDescription(player.getUniqueId().toString(), "alpha", "masked", TEXT));
+        assertEquals(1, async.size(), "An unreadable reply pulls the wardrobe again");
+        async.clear();
+        messages();
+        WardrobeCommand.handle(player, "rp", new String[]{"wardrobe", "describe", "masked", TEXT});
+        assertTrue(said("Wait"));
+        assertTrue(async.isEmpty());
+        net.tfminecraft.rpcharacters.persona.PersonaCooldownManager.get().clear(player);
+    }
+
+    @Test void promptAndSaveStopWhenThePlayerLeavesOrSwitches() {
+        cache(wardrobe("base", true, null, null));
+        client.when(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()))
+            .thenReturn(ok(response(TEXT)));
+        var input = new WardrobeDescriptionInput();
+        WardrobeDescriptionInput.begin(player, "extra_1");
+        input.onChat(chat(TEXT));
+        active.set(otherCharacter("beta"));
+        drain();
+        assertTrue(said("active character changed"));
+        active.set(character);
+        WardrobeDescriptionInput.begin(player, "extra_1");
+        input.onQuit(new org.bukkit.event.player.PlayerQuitEvent(player, "quit"));
+        assertFalse(WardrobeDescriptionInput.isPending(player));
+        var errors = new ArrayList<String>();
+        WardrobeService.setDescription(player, "extra_1", TEXT, errors::add);
+        async.removeFirst().run();
+        WardrobeDescriptionInput.begin(player, "extra_1");
+        input.onChat(chat(TEXT));
+        player.disconnect();
+        drain();
+        assertTrue(errors.isEmpty(), "Nothing to tell a player who left");
+        client.verify(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()), times(1));
+    }
+
+    @Test void aSaveFinishingInANewSessionOfTheSameCharacterIsNotApplied() {
+        try (var identities = mockStatic(net.tfminecraft.tlibs.character.Characters.class)) {
+            var session = mock(net.tfminecraft.tlibs.character.CharacterSession.class);
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.currentSession(player))
+                .thenReturn(Optional.of(session));
+            cache(wardrobe("base", true, null, null));
+            client.when(() -> ProvinceSystemClient.setWardrobeDescription(anyString(), anyString(), anyString(), any()))
+                .thenReturn(ok(response(TEXT)));
+            var errors = new ArrayList<String>();
+            WardrobeService.setDescription(player, "extra_1", TEXT, errors::add);
+            async.removeFirst().run();
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(false);
+            main.removeFirst().run();
+            assertTrue(errors.getFirst().contains("active character changed"));
+            assertNull(WardrobeCache.get(player).getSlot("extra_1").getDescription());
+            identities.when(() -> net.tfminecraft.tlibs.character.Characters.isCurrent(session)).thenReturn(true);
+            WardrobeService.setDescription(player, "extra_1", TEXT, errors::add);
+            drain();
+            assertNull(errors.getLast());
+            assertEquals(TEXT, WardrobeCache.get(player).getSlot("extra_1").getDescription());
+        }
+    }
+
     InventoryClickEvent click(int rawSlot, ClickType type) {
         return new InventoryClickEvent(player.getOpenInventory(), InventoryType.SlotType.CONTAINER, rawSlot, type,
             InventoryAction.PICKUP_ALL);
