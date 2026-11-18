@@ -65,9 +65,9 @@ class IntegratorRuntimeTest {
         verify(instances.get("strength"), never()).setBase(anyInt()); verify(instances.get("dexterity"), never()).setBase(anyInt()); assertEquals(10, value("strength")); assertEquals(6, value("dexterity"));
     }
     @Test void reapplyMovesEachChangedAttributeToItsFinalValueInOneStep() {
-        Map<String, Integer> before = Integrator.snapshot(character);
-        character.getAttributeData().getModifiers().getFirst().add(-2); character.getAttributeData().getModifiers().removeIf(m -> m.getType().equals("dexterity")); character.getAttributeData().addModifier(new AttributeModifier("constitution", 2));
-        integrator.reapply(player, before, character);
+        Map<String, Integer> before = Integrator.snapshot(character); attribute("constitution", 10);
+        character.getAttributeData().getModifiers().getFirst().add(-2); character.getAttributeData().getModifiers().removeIf(m -> m.getType().equals("dexterity")); character.getAttributeData().addModifier(new AttributeModifier("constitution", 2)); character.getAttributeData().addModifier(new AttributeModifier("unregistered", 5));
+        integrator.reapply(player, before, character); verify(instances.get("constitution"), times(1)).setBase(12); assertEquals(12, value("constitution"));
         verify(instances.get("strength"), times(1)).setBase(8); verify(instances.get("dexterity"), times(1)).setBase(8); verify(instances.get("strength"), times(1)).setBase(anyInt()); verify(instances.get("dexterity"), times(1)).setBase(anyInt());
         assertEquals(8, value("strength")); assertEquals(8, value("dexterity"));
     }
