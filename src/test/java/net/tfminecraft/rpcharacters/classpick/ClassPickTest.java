@@ -196,6 +196,9 @@ class ClassPickTest {
         assertEquals(BigDecimal.ZERO, ClassPickService.price(character, evokerPick)); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, warriorPick));
         assertTrue(ChatColor.stripColor(ClassPickService.pathSwitchNote(character, evokerPick)).startsWith("Uses your free path switch for "));
         assertNull(ClassPickService.pathSwitchNote(character, warriorPick)); assertTrue(lines.get().contains("Path switch: Free now"), lines.get());
+        var menu = String.join("\n", Arrays.stream(openSubclasses().getContents()).filter(Objects::nonNull).filter(ItemStack::hasItemMeta)
+                .filter(item -> item.getItemMeta().hasLore()).map(ClassPickTest::lore).toList());
+        assertTrue(menu.contains("Uses your free path switch for "), menu); player.closeInventory();
         var swapped = ClassPickService.choose(player, "evoker");
         assertEquals(Status.CHOSEN, swapped.status()); assertEquals(BigDecimal.ZERO, swapped.cost()); assertNull(swapped.paidFrom());
         assertEquals(50_000_000L, character.getFreePathSwitchAtMs()); assertEquals(0, character.getPaidClassPicks());
