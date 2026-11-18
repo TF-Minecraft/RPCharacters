@@ -14,6 +14,7 @@ public final class WardrobeSlotData {
 	private final String displayName;
 	private final String textureValue;
 	private final String textureSignature;
+	private final String description;
 
 	public WardrobeSlotData(
 		String slot,
@@ -26,6 +27,22 @@ public final class WardrobeSlotData {
 		String textureValue,
 		String textureSignature
 	) {
+		this(slot, unlocked, filled, signed, applyPending, model, displayName,
+			textureValue, textureSignature, null);
+	}
+
+	public WardrobeSlotData(
+		String slot,
+		boolean unlocked,
+		boolean filled,
+		boolean signed,
+		boolean applyPending,
+		String model,
+		String displayName,
+		String textureValue,
+		String textureSignature,
+		String description
+	) {
 		this.slot = slot;
 		this.unlocked = unlocked;
 		this.filled = filled;
@@ -35,6 +52,7 @@ public final class WardrobeSlotData {
 		this.displayName = displayName;
 		this.textureValue = textureValue;
 		this.textureSignature = textureSignature;
+		this.description = description == null || description.isBlank() ? null : description.trim();
 	}
 
 	public String getSlot() {
@@ -71,6 +89,11 @@ public final class WardrobeSlotData {
 
 	public String getTextureSignature() {
 		return textureSignature;
+	}
+
+	/** What others read while this skin is worn, or null to use the character description. */
+	public String getDescription() {
+		return description;
 	}
 
 	public boolean canApply() {

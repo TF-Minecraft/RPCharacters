@@ -245,6 +245,7 @@ public final class CharCommand {
 		applyCooldown(player, FIELD_DESCRIPTION, Cache.personaDescriptionCooldownSeconds);
 		RPCharacters.getPlayerManager().savePlayer(player);
 		RPTexts.send(player, RPTexts.SUCCESS + "Description updated.");
+		net.tfminecraft.rpcharacters.wardrobe.WardrobeDescriptions.sendCharacterDescriptionHint(player);
 		return true;
 	}
 

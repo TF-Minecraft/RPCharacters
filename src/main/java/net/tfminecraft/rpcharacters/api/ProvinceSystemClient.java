@@ -351,6 +351,32 @@ public final class ProvinceSystemClient {
 	}
 
 	/**
+	 * POST /characters/plugin/wardrobe/{playerUuid}/{characterId}/slots/{slot}/description
+	 * {@code description} null clears it. Returns the plugin wardrobe payload.
+	 */
+	public static SimpleResult setWardrobeDescription(
+		String playerUuid,
+		String characterId,
+		String slot,
+		String description
+	) {
+		String uuid = sanitizePathSegment(playerUuid);
+		String cid = sanitizePathSegment(characterId);
+		if (uuid == null || cid == null || slot == null
+				|| (!WardrobeSlots.swappable().contains(slot) && !"masked".equals(slot))) {
+			return SimpleResult.fail("invalid player, character or outfit");
+		}
+		String body = description == null
+			? "{\"description\":null}"
+			: "{\"description\":\"" + jsonEscape(description) + "\"}";
+		return request(
+			"POST",
+			"/characters/plugin/wardrobe/" + uuid + "/" + cid + "/slots/" + slot + "/description",
+			body
+		);
+	}
+
+	/**
 	 * POST /characters/plugin/wardrobe/{playerUuid}/{characterId}/ack
 	 * Clears apply_pending for slots after pull + apply.
 	 */
