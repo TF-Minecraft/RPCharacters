@@ -2,6 +2,7 @@ package net.tfminecraft.rpcharacters.injuries;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -96,10 +97,9 @@ public final class InjuryHealingService {
 
 	public static void refreshCharacter(Player player, RPCharacter character) {
 		if (character.isActive()) {
-			Integrator integrator = new Integrator();
-			integrator.remove(player, character, false);
+			Map<String, Integer> before = Integrator.snapshot(character);
 			character.update();
-			integrator.integrate(player, character);
+			new Integrator().reapply(player, before, character);
 		} else {
 			character.update();
 		}

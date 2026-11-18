@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.prosthetics;
 
+import java.util.Map;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -99,9 +101,8 @@ public final class ProstheticFuelService {
 	}
 
 	private static void refreshCharacter(Player player, RPCharacter character) {
-		Integrator integrator = new Integrator();
-		integrator.remove(player, character, false);
+		Map<String, Integer> before = Integrator.snapshot(character);
 		character.update();
-		integrator.integrate(player, character);
+		new Integrator().reapply(player, before, character);
 	}
 }
