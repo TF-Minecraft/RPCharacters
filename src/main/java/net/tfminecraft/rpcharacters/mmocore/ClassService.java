@@ -20,10 +20,12 @@ import net.Indyuce.mmocore.MMOCore;
 import net.Indyuce.mmocore.api.player.PlayerData;
 import net.Indyuce.mmocore.api.player.profess.PlayerClass;
 import net.Indyuce.mmocore.api.player.profess.SavedClassInformation;
+import net.Indyuce.mmocore.experience.droptable.ExperienceItem;
 import net.Indyuce.mmocore.experience.droptable.ExperienceTable;
 import net.Indyuce.mmocore.skill.ClassSkill;
 import net.Indyuce.mmocore.skill.binding.BoundSkillInfo;
 import net.tfminecraft.rpcharacters.Cache;
+import net.tfminecraft.rpcharacters.classpick.ClassPickService;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.progress.CharacterProgress;
@@ -444,15 +446,33 @@ public final class ClassService {
 	 * claimed yet. The level is shared across classes, so a class picked at level 12 never levelled
 	 * through 7 or 12 and would otherwise miss the skill slots unlocked there. MMOCore counts claims,
 	 * so a reward is never given twice. Their skill points reach the pools through
-	 * {@link #creditRewardSkillPoints}, once per pool.
+	 * {@link #creditRewardSkillPoints}, once per pool. Classes of a free path switch family that use
+	 * the same table share its claims first, so swapping paths never gives a reward again.
 	 */
 	private static void claimMissedLevelRewards(PlayerData mmoPd, PlayerClass profess) {
 		if (!profess.hasExperienceTable()) {
 			return;
 		}
 		ExperienceTable table = profess.getExperienceTable();
+		shareFamilyClaims(mmoPd, profess, table);
 		for (int level = 1; level <= mmoPd.getLevel(); level++) {
 			table.claim(mmoPd, level, profess);
+		}
+	}
+
+	/** Raises the class's claims on {@code table} to the most any class of its reward family has made on it. */
+	static void shareFamilyClaims(PlayerData mmoPd, PlayerClass profess, ExperienceTable table) {
+		for (PlayerClass member : ClassPickService.rewardFamily(profess)) {
+			if (member.getId().equalsIgnoreCase(profess.getId()) || !member.hasExperienceTable()
+					|| !table.getId().equals(member.getExperienceTable().getId())) {
+				continue;
+			}
+			for (ExperienceItem item : table.getItems()) {
+				int theirs = mmoPd.getClaims(member, table, item);
+				if (theirs > mmoPd.getClaims(profess, table, item)) {
+					mmoPd.setClaims(profess, table, item, theirs);
+				}
+			}
 		}
 	}
 

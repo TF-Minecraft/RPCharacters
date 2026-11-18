@@ -13,9 +13,10 @@ import net.tfminecraft.rpcharacters.paidchange.Payment;
 
 /**
  * Class picker state in the character file, under "class-picks": whether the free subclass pick
- * is used ("subclass-picked"), how many picks were paid for ("paid") and a paid pick saved before
- * its debit ("pending"). Hidden classes the character has unlocked are listed under
- * "unlocked-classes", and classes with their own skill-point pool under "class-skill-points".
+ * is used ("subclass-picked"), how many picks were paid for ("paid"), when the last free path
+ * switch was made ("free-switch-at", epoch ms) and a paid pick saved before its debit ("pending").
+ * Hidden classes the character has unlocked are listed under "unlocked-classes", and classes with
+ * their own skill-point pool under "class-skill-points".
  */
 public final class CharacterClassPickFields {
 	static final String UNLOCKED_CLASSES = "unlocked-classes";
@@ -48,6 +49,9 @@ public final class CharacterClassPickFields {
 		if (picks.get("paid") instanceof Number paid) {
 			character.setPaidClassPicks(paid.intValue());
 		}
+		if (picks.get("free-switch-at") instanceof Number switchedAt) {
+			character.setFreePathSwitchAtMs(switchedAt.longValue());
+		}
 		if (picks.get("pending") instanceof Map<?, ?> pending) {
 			try {
 				character.setPendingClassPick(new PendingClassPick((String) pending.get("target"),
@@ -73,12 +77,16 @@ public final class CharacterClassPickFields {
 			defaults.put(CLASS_SKILL_POINTS, pools);
 		}
 		PendingClassPick pending = character.getPendingClassPick();
-		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0 && pending == null) {
+		if (!character.hasPickedSubclass() && character.getPaidClassPicks() == 0 && pending == null
+				&& character.getFreePathSwitchAtMs() == 0L) {
 			return;
 		}
 		JSONObject picks = new JSONObject();
 		picks.put("subclass-picked", character.hasPickedSubclass());
 		picks.put("paid", character.getPaidClassPicks());
+		if (character.getFreePathSwitchAtMs() > 0L) {
+			picks.put("free-switch-at", character.getFreePathSwitchAtMs());
+		}
 		if (pending != null) {
 			JSONObject held = new JSONObject();
 			held.put("target", pending.targetClass());

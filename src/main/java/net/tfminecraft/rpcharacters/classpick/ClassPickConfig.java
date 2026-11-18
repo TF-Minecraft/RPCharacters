@@ -13,6 +13,7 @@ import org.bukkit.configuration.ConfigurationSection;
 
 import net.tfminecraft.rpcharacters.classpick.ClassPickService.Settings;
 import net.tfminecraft.rpcharacters.paidchange.DenarWallet.Account;
+import net.tfminecraft.rpcharacters.utils.DurationParser;
 
 /** Reads the {@code class-selection} section of config.yml into {@link ClassPickService}. */
 public final class ClassPickConfig {
@@ -32,7 +33,38 @@ public final class ClassPickConfig {
 				readCost(section.get("change-cost"), defaults.changeCost()),
 				readAccounts(section, defaults.accounts()),
 				readCommands(section, defaults.commands()),
-				readPermission(section, defaults.resetPermission())));
+				readPermission(section, defaults.resetPermission()),
+				readFreeSwitchClasses(section.getConfigurationSection("free-path-switch")),
+				readFreeSwitchCooldown(section.getConfigurationSection("free-path-switch"))));
+	}
+
+	private static Set<String> readFreeSwitchClasses(ConfigurationSection section) {
+		if (section == null) {
+			return Set.of();
+		}
+		Set<String> classes = new LinkedHashSet<>();
+		for (String raw : section.getStringList("classes")) {
+			String id = raw.trim().toUpperCase(Locale.ROOT);
+			if (!id.isEmpty()) {
+				classes.add(id);
+			}
+		}
+		return Set.copyOf(classes);
+	}
+
+	private static long readFreeSwitchCooldown(ConfigurationSection section) {
+		long fallback = Settings.DEFAULT_FREE_SWITCH_COOLDOWN_MS;
+		if (section == null || !section.contains("cooldown")) {
+			return fallback;
+		}
+		String raw = section.getString("cooldown", "");
+		long cooldown = DurationParser.parseLockTimeMs(raw);
+		if (cooldown <= 0L) {
+			LOG.warning("[RPCharacters] class-selection.free-path-switch.cooldown: ignored '" + raw
+					+ "'. Use hours or days, like 24h or 1d.");
+			return fallback;
+		}
+		return cooldown;
 	}
 
 	private static BigDecimal readCost(Object value, BigDecimal fallback) {

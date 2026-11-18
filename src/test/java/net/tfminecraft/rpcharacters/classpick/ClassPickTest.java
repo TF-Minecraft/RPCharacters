@@ -113,7 +113,7 @@ class ClassPickTest {
 
     @AfterEach void cleanup() throws Exception {
         Logger.getLogger("RPCharacters").removeHandler(handler); CreationManager.activeCreators.clear();
-        ClassPickService.configure(Settings.DEFAULTS); ClassPickService.setWallet(mock(DenarWallet.class));
+        ClassPickService.configure(Settings.DEFAULTS); ClassPickService.setWallet(mock(DenarWallet.class)); ClassPickService.setClock(System::currentTimeMillis);
         for (int i = boundaries.size() - 1; i >= 0; i--) boundaries.get(i).close();
         MMOCore.plugin = previousMmo; state.close(); MockBukkit.unmock();
     }
@@ -156,6 +156,79 @@ class ClassPickTest {
         assertEquals(Settings.DEFAULTS.changeCost(), ClassPickService.settings().changeCost()); assertTrue(ClassPickService.settings().infinitePoints());
         assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("change-cost: ignored 'lots'")));
         assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("unknown account 'vault'")));
+    }
+
+    Settings mageSwitch(boolean infinite) {
+        return new Settings(true, infinite, new BigDecimal("200.00"), List.of(Account.POUCH, Account.BANK), Set.of("class", "c"), "rpchar.class.reset", Set.of("MAGE"), 3_600_000L);
+    }
+
+    List<PlayerClass> magePaths() {
+        var arcanist = playerClass("arcanist", "Arcanist", 5, null); var evoker = playerClass("evoker", "Evoker", 6, null); var battlemage = playerClass("battlemage", "Battlemage", 7, null);
+        when(mage.getSubclasses()).thenReturn(List.of(new Subclass(arcanist, 2), new Subclass(evoker, 2), new Subclass(battlemage, 2)));
+        return List.of(arcanist, evoker, battlemage);
+    }
+
+    @Test void freePathSwitchSettingsAreReadWithSafeFallbacks() {
+        assertEquals(Set.of(), Settings.DEFAULTS.freeSwitchClasses()); assertEquals(86_400_000L, Settings.DEFAULTS.freeSwitchCooldownMs());
+        var yaml = new YamlConfiguration();
+        yaml.set("a.free-path-switch.classes", List.of("mage", " ")); yaml.set("a.free-path-switch.cooldown", "2h");
+        ClassPickConfig.load(yaml.getConfigurationSection("a"));
+        assertEquals(Set.of("MAGE"), ClassPickService.settings().freeSwitchClasses()); assertEquals(7_200_000L, ClassPickService.settings().freeSwitchCooldownMs());
+        yaml.set("b.free-path-switch.classes", List.of("mage")); yaml.set("b.free-path-switch.cooldown", "soon");
+        ClassPickConfig.load(yaml.getConfigurationSection("b")); assertEquals(86_400_000L, ClassPickService.settings().freeSwitchCooldownMs());
+        assertTrue(logs.stream().anyMatch(record -> record.getMessage().contains("free-path-switch.cooldown: ignored 'soon'")));
+        yaml.set("c.free-path-switch.classes", List.of("mage"));
+        ClassPickConfig.load(yaml.getConfigurationSection("c")); assertEquals(86_400_000L, ClassPickService.settings().freeSwitchCooldownMs());
+        yaml.set("d.enabled", true); ClassPickConfig.load(yaml.getConfigurationSection("d"));
+        assertEquals(Set.of(), ClassPickService.settings().freeSwitchClasses()); assertEquals(86_400_000L, ClassPickService.settings().freeSwitchCooldownMs());
+    }
+
+    @Test void magePathsSwapFreeOncePerCooldownAndOtherwiseCostAClassChange() {
+        var paths = magePaths(); long[] now = {50_000_000L}; ClassPickService.setClock(() -> now[0]);
+        ClassPickService.configure(mageSwitch(false)); level.set(3); character.setMMOClass("mage");
+        var lines = (java.util.function.Supplier<String>) () -> String.join(" / ", ClassPickService.pricingLore(character, "Head").stream().map(ChatColor::stripColor).toList());
+        assertFalse(lines.get().contains("Path switch"), "A base Mage has no path to switch from");
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "arcanist").status());
+        assertEquals(0L, character.getFreePathSwitchAtMs(), "The first path is the free subclass pick, not the daily switch");
+        var evokerPick = ClassPickService.option("evoker"); var battlemagePick = ClassPickService.option("battlemage"); var warriorPick = ClassPickService.option("warrior");
+        assertTrue(ClassPickService.isPathSwitch(character, evokerPick)); assertFalse(ClassPickService.isPathSwitch(character, warriorPick));
+        assertFalse(ClassPickService.isPathSwitch(character, ClassPickService.option("berserker")));
+        assertEquals(BigDecimal.ZERO, ClassPickService.price(character, evokerPick)); assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, warriorPick));
+        assertTrue(ChatColor.stripColor(ClassPickService.pathSwitchNote(character, evokerPick)).startsWith("Uses your free path switch for "));
+        assertNull(ClassPickService.pathSwitchNote(character, warriorPick)); assertTrue(lines.get().contains("Path switch: Free now"), lines.get());
+        var swapped = ClassPickService.choose(player, "evoker");
+        assertEquals(Status.CHOSEN, swapped.status()); assertEquals(BigDecimal.ZERO, swapped.cost()); assertNull(swapped.paidFrom());
+        assertEquals(50_000_000L, character.getFreePathSwitchAtMs()); assertEquals(0, character.getPaidClassPicks());
+        now[0] += 1_800_000L;
+        assertEquals(1_800_000L, ClassPickService.freePathSwitchRemainingMs(character));
+        assertEquals(new BigDecimal("200.00"), ClassPickService.price(character, battlemagePick), "A second switch inside the cooldown is a normal class change");
+        assertTrue(ChatColor.stripColor(ClassPickService.pathSwitchNote(character, battlemagePick)).startsWith("Free path switch again in "));
+        assertTrue(lines.get().contains("Path switch: Free in "), lines.get());
+        wallet.set(Account.POUCH, 50_000); var paid = ClassPickService.choose(player, "battlemage");
+        assertEquals(Status.CHOSEN, paid.status()); assertEquals(new BigDecimal("200.00"), paid.cost());
+        assertEquals(50_000_000L, character.getFreePathSwitchAtMs(), "A paid switch leaves the free switch's timer alone");
+        now[0] += 1_800_000L;
+        assertEquals(0L, ClassPickService.freePathSwitchRemainingMs(character)); assertEquals(BigDecimal.ZERO, ClassPickService.price(character, ClassPickService.option("arcanist")));
+        ClassPickService.configure(mageSwitch(true));
+        assertNull(ClassPickService.pathSwitchNote(character, evokerPick), "Infinite points need no switch note");
+        assertEquals(List.of(mage, paths.get(0), paths.get(1), paths.get(2)), ClassPickService.rewardFamily(paths.get(1)));
+        assertEquals(List.of(mage, paths.get(0), paths.get(1), paths.get(2)), ClassPickService.rewardFamily(mage));
+        assertEquals(List.of(), ClassPickService.rewardFamily(berserker)); assertEquals(List.of(), ClassPickService.rewardFamily(hidden));
+        ClassPickService.configure(Settings.DEFAULTS);
+        assertEquals(List.of(), ClassPickService.rewardFamily(mage)); assertFalse(ClassPickService.isPathSwitch(character, evokerPick));
+    }
+
+    @Test void anOpenClassLockWindowKeepsPathSwitchesFreeWithoutSpendingTheDailyOne() {
+        magePaths(); ClassPickService.configure(mageSwitch(false)); level.set(3); character.setMMOClass("arcanist"); character.setSubclassPicked(true);
+        var stage = mock(SelectionStage.class); when(stage.getTarget()).thenReturn("class"); when(stage.getId()).thenReturn("class_selection_stage");
+        StageLoader.oList = new ArrayList<>(List.of(stage));
+        PaidChangeService.configure(List.of(new PaidChangeRule("class", "class_selection_stage", "class", List.of(new BigDecimal("1000")))), List.of());
+        var locks = boundary(StageEditLock.class); locks.when(() -> StageEditLock.canEdit(player, stage, character)).thenReturn(true);
+        var evokerPick = ClassPickService.option("evoker");
+        assertEquals(BigDecimal.ZERO, ClassPickService.price(character, evokerPick)); assertNull(ClassPickService.pathSwitchNote(character, evokerPick));
+        assertEquals(Status.CHOSEN, ClassPickService.choose(player, "evoker").status()); assertEquals(0L, character.getFreePathSwitchAtMs());
+        character.setFreePathSwitchAtMs(System.currentTimeMillis() + 10_000_000L);
+        assertTrue(ClassPickService.freePathSwitchRemainingMs(character) > 3_600_000L, "A clock that moved back keeps the switch closed until it passes");
     }
 
     @Test void optionsListDisplayedBaseClassesInOrderWithTheirSubclasses() {
