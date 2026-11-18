@@ -59,6 +59,28 @@ class IntegratorRuntimeTest {
         instances.get("strength").setBase(10); instances.get("dexterity").setBase(6); integrator.remove(player, character, true); assertEquals(7, value("strength")); assertEquals(8, value("dexterity"));
         instances.get("strength").setBase(10); instances.get("dexterity").setBase(6); integrator.remove(player, character, false); assertEquals(7, value("strength")); assertEquals(8, value("dexterity"));
     }
+    @Test void reapplyLeavesAnUnchangedLayerAloneSoMaxHealthAndManaNeverDip() {
+        Map<String, Integer> before = Integrator.snapshot(character); assertEquals(Map.of("strength", 3, "dexterity", -2, "removed_attribute", 4), before);
+        integrator.reapply(player, before, character); integrator.reapply(player, Map.of("STRENGTH", 3, "Dexterity", -2, "removed_attribute", 4), character);
+        verify(instances.get("strength"), never()).setBase(anyInt()); verify(instances.get("dexterity"), never()).setBase(anyInt()); assertEquals(10, value("strength")); assertEquals(6, value("dexterity"));
+    }
+    @Test void reapplyMovesEachChangedAttributeToItsFinalValueInOneStep() {
+        Map<String, Integer> before = Integrator.snapshot(character); attribute("constitution", 10);
+        character.getAttributeData().getModifiers().getFirst().add(-2); character.getAttributeData().getModifiers().removeIf(m -> m.getType().equals("dexterity")); character.getAttributeData().addModifier(new AttributeModifier("constitution", 2)); character.getAttributeData().addModifier(new AttributeModifier("unregistered", 5));
+        integrator.reapply(player, before, character); verify(instances.get("constitution"), times(1)).setBase(12); assertEquals(12, value("constitution"));
+        verify(instances.get("strength"), times(1)).setBase(8); verify(instances.get("dexterity"), times(1)).setBase(8); verify(instances.get("strength"), times(1)).setBase(anyInt()); verify(instances.get("dexterity"), times(1)).setBase(anyInt());
+        assertEquals(8, value("strength")); assertEquals(8, value("dexterity"));
+    }
+    @Test void reapplyKeepsTheOldClampAtZeroWhenTheBaseIsBelowTheOldAmount() {
+        instances.get("strength").setBase(2); Map<String, Integer> before = Integrator.snapshot(character); character.getAttributeData().getModifiers().getFirst().add(2);
+        integrator.reapply(player, before, character); assertEquals(5, value("strength"));
+    }
+    @Test void reapplyNeedsAPlayerReadyInMmoAndBothLayers() {
+        Map<String, Integer> before = Integrator.snapshot(character); character.getAttributeData().getModifiers().getFirst().add(1); assertEquals(Map.of(), Integrator.snapshot(null));
+        integrator.reapply(player, null, character); integrator.reapply(player, before, null); integrator.reapply(null, before, character);
+        when(mmo.isSynchronized()).thenReturn(false); integrator.reapply(player, before, character);
+        verify(instances.get("strength"), never()).setBase(anyInt()); assertEquals(10, value("strength"));
+    }
     @Test void serializedRemovalsPreserveNegativeCreationModifiersAndIgnoreRemovedAttributes() {
         integrator.remove(player, "strength.2"); integrator.remove(player, "dexterity.-3"); integrator.remove(player, "deleted.5"); assertEquals(8, value("strength")); assertEquals(9, value("dexterity"));
     }

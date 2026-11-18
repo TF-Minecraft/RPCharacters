@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.bukkit.entity.Player;
 
@@ -45,6 +46,42 @@ public class Integrator {
 			}
 			int next = attribute.getBase() - m.getAmount();
 			attribute.setBase(Math.max(0, next));
+		}
+	}
+
+	/**
+	 * The creation layer's total per attribute (names compared without case). Read it before changing a character's
+	 * traits or injuries, then pass it to {@link #reapply} afterwards.
+	 */
+	public static Map<String, Integer> snapshot(RPCharacter c) {
+		Map<String, Integer> amounts = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+		if (c == null) return amounts;
+		for (AttributeModifier m : c.getAttributeData().getModifiers()) {
+			amounts.merge(m.getType(), m.getAmount(), Integer::sum);
+		}
+		return amounts;
+	}
+
+	/**
+	 * Moves each attribute from its amount in {@code before} to the character's current creation layer with one
+	 * setBase, and leaves unchanged attributes alone. Taking the whole layer off and adding it back would briefly
+	 * lower MMOCore's max health and mana, which caps the player's current health and mana.
+	 */
+	public void reapply(Player p, Map<String, Integer> before, RPCharacter c) {
+		if (c == null || before == null) return;
+		PlayerAttributes attributes = readyAttributes(p);
+		if (attributes == null) return;
+		Map<String, Integer> after = snapshot(c);
+		Map<String, Integer> types = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+		types.putAll(before);
+		types.putAll(after);
+		for (String type : types.keySet()) {
+			int old = before.getOrDefault(type, 0);
+			int next = after.getOrDefault(type, 0);
+			if (old == next) continue;
+			AttributeInstance attribute = attributes.getInstance(type);
+			if (attribute == null) continue;
+			attribute.setBase(Math.max(0, attribute.getBase() - old) + next);
 		}
 	}
 

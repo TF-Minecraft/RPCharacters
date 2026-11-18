@@ -1,5 +1,7 @@
 package net.tfminecraft.rpcharacters.utils;
 
+import java.util.Map;
+
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.rpcharacters.loaders.TraitLoader;
@@ -15,11 +17,10 @@ public final class TraitChangeService {
 
 	public static void addTrait(Player player, RPCharacter character, Trait trait) {
 		if (character.isActive()) {
-			Integrator integrator = new Integrator();
-			integrator.remove(player, character, false);
+			Map<String, Integer> before = Integrator.snapshot(character);
 			character.addTrait(trait);
 			character.update();
-			integrator.integrate(player, character);
+			new Integrator().reapply(player, before, character);
 			AttributePointService.refreshAfterCreationLayerChange(player, character);
 		} else {
 			character.addTrait(trait);
@@ -32,11 +33,10 @@ public final class TraitChangeService {
 
 	public static void removeTrait(Player player, RPCharacter character, Trait trait) {
 		if (character.isActive()) {
-			Integrator integrator = new Integrator();
-			integrator.remove(player, character, false);
+			Map<String, Integer> before = Integrator.snapshot(character);
 			character.removeTrait(trait);
 			character.update();
-			integrator.integrate(player, character);
+			new Integrator().reapply(player, before, character);
 			AttributePointService.refreshAfterCreationLayerChange(player, character);
 		} else {
 			character.removeTrait(trait);

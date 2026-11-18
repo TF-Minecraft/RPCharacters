@@ -34,8 +34,9 @@ class InjuryHealingServiceTest extends HealingRuntimeFixture {
         var wound = trait("wound", "injury", "1h"); character.getTraits().add(wound);
         InjuryHealingService.start(); assertEquals(40, delay); assertEquals(40, period); assertNotNull(timer);
         timer.run(); assertTrue(character.getDurationRemainingMs("wound") > 3_590_000);
-        verify(manager).savePlayer(player); verify(integrations.constructed().getFirst()).remove(player, character, false);
-        verify(integrations.constructed().getFirst()).integrate(player, character);
+        verify(manager).savePlayer(player); verify(integrations.constructed().getFirst()).reapply(eq(player), anyMap(), eq(character));
+        verify(integrations.constructed().getFirst(), never()).remove(any(Player.class), any(RPCharacter.class), anyBoolean());
+        verify(integrations.constructed().getFirst(), never()).integrate(any(), any());
         timer.run(); verify(manager, times(1)).savePlayer(player); assertEquals(2, integrations.constructed().size());
     }
 
@@ -70,7 +71,7 @@ class InjuryHealingServiceTest extends HealingRuntimeFixture {
         var wound = trait("wound", "injury", "1h", "attribute-modifiers", List.of("strength.-4"));
         character.addTrait(wound); InjuryHealingService.refreshCharacter(player, character);
         assertEquals(-4, character.getAttributeData().getAmount(new AttributeModifier("strength", 0)));
-        verify(integrations.constructed().getFirst()).integrate(player, character);
+        verify(integrations.constructed().getFirst()).reapply(eq(player), anyMap(), eq(character));
         var inactive = character(false); inactive.addTrait(wound); InjuryHealingService.refreshCharacter(player, inactive);
         assertEquals(-4, inactive.getAttributeData().getAmount(new AttributeModifier("strength", 0)));
         assertEquals(1, integrations.constructed().size());
