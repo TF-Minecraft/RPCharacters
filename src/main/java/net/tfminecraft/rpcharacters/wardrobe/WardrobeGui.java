@@ -22,6 +22,7 @@ import net.tfminecraft.rpcharacters.objects.PermissionGroupDefinition;
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.utils.ClueFormatter;
 import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
@@ -83,6 +84,7 @@ public final class WardrobeGui {
 		if (player == null || !player.isOnline() || snapshot == null) {
 			return;
 		}
+		WardrobeDescriptionInput.cancel(player);
 		WardrobeGuiHolder holder = new WardrobeGuiHolder(player);
 		Inventory inv = Bukkit.createInventory(
 			holder,
@@ -170,6 +172,9 @@ public final class WardrobeGui {
 			} else {
 				lore.add(RPTexts.formatGui(RPTexts.MUTED + "Click to equip"));
 			}
+			if (snapshot.supportsDescriptions()) {
+				addDescriptionLore(lore, slotId, data);
+			}
 		} else {
 			meta.setDisplayName(RPTexts.formatGui(RPTexts.WARN + label));
 			lore.add(RPTexts.formatGui(RPTexts.MUTED + "Empty"));
@@ -186,6 +191,26 @@ public final class WardrobeGui {
 		);
 		item.setItemMeta(meta);
 		return item;
+	}
+
+	@SuppressWarnings("deprecation")
+	static void addDescriptionLore(List<String> lore, String slotId, WardrobeSlotData data) {
+		lore.add(RPTexts.spacer());
+		if (WardrobeSnapshot.SLOT_BASE.equals(slotId)) {
+			lore.add(RPTexts.formatGui(RPTexts.MUTED + "Uses your character description"));
+			lore.add(RPTexts.formatGui(RPTexts.MUTED + "(/rpcharacter description)"));
+			return;
+		}
+		String description = data != null ? data.getDescription() : null;
+		if (description == null) {
+			lore.add(RPTexts.formatGui(RPTexts.MUTED + "Uses your character description"));
+		} else {
+			lore.add(RPTexts.formatGui(RPTexts.GUI_WARN + "Description while worn:"));
+			for (String line : ClueFormatter.wrapLore(RPTexts.MUTED + description)) {
+				lore.add(RPTexts.formatGui(line));
+			}
+		}
+		lore.add(RPTexts.formatGui(RPTexts.MUTED + "Shift-click to set a description"));
 	}
 
 	static boolean isUnlocked(

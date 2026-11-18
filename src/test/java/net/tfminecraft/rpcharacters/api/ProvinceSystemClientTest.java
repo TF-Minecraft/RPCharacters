@@ -197,6 +197,23 @@ class ProvinceSystemClientTest {
         })));
     }
 
+    @Test void wardrobeDescriptionRouteEscapesTextAndRejectsUnsafeTargets() {
+        for (String invalid : Arrays.asList(null, " ", "a/b", "a..b")) {
+            assertFalse(setWardrobeDescription(invalid, "char", "extra_1", "x").ok);
+            assertFalse(setWardrobeDescription("player", invalid, "extra_1", "x").ok);
+        }
+        for (String slot : Arrays.asList(null, "extra_9", "../base")) {
+            assertFalse(setWardrobeDescription("player", "char", slot, "x").ok);
+        }
+        gateway.verifyNoInteractions();
+        assertTrue(setWardrobeDescription("player", "char", "extra_1", "A \"quoted\" cloak").ok);
+        gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wardrobe/player/char/slots/extra_1/description",
+            "{\"description\":\"A \\\"quoted\\\" cloak\"}"));
+        assertTrue(setWardrobeDescription("player", "char", "masked", null).ok);
+        gateway.verify(() -> GatewayClient.request("POST", "/characters/plugin/wardrobe/player/char/slots/masked/description",
+            "{\"description\":null}"));
+    }
+
     @Test void wardrobeRoutesRejectUnsafePathsAndSupportNullActiveSlots() {
         for (String invalid : Arrays.asList(null, " ", "a/b", "a\\b", "a..b")) {
             assertFalse(fetchWardrobe(invalid, "char").ok); assertFalse(fetchWardrobe("player", invalid).ok);

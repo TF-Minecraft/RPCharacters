@@ -1,6 +1,7 @@
 package net.tfminecraft.rpcharacters.wardrobe;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -14,11 +15,13 @@ import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.PlayerData;
 
 /**
- * /rpcharacter wardrobe — GUI picker, or chat equip with a slot arg.
+ * /rpcharacter wardrobe — GUI picker, or chat equip with a slot arg;
+ * /rpcharacter wardrobe describe &lt;skin&gt; [text|clear] sets a skin's description.
  */
 public final class WardrobeCommand {
 
 	public static final String SUBCOMMAND = "wardrobe";
+	public static final String DESCRIBE = "describe";
 
 	private WardrobeCommand() {}
 
@@ -28,6 +31,8 @@ public final class WardrobeCommand {
 			return true;
 		}
 		Player player = (Player) sender;
+		// Any wardrobe command ends a description prompt left open from the menu.
+		WardrobeDescriptionInput.cancel(player);
 		PlayerData pd = PlayerManager.get(player);
 		if (pd == null || !pd.hasActiveCharacter()) {
 			RPTexts.send(player, RPTexts.ERROR + "You need an active character.");
@@ -48,6 +53,10 @@ public final class WardrobeCommand {
 			);
 			WardrobeService.refreshActiveAsync(player);
 			return true;
+		}
+
+		if (DESCRIBE.equalsIgnoreCase(args[1]) && snapshot.supportsDescriptions()) {
+			return handleDescribe(player, label, snapshot, args);
 		}
 
 		String slot = resolveSlotArg(snapshot, args[1]);
@@ -82,7 +91,31 @@ public final class WardrobeCommand {
 					+ RPTexts.WARN + WardrobeService.labelForSlot(snapshot, slot)
 					+ RPTexts.SUCCESS + "."
 			);
+			WardrobeDescriptions.sendEquipHint(player, slot);
 		});
+		return true;
+	}
+
+	private static boolean handleDescribe(Player player, String label, WardrobeSnapshot snapshot, String[] args) {
+		if (args.length < 3) {
+			RPTexts.send(player, RPTexts.WARN + "Usage: /" + label + " wardrobe describe <skin> [text...|clear]");
+			return true;
+		}
+		String slot = WardrobeSnapshot.SLOT_MASKED.equalsIgnoreCase(args[2])
+			? WardrobeSnapshot.SLOT_MASKED
+			: resolveSlotArg(snapshot, args[2]);
+		if (slot == null) {
+			RPTexts.send(player, RPTexts.ERROR + "Unknown skin. Use a skin number from 2 to "
+				+ WardrobeSlots.MAX_SWAPPABLE + ", its name, or masked.");
+			return true;
+		}
+		if (args.length == 3) {
+			if (WardrobeDescriptions.canDescribe(player, slot)) {
+				WardrobeDescriptionInput.begin(player, slot);
+			}
+			return true;
+		}
+		WardrobeDescriptions.submit(player, slot, String.join(" ", Arrays.copyOfRange(args, 3, args.length)));
 		return true;
 	}
 
@@ -122,11 +155,19 @@ public final class WardrobeCommand {
 	}
 
 	public static List<String> tabComplete(Player player, String[] args) {
-		if (args.length != 2) {
+		WardrobeSnapshot snapshot = WardrobeCache.get(player);
+		boolean describing = args.length >= 3 && DESCRIBE.equalsIgnoreCase(args[1])
+			&& snapshot != null && snapshot.supportsDescriptions();
+		if (describing && args.length == 4) {
+			return "clear".startsWith(args[3].toLowerCase(Locale.ROOT)) ? List.of("clear") : Collections.emptyList();
+		}
+		if (args.length != 2 && !(describing && args.length == 3)) {
 			return Collections.emptyList();
 		}
-		WardrobeSnapshot snapshot = WardrobeCache.get(player);
 		List<String> options = new ArrayList<>();
+		if (args.length == 2 && snapshot != null && snapshot.supportsDescriptions()) {
+			options.add(DESCRIBE);
+		}
 		if (snapshot == null) {
 			options.addAll(WardrobeSlots.swappable());
 		} else {
@@ -148,7 +189,14 @@ public final class WardrobeCommand {
 				}
 			}
 		}
-		String prefix = args[1].toLowerCase(Locale.ROOT);
+		if (describing) {
+			options.remove(WardrobeSnapshot.SLOT_BASE);
+			WardrobeSlotData masked = snapshot.getSlot(WardrobeSnapshot.SLOT_MASKED);
+			if (masked != null && masked.isFilled()) {
+				options.add(WardrobeSnapshot.SLOT_MASKED);
+			}
+		}
+		String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
 		return options.stream()
 			.filter(s -> s.toLowerCase(Locale.ROOT).startsWith(prefix))
 			.collect(Collectors.toList());

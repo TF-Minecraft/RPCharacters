@@ -191,33 +191,138 @@ public final class WardrobeService {
 			return;
 		}
 
-		if (MaskService.isMasked(player)) {
-			WardrobeSlotData masked = snapshot.getSlot(WardrobeSnapshot.SLOT_MASKED);
-			if (masked != null && masked.canApply()) {
-				SkinApplyHelper.apply(
-					player,
-					masked.getTextureValue(),
-					masked.getTextureSignature()
-				);
-				return;
-			}
+		WardrobeSlotData worn = wornSlot(snapshot, MaskService.isMasked(player));
+		if (worn != null) {
+			SkinApplyHelper.apply(
+				player,
+				worn.getTextureValue(),
+				worn.getTextureSignature()
+			);
+			return;
 		}
 
+		applyAccountSkin(player);
+	}
+
+	/**
+	 * The skin a character shows: Masked while a mask is worn (when it has one), else the
+	 * active skin; null means the account skin.
+	 */
+	static WardrobeSlotData wornSlot(WardrobeSnapshot snapshot, boolean masked) {
+		if (snapshot == null) {
+			return null;
+		}
+		if (masked) {
+			WardrobeSlotData slot = snapshot.getSlot(WardrobeSnapshot.SLOT_MASKED);
+			if (slot != null && slot.canApply()) {
+				return slot;
+			}
+		}
 		String active = snapshot.getActiveSlot();
 		if (active != null && !active.isBlank()) {
 			WardrobeSlotData slot = snapshot.getSlot(active);
 			// A cache from before a rank drop may still name a slot that is now locked.
 			if (slot != null && slot.isUnlocked() && slot.canApply()) {
-				SkinApplyHelper.apply(
-					player,
-					slot.getTextureValue(),
-					slot.getTextureSignature()
-				);
-				return;
+				return slot;
 			}
 		}
+		return null;
+	}
 
-		applyAccountSkin(player);
+	/** The worn skin when it is not Base and descriptions are on; null otherwise. */
+	public static WardrobeSlotData wornDescribableSlot(Player owner) {
+		if (owner == null) {
+			return null;
+		}
+		WardrobeSnapshot snapshot = WardrobeCache.get(owner);
+		if (snapshot == null || !snapshot.supportsDescriptions()) {
+			return null;
+		}
+		PlayerData data = PlayerManager.get(owner);
+		RPCharacter character = data != null ? data.getActiveCharacter() : null;
+		if (character == null || !character.getId().equalsIgnoreCase(snapshot.getCharacterId())) {
+			return null;
+		}
+		WardrobeSlotData worn = wornSlot(snapshot, MaskService.isMasked(owner));
+		if (worn == null || WardrobeSnapshot.SLOT_BASE.equals(worn.getSlot())) {
+			return null;
+		}
+		return worn;
+	}
+
+	/**
+	 * What others read for this character right now when its worn skin has its own
+	 * description; null to use the character description.
+	 */
+	public static String wornDescription(RPCharacter character) {
+		if (character == null) {
+			return null;
+		}
+		Player owner = character.getOwner();
+		if (owner == null || !owner.isOnline()) {
+			return null;
+		}
+		PlayerData data = PlayerManager.get(owner);
+		if (data == null || data.getActiveCharacter() != character) {
+			return null;
+		}
+		WardrobeSlotData worn = wornDescribableSlot(owner);
+		return worn != null ? worn.getDescription() : null;
+	}
+
+	/**
+	 * Save a skin's description on the website, then update the cached wardrobe without
+	 * re-applying the skin. {@code description} null clears it.
+	 */
+	public static void setDescription(
+		Player player,
+		String slot,
+		String description,
+		ActiveCallback callback
+	) {
+		PlayerData pd = PlayerManager.get(player);
+		if (player == null || !player.isOnline() || pd == null || !pd.hasActiveCharacter()) {
+			callback.done("You need an active character.");
+			return;
+		}
+		RPCharacter character = pd.getActiveCharacter();
+		String characterId = character.getId();
+		UUID playerId = player.getUniqueId();
+		String uuid = playerId.toString();
+		var session = net.tfminecraft.tlibs.character.Characters.currentSession(player).orElse(null);
+		Bukkit.getScheduler().runTaskAsynchronously(RPCharacters.plugin, () -> {
+			ProvinceSystemClient.SimpleResult result =
+				ProvinceSystemClient.setWardrobeDescription(uuid, characterId, slot, description);
+			WardrobeSnapshot updated = result.ok ? WardrobeSnapshot.parse(result.body) : null;
+			Bukkit.getScheduler().runTask(RPCharacters.plugin, () -> {
+				Player online = Bukkit.getPlayer(playerId);
+				if (online != player || !online.isOnline()) {
+					return;
+				}
+				PlayerData current = PlayerManager.get(online);
+				if (current == null || current.getActiveCharacter() != character
+						|| session != null && !net.tfminecraft.tlibs.character.Characters.isCurrent(session)) {
+					callback.done("Your active character changed. Try again.");
+					return;
+				}
+				if (!result.ok) {
+					RPCharacters.plugin.getLogger().warning(
+						"Wardrobe description save failed for " + uuid + "/" + characterId + ": " + result.error);
+					callback.done("Could not save the description. Try again in a moment.");
+					return;
+				}
+				// Change only this skin's text, so a pull or equip still in flight keeps the rest.
+				WardrobeSnapshot cached = WardrobeCache.get(playerId);
+				WardrobeSlotData saved = updated != null && characterId.equalsIgnoreCase(updated.getCharacterId())
+					? updated.getSlot(slot) : null;
+				if (saved != null && cached != null && characterId.equalsIgnoreCase(cached.getCharacterId())) {
+					WardrobeCache.put(playerId, cached.withDescription(slot, saved.getDescription()));
+				} else {
+					refreshActiveAsync(online);
+				}
+				callback.done(null);
+			});
+		});
 	}
 
 	private static void applyAccountSkin(Player player) {

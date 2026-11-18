@@ -20,6 +20,7 @@ public final class WardrobeSnapshot {
 	private String activeSlot;
 	private final int swappableSlots;
 	private final Map<String, WardrobeSlotData> slots;
+	private final boolean descriptions;
 
 	public WardrobeSnapshot(
 		String characterId,
@@ -27,10 +28,36 @@ public final class WardrobeSnapshot {
 		int swappableSlots,
 		Map<String, WardrobeSlotData> slots
 	) {
+		this(characterId, activeSlot, swappableSlots, slots, false);
+	}
+
+	public WardrobeSnapshot(
+		String characterId,
+		String activeSlot,
+		int swappableSlots,
+		Map<String, WardrobeSlotData> slots,
+		boolean descriptions
+	) {
 		this.characterId = characterId;
 		this.activeSlot = activeSlot;
 		this.swappableSlots = swappableSlots;
 		this.slots = slots;
+		this.descriptions = descriptions;
+	}
+
+	/** A copy where one skin's description is replaced; everything else is unchanged. */
+	public WardrobeSnapshot withDescription(String slot, String description) {
+		Map<String, WardrobeSlotData> copy = new LinkedHashMap<>(slots);
+		WardrobeSlotData current = getSlot(slot);
+		if (current != null) {
+			copy.put(current.getSlot(), current.withDescription(description));
+		}
+		return new WardrobeSnapshot(characterId, activeSlot, swappableSlots, copy, descriptions);
+	}
+
+	/** True once the website stores skin descriptions; until then the feature stays hidden. */
+	public boolean supportsDescriptions() {
+		return descriptions;
 	}
 
 	public String getCharacterId() {
@@ -117,6 +144,7 @@ public final class WardrobeSnapshot {
 					if (value != null && signature != null) {
 						signed = true;
 					}
+					String description = stringOf(s.get("description"));
 					map.put(
 						slot,
 						new WardrobeSlotData(
@@ -128,12 +156,14 @@ public final class WardrobeSnapshot {
 							model,
 							displayName,
 							value,
-							signature
+							signature,
+							description
 						)
 					);
 				}
 			}
-			return new WardrobeSnapshot(characterId, active, swappable, map);
+			return new WardrobeSnapshot(characterId, active, swappable, map,
+				boolOf(root.get("descriptions"), false));
 		} catch (Exception ignored) {
 			return null;
 		}

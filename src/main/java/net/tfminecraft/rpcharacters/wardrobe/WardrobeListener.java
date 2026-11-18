@@ -100,6 +100,16 @@ public final class WardrobeListener implements Listener {
 			return;
 		}
 
+		if (event.isShiftClick() && snapshot.supportsDescriptions()) {
+			if (WardrobeDescriptions.canDescribe(player, slotId)) {
+				player.closeInventory();
+				WardrobeDescriptionInput.begin(player, slotId);
+			} else {
+				player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+			}
+			return;
+		}
+
 		String active = snapshot.getActiveSlot();
 		if (active != null && active.equalsIgnoreCase(slotId)) {
 			RPTexts.send(
@@ -134,6 +144,7 @@ public final class WardrobeListener implements Listener {
 					)
 					+ RPTexts.SUCCESS + "."
 			);
+			WardrobeDescriptions.sendEquipHint(player, slotId);
 			player.playSound(
 				player.getLocation(),
 				Sound.BLOCK_NOTE_BLOCK_BIT,

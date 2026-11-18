@@ -90,6 +90,11 @@ public final class PersonaService {
 		if (character == null) {
 			return "";
 		}
+		// A worn wardrobe skin with its own description replaces the character description.
+		String outfit = net.tfminecraft.rpcharacters.wardrobe.WardrobeService.wornDescription(character);
+		if (outfit != null) {
+			return outfit;
+		}
 		String custom = character.getPersonaDescription();
 		if (custom != null && !custom.isBlank()) {
 			return custom;
