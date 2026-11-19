@@ -11,7 +11,6 @@ import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.tfminecraft.rpcharacters.identity.DisplayIdentityService;
 import net.tfminecraft.rpcharacters.RPCharacters;
 import net.tfminecraft.rpcharacters.body.CharacterBodies;
-import net.tfminecraft.tlibs.character.CharacterInfo;
 import net.tfminecraft.tlibs.character.Characters;
 
 public final class GraveHologramTexts {
@@ -42,9 +41,11 @@ public final class GraveHologramTexts {
 		CharacterBodies bodies = RPCharacters.getCharacterBodies();
 		if (character != null || bodies != null) {
 			if (character == null && grave.getOwner() != null) character = bodies.migrationHeir(grave.getOwner());
+			// The hologram is public, so it shows the alias, never a real name the character keeps private.
 			return character == null ? offlineName(grave.getOwner()) : Characters.info(character)
 					.filter(info -> info.ref().ownerId().equals(grave.getOwner()))
-					.map(CharacterInfo::name).filter(name -> !name.isBlank())
+					.map(info -> publicName(info.ref().characterId()).orElse(info.name()))
+					.filter(name -> !name.isBlank())
 					.orElseGet(() -> offlineName(grave.getOwner()));
 		}
 		Player owner = grave.getOwner() != null ? Bukkit.getPlayer(grave.getOwner()) : null;
@@ -82,6 +83,12 @@ public final class GraveHologramTexts {
 			return "";
 		}
 		return StringFormatter.formatHex(message.replace('&', '\u00A7'));
+	}
+
+	/** Asks this plugin's own identity service, so an older TLibs on the server cannot break graves. */
+	private static java.util.Optional<String> publicName(UUID characterId) {
+		var identity = RPCharacters.getCharacterIdentity();
+		return identity == null ? java.util.Optional.empty() : identity.publicName(characterId);
 	}
 
 	private static String characterOrName(Player player) {

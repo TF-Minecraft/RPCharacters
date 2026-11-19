@@ -217,13 +217,21 @@ public final class CreationWizard {
 			return;
 		}
 		boolean description = target.equals("description");
+		boolean alias = target.equals("alias");
+		if (alias) {
+			body.add(message("Your alias is the name other players see: TAB, chat and /faction list.", NamedTextColor.WHITE));
+			body.add(message("Your character's real name stays hidden until you share it in roleplay.", NamedTextColor.GRAY));
+			body.add(message("Type a nickname or title, or type " + CreationRules.SAME_AS_NAME
+					+ " to show your real name. Change it later with /char alias.", NamedTextColor.GRAY));
+		}
 		String initial = switch (target) {
 			case "name" -> character.getName();
+			case "alias" -> character.getAlias();
 			case "age" -> character.getBirthday() == null ? "" : AgeCalculator.formatAge(character.getBirthday());
 			case "description" -> character.getPersonaDescription();
 			default -> "";
 		};
-		int max = description ? Cache.characterDescriptionMaxLength : target.equals("name") ? Cache.personaDisplayNameMaxLength : 64;
+		int max = description ? Cache.characterDescriptionMaxLength : target.equals("name") || alias ? Cache.personaDisplayNameMaxLength : 64;
 		if (description) body.add(message("Appearance and manner · " + Cache.characterDescriptionMinLength + "–" + max + " characters", NamedTextColor.GRAY));
 		if (target.equals("age") && character.getRace() != null) {
 			int minimum = Cache.calendarAgeMinimum;
@@ -569,6 +577,7 @@ public final class CreationWizard {
 		if (!confirmed.contains(stage)) return "Not confirmed";
 		if (stage instanceof SetterStage setter) return switch (setter.getTarget().toLowerCase(Locale.ROOT)) {
 			case "name" -> DisplayIdentityService.colourPlain(character.getName(), character.getNameColour());
+			case "alias" -> character.getAlias() == null ? "Same as the real name" : character.getAlias();
 			case "description" -> character.getPersonaDescription() + "\nGender: " + (character.getGender() == null || character.getGender().isBlank() ? "Unspecified" : character.getGender());
 			case "age" -> AgeCalculator.formatAge(character.getBirthday());
 			case "real_age" -> PlayerManager.get(player).isEighteen() ? "18+" : "Under 18";
@@ -717,6 +726,7 @@ public final class CreationWizard {
 		RPCharacter character = creation.getCharacter();
 		String invalid = CreationRules.nameError(character.getName());
 		if (invalid == null && character.getNameColour() != null) invalid = PermissionGroupService.validateNameColourHexes(player, character.getNameColour().getHexCodes(), false).orElse(null);
+		if (invalid == null) invalid = CreationRules.aliasError(character.getAlias());
 		if (invalid == null) invalid = CreationRules.classError(character.getMMOClass());
 		if (invalid == null) invalid = character.getRace() == null ? "Pick a race." : CreationRules.birthdayError(character, character.getBirthday());
 		if (invalid == null) invalid = CreationRules.descriptionError(character.getPersonaDescription());

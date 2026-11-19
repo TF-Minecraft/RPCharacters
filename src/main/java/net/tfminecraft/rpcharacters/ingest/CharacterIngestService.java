@@ -361,6 +361,9 @@ public final class CharacterIngestService {
 		);
 		character.setGender(gender);
 		character.setPersonaDescription(description);
+		// Blank, or the real name again, means no alias: the real name shows, as it does in game.
+		String alias = stringOf(payload.get("alias"));
+		if (!alias.equalsIgnoreCase(name)) character.setAlias(alias);
 		List<String> nameColours = new ArrayList<>();
 		Object coloursRaw = payload.get("name_colours");
 		if (coloursRaw instanceof JSONArray colourArr) {
@@ -460,6 +463,7 @@ public final class CharacterIngestService {
 		List<Stage> stages = StageLoader.oList;
 		List<Supplier<String>> checks = List.of(
 			() -> CreationRules.nameError(character.getName()),
+			() -> CreationRules.aliasError(character.getAlias()),
 			() -> CreationRules.raceError(character.getRace(), stages),
 			() -> CreationRules.ageError(age, character.getRace()),
 			() -> CreationRules.birthdayError(character, character.getBirthday()),

@@ -206,6 +206,19 @@ class GraveCharacterOwnershipTest extends GraveRuntimeFixture {
         }
     }
 
+    @Test void hologramShowsTheAliasNotThePrivateRealName() {
+        Grave grave = grave(); grave.setCharacterOwner(alice);
+        var identity = mock(net.tfminecraft.rpcharacters.identity.CharacterIdentityService.class);
+        try (var runtime = mockStatic(RPCharacters.class); var characters = mockStatic(Characters.class)) {
+            characters.when(() -> Characters.info(alice)).thenReturn(Optional.of(info(player.getUniqueId(), "Alice")));
+            runtime.when(RPCharacters::getCharacterIdentity).thenReturn(identity);
+            when(identity.publicName(alice)).thenReturn(Optional.of("Hooded Stranger"));
+            assertEquals("Hooded Stranger", GraveHologramTexts.baseLines(grave).getFirst());
+            when(identity.publicName(alice)).thenReturn(Optional.empty());
+            assertEquals("Alice", GraveHologramTexts.baseLines(grave).getFirst());
+        }
+    }
+
     @Test void legacyHologramUsesTheMigrationHeirOnlyWhileBodiesAreEnabled() {
         Grave grave = grave(); CharacterBodies bodies = mock(CharacterBodies.class);
         identities.when(() -> DisplayIdentityService.resolveCharacterName(player)).thenReturn("Bob");

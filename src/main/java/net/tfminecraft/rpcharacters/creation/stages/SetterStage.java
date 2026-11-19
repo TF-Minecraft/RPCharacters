@@ -108,6 +108,11 @@ public class SetterStage extends Stage{
 			return;
 		}
 
+		if (target != null && target.equalsIgnoreCase("alias")) {
+			handleAlias(n, p, cc);
+			return;
+		}
+
 		if (target != null && target.equalsIgnoreCase("real_age")) {
 			if(n.equalsIgnoreCase("yes")) {
 				if (!cc.isPreview()) {
@@ -149,6 +154,35 @@ public class SetterStage extends Stage{
 		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n, 5, 50, 5);
 		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + WordUtils.capitalize(target) + " set to " + RPTexts.WARN + n);
 		cc.getCharacter().modify(target, n);
+		scheduleAdvance(p, cc);
+	}
+
+	/**
+	 * Required step: the player types an alias, or {@link CreationRules#SAME_AS_NAME} to keep the real
+	 * name showing. An alias equal to the real name is stored as no alias, which shows the same.
+	 */
+	private void handleAlias(String input, Player p, CharacterCreation cc) {
+		String text = input == null ? "" : input.trim();
+		if (text.isEmpty()) {
+			CreationWizard.sendError(p, cc, RPTexts.ERROR + "Type an alias, or " + RPTexts.WARN + CreationRules.SAME_AS_NAME
+					+ RPTexts.ERROR + " to show your character's real name.");
+			return;
+		}
+		String name = cc.getCharacter().getName();
+		boolean same = text.equalsIgnoreCase(CreationRules.SAME_AS_NAME) || text.equalsIgnoreCase(name);
+		if (!same) {
+			String error = AliasValidator.validate(text);
+			if (error != null) {
+				if (!CreationWizard.reportError(cc, error)) p.sendMessage(error);
+				return;
+			}
+		}
+		if (same) cc.getCharacter().clearAlias();
+		else cc.getCharacter().setAlias(text);
+		String shown = same ? (name == null ? "your real name" : name) : cc.getCharacter().getAlias();
+		if (cc.getWizard() == null) RPTexts.title(p, " ", RPTexts.MUTED + "Others will see " + RPTexts.WARN + shown, 5, 50, 5);
+		if (cc.getWizard() == null) RPTexts.send(p, RPTexts.MUTED + "Others will see " + RPTexts.WARN + shown
+				+ RPTexts.MUTED + ". Change it later with " + RPTexts.COMMAND + "/char alias" + RPTexts.MUTED + ".");
 		scheduleAdvance(p, cc);
 	}
 

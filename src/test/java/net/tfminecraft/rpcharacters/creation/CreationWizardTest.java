@@ -629,6 +629,33 @@ class CreationWizardTest {
 	}
 
 	@Test
+	void aliasStepIsRequiredAndSameKeepsTheRealNameShowing() throws Exception {
+		start(setter("name_stage", "name"), setter("alias_stage", "alias"), summary());
+		click("Next", Map.of("value", "Aren"));
+		assertTrue(body().contains("Your alias is the name other players see"));
+		assertTrue(body().contains("type same to show your real name"));
+
+		click("Next", Map.of("value", "  "));
+		assertTrue(body().contains("Type an alias, or same"));
+		click("Next", Map.of("value", "Hooded 2"));
+		assertTrue(body().contains("disallowed character"));
+		assertNull(creation.getCharacter().getAlias());
+
+		click("Next", Map.of("value", "Hooded Stranger"));
+		assertEquals("Hooded Stranger", creation.getCharacter().getAlias());
+		assertTrue(body().contains("Alias: Hooded Stranger"));
+
+		click("Edit Alias");
+		assertEquals("Hooded Stranger", ui.last().field("value").initial());
+		click("Save and review", Map.of("value", "SAME"));
+		assertNull(creation.getCharacter().getAlias());
+		assertTrue(body().contains("Alias: Same as the real name"));
+
+		click("Edit Alias"); click("Save and review", Map.of("value", "aren"));
+		assertNull(creation.getCharacter().getAlias(), "the real name typed again is no alias");
+	}
+
+	@Test
 	void customSetterValuesAndFinalValidationRemainVisible() throws Exception {
 		start(setter("custom_stage", "nickname"), summary());
 		click("Next", Map.of("value", "Aren"));

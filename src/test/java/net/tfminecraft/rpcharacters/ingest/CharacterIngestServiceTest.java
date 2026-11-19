@@ -109,10 +109,10 @@ class CharacterIngestServiceTest extends IngestFixture {
     }
 
     @Test void pendingRowsApplyOnMainAndPersistBeforeAcknowledgement() throws Exception {
-        trait("strong","physical");stage("physical");JSONObject payload=payload();payload.putAll(obj("all_traits",array("strong"),"clues",array("Blue coat"),"name_colours",array(null," "," #112233 ","#abcdef"),"birthday","2000-01-02","eighteen",true));pending(row("alpha",payload));
+        trait("strong","physical");stage("physical");JSONObject payload=payload();payload.putAll(obj("all_traits",array("strong"),"clues",array("Blue coat"),"name_colours",array(null," "," #112233 ","#abcdef"),"birthday","2000-01-02","eighteen",true,"alias"," Hooded Stranger "));pending(row("alpha",payload));
         api.when(() -> ProvinceSystemClient.ackCreates(anyString())).thenAnswer(call->{assertTrue(Files.exists(characterFolder.resolve("alpha.json")),"Character must exist before a success acknowledgment");acknowledgments.add(parse(call.getArgument(0)));return ProvinceSystemClient.SimpleResult.success("{}");});
         CharacterIngestService.pullAsync(plugin);assertFalse(Files.exists(playerFile));assertTrue(acknowledgments.isEmpty());runWorkers();
-        assertEquals(obj("id","alpha","ok",true,"character_id","alpha"),result(0));JSONObject saved=parse(Files.readString(characterFolder.resolve("alpha.json")));assertEquals("Aria",saved.get("name"));assertEquals("woman",saved.get("gender"));assertEquals("Traveller from the northern coast who never stays long",saved.get("description"));assertEquals(array("strong"),saved.get("traits"));assertEquals("2000-01-02",saved.get("birthday"));assertTrue(((Number)saved.get("created-at")).longValue()>0);assertEquals(obj("colours",array("#112233","#abcdef")),saved.get("name-colour"));assertEquals("true",parse(Files.readString(playerFile)).get("eighteen"));
+        assertEquals(obj("id","alpha","ok",true,"character_id","alpha"),result(0));JSONObject saved=parse(Files.readString(characterFolder.resolve("alpha.json")));assertEquals("Aria",saved.get("name"));assertEquals("Hooded Stranger",saved.get("alias"));assertEquals("woman",saved.get("gender"));assertEquals("Traveller from the northern coast who never stays long",saved.get("description"));assertEquals(array("strong"),saved.get("traits"));assertEquals("2000-01-02",saved.get("birthday"));assertTrue(((Number)saved.get("created-at")).longValue()>0);assertEquals(obj("colours",array("#112233","#abcdef")),saved.get("name-colour"));assertEquals("true",parse(Files.readString(playerFile)).get("eighteen"));
         lifecycle.verify(() -> CharacterLifecycle.fireCreated(isNull(),eq(owner),argThat(c -> c.getId().equals("alpha"))));kitService.verify(() -> KitService.onCharacterCreated(isNull(),any(PlayerData.class),argThat(c -> c.getId().equals("alpha"))));roster.verify(() -> RosterSyncService.pushRosterAsync(owner));verify(logger).info(contains("processed 1"));verify(scheduler).runTask(eq(plugin),any(Runnable.class));
     }
 
@@ -276,7 +276,8 @@ class CharacterIngestServiceTest extends IngestFixture {
         JSONObject pirate=payload(); pirate.put("class_id","pirate");
         JSONObject shortDescription=payload(); shortDescription.put("description","Too short");
         JSONObject repeatedClue=payload(); repeatedClue.put("clues",array("Blue coat","blue coat"));
-        pending(row("a",unknownTrait),row("b",digits),row("c",tooOld),row("d",pirate),row("e",shortDescription),row("f",repeatedClue));
+        JSONObject badAlias=payload(); badAlias.put("alias","Hooded 2");
+        pending(row("a",unknownTrait),row("b",digits),row("c",tooOld),row("d",pirate),row("e",shortDescription),row("f",repeatedClue),row("g",badAlias));
         CharacterIngestService.pullAsync(plugin); runWorkers();
         assertEquals("unknown trait: missing",result(0).get("error"));
         assertEquals("Name may only use letters, spaces, apostrophes, hyphens and full stops.",result(1).get("error"));
@@ -284,6 +285,7 @@ class CharacterIngestServiceTest extends IngestFixture {
         assertEquals("Unknown class: pirate",result(3).get("error"));
         assertEquals("Description must be at least 32 characters.",result(4).get("error"));
         assertEquals("Duplicate clue: blue coat",result(5).get("error"));
+        assertEquals("Alias contains disallowed character: 2",result(6).get("error"));
         assertFalse(Files.exists(playerFile)); lifecycle.verifyNoInteractions();
     }
 
