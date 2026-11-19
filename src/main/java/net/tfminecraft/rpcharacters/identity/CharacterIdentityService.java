@@ -97,6 +97,13 @@ public final class CharacterIdentityService implements CharacterIdentity {
         return directory.info(characterId);
     }
 
+    /** The alias, or the real name without one, with live edits overlaid like {@link #info(UUID)}. */
+    @Override
+    public Optional<String> publicName(UUID characterId) {
+        refreshCharacter(characterId);
+        return directory.publicName(characterId);
+    }
+
     @Override
     public Optional<UUID> deathId(UUID characterId) {
         refreshCharacter(characterId);
@@ -174,7 +181,8 @@ public final class CharacterIdentityService implements CharacterIdentity {
         }
         boolean active = Boolean.TRUE.equals(character.isActive());
         UUID deathId = character.getDeathId();
-        onMainThread(directory -> directory.upsert(owner, info, active, deathId));
+        String alias = character.getAlias();
+        onMainThread(directory -> directory.upsert(owner, info, active, deathId, alias));
     }
 
     public static void removed(UUID owner, String characterId) {

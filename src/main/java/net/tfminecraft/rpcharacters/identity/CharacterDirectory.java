@@ -42,6 +42,8 @@ public final class CharacterDirectory {
 	private final Map<UUID, Map<UUID, CharacterInfo>> accounts = new HashMap<>();
 	private final Map<UUID, UUID> owners = new HashMap<>();
 	private final Map<UUID, UUID> deaths = new HashMap<>();
+	/** Plain alias by character ID; characters without one have no entry. */
+	private final Map<UUID, String> aliases = new HashMap<>();
 	private final Set<UUID> unavailable = new HashSet<>();
 	/** Characters saved with the legacy {@code active} flag, which predates session timestamps. */
 	private final Set<CharacterRef> flaggedActive = new HashSet<>();
@@ -78,6 +80,14 @@ public final class CharacterDirectory {
 		UUID ownerId = owners.get(Objects.requireNonNull(characterId, "characterId"));
 		if (ownerId == null || unavailable.contains(ownerId)) return Optional.empty();
 		return Optional.ofNullable(accounts.getOrDefault(ownerId, Map.of()).get(characterId));
+	}
+
+	/**
+	 * The name the character goes by in public: its alias, or its real name without one. Empty
+	 * whenever {@link #info(UUID)} is.
+	 */
+	public Optional<String> publicName(UUID characterId) {
+		return info(characterId).map(info -> aliases.getOrDefault(info.ref().characterId(), info.name()));
 	}
 
 	/**
@@ -157,6 +167,20 @@ public final class CharacterDirectory {
 			return;
 		}
 		upsert(ownerId, info, Boolean.TRUE.equals(character.isActive()), character.getDeathId());
+		rememberAlias(info.ref().characterId(), character.getAlias());
+	}
+
+	/** As {@link #upsert(UUID, CharacterInfo, boolean, UUID)}, also replacing the saved alias. */
+	public void upsert(UUID ownerId, CharacterInfo info, boolean active, UUID deathId, String alias) {
+		upsert(ownerId, info, active, deathId);
+		rememberAlias(info.ref().characterId(), alias);
+	}
+
+	/** A blank or unreadable alias counts as none; it never quarantines the account. */
+	private void rememberAlias(UUID characterId, Object alias) {
+		String plain = alias instanceof String text ? ClueFormatter.stripColor(text).trim() : "";
+		if (plain.isEmpty()) aliases.remove(characterId);
+		else aliases.put(characterId, plain);
 	}
 
 	/** {@link #snapshot}, reusing the last one while every value it read is unchanged. */
@@ -192,7 +216,10 @@ public final class CharacterDirectory {
 			Map<UUID, CharacterInfo> characters = accounts.get(ownerId);
 			if (characters != null) characters.remove(id);
 			flaggedActive.remove(new CharacterRef(ownerId, id));
-			if (ownerId.equals(owners.get(id))) deaths.remove(id);
+			if (ownerId.equals(owners.get(id))) {
+				deaths.remove(id);
+				aliases.remove(id);
+			}
 			if (!unavailable.contains(ownerId)) owners.remove(id, ownerId);
 		} catch (RuntimeException error) {
 			quarantine(ownerId, "Invalid removed character ID: " + error.getMessage());
@@ -267,6 +294,7 @@ public final class CharacterDirectory {
 			CharacterInfo info = new CharacterInfo(new CharacterRef(ownerId, id), plainName(string(json.get("name"))),
 					CharacterStatus.valueOf(string(json.get("status")).toUpperCase(Locale.ROOT)), race, traits, seconds, lastPlayed);
 			characters.put(id, info);
+			rememberAlias(id, json.get("alias"));
 			rememberDeath(info, json.get("death-id") == null ? null : uuid(string(json.get("death-id"))));
 			flag(info.ref(), Boolean.parseBoolean(String.valueOf(json.get("active"))));
 		} catch (IOException | RuntimeException error) {

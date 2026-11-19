@@ -69,6 +69,8 @@ creation_name_stage:
   - subtitle(§eIn the next stage you will type the name in chat)
   - subtitle(§eMake a good name - your IGN is not permitted)
   - subtitle(§eNo characters from other franchises/real life)
+  - subtitle(§eThis is your character's real name - others learn it in RP)
+  - subtitle(§eAfter it you pick an alias, the name other players see)
   - 'subtitle(§eUse #32ed73/rpcharacter next§e to move on)'
   web-messages:
   - title(Character Name)
@@ -79,6 +81,12 @@ creation_name_set_stage:
   target: name
   repeat: true
   message: subtitle(§eType your character name in chat)
+creation_alias_set_stage:
+  type: setter
+  target: alias
+  repeat: true
+  platform: game
+  message: subtitle(§eType the alias others see, or same to show your real name)
 class_info_stage:
   type: info
   repeat: true

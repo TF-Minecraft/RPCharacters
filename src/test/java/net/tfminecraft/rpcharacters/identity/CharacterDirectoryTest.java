@@ -468,6 +468,55 @@ class CharacterDirectoryTest {
 		assertFalse(directory.unreadable(UUID.randomUUID()));
 	}
 
+	@Test
+	void publicNameIsTheSavedAliasOrTheRealNameWithoutOne() throws Exception {
+		save(owner, id + ".json", json(id, "Thalia Hawthorn", "ALIVE", "\"alias\":\"&aLia Thorn \""));
+		save(owner, second + ".json", json(second, "Clip", "ALIVE", "\"alias\":\"  \""));
+		UUID numeric = UUID.randomUUID();
+		save(owner, numeric + ".json", json(numeric, "Odd Alias", "ALIVE", "\"alias\":7"));
+		CharacterDirectory directory = load();
+
+		assertEquals("Lia Thorn", directory.publicName(id).orElseThrow());
+		assertEquals("Thalia Hawthorn", directory.info(id).orElseThrow().name());
+		assertEquals("Clip", directory.publicName(second).orElseThrow());
+		assertEquals("Odd Alias", directory.publicName(numeric).orElseThrow());
+		assertTrue(directory.publicName(UUID.randomUUID()).isEmpty());
+		assertTrue(warnings.isEmpty());
+	}
+
+	@Test
+	void liveAndQueuedSavesReplaceTheAliasAndRemovalForgetsIt() throws Exception {
+		CharacterDirectory directory = load();
+		RPCharacter live = live(id);
+		when(live.getAlias()).thenReturn("Hooded Stranger");
+		directory.upsert(owner, live);
+		assertEquals("Hooded Stranger", directory.publicName(id).orElseThrow());
+
+		when(live.getAlias()).thenReturn(null);
+		directory.upsert(owner, live);
+		assertEquals("Live Name", directory.publicName(id).orElseThrow());
+
+		CharacterInfo info = directory.info(id).orElseThrow();
+		directory.upsert(owner, info, false, null, "Queued Alias");
+		assertEquals("Queued Alias", directory.publicName(id).orElseThrow());
+		directory.upsert(owner, info, false, null);
+		assertEquals("Queued Alias", directory.publicName(id).orElseThrow(), "a save without an alias keeps the last one");
+
+		directory.remove(owner, id.toString());
+		assertTrue(directory.publicName(id).isEmpty());
+		directory.upsert(owner, info, false, null);
+		assertEquals("Live Name", directory.publicName(id).orElseThrow());
+	}
+
+	@Test
+	void quarantinedAccountsHaveNoPublicName() throws Exception {
+		save(owner, id + ".json", json(id, "Real", "ALIVE", "\"alias\":\"Alias\""));
+		save(other, id + ".json", json(id, "Copy", "ALIVE", "\"alias\":\"Alias\""));
+		CharacterDirectory directory = load();
+
+		assertTrue(directory.publicName(id).isEmpty());
+	}
+
 	private CharacterDirectory load() throws IOException {
 		return CharacterDirectory.load(root, warnings::add);
 	}

@@ -47,6 +47,17 @@ public final class CreationRules {
 		return plain(AliasValidator.validateCharacterName(name));
 	}
 
+	/** The word a player types to keep no alias, so other players see the real name. */
+	public static final String SAME_AS_NAME = "same";
+
+	/** Same rules as {@code /char alias}; no alias (null or blank) always passes. */
+	public static String aliasError(String alias) {
+		if (alias == null || alias.isBlank()) {
+			return null;
+		}
+		return plain(AliasValidator.validate(alias.trim()));
+	}
+
 	public static String ageError(int age, Race race) {
 		int ageMin = Cache.calendarAgeMinimum;
 		int ageMax = race.getAgeMax();

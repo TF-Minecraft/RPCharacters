@@ -48,6 +48,17 @@ class CreationRulesTest {
 
     @AfterEach void cleanup() { state.close(); MockBukkit.unmock(); }
 
+    @Test void aliasesFollowTheCharAliasRulesAndNoAliasPasses() {
+        Cache.personaAliasAllowedChars = "abcdefghijklmnopqrstuvwxyz.,-' ";
+        Cache.personaDisplayNameMinLength = 3; Cache.personaDisplayNameMaxLength = 24;
+        assertNull(CreationRules.aliasError(null));
+        assertNull(CreationRules.aliasError("  "));
+        assertNull(CreationRules.aliasError(" Hooded Stranger "));
+        assertEquals("Alias contains disallowed character: 2", CreationRules.aliasError("Hooded 2"));
+        assertEquals("Alias must be at least 3 characters.", CreationRules.aliasError("Al"));
+        assertEquals("Alias cannot exceed 24 characters.", CreationRules.aliasError("a".repeat(25)));
+    }
+
     @Test void namesAllowLettersInAnyAlphabetAndCommonNamePunctuation() {
         for (String name : List.of("Dr. Dai", "Saul Go'Dar", "Sweyn Wolf-Fang", "Nøkk")) {
             assertNull(CreationRules.nameError(name), name);
