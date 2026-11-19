@@ -76,7 +76,7 @@ creation_name_stage:
   - title(Character Name)
   - subtitle(Every character needs a name. On the next step you will enter it.)
   - subtitle(Make a good name, your IGN is not allowed. No characters from other franchises or real life.)
-  - subtitle(This is your character's real name. Other players only learn it through roleplay. After it you pick an alias, the name other players see.)
+  - subtitle(This is your character's real name. Other players only learn it through roleplay.)
 creation_name_set_stage:
   type: setter
   target: name
@@ -598,7 +598,6 @@ creation_summary_stage:
   auto-next: false
   entries:
     name: creation_name_set_stage
-    alias: creation_alias_set_stage
     class: class_selection_stage
     race: race_selection_stage
     age: character_age_stage
