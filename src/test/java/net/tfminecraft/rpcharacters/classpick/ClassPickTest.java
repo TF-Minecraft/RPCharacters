@@ -232,6 +232,7 @@ class ClassPickTest {
         assertEquals(Status.CHOSEN, ClassPickService.choose(player, "evoker").status()); assertEquals(0L, character.getFreePathSwitchAtMs());
         character.setFreePathSwitchAtMs(System.currentTimeMillis() + 10_000_000L);
         assertTrue(ClassPickService.freePathSwitchRemainingMs(character) > 3_600_000L, "A clock that moved back keeps the switch closed until it passes");
+        assertNull(ClassPickService.pathSwitchNote(character, ClassPickService.option("battlemage")), "A pick that is free anyway shows no wait");
     }
 
     @Test void optionsListDisplayedBaseClassesInOrderWithTheirSubclasses() {

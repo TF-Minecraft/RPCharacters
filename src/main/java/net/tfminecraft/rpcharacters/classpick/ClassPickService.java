@@ -239,14 +239,17 @@ public final class ClassPickService {
 		if (settings.infinitePoints() || !isPathSwitch(character, option)) {
 			return null;
 		}
-		long remaining = freePathSwitchRemainingMs(character);
-		if (remaining > 0L) {
-			return RPTexts.MUTED + "Free path switch again in " + RPTexts.WARN + AgeFormatter.formatCountdown(remaining);
+		Quote quote = quote(character, option);
+		if (quote.freePathSwitch()) {
+			return RPTexts.MUTED + "Uses your free path switch for " + RPTexts.WARN
+					+ AgeFormatter.formatCountdown(settings.freeSwitchCooldownMs());
 		}
-		return quote(character, option).freePathSwitch()
-				? RPTexts.MUTED + "Uses your free path switch for " + RPTexts.WARN
-						+ AgeFormatter.formatCountdown(settings.freeSwitchCooldownMs())
-				: null;
+		if (quote.cost().signum() == 0) {
+			return null; // free anyway (an open class lock window or a free subclass pick): no wait to show
+		}
+		// A priced path switch only happens while the free one is on cooldown.
+		return RPTexts.MUTED + "Free path switch again in " + RPTexts.WARN
+				+ AgeFormatter.formatCountdown(freePathSwitchRemainingMs(character));
 	}
 
 	/**
