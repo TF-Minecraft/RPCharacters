@@ -139,6 +139,10 @@ public final class ClassPickGui {
 			}
 			lore.add(RPTexts.MUTED + "Cost: " + RPTexts.WARN
 					+ ClassPickService.priceText(ClassPickService.price(character, option)));
+			String pathSwitch = ClassPickService.pathSwitchNote(character, option);
+			if (pathSwitch != null) {
+				lore.add(pathSwitch);
+			}
 			lore.add(pending ? RPTexts.WARN + "Click again to confirm" : RPTexts.MUTED + "Click to choose");
 		}
 		ItemStack icon = option.playerClass().getIcon();

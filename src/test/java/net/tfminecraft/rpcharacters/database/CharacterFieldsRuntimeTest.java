@@ -94,6 +94,13 @@ class CharacterFieldsRuntimeTest {
         CharacterClassPickFields.load(untouched, json(Map.of("class-picks", "broken")));
         CharacterClassPickFields.load(untouched, json(Map.of("class-picks", Map.of("paid", "many"))));
         assertFalse(untouched.hasPickedSubclass()); assertEquals(0, untouched.getPaidClassPicks());
+        var switched = new RPCharacter(null); switched.setFreePathSwitchAtMs(1_700_000_000_000L); var switchedSaved = new HashMap<String, Object>();
+        CharacterClassPickFields.save(switchedSaved, switched);
+        assertEquals(Map.of("subclass-picked", false, "paid", 0, "free-switch-at", 1_700_000_000_000L), switchedSaved.get("class-picks"));
+        var switchedLoaded = new RPCharacter(null); CharacterClassPickFields.load(switchedLoaded, json(switchedSaved));
+        assertEquals(1_700_000_000_000L, switchedLoaded.getFreePathSwitchAtMs());
+        CharacterClassPickFields.load(untouched, json(Map.of("class-picks", Map.of("free-switch-at", "later"))));
+        assertEquals(0L, untouched.getFreePathSwitchAtMs()); untouched.setFreePathSwitchAtMs(-5L); assertEquals(0L, untouched.getFreePathSwitchAtMs());
     }
 
     @Test void oversizedPaidChangeCountCannotResetThePriceHistory() {

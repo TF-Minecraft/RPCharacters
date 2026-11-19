@@ -99,6 +99,12 @@ class-selection:
   accounts: [pouch, bank]
   commands: [class, c]
   reset-permission: rpchar.class.reset
+  # Base classes whose subclasses (paths) are built around gear instead of skills, so moving
+  # between them is free once per cooldown. A switch inside the cooldown is priced as usual, and
+  # these subclasses share their exp-table rewards, so a switch never gives a reward twice.
+  free-path-switch:
+    classes: []
+    cooldown: 24h
 
 # Pay to change a choice after its stage's lock-time runs out (class is locked after 5d).
 # With class-selection enabled, the class rule prices the class picker instead of the edit stage.

@@ -7,7 +7,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -44,14 +46,28 @@ import net.tfminecraft.rpcharacters.utils.RPTexts;
  * move to another class costs one class change, not a second one for its subclass. Other picks
  * are class changes, priced like the class creation stage: free while its lock window is open,
  * then the class paid-change rule (change-cost when there is no rule). Infinite points make every
- * pick free.
+ * pick free. Subclasses of a free-path-switch base class (gear-built paths such as the Mage's) can
+ * be swapped for each other for free once per cooldown; a swap inside the cooldown is priced as usual.
  */
 public final class ClassPickService {
 
+	/**
+	 * {@code freeSwitchClasses}: upper-case ids of base classes whose subclasses swap for free once per
+	 * {@code freeSwitchCooldownMs}.
+	 */
 	public record Settings(boolean enabled, boolean infinitePoints, BigDecimal changeCost,
-			List<Account> accounts, Set<String> commands, String resetPermission) {
+			List<Account> accounts, Set<String> commands, String resetPermission,
+			Set<String> freeSwitchClasses, long freeSwitchCooldownMs) {
+		public static final long DEFAULT_FREE_SWITCH_COOLDOWN_MS = 24L * 60 * 60 * 1000;
 		public static final Settings DEFAULTS = new Settings(true, false, new BigDecimal("200.00"),
 				List.of(Account.POUCH, Account.BANK), Set.of("class", "c"), "rpchar.class.reset");
+
+		/** Settings without free path switches. */
+		public Settings(boolean enabled, boolean infinitePoints, BigDecimal changeCost,
+				List<Account> accounts, Set<String> commands, String resetPermission) {
+			this(enabled, infinitePoints, changeCost, accounts, commands, resetPermission, Set.of(),
+					DEFAULT_FREE_SWITCH_COOLDOWN_MS);
+		}
 	}
 
 	public enum Status {
@@ -83,6 +99,12 @@ public final class ClassPickService {
 
 	private static volatile Settings settings = Settings.DEFAULTS;
 	private static DenarWallet wallet = new DenarEconomyWallet();
+	private static LongSupplier clock = System::currentTimeMillis;
+
+	/** A pick's price, and whether it spends the character's free path switch. */
+	private record Quote(BigDecimal cost, boolean freePathSwitch) {}
+
+	private static final Quote FREE = new Quote(BigDecimal.ZERO, false);
 
 	private ClassPickService() {}
 
@@ -92,6 +114,10 @@ public final class ClassPickService {
 
 	static void setWallet(DenarWallet replacement) {
 		wallet = replacement;
+	}
+
+	static void setClock(LongSupplier replacement) {
+		clock = replacement;
 	}
 
 	public static Settings settings() {
@@ -166,16 +192,89 @@ public final class ClassPickService {
 				: null;
 	}
 
-	/** Free for the first class, a free subclass pick in the current class family, and on infinite points. */
+	/**
+	 * Free for the first class, a free subclass pick in the current class family, a free path switch,
+	 * and on infinite points.
+	 */
 	public static BigDecimal price(RPCharacter character, Option option) {
+		return quote(character, option).cost();
+	}
+
+	private static Quote quote(RPCharacter character, Option option) {
 		if (settings.infinitePoints() || !character.hasMMOClass()) {
-			return BigDecimal.ZERO;
+			return FREE;
 		}
 		if (option.isSubclass() && freeSubclassOpen(character)
 				&& option.base().getId().equalsIgnoreCase(baseClassId(character))) {
-			return BigDecimal.ZERO;
+			return FREE;
 		}
-		return changePrice(character);
+		BigDecimal change = changePrice(character);
+		// Only a pick that would cost something spends the free switch; an open lock window stays free.
+		if (change.signum() > 0 && isPathSwitch(character, option) && freePathSwitchRemainingMs(character) == 0L) {
+			return new Quote(BigDecimal.ZERO, true);
+		}
+		return new Quote(change, false);
+	}
+
+	/** True when {@code option} moves the character from one subclass of a free-path-switch class to another. */
+	public static boolean isPathSwitch(RPCharacter character, Option option) {
+		if (!option.isSubclass() || !isFreeSwitchClass(option.base())) {
+			return false;
+		}
+		Option current = option(character.getMMOClass());
+		return current != null && current.isSubclass() && current.base().getId().equalsIgnoreCase(option.base().getId());
+	}
+
+	/** Milliseconds until the character's free path switch is back; 0 when it can be used now. */
+	public static long freePathSwitchRemainingMs(RPCharacter character) {
+		long last = character.getFreePathSwitchAtMs();
+		if (last <= 0L) {
+			return 0L;
+		}
+		return Math.max(0L, last + settings.freeSwitchCooldownMs() - clock.getAsLong());
+	}
+
+	/** A lore line about the free path switch for {@code option}, or null when it does not apply. */
+	public static String pathSwitchNote(RPCharacter character, Option option) {
+		if (settings.infinitePoints() || !isPathSwitch(character, option)) {
+			return null;
+		}
+		Quote quote = quote(character, option);
+		if (quote.freePathSwitch()) {
+			return RPTexts.MUTED + "Uses your free path switch for " + RPTexts.WARN
+					+ AgeFormatter.formatCountdown(settings.freeSwitchCooldownMs());
+		}
+		if (quote.cost().signum() == 0) {
+			return null; // free anyway (an open class lock window or a free subclass pick): no wait to show
+		}
+		// A priced path switch only happens while the free one is on cooldown.
+		return RPTexts.MUTED + "Free path switch again in " + RPTexts.WARN
+				+ AgeFormatter.formatCountdown(freePathSwitchRemainingMs(character));
+	}
+
+	/**
+	 * Every class that shares exp-table rewards with {@code profess}: a free-path-switch base class and
+	 * its subclasses, so swapping paths never gives a level reward twice. Empty for other classes.
+	 */
+	public static List<PlayerClass> rewardFamily(PlayerClass profess) {
+		if (settings.freeSwitchClasses().isEmpty()) {
+			return List.of();
+		}
+		Option option = option(profess.getId());
+		PlayerClass base = option != null && option.isSubclass() ? option.base() : profess;
+		if (!isFreeSwitchClass(base)) {
+			return List.of();
+		}
+		List<PlayerClass> family = new ArrayList<>();
+		family.add(base);
+		for (Subclass subclass : base.getSubclasses()) {
+			family.add(subclass.getProfess());
+		}
+		return family;
+	}
+
+	private static boolean isFreeSwitchClass(PlayerClass base) {
+		return settings.freeSwitchClasses().contains(base.getId().toUpperCase(Locale.ROOT));
 	}
 
 	/**
@@ -266,7 +365,8 @@ public final class ClassPickService {
 		if (character.getPendingClassPick() != null || character.getPendingPaidChange() != null) {
 			return new Result(Status.UNAVAILABLE, target, BigDecimal.ZERO, null);
 		}
-		BigDecimal cost = price(character, option);
+		Quote quote = quote(character, option);
+		BigDecimal cost = quote.cost();
 		Payment payment = null;
 		if (cost.signum() > 0) {
 			if (!wallet.available()) {
@@ -298,6 +398,9 @@ public final class ClassPickService {
 		}
 		if (option.isSubclass()) {
 			character.setSubclassPicked(true);
+		}
+		if (quote.freePathSwitch()) {
+			character.setFreePathSwitchAtMs(clock.getAsLong());
 		}
 		if (payment != null) {
 			countPaid(character);
@@ -437,6 +540,7 @@ public final class ClassPickService {
 		if (freeSubclassOpen(character)) {
 			lines.add(RPTexts.MUTED + "First subclass: " + RPTexts.WARN + "Free");
 		}
+		pathSwitchLine(character).ifPresent(lines::add);
 		Stage stage = classStage();
 		PaidChangeRule rule = PaidChangeService.ruleFor(stage);
 		if (rule == null) {
@@ -457,6 +561,17 @@ public final class ClassPickService {
 		}
 		lines.add(RPTexts.MUTED + "Then: " + RPTexts.WARN + priceText(rule.costAfter(paid)));
 		return lines;
+	}
+
+	/** When the character plays a free-path-switch subclass: when its next free path switch is. */
+	private static Optional<String> pathSwitchLine(RPCharacter character) {
+		Option current = option(character.getMMOClass());
+		if (current == null || !current.isSubclass() || !isFreeSwitchClass(current.base())) {
+			return Optional.empty();
+		}
+		long remaining = freePathSwitchRemainingMs(character);
+		return Optional.of(RPTexts.MUTED + "Path switch: " + RPTexts.WARN
+				+ (remaining > 0L ? "Free in " + AgeFormatter.formatCountdown(remaining) : "Free now"));
 	}
 
 	/** Price text for a lore line: "Free" or "200 denars". */

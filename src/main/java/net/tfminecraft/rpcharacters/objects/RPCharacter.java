@@ -130,6 +130,8 @@ public class RPCharacter {
 	private boolean subclassPicked;
 	/** Class picks this character has paid for. */
 	private int paidClassPicks;
+	/** Epoch ms of the last free path switch (see ClassPickService); 0 when never used. */
+	private long freePathSwitchAtMs;
 	/** Upper-case ids of hidden classes this character may pick; see ClassUnlocks. */
 	private final Set<String> unlockedClasses = new LinkedHashSet<>();
 	/** Skill-point totals of classes that keep their own pool, keyed by upper-case class id; see ClassSkillPoints. */
@@ -277,6 +279,14 @@ public class RPCharacter {
 
 	public void setPaidClassPicks(int paidClassPicks) {
 		this.paidClassPicks = Math.max(0, paidClassPicks);
+	}
+
+	public long getFreePathSwitchAtMs() {
+		return freePathSwitchAtMs;
+	}
+
+	public void setFreePathSwitchAtMs(long freePathSwitchAtMs) {
+		this.freePathSwitchAtMs = Math.max(0L, freePathSwitchAtMs);
 	}
 
 	/** Upper-case class ids, in unlock order. */
