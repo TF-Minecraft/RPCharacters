@@ -119,6 +119,9 @@ class CharacterIdentityServiceTest {
         assertEquals(3, first.size());
         assertEquals(Optional.of(death), service.deathId(UUID.fromString(deceased.getId())));
         assertEquals("Alice", snapshot.name());
+        assertEquals(Optional.of("Public alias"), service.publicName(UUID.fromString(alice.getId())));
+        assertEquals(Optional.of("Deceased"), service.publicName(UUID.fromString(deceased.getId())));
+        assertTrue(service.publicName(UUID.randomUUID()).isEmpty());
         assertEquals(CharacterStatus.DEAD, service.lastPlayed(player.getUniqueId()).orElseThrow().status());
         assertTrue(first.stream().anyMatch(character -> character.status() == CharacterStatus.MISSING));
         Trait trait = mock(Trait.class);
@@ -309,6 +312,7 @@ class CharacterIdentityServiceTest {
         RPCharacter character = character("Saved off thread", false);
         UUID capturedDeath = UUID.randomUUID();
         character.setDeathRecord(capturedDeath, null);
+        character.setAlias("Saved alias");
         UUID id = UUID.fromString(character.getId());
         try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
@@ -325,8 +329,10 @@ class CharacterIdentityServiceTest {
         // The queued update keeps what was saved, not later edits to the live character.
         character.setName("Renamed after the save");
         character.setDeathRecord(UUID.randomUUID(), null);
+        character.setAlias("Alias after the save");
         queued.getFirst().run();
         assertEquals("Saved off thread", service.info(id).orElseThrow().name());
+        assertEquals(Optional.of("Saved alias"), service.publicName(id));
         assertEquals(capturedDeath, service.deathId(id).orElseThrow());
         queued.getLast().run();
         assertTrue(service.info(id).isEmpty());
