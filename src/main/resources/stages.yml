@@ -76,7 +76,6 @@ creation_name_stage:
   - title(Character Name)
   - subtitle(Every character needs a name. On the next step you will enter it.)
   - subtitle(Make a good name, your IGN is not allowed. No characters from other franchises or real life.)
-  - subtitle(This is your character's real name. Other players only learn it through roleplay.)
 creation_name_set_stage:
   type: setter
   target: name

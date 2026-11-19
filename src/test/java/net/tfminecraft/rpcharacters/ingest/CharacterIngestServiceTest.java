@@ -277,7 +277,8 @@ class CharacterIngestServiceTest extends IngestFixture {
         JSONObject shortDescription=payload(); shortDescription.put("description","Too short");
         JSONObject repeatedClue=payload(); repeatedClue.put("clues",array("Blue coat","blue coat"));
         JSONObject badAlias=payload(); badAlias.put("alias","Hooded 2");
-        pending(row("a",unknownTrait),row("b",digits),row("c",tooOld),row("d",pirate),row("e",shortDescription),row("f",repeatedClue),row("g",badAlias));
+        JSONObject colourAlias=payload(); colourAlias.put("alias","§c");
+        pending(row("a",unknownTrait),row("b",digits),row("c",tooOld),row("d",pirate),row("e",shortDescription),row("f",repeatedClue),row("g",badAlias),row("h",colourAlias));
         CharacterIngestService.pullAsync(plugin); runWorkers();
         assertEquals("unknown trait: missing",result(0).get("error"));
         assertEquals("Name may only use letters, spaces, apostrophes, hyphens and full stops.",result(1).get("error"));
@@ -286,6 +287,7 @@ class CharacterIngestServiceTest extends IngestFixture {
         assertEquals("Description must be at least 32 characters.",result(4).get("error"));
         assertEquals("Duplicate clue: blue coat",result(5).get("error"));
         assertEquals("Alias contains disallowed character: 2",result(6).get("error"));
+        assertEquals("Alias cannot be empty.",result(7).get("error"));
         assertFalse(Files.exists(playerFile)); lifecycle.verifyNoInteractions();
     }
 

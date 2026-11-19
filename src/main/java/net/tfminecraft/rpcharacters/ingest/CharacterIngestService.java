@@ -363,7 +363,14 @@ public final class CharacterIngestService {
 		character.setPersonaDescription(description);
 		// Blank, "same" or the real name again means no alias: the real name shows, as it does in game.
 		String alias = stringOf(payload.get("alias"));
-		if (!alias.equalsIgnoreCase(name) && !alias.equalsIgnoreCase(CreationRules.SAME_AS_NAME)) character.setAlias(alias);
+		if (!alias.isEmpty() && !alias.equalsIgnoreCase(name) && !alias.equalsIgnoreCase(CreationRules.SAME_AS_NAME)) {
+			// Checked before storing: setAlias strips colour codes, so "§c" would otherwise pass as no alias.
+			String aliasError = CreationRules.aliasError(alias);
+			if (aliasError != null) {
+				return ApplyOutcome.fail(aliasError);
+			}
+			character.setAlias(alias);
+		}
 		List<String> nameColours = new ArrayList<>();
 		Object coloursRaw = payload.get("name_colours");
 		if (coloursRaw instanceof JSONArray colourArr) {
