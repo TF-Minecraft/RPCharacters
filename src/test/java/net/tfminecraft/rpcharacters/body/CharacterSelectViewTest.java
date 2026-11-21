@@ -83,6 +83,7 @@ class CharacterSelectViewTest {
 	private final List<Runnable> mainQueue = new ArrayList<>();
 	private final Map<ClickEvent, ClickCallback<Audience>> links = new IdentityHashMap<>();
 	private final Map<ClickEvent, ClickCallback.Options> linkOptions = new IdentityHashMap<>();
+	private final java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000_000L);
 
 	@BeforeEach
 	void setup() {
@@ -109,6 +110,7 @@ class CharacterSelectViewTest {
 			return loads.computeIfAbsent(id, k -> new CompletableFuture<>());
 		};
 		CharacterSelectView.mainThread = mainQueue::add;
+		CharacterSelectView.clock = now::get;
 		CharacterSelectView.clickEvents = (callback, options) -> {
 			ClickEvent event = ClickEvent.suggestCommand("link" + links.size());
 			links.put(event, callback);
@@ -170,6 +172,12 @@ class CharacterSelectViewTest {
 			Component link = ui.last().parts().stream().flatMap(p -> components(p.contents())).filter(c -> c.clickEvent() != null && text(c).equals(label)).findFirst().orElseThrow();
 			links.get(link.clickEvent()).accept(player);
 		}
+	}
+
+	/** Waits out the final page's delay, then confirms. */
+	private void endForGood() {
+		now.addAndGet(CharacterSelectView.END_CONFIRM_DELAY_MS);
+		click("End for good");
 	}
 
 	@Test void noticesAndDiscordLinkingUseTheCurrentVisibleDialogAndGuardOldClicks() {
@@ -288,7 +296,7 @@ class CharacterSelectViewTest {
 		assertEquals(CharacterSelectView.placeholder(CharacterSelectView.LOADING), ui.last().portrait());
 		assertEquals(List.of(wrenId + "|" + ACCOUNT_SKIN.url()), requested);
 		assertEquals("‹   Lady Wren   Rowan   New character   ›\nLady Wren\nHuman • Sword master • Age 27\n"
-				+ "Ironhand • Last played 2d 2h ago\nEnd character\nMemorials (2)", ui.last().bodyText());
+				+ "Ironhand • Last played 2d 2h ago\nMemorials (2)\n\nEnd character", ui.last().bodyText());
 		verify(wallet, atLeastOnce()).balance(new CharacterRef(OWNER, UUID.fromString(wrenId)), Account.BANK);
 		for (var part : ui.last().parts()) {
 			if (part != ui.last().portraitPart()) assertEquals(text(part.contents()).startsWith("‹") ? 360 : 300, part.width());
@@ -1043,11 +1051,11 @@ class CharacterSelectViewTest {
 		assertEquals("Bartholomew the Unyielding of Greywater",
 				text((Component) strip().get("Bartholome…").hoverEvent().value()));
 		link("Bartholome…");
-		assertTrue(ui.last().bodyText().endsWith("\nBartholomew the Unyielding of Greywater\nEnd character"));
+		assertTrue(ui.last().bodyText().endsWith("\nBartholomew the Unyielding of Greywater\n\nEnd character"));
 	}
 
 	@Test
-	void backgroundTraitsAndCluesShowOnHoverBesideEndCharacter() {
+	void backgroundAndCluesOpenPagesTraitsHoverAndEndCharacterSitsApart() {
 		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
 		when(wren.getDescription()).thenReturn(List.of("&6Raised by wolves", "in the north."));
 		when(wren.getPlayerClues()).thenReturn(List.of("&aKnows the old roads"));
@@ -1055,14 +1063,40 @@ class CharacterSelectViewTest {
 		CharacterSelectView.traits = c -> c == wren ? List.of("§aBrave§7 (Personality)") : List.of();
 		CharacterSelectView.open(player, data, actions);
 		Component row = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
-				.filter(c -> text(c).endsWith("End character")).findFirst().orElseThrow();
-		assertEquals("Background • Traits • Clues • End character", text(row));
+				.filter(c -> text(c).startsWith("Background")).findFirst().orElseThrow();
+		assertEquals("Background • Traits • Clues", text(row));
 		Map<String, String> hovers = components(row).filter(c -> c.hoverEvent() != null && c.children().isEmpty())
 				.collect(Collectors.toMap(CharacterSelectViewTest::text, c -> text((Component) c.hoverEvent().value())));
 		assertEquals("Read Wren's background", hovers.get("Background"));
 		assertEquals("Brave (Personality)", hovers.get("Traits"));
 		assertEquals("Knows the old roads\n2 more needed.", hovers.get("Clues"));
-		assertEquals("Kill this character for good", hovers.get("End character"));
+		List<PlainMessageDialogBody> parts = ui.last().parts();
+		PlainMessageDialogBody end = parts.getLast();
+		assertEquals("\nEnd character", text(end.contents()), "ending is the last line, below a gap");
+		assertEquals("Kill this character for good", components(end.contents())
+				.filter(c -> c.hoverEvent() != null).map(c -> text((Component) c.hoverEvent().value())).findFirst().orElseThrow());
+
+		click("Clues");
+		assertEquals("Wren's clues", text(ui.last().base().title()));
+		assertEquals("Knows the old roads\n2 more needed.", ui.last().bodyText());
+		assertEquals(List.of("Back"), labels());
+		click("Back");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		click("Clues");
+		when(wren.getStatus()).thenReturn(Status.DEAD);
+		CharacterSelectView.notice(player, "Gone");
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		assertNull(CharacterSelectView.session(OWNER).clues);
+		when(wren.getStatus()).thenReturn(Status.ALIVE);
+		CharacterSelectView.notice(player, "Back again");
+		link("Wren");
+		click("Clues");
+		data.getCharacters().remove(wren);
+		CharacterSelectView.notice(player, "Removed");
+		assertNull(CharacterSelectView.session(OWNER).clues);
+		data.addCharacter(wren);
+		CharacterSelectView.notice(player, "Restored");
+		link("Wren");
 
 		click("Background");
 		assertEquals("Wren's background", text(ui.last().base().title()));
@@ -1084,11 +1118,11 @@ class CharacterSelectViewTest {
 		CharacterSelectView.traits = c -> List.of();
 		link("‹");
 		link("›");
-		assertTrue(ui.last().bodyText().endsWith("\nWren\nEnd character"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().endsWith("\nWren\n\nEnd character"), ui.last().bodyText());
 		when(wren.getCluesNeeded()).thenReturn(2);
 		link("‹");
 		link("›");
-		assertTrue(ui.last().bodyText().contains("\nClues • End character"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().contains("\nClues\n\nEnd character"), ui.last().bodyText());
 		Component clues = ui.last().parts().stream().map(PlainMessageDialogBody::contents)
 				.flatMap(CharacterSelectViewTest::components).filter(c -> text(c).equals("Clues")).findFirst().orElseThrow();
 		assertEquals("No clues yet.\n2 more needed.", text((Component) clues.hoverEvent().value()));
@@ -1108,22 +1142,50 @@ class CharacterSelectViewTest {
 		assertEquals("End Wren?", text(ui.last().base().title()));
 		assertEquals("Wren will die and move to Memorials. Only staff can bring them back.", ui.last().bodyText());
 		assertEquals(List.of("End character", "Back"), labels());
+		assertEquals(List.of(120, 120), ui.last().buttons().stream().map(ActionButton::width).toList());
 		assertEquals(2, columns());
 		click("Back");
 		assertEquals("Choose your character", text(ui.last().base().title()));
 		click("End character");
 		click("End character");
 		assertEquals("Are you sure? This cannot be undone.", ui.last().bodyText());
+		assertEquals(List.of("Back", "End for good"), labels(), "Back takes the spot End character had");
+		assertEquals(List.of(120, 120), ui.last().buttons().stream().map(ActionButton::width).toList());
+		assertEquals(2, columns());
 		assertEquals("Kill Wren now", text(button("End for good").tooltip()));
 		verify(actions, never()).endCharacter(any());
-		click("End for good");
+		endForGood();
 
 		verify(actions).endCharacter(wren);
 		assertEquals("Choose your character", text(ui.last().base().title()));
 		assertTrue(ui.last().bodyText().startsWith("Wren has died. You can find them in Memorials.\n"));
 		assertEquals(List.of("‹", "rowan", "New character", "›"), tabs());
-		assertTrue(ui.last().bodyText().endsWith("Memorials (1)"));
+		assertTrue(ui.last().bodyText().endsWith("Memorials (1)\n\nEnd character"), ui.last().bodyText());
 		verify(player, never()).closeDialog();
+	}
+
+	@Test
+	void aRepeatedClickOrAnInstantConfirmCannotEndACharacter() {
+		RPCharacter wren = character("wren", "Wren", Status.ALIVE);
+		CharacterSelectView.open(player, data, actions);
+		click("End character");
+		// A double click on the first step's button lands on Back on the final page.
+		ui.click(ui.last().buttons().getFirst(), player);
+		ui.click(ui.last().buttons().getFirst(), player);
+		assertEquals("Choose your character", text(ui.last().base().title()));
+		verify(actions, never()).endCharacter(any());
+
+		click("End character");
+		click("End character");
+		now.addAndGet(CharacterSelectView.END_CONFIRM_DELAY_MS - 1);
+		click("End for good");
+		verify(actions, never()).endCharacter(any());
+		assertEquals("End Wren?", text(ui.last().base().title()));
+		assertEquals(CharacterSelectView.END_TOO_SOON + "\nAre you sure? This cannot be undone.", ui.last().bodyText());
+		assertEquals(List.of("Back", "End for good"), labels());
+		now.addAndGet(1);
+		click("End for good");
+		verify(actions).endCharacter(wren);
 	}
 
 	@Test
@@ -1132,7 +1194,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.open(player, data, actions);
 		click("End character");
 		click("End character");
-		click("End for good");
+		endForGood();
 		verify(actions).endCharacter(wren);
 		assertTrue(ui.last().bodyText().startsWith("That character could not be ended.\n"));
 		assertEquals(List.of("‹", "Wren", "New character", "›"), tabs());
@@ -1160,7 +1222,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.open(player, data, actions);
 		click("End character");
 		click("End character");
-		click("End for good");
+		endForGood();
 		assertEquals("Choose your character", text(ui.last().base().title()));
 		assertTrue(ui.last().bodyText().startsWith("Something went wrong. Check Memorials before trying again.\n"));
 
@@ -1171,7 +1233,7 @@ class CharacterSelectViewTest {
 		click("End character");
 		click("End character");
 		int shown = ui.opened.size();
-		click("End for good");
+		endForGood();
 		assertEquals(shown, ui.opened.size());
 	}
 
@@ -1186,7 +1248,7 @@ class CharacterSelectViewTest {
 		click("End character");
 		click("End character");
 		int shown = ui.opened.size();
-		click("End for good");
+		endForGood();
 		assertEquals(shown, ui.opened.size());
 	}
 
@@ -1278,7 +1340,7 @@ class CharacterSelectViewTest {
 		CharacterSelectView.guilds = p -> null;
 		assertNull(CharacterSelectView.guild(cora));
 		CharacterSelectView.open(player, data, actions);
-		assertTrue(ui.last().bodyText().endsWith("\nCora\nEnd character"), ui.last().bodyText());
+		assertTrue(ui.last().bodyText().endsWith("\nCora\n\nEnd character"), ui.last().bodyText());
 		assertTrue(text(button("▶ Play").tooltip()).endsWith("\nPouch and bank: unavailable"));
 		CharacterSelectView.guilds = p -> "";
 		assertNull(CharacterSelectView.guild(cora));

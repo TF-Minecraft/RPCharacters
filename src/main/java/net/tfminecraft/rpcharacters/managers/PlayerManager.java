@@ -679,7 +679,7 @@ public class PlayerManager implements Listener{
 				confirm.put(p, ConfirmType.KILL);
 				last.put(p, c);
 				InventoryManager inv = new InventoryManager();
-				inv.confirmView(p);
+				inv.confirmView(p, ConfirmType.KILL, c);
 			} else if (e.getSlot() == 4 && Permissions.isAdmin(p)) {
 				ItemStack i = e.getInventory().getItem(10);
 				if (i == null || i.getItemMeta() == null) return;
@@ -710,7 +710,7 @@ public class PlayerManager implements Listener{
 				confirm.put(p, ConfirmType.REVIVE);
 				last.put(p, c);
 				InventoryManager inv = new InventoryManager();
-				inv.confirmView(p);
+				inv.confirmView(p, ConfirmType.REVIVE, c);
 			} else if (e.getSlot() == InventoryManager.CLASS_PICK_SLOT) {
 				ItemStack clicked = e.getCurrentItem();
 				if (clicked == null || clicked.getItemMeta() == null || !p.equals(o) || !clicked.getItemMeta()
@@ -738,7 +738,7 @@ public class PlayerManager implements Listener{
 				confirm.put(p, ConfirmType.SWITCH);
 				last.put(p, c);
 				InventoryManager inv = new InventoryManager();
-				inv.confirmView(p);
+				inv.confirmView(p, ConfirmType.SWITCH, c);
 			} else if(e.getSlot() == 14) {
 				ItemStack i = e.getInventory().getItem(10);
 				if(i == null || i.getItemMeta() == null) return;

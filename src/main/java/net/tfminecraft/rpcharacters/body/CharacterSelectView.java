@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -128,6 +129,12 @@ public final class CharacterSelectView {
 	static final int BUST_ROWS = 14;
 	static final int TAB_NAME = 11;
 	static final String NO_COOLDOWN_PERMISSION = "rpcharacters.no_cooldown";
+	/**
+	 * How long End for good ignores clicks after the final page opens, so a double click or clicks a
+	 * frozen client sends all at once can't run through both steps.
+	 */
+	static final long END_CONFIRM_DELAY_MS = 1500;
+	static final String END_TOO_SOON = "Take a moment. Press End for good again to confirm.";
 	/** Shown when Switch was clicked on a warning whose cooldown length has since changed. */
 	static final String TERMS_CHANGED = "Your cooldown has changed. Check it before switching.";
 	public static final String LOADING = "Loading portrait…";
@@ -149,6 +156,7 @@ public final class CharacterSelectView {
 	static BiFunction<ClickCallback<Audience>, ClickCallback.Options, ClickEvent> clickEvents = ClickEvent::callback;
 	static Function<RPCharacter, List<String>> traits = InventoryManager::traitLines;
 	static Executor mainThread = task -> Bukkit.getScheduler().runTask(RPCharacters.plugin, task);
+	static LongSupplier clock = System::currentTimeMillis;
 
 	private static final Map<UUID, Session> SESSIONS = new HashMap<>();
 	private static final AtomicLong SESSION_IDS = new AtomicLong();
@@ -171,9 +179,13 @@ public final class CharacterSelectView {
 		String selected;
 		/** The character whose background is open, or null. */
 		String reading;
+		/** The character whose clues page is open, or null. */
+		String clues;
 		/** The character on the end page, or null. */
 		String ending;
 		boolean sure;
+		/** When the final End for good page opened, by {@link CharacterSelectView#clock}. */
+		long sureAt;
 		/** The character on the switch cooldown warning page, or null. */
 		String confirming;
 		String notice;
@@ -276,6 +288,7 @@ public final class CharacterSelectView {
 			if (session.ending != null) renderEnding(session);
 			else if (session.confirming != null) renderSwitchWarning(session);
 			else if (session.reading != null) renderBackground(session);
+			else if (session.clues != null) renderClues(session);
 			else if (session.memorials) renderMemorials(session);
 			else renderRoster(session);
 		} finally {
@@ -316,7 +329,8 @@ public final class CharacterSelectView {
 			reason = session.actions.blockReason(selected);
 			body.add(DialogBody.plainMessage(portrait(session, selected), SkinPortrait.ROW_WIDTH));
 			body.add(text(characterCard(selected, reason)));
-			body.add(text(extras(session, selected)));
+			Component extras = extras(session, selected);
+			if (extras != null) body.add(text(extras));
 		}
 
 		List<ActionButton> buttons = new ArrayList<>();
@@ -344,6 +358,8 @@ public final class CharacterSelectView {
 						v.memorialPage = 0;
 					}))));
 		}
+		// Kept apart from the reading links above, so checking a character can't land on ending it.
+		if (!session.creating) body.add(text(endLink(session, selected)));
 		// One row of buttons: a shared grid would widen columns to the widest button.
 		show(session, Component.text("Choose your character", TEAL, TextDecoration.BOLD), body, buttons, null, 1);
 	}
@@ -386,7 +402,24 @@ public final class CharacterSelectView {
 		show(session, Component.text(name(character) + "'s background", PALE, TextDecoration.BOLD), body, buttons, null, 1);
 	}
 
-	/** Confirms twice; the second step does the deed. */
+	/** The character's clues, one per line, with how many are still needed. */
+	private static void renderClues(Session session) {
+		RPCharacter character = session.data.getCharacterById(session.clues);
+		if (character == null || character.getStatus() != Status.ALIVE) {
+			session.clues = null;
+			renderRoster(session);
+			return;
+		}
+		List<DialogBody> body = List.of(text(Component.text(cluesText(character), MUTED)));
+		List<ActionButton> buttons = List.of(button(Component.text("Back", TEAL, TextDecoration.BOLD),
+				"Back to your characters", 100, session, s -> navigate(s, v -> v.clues = null)));
+		show(session, Component.text(name(character) + "'s clues", PALE, TextDecoration.BOLD), body, buttons, null, 1);
+	}
+
+	/**
+	 * Confirms twice; the second step does the deed. The final page puts Back where End character was
+	 * and End for good on the other side, so a repeated click on one spot steps back instead.
+	 */
 	private static void renderEnding(Session session) {
 		RPCharacter character = session.data.getCharacterById(session.ending);
 		if (character == null || character.getStatus() != Status.ALIVE) {
@@ -401,14 +434,17 @@ public final class CharacterSelectView {
 		body.add(text(session.sure
 				? Component.text("Are you sure? This cannot be undone.", WARN)
 				: Component.text(name + " will die and move to Memorials. Only staff can bring them back.", MUTED)));
-		List<ActionButton> buttons = new ArrayList<>();
-		buttons.add(session.sure
-				? button(Component.text("End for good", WARN, TextDecoration.BOLD), "Kill " + name + " now", 120, session,
-						s -> endCharacter(s, id))
-				: button(Component.text("End character", WARN, TextDecoration.BOLD), null, 120, session,
-						s -> navigate(s, v -> v.sure = true)));
-		buttons.add(button(Component.text("Back", TEAL, TextDecoration.BOLD), "Back to your characters", 100, session,
-				s -> navigate(s, v -> v.ending = null)));
+		// Same width as the action buttons, so Back covers the whole spot End character had.
+		ActionButton back = button(Component.text("Back", TEAL, TextDecoration.BOLD), "Back to your characters", 120,
+				session, s -> navigate(s, v -> v.ending = null));
+		List<ActionButton> buttons = session.sure
+				? List.of(back, button(Component.text("End for good", WARN, TextDecoration.BOLD), "Kill " + name + " now",
+						120, session, s -> endCharacter(s, id)))
+				: List.of(button(Component.text("End character", WARN, TextDecoration.BOLD), null, 120, session,
+						s -> navigate(s, v -> {
+							v.sure = true;
+							v.sureAt = clock.getAsLong();
+						})), back);
 		show(session, Component.text("End " + name + "?", PALE, TextDecoration.BOLD), body, buttons, null, buttons.size());
 	}
 
@@ -677,7 +713,7 @@ public final class CharacterSelectView {
 		return card.build();
 	}
 
-	/** Background page, traits and clues on hover, then the way to end the character. */
+	/** Background and clues pages, traits on hover; null when the character has none of them. */
 	static Component extras(Session session, RPCharacter character) {
 		List<Component> parts = new ArrayList<>();
 		String id = character.getId();
@@ -688,14 +724,26 @@ public final class CharacterSelectView {
 		hover(parts, "Traits", traits.apply(character));
 		List<String> clues = character.getPlayerClues() == null ? List.of() : character.getPlayerClues();
 		if (character.getCluesNeeded() > 0 || !clues.isEmpty()) {
-			String text = clues.isEmpty() ? "No clues yet." : plain(clues);
-			int missing = character.getCluesNeeded() - clues.size();
-			if (missing > 0) text += "\n" + missing + " more needed.";
-			parts.add(Component.text("Clues", MUTED).hoverEvent(HoverEvent.showText(Component.text(text))));
+			parts.add(link(Component.text("Clues", MUTED), cluesText(character), session, s -> navigate(s, v -> v.clues = id)));
 		}
-		parts.add(link(Component.text("End character", WARN), "Kill this character for good", session,
-				s -> navigate(s, v -> { v.ending = id; v.sure = false; })));
-		return Component.join(JoinConfiguration.separator(Component.text(" • ", DIM)), parts);
+		return parts.isEmpty() ? null : Component.join(JoinConfiguration.separator(Component.text(" • ", DIM)), parts);
+	}
+
+	/** The way to end the character, on a line of its own below everything else. */
+	private static Component endLink(Session session, RPCharacter character) {
+		String id = character.getId();
+		return Component.text().append(Component.newline())
+				.append(link(Component.text("End character", WARN), "Kill this character for good", session,
+						s -> navigate(s, v -> { v.ending = id; v.sure = false; })))
+				.build();
+	}
+
+	private static String cluesText(RPCharacter character) {
+		List<String> clues = character.getPlayerClues() == null ? List.of() : character.getPlayerClues();
+		String text = clues.isEmpty() ? "No clues yet." : plain(clues);
+		int missing = character.getCluesNeeded() - clues.size();
+		if (missing > 0) text += "\n" + missing + " more needed.";
+		return text;
 	}
 
 	private static void hover(List<Component> parts, String label, List<String> lines) {
@@ -821,8 +869,14 @@ public final class CharacterSelectView {
 
 	private static void endCharacter(Session session, String characterId) {
 		RPCharacter character = session.data.getCharacterById(characterId);
+		boolean alive = character != null && character.getStatus() == Status.ALIVE;
+		if (alive && clock.getAsLong() - session.sureAt < END_CONFIRM_DELAY_MS) {
+			// Too soon after the page opened to be a deliberate second confirmation; ask again.
+			notice(session, END_TOO_SOON);
+			return;
+		}
 		session.ending = null;
-		if (character == null || character.getStatus() != Status.ALIVE) {
+		if (!alive) {
 			notice(session, "That character has already gone.");
 			return;
 		}

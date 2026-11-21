@@ -31,6 +31,7 @@ import net.tfminecraft.rpcharacters.paidchange.PaidChangeService;
 import net.tfminecraft.rpcharacters.creation.stages.AttributesStage;
 import net.tfminecraft.rpcharacters.creation.stages.SelectionStage;
 import net.tfminecraft.rpcharacters.creation.stages.SummaryStage;
+import net.tfminecraft.rpcharacters.enums.ConfirmType;
 import net.tfminecraft.rpcharacters.holder.RPCHolder;
 import net.tfminecraft.rpcharacters.loaders.RaceLoader;
 import net.tfminecraft.rpcharacters.loaders.StageLoader;
@@ -852,9 +853,11 @@ public class InventoryManager {
 
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")
-	public void confirmView(Player player) {
+	/** Confirm or Cancel, with the action and the character it applies to shown between them. */
+	public void confirmView(Player player, ConfirmType type, RPCharacter character) {
 		Inventory i = RPCharacters.plugin.getServer().createInventory(new RPCHolder(player), 27, t(RPTexts.MUTED + "Confirm Action"));
 		i.setItem(11, createItemStack(Material.GREEN_CONCRETE, t(RPTexts.GUI_SUCCESS + "Confirm")));
+		i.setItem(13, getConfirmSubject(type, character));
 		i.setItem(15, createItemStack(Material.RED_CONCRETE, t(RPTexts.ERROR + "Cancel")));
 		Integer slot = 0;
 		while(slot < i.getSize()) {
@@ -891,6 +894,31 @@ public class InventoryManager {
 		}
 
 		return formattedTime.trim();
+	}
+	/** Says what Confirm will do and to whom, so a kill can't pass for a switch. */
+	@SuppressWarnings("deprecation")
+	public ItemStack getConfirmSubject(ConfirmType type, RPCharacter character) {
+		String name = character == null || character.getName() == null || character.getName().isBlank()
+				? "this character" : ClueFormatter.stripColor(character.getName());
+		ItemStack i;
+		List<String> lore = new ArrayList<>();
+		switch (type) {
+			case KILL -> {
+				i = createItemStack(Material.IRON_AXE, t(RPTexts.ERROR + "Kill " + name + "?"));
+				lore.add(t(RPTexts.MUTED + "This cannot be undone"));
+				lore.add(t(RPTexts.MUTED + "Only staff can reverse this"));
+			}
+			case SWITCH -> {
+				i = createItemStack(Material.EMERALD, t(RPTexts.GUI_SUCCESS + "Switch to " + name + "?"));
+				lore.add(t(RPTexts.MUTED + "You will be put on cooldown from switching again"));
+			}
+			default -> i = createItemStack(Material.TOTEM_OF_UNDYING, t(RPTexts.GUI_SUCCESS + "Revive " + name + "?"));
+		}
+		ItemMeta meta = i.getItemMeta();
+		meta.setLore(lore);
+		meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+		i.setItemMeta(meta);
+		return i;
 	}
 	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
 	@SuppressWarnings("deprecation")

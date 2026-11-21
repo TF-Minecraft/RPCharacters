@@ -110,7 +110,14 @@ class InventoryManagerViewsTest extends InventoryFixture {
     }
 
     @Test void confirmViewHasOnlyTwoActionsAndFillsUnusedSlots() {
-        manager.confirmView(player); assertFilled(top()); assertEquals(Material.GREEN_CONCRETE,top().getItem(11).getType()); assertEquals("Confirm",name(top().getItem(11))); assertEquals(Material.RED_CONCRETE,top().getItem(15).getType()); assertEquals("Cancel",name(top().getItem(15)));
+        manager.confirmView(player,ConfirmType.KILL,character); assertFilled(top()); assertEquals(Material.GREEN_CONCRETE,top().getItem(11).getType()); assertEquals("Confirm",name(top().getItem(11))); assertEquals(Material.RED_CONCRETE,top().getItem(15).getType()); assertEquals("Cancel",name(top().getItem(15)));
+        assertEquals(Material.IRON_AXE,top().getItem(13).getType()); assertEquals("Kill Aria?",name(top().getItem(13))); assertEquals("This cannot be undone\nOnly staff can reverse this",lore(top().getItem(13)));
+        manager.confirmView(player,ConfirmType.SWITCH,character); assertEquals(Material.EMERALD,top().getItem(13).getType()); assertEquals("Switch to Aria?",name(top().getItem(13))); assertEquals("You will be put on cooldown from switching again",lore(top().getItem(13)));
+        manager.confirmView(player,ConfirmType.REVIVE,character); assertEquals(Material.TOTEM_OF_UNDYING,top().getItem(13).getType()); assertEquals("Revive Aria?",name(top().getItem(13))); assertEquals("",lore(top().getItem(13)));
+        when(character.getName()).thenReturn("§cRed Aria"); manager.confirmView(player,ConfirmType.KILL,character); assertEquals("Kill Red Aria?",name(top().getItem(13)));
+        when(character.getName()).thenReturn(" "); manager.confirmView(player,ConfirmType.KILL,character); assertEquals("Kill this character?",name(top().getItem(13)));
+        when(character.getName()).thenReturn(null); manager.confirmView(player,ConfirmType.KILL,character); assertEquals("Kill this character?",name(top().getItem(13)));
+        manager.confirmView(player,ConfirmType.SWITCH,null); assertEquals("Switch to this character?",name(top().getItem(13)));
     }
 
     @Test void creationSummaryRendersAllEntryTypesAndPreservesClassTemplate() throws Exception {
