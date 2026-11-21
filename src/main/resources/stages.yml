@@ -46,7 +46,9 @@ creation_info_stage:
   - subtitle(§eConsult the lore documents if you are confused)
   - subtitle(§eAny choices made can be changed later in case of mistakes)
   - subtitle(§eYou can also edit your traits later to fit changes in RP)
-  - subtitle(§eThe only unchangeable choices are your race and background)
+  - subtitle(§eRace and backstory lock a day after creation)
+  - subtitle(§eMost other choices lock after 5 days)
+  - subtitle(§eYou can still change your class later for a fee)
   - subtitle(§eYou are expected to roleplay your traits)
   - subtitle(§eNot following your traits is FailRP)
   - subtitle(§eRemember to edit your traits when it makes sense)
@@ -56,7 +58,8 @@ creation_info_stage:
   - title(Character Creation)
   - subtitle(You will now make a new character. Consult the lore documents if you are confused.)
   - subtitle(Most choices can be changed later if you make a mistake, and you can edit traits as your RP changes.)
-  - subtitle(Race and background cannot be changed. You are expected to roleplay your traits, ignoring them is FailRP.)
+  - subtitle(Race and backstory lock a day after creation, and most other choices lock after 5 days. You can still change your class later for a fee.)
+  - subtitle(You are expected to roleplay your traits, ignoring them is FailRP.)
   - subtitle(You can always make a new character if you are unhappy.)
 creation_name_stage:
   type: info

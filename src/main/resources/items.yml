@@ -8,34 +8,3 @@ attribute-point-tomes:
   attribute_tome:
     item: m.books.ATTRIBUTE_POINT_BOOK
     attribute-points: 1
-
-magnifying-glasses:
-  iron:
-    item: m.tools.iron_magnifying_glass
-    discovery-bonus: 0.0
-    investigation-cost: 1
-    search-radius: 3.0
-  steel:
-    item: m.tools.steel_magnifying_glass
-    discovery-bonus: 0.1
-    investigation-cost: 1
-    search-radius: 3.75
-    requires:
-      wisdom: 6
-      intelligence: 4
-  abyssalite:
-    item: m.tools.abyssalite_magnifying_glass
-    discovery-bonus: 0.2
-    investigation-cost: 1
-    search-radius: 4.5
-    requires:
-      wisdom: 10
-      intelligence: 8
-  mythril:
-    item: m.tools.mythril_magnifying_glass
-    discovery-bonus: 0.35
-    investigation-cost: 1
-    search-radius: 6.0
-    requires:
-      wisdom: 14
-      intelligence: 12
