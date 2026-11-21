@@ -252,7 +252,7 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
             manager.selectionClick(info(slot, action, "character", null));
             manager.selectionClick(info(slot, action, "missing", player));
             manager.selectionClick(info(slot, action, "character", player));
-            verify(lastInventory()).confirmView(player);
+            verify(lastInventory()).confirmView(player, slot == 8 ? ConfirmType.KILL : ConfirmType.SWITCH, character);
             manager.selectionClick(menu("Confirm Action", 0, null, player));
             manager.selectionClick(menu("Confirm Action", 15, null, player));
             verify(lastInventory()).characterView(player, character);
@@ -286,7 +286,7 @@ class PlayerManagerEventsTest extends PlayerManagerFixture {
         slots.when(() -> CharacterSlotService.hasFreeSlot(player, data)).thenReturn(true);
         manager.selectionClick(info(4, Material.TOTEM_OF_UNDYING, "character", player));
         assertEquals(ConfirmType.REVIVE, confirmations().get(player));
-        verify(lastInventory()).confirmView(player);
+        verify(lastInventory()).confirmView(player, ConfirmType.REVIVE, character);
         try (var revive = mockStatic(StaffRevive.class)) {
             manager.selectionClick(menu("Confirm Action", 11, null, player));
             revive.verify(() -> StaffRevive.run(manager, player, character, false));
