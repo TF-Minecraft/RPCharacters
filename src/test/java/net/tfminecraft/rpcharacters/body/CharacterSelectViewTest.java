@@ -1142,6 +1142,7 @@ class CharacterSelectViewTest {
 		assertEquals("End Wren?", text(ui.last().base().title()));
 		assertEquals("Wren will die and move to Memorials. Only staff can bring them back.", ui.last().bodyText());
 		assertEquals(List.of("End character", "Back"), labels());
+		assertEquals(List.of(120, 120), ui.last().buttons().stream().map(ActionButton::width).toList());
 		assertEquals(2, columns());
 		click("Back");
 		assertEquals("Choose your character", text(ui.last().base().title()));
@@ -1149,6 +1150,7 @@ class CharacterSelectViewTest {
 		click("End character");
 		assertEquals("Are you sure? This cannot be undone.", ui.last().bodyText());
 		assertEquals(List.of("Back", "End for good"), labels(), "Back takes the spot End character had");
+		assertEquals(List.of(120, 120), ui.last().buttons().stream().map(ActionButton::width).toList());
 		assertEquals(2, columns());
 		assertEquals("Kill Wren now", text(button("End for good").tooltip()));
 		verify(actions, never()).endCharacter(any());
@@ -1200,7 +1202,7 @@ class CharacterSelectViewTest {
 		click("End character");
 		click("End character");
 		when(wren.getStatus()).thenReturn(Status.DEAD);
-		endForGood();
+		click("End for good");
 		verify(actions).endCharacter(wren);
 		assertTrue(ui.last().bodyText().startsWith("That character has already gone.\n"));
 

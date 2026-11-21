@@ -434,7 +434,8 @@ public final class CharacterSelectView {
 		body.add(text(session.sure
 				? Component.text("Are you sure? This cannot be undone.", WARN)
 				: Component.text(name + " will die and move to Memorials. Only staff can bring them back.", MUTED)));
-		ActionButton back = button(Component.text("Back", TEAL, TextDecoration.BOLD), "Back to your characters", 100,
+		// Same width as the action buttons, so Back covers the whole spot End character had.
+		ActionButton back = button(Component.text("Back", TEAL, TextDecoration.BOLD), "Back to your characters", 120,
 				session, s -> navigate(s, v -> v.ending = null));
 		List<ActionButton> buttons = session.sure
 				? List.of(back, button(Component.text("End for good", WARN, TextDecoration.BOLD), "Kill " + name + " now",
@@ -867,14 +868,15 @@ public final class CharacterSelectView {
 	}
 
 	private static void endCharacter(Session session, String characterId) {
-		if (clock.getAsLong() - session.sureAt < END_CONFIRM_DELAY_MS) {
+		RPCharacter character = session.data.getCharacterById(characterId);
+		boolean alive = character != null && character.getStatus() == Status.ALIVE;
+		if (alive && clock.getAsLong() - session.sureAt < END_CONFIRM_DELAY_MS) {
 			// Too soon after the page opened to be a deliberate second confirmation; ask again.
 			notice(session, END_TOO_SOON);
 			return;
 		}
-		RPCharacter character = session.data.getCharacterById(characterId);
 		session.ending = null;
-		if (character == null || character.getStatus() != Status.ALIVE) {
+		if (!alive) {
 			notice(session, "That character has already gone.");
 			return;
 		}
