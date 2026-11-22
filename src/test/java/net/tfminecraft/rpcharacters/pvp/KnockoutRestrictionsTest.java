@@ -28,6 +28,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.lumine.mythic.lib.api.event.skill.PlayerCastSkillEvent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 class KnockoutRestrictionsTest {
 
@@ -121,17 +123,18 @@ class KnockoutRestrictionsTest {
         verify(standingClick, never()).setUseItemInHand(any());
     }
 
-    @Test void theNoticeIsSentAtMostOnceASecondAndResetsOnQuit() {
+    @Test void theNoticeGoesOnTheActionBarAtMostOnceASecondAndResetsOnQuit() {
         var first = interact(downed, Action.LEFT_CLICK_AIR);
         restrictions.onInteract(first);
         restrictions.onInteract(interact(downed, Action.RIGHT_CLICK_AIR));
-        verify(downed, times(1)).sendMessage(contains("knocked out"));
+        verify(downed, times(1)).sendActionBar(knockedOutText());
+        verify(downed, never()).sendMessage(anyString());
         var quit = mock(PlayerQuitEvent.class);
         when(quit.getPlayer()).thenReturn(downed);
         restrictions.onQuit(quit);
         restrictions.onInteract(interact(downed, Action.RIGHT_CLICK_AIR));
-        verify(downed, times(2)).sendMessage(contains("knocked out"));
-        verify(standing, never()).sendMessage(anyString());
+        verify(downed, times(2)).sendActionBar(knockedOutText());
+        verify(standing, never()).sendActionBar(any(Component.class));
     }
 
     @Test void theNoticeRepeatsOnceTheIntervalHasPassed() throws Exception {
@@ -142,7 +145,11 @@ class KnockoutRestrictionsTest {
         var notices = (java.util.Map<UUID, Long>) field.get(restrictions);
         notices.put(downed.getUniqueId(), System.currentTimeMillis() - 1_000L);
         restrictions.onInteract(interact(downed, Action.RIGHT_CLICK_AIR));
-        verify(downed, times(2)).sendMessage(contains("knocked out"));
+        verify(downed, times(2)).sendActionBar(knockedOutText());
+    }
+
+    private static Component knockedOutText() {
+        return argThat(text -> PlainTextComponentSerializer.plainText().serialize(text).contains("knocked out"));
     }
 
     private <E extends Event & Cancellable> void check(E event, Player player, Consumer<E> handler) {
