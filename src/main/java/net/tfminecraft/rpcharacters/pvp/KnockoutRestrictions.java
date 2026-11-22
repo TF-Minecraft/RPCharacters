@@ -26,12 +26,12 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 
 import io.lumine.mythic.lib.api.event.skill.PlayerCastSkillEvent;
 import net.tfminecraft.rpcharacters.loaders.PvpLoader;
-import net.tfminecraft.rpcharacters.utils.RPTexts;
 
 /**
  * A knocked out player can talk and roleplay, but can't fight back: no hits, shots, skills
  * or spells, and no eating, drinking, item use, dropping items or building. Everything runs
- * first so other plugins never act on the attempt.
+ * first so other plugins never act on the attempt. The reminder goes on the action bar, so
+ * clicking while down never floods chat.
  */
 public final class KnockoutRestrictions implements Listener {
 
@@ -131,6 +131,6 @@ public final class KnockoutRestrictions implements Listener {
 			return;
 		}
 		lastNotice.put(player.getUniqueId(), now);
-		RPTexts.send(player, PvpLoader.getDownedBlocked());
+		PvpActionBar.show(player, PvpLoader.getDownedBlocked());
 	}
 }

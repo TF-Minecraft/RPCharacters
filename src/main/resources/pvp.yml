@@ -83,7 +83,7 @@ messages:
   already-lethal: "&7This character is already in lethal PvP."
   lethal: "&cThis character is now in lethal PvP. &7It goes back to nonlethal when you log out, switch character or run &f/pvp nonlethal&7."
   nonlethal: "&aThis character is now in nonlethal PvP."
-  # Shown (at most once a second) when a knocked out player tries to fight or use an item.
+  # Shown on the action bar (at most once a second) when a knocked out player tries to fight or use an item.
   downed-blocked: "&cYou're knocked out. You can still talk, but you can't do that."
   # Sent to a player struck by a lethal kill. {killer} = the killer's display name.
   auto-strike-victim: "&c{killer} &cwas in lethal PvP, so their kill gave you a strike."

@@ -33,10 +33,6 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 
-import io.lumine.mythic.lib.api.player.MMOPlayerData;
-import io.lumine.mythic.lib.message.actionbar.ActionBarPriority;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.tfminecraft.tlibs.armour.ArmorEquipEvent;
 import net.tfminecraft.tlibs.armour.ArmorType;
 
@@ -61,7 +57,6 @@ public final class ArmourDonning implements Listener {
 	private static final int CURSOR = -1;
 	private static final int NOT_FOUND = -2;
 	/** Ticks a progress line holds MMOCore's bar off; the ticker refreshes it well before. */
-	private static final long ACTION_BAR_TICKS = 40L;
 
 	private static final Map<UUID, Donning> donning = new HashMap<>();
 	private static final Set<UUID> completing = new HashSet<>();
@@ -261,7 +256,7 @@ public final class ArmourDonning implements Listener {
 	private static void finish(Player player, Donning state, long nowMs) {
 		Piece piece = state.current;
 		if (equip(player, piece)) {
-			actionBar(player, PvpLoader.getDonDone().replace("{piece}", pieceName(piece.type())));
+			PvpActionBar.show(player, PvpLoader.getDonDone().replace("{piece}", pieceName(piece.type())));
 			player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_GENERIC, 1f, 1f);
 		}
 		next(player, state, nowMs);
@@ -338,7 +333,7 @@ public final class ArmourDonning implements Listener {
 			return;
 		}
 		clearSlowness(player);
-		clearActionBar(player);
+		PvpActionBar.clear(player);
 		if (tell) {
 			RPTexts.send(player, PvpLoader.getDonInterrupted().replace("{piece}", pieceName(state.current.type())));
 		}
@@ -359,31 +354,11 @@ public final class ArmourDonning implements Listener {
 		String bar = "&a" + "|".repeat(filled) + "&8" + "|".repeat(BAR_LENGTH - filled);
 		String queued = state.queue.isEmpty() ? ""
 				: PvpLoader.getDonQueued().replace("{count}", String.valueOf(state.queue.size()));
-		actionBar(player, PvpLoader.getDonProgress()
+		PvpActionBar.show(player, PvpLoader.getDonProgress()
 				.replace("{piece}", pieceName(state.current.type()))
 				.replace("{bar}", bar)
 				.replace("{seconds}", String.valueOf((left + 999L) / 1000L))
 				.replace("{queued}", queued));
-	}
-
-	/** MythicLib redraws MMOCore's bar every tick, so go through its queue when it tracks the player. */
-	private static void actionBar(Player player, String raw) {
-		String text = RPTexts.formatDisplay(raw);
-		MMOPlayerData data = MMOPlayerData.getOrNull(player.getUniqueId());
-		if (data != null) {
-			data.getActionBar().show(ActionBarPriority.HIGH, ACTION_BAR_TICKS, text);
-		} else {
-			player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(text));
-		}
-	}
-
-	private static void clearActionBar(Player player) {
-		MMOPlayerData data = MMOPlayerData.getOrNull(player.getUniqueId());
-		if (data != null) {
-			data.getActionBar().reset(ActionBarPriority.HIGH);
-		} else {
-			player.sendActionBar(Component.empty());
-		}
 	}
 
 	/** Armour doesn't stack, so it goes in the first free storage slot or on the ground. */
