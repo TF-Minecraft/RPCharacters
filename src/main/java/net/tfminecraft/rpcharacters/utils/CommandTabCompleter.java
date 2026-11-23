@@ -82,7 +82,8 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
-			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)) {
+			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)
+					|| net.tfminecraft.rpcharacters.body.BodyAdminCommand.canUse(sender)) {
 				completions.add("admin");
 			}
 			completions.add("strikes");
@@ -195,6 +196,9 @@ public class CommandTabCompleter implements TabCompleter {
 				if (ClassPickReset.canUse(sender)) {
 					completions.add(ClassPickReset.SUBCOMMAND);
 					completions.add(ClassPickAdminCommand.SUBCOMMAND);
+				}
+				if (net.tfminecraft.rpcharacters.body.BodyAdminCommand.canUse(sender)) {
+					completions.add(net.tfminecraft.rpcharacters.body.BodyAdminCommand.SUBCOMMAND);
 				}
 				if (HiddenCharacterAdminCommand.canUse(sender)) {
 					completions.add(HiddenCharacterAdminCommand.SUBCOMMAND);

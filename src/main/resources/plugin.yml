@@ -86,6 +86,12 @@ permissions:
   rpchar.estate.admin:
     description: Staff estate tools (/estate list, show, hold, assign and the rest)
     default: op
+  rpchar.body.view:
+    description: List the items in any character's stored body, also offline (/rpcharacter admin body)
+    default: op
+  rpchar.body.edit:
+    description: Put items into and take items out of stored character bodies (/rpcharacter admin body ... put|take)
+    default: op
   rpchar.prison:
     description: Mark imprisoned characters to switch in and out without the switch cooldown (/rpcharacter admin prison)
     default: op

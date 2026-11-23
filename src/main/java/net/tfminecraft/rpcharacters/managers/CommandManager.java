@@ -92,6 +92,10 @@ public class CommandManager implements Listener, CommandExecutor{
 			return ClassPickAdminCommand.handle(sender, args, 2);
 		}
 		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+				&& args[1].equalsIgnoreCase(net.tfminecraft.rpcharacters.body.BodyAdminCommand.SUBCOMMAND)) {
+			return net.tfminecraft.rpcharacters.body.BodyAdminCommand.handle(sender, args, 2);
+		}
+		if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
 				&& args[1].equalsIgnoreCase(PrisonSwitch.SUBCOMMAND)) {
 			return PrisonSwitch.handle(sender, args, 2);
 		}

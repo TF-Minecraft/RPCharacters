@@ -169,6 +169,8 @@ class CommandManagerTest {
             String[] unlock = {"admin", verb, "Iris", "blood_mage"}; assertFalse(run(unlock));
             unlocks.verify(() -> net.tfminecraft.rpcharacters.classpick.ClassUnlockCommand.handle(player, unlock, 2));
         }
+        var bodyEdits = boundary(net.tfminecraft.rpcharacters.body.BodyAdminCommand.class); String[] body = {"admin", "Body", "Iris"}; assertFalse(run(body));
+        bodyEdits.verify(() -> net.tfminecraft.rpcharacters.body.BodyAdminCommand.handle(player, body, 2));
         var hides = boundary(net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand.class); String[] hide = {"admin", "Hide", "Iris", "on"}; assertFalse(run(hide));
         hides.verify(() -> net.tfminecraft.rpcharacters.playerlist.HiddenCharacterAdminCommand.handle(player, hide, 2));
         String[] directKill = {"permakill", "Iris"}; assertFalse(run(directKill)); death.verify(() -> PermadeathAdminCommands.handlePermakill(player, directKill, 1, "permakill"));

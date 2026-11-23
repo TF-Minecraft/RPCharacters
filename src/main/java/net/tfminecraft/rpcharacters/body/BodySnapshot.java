@@ -195,6 +195,44 @@ public final class BodySnapshot {
         }
     }
 
+    /** A body's two item containers, by the key the body file stores them under. */
+    public enum Container {
+        /** Player inventory: 0-35 storage (0-8 hotbar), 36-39 armour, 40 offhand. */
+        INVENTORY("inventory"),
+        ENDER_CHEST("enderChest");
+
+        private final String key;
+
+        Container(String key) {
+            this.key = key;
+        }
+    }
+
+    public int slotCount(Container container) throws IOException {
+        return slotBytes(container.key).size();
+    }
+
+    /** Paper's single-item bytes ({@link ItemStack#serializeAsBytes()}) in that slot; empty for an empty slot. */
+    public byte[] slot(Container container, int slot) throws IOException {
+        List<byte[]> slots = slotBytes(container.key);
+        if (slot < 0 || slot >= slots.size()) throw new IOException("There is no slot " + slot + " in the " + container.key);
+        return slots.get(slot).clone();
+    }
+
+    /** This body with one slot set to {@code item} (single-item bytes, empty to clear it); nothing else changes. */
+    public BodySnapshot withSlot(Container container, int slot, byte[] item) throws IOException {
+        List<byte[]> slots = slotBytes(container.key);
+        if (slot < 0 || slot >= slots.size()) throw new IOException("There is no slot " + slot + " in the " + container.key);
+        slots.set(slot, item.clone());
+        int size = 5;
+        for (byte[] stack : slots) size += 4 + stack.length;
+        ByteBuffer rebuilt = ByteBuffer.allocate(size).put((byte) 1).putInt(slots.size());
+        for (byte[] stack : slots) rebuilt.putInt(stack.length).put(stack);
+        JsonObject copy = data.deepCopy();
+        copy.addProperty(container.key, BodyJson.encode(rebuilt.array()));
+        return fromJson(copy);
+    }
+
     /** Each slot's item bytes, empty for an empty slot. */
     private List<byte[]> slotBytes(String key) throws IOException {
         ByteBuffer buffer = ByteBuffer.wrap(BodyJson.bytes(data, key));
