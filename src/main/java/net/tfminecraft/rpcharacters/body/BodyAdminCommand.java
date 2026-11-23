@@ -235,7 +235,11 @@ public final class BodyAdminCommand {
         }
         BodyEditor.Change change = bodies.editor().put(account.owner, characterId, container, slot, item, version, reason("put", sender));
         // Same tick as the write: the held item leaves the hand only once the body holds it.
-        if (holder != null) holder.getInventory().setItemInMainHand(null);
+        if (holder != null) {
+            holder.getInventory().setItemInMainHand(null);
+            // Saved now, so a crash before Paper's autosave cannot bring the item back into the hand.
+            holder.saveData();
+        }
         audit(sender, "put", account, characterId, container, version, change, source);
         RPTexts.send(sender, RPTexts.SUCCESS + "Put " + describe(change.item()) + " into " + slotName(container, change.slot())
                 + ". Body version is now " + change.record().rev() + ".");
@@ -263,7 +267,14 @@ public final class BodyAdminCommand {
         } else if (!destination.equals("delete") || args.length != at + 5) {
             throw new IllegalArgumentException(USAGE);
         }
-        BodyEditor.Change change = bodies.editor().take(account.owner, characterId, container, slot,
+        BodyEditor editor = bodies.editor();
+        if (receiver != null) {
+            byte[] held = editor.read(account.owner, characterId).body().slot(container, slot);
+            if (held.length > 0 && !fits(receiver, ItemStack.deserializeBytes(held))) {
+                throw new IllegalArgumentException(receiver.getName() + " has no room for that stack.");
+            }
+        }
+        BodyEditor.Change change = editor.take(account.owner, characterId, container, slot,
                 bytes -> matches(expected, bytes), version, reason("take", sender));
         String where = receiver == null ? "deleted" : "to " + receiver.getName();
         if (receiver != null) {
@@ -271,10 +282,23 @@ public final class BodyAdminCommand {
             Player to = receiver;
             to.getInventory().addItem(ItemStack.deserializeBytes(change.item()))
                     .values().forEach(left -> to.getWorld().dropItemNaturally(to.getLocation(), left));
+            // Saved now, so a crash before Paper's autosave cannot lose what the body just gave up.
+            to.saveData();
         }
         audit(sender, "take", account, characterId, container, version, change, where);
         RPTexts.send(sender, RPTexts.SUCCESS + "Took " + describe(change.item()) + " out of " + slotName(container, slot)
                 + " (" + where + "). Body version is now " + change.record().rev() + ".");
+    }
+
+    /** True when the whole stack fits in the receiver's storage, so nothing would be dropped on the ground. */
+    static boolean fits(Player receiver, ItemStack item) {
+        int need = item.getAmount();
+        for (ItemStack held : receiver.getInventory().getStorageContents()) {
+            if (held == null || held.getType().isAir()) return true;
+            if (held.isSimilar(item)) need -= Math.max(0, held.getMaxStackSize() - held.getAmount());
+            if (need <= 0) return true;
+        }
+        return false;
     }
 
     /** The expected item: MMOItems {@code TYPE:ID} for an MMOItems item, the material otherwise. */
