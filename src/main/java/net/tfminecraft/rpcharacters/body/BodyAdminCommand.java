@@ -229,7 +229,7 @@ public final class BodyAdminCommand {
             case "base64" -> {
                 if (args.length != at + 5) throw new IllegalArgumentException(USAGE);
                 item = Base64.getDecoder().decode(args[at + 4]);
-                if (ItemStack.deserializeBytes(item).getType().isAir()) throw new IllegalArgumentException("That data holds no item.");
+                ItemStack.deserializeBytes(item); // data that is not an item fails here, before anything is written
             }
             default -> throw new IllegalArgumentException(USAGE);
         }
@@ -238,7 +238,7 @@ public final class BodyAdminCommand {
         if (holder != null) {
             holder.getInventory().setItemInMainHand(null);
             // Saved now, so a crash before Paper's autosave cannot bring the item back into the hand.
-            holder.saveData();
+            save(holder);
         }
         audit(sender, "put", account, characterId, container, version, change, source);
         RPTexts.send(sender, RPTexts.SUCCESS + "Put " + describe(change.item()) + " into " + slotName(container, change.slot())
@@ -283,7 +283,7 @@ public final class BodyAdminCommand {
             to.getInventory().addItem(ItemStack.deserializeBytes(change.item()))
                     .values().forEach(left -> to.getWorld().dropItemNaturally(to.getLocation(), left));
             // Saved now, so a crash before Paper's autosave cannot lose what the body just gave up.
-            to.saveData();
+            save(to);
         }
         audit(sender, "take", account, characterId, container, version, change, where);
         RPTexts.send(sender, RPTexts.SUCCESS + "Took " + describe(change.item()) + " out of " + slotName(container, slot)
@@ -381,6 +381,15 @@ public final class BodyAdminCommand {
             Files.write(log, lines, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException | RuntimeException error) {
             LOG.log(Level.WARNING, "[RPCharacters] Could not append to body-edits.log; the console line above is the record", error);
+        }
+    }
+
+    /** The body change is already written, so a failed save only waits for Paper's autosave. */
+    static void save(Player player) {
+        try {
+            player.saveData();
+        } catch (RuntimeException error) {
+            LOG.log(Level.WARNING, "[RPCharacters] Could not save " + player.getName() + " right after a body edit", error);
         }
     }
 

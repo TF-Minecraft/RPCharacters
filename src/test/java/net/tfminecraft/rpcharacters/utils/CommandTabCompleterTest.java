@@ -165,6 +165,12 @@ class CommandTabCompleterTest {
         field.set(core, null); assertEquals(List.of(), complete("admin", "unlockclass", "Iris", ""));
     }
 
+    @Test void bodyAdminIsOfferedWithTheViewPermission() {
+        assertEquals(List.of(), complete("admin", ""));
+        grant("rpchar.body.view", true);
+        assertEquals(List.of("body"), complete("admin", ""));
+    }
+
     @Test void hideCompletionOffersOnlinePlayersThenOnOff() {
         grant(Cache.personaCharacterHiddenPermission, true);
         assertEquals(List.of("admin"), complete("adm"));

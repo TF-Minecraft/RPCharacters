@@ -172,6 +172,31 @@ class BodyEditorTest {
     }
 
     @Test
+    void conflictsBecomeRefusalsAndAnUnreadableRereadKeepsTheDiskError() throws Exception {
+        assertFalse(BodyEditor.Accessories.NONE.placeholder(new byte[0]));
+        BodyRecord record = store.read(owner, character).orElseThrow();
+        BodyStore conflicted = org.mockito.Mockito.mock(BodyStore.class);
+        org.mockito.Mockito.when(conflicted.read(owner, character)).thenReturn(java.util.Optional.of(record));
+        org.mockito.Mockito.when(conflicted.write(org.mockito.ArgumentMatchers.eq(owner), org.mockito.ArgumentMatchers.eq(character),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new BodyConflictException(1, 2));
+        BodyEditor.Refused refused = assertRefused(() -> new BodyEditor(conflicted, (who, which) -> null, BodyEditor.Accessories.NONE)
+                .take(owner, character, Container.INVENTORY, 1, bytes -> true, 1, "staff-take:Fran"));
+        assertTrue(refused.getMessage().contains("changed while it was being written"), refused.getMessage());
+
+        BodyStore unreadable = org.mockito.Mockito.mock(BodyStore.class);
+        org.mockito.Mockito.when(unreadable.read(owner, character)).thenReturn(java.util.Optional.of(record))
+                .thenThrow(new IOException("unreadable"));
+        org.mockito.Mockito.when(unreadable.write(org.mockito.ArgumentMatchers.eq(owner), org.mockito.ArgumentMatchers.eq(character),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IOException("disk"));
+        IOException error = assertThrows(IOException.class, () -> new BodyEditor(unreadable, (who, which) -> null, BodyEditor.Accessories.NONE)
+                .take(owner, character, Container.INVENTORY, 1, bytes -> true, 1, "staff-take:Fran"));
+        assertEquals("disk", error.getMessage());
+        assertEquals("unreadable", error.getSuppressed()[0].getMessage());
+    }
+
+    @Test
     void takeEmptiesTheSlotAndReturnsItsItem() throws Exception {
         BodyEditor.Change change = editor.take(owner, character, Container.INVENTORY, 1,
                 bytes -> item(bytes).getType() == Material.STICK, 1, "staff-take:Fran");
