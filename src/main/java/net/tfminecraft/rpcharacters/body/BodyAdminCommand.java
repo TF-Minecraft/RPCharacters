@@ -294,8 +294,8 @@ public final class BodyAdminCommand {
     static boolean fits(Player receiver, ItemStack item) {
         int need = item.getAmount();
         for (ItemStack held : receiver.getInventory().getStorageContents()) {
-            if (held == null || held.getType().isAir()) return true;
-            if (held.isSimilar(item)) need -= Math.max(0, held.getMaxStackSize() - held.getAmount());
+            if (held == null || held.getType().isAir()) need -= item.getMaxStackSize();
+            else if (held.isSimilar(item)) need -= Math.max(0, held.getMaxStackSize() - held.getAmount());
             if (need <= 0) return true;
         }
         return false;
