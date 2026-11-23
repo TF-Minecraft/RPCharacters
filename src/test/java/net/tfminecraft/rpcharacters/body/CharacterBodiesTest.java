@@ -312,6 +312,9 @@ class CharacterBodiesTest {
     }
     @Test void staffBodyEditsWaitWhileTheBodyIsInPlayOrTheAccountIsEnteringOne() throws Exception {
         assertNull(bodies.editBlocked(owner,first));
+        when(migration.migrated(owner)).thenReturn(false);
+        assertTrue(bodies.editBlocked(owner,first).contains("not fully set up"));
+        when(migration.migrated(owner)).thenReturn(true);
         when(leases.names(owner,first)).thenReturn(true);
         assertTrue(bodies.editBlocked(owner,first).contains("still on the player"));
         assertNull(bodies.editBlocked(owner,second));

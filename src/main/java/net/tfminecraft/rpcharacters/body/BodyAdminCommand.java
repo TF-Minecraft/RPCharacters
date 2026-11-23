@@ -105,8 +105,20 @@ public final class BodyAdminCommand {
     private record Account(UUID owner, String name, PlayerData data) {
     }
 
-    /** Online accounts use their live data; offline ones are read from disk and never saved here. */
+    /**
+     * By name or account UUID (the server's name cache forgets long-inactive players). Online accounts use their
+     * live data; offline ones are read from disk and never saved here.
+     */
     private static Account account(String name) {
+        UUID id = uuid(name);
+        if (id != null) {
+            Player online = Bukkit.getPlayer(id);
+            if (online != null) return account(online.getName());
+            if (!Files.exists(Path.of("plugins/RPCharacters/data/playerdata", id + ".json"))) return null;
+            OfflinePlayer offline = Bukkit.getOfflinePlayer(id);
+            PlayerData data = new Database().loadPlayerData(id);
+            return data == null ? null : new Account(id, offline.getName() == null ? id.toString() : offline.getName(), data);
+        }
         Player online = Bukkit.getPlayerExact(name);
         if (online != null) {
             PlayerData data = PlayerManager.get(online);
@@ -116,6 +128,15 @@ public final class BodyAdminCommand {
         if (offline == null) return null;
         PlayerData data = new Database().loadPlayerData(offline.getUniqueId());
         return data == null ? null : new Account(offline.getUniqueId(), offline.getName() == null ? name : offline.getName(), data);
+    }
+
+    private static UUID uuid(String text) {
+        if (text.length() != 36) return null;
+        try {
+            return UUID.fromString(text);
+        } catch (IllegalArgumentException notUuid) {
+            return null;
+        }
     }
 
     static RPCharacter character(PlayerData data, String wanted) {
@@ -152,7 +173,8 @@ public final class BodyAdminCommand {
 
     private static void listItems(CommandSender sender, CharacterBodies bodies, Account account, RPCharacter character,
             UUID characterId) throws IOException {
-        BodyRecord record = bodies.editor().read(account.owner, characterId);
+        BodyEditor editor = bodies.editor();
+        BodyRecord record = editor.read(account.owner, characterId);
         String blocked = character.getStatus() != Status.ALIVE ? "the character is " + character.getStatus()
                 : bodies.editBlocked(account.owner, characterId);
         RPTexts.send(sender, RPTexts.ACCENT + character.getName() + RPTexts.MUTED + " (" + account.name + ") body version "
@@ -163,7 +185,8 @@ public final class BodyAdminCommand {
             for (int slot = 0; slot < record.body().slotCount(container); slot++) {
                 byte[] item = record.body().slot(container, slot);
                 if (item.length == 0) continue;
-                RPTexts.send(sender, RPTexts.MUTED + slotName(container, slot) + ": " + RPTexts.WHITE + describe(item));
+                RPTexts.send(sender, RPTexts.MUTED + slotName(container, slot)
+                        + (editor.accessorySlot(container, slot) ? " (accessory)" : "") + ": " + RPTexts.WHITE + describe(item));
                 shown++;
             }
         }
@@ -233,6 +256,10 @@ public final class BodyAdminCommand {
         if (destination.equals("to") && args.length == at + 6) {
             receiver = Bukkit.getPlayerExact(args[at + 5]);
             if (receiver == null) throw new IllegalArgumentException("No online player called " + args[at + 5] + ".");
+            // A room, dead or respawning inventory is replaced when a body is applied, so the item would be lost.
+            if (!bodies.hasLiveBody(receiver) || bodies.isSelecting(receiver) || bodies.isRespawning(receiver) || receiver.isDead()) {
+                throw new IllegalArgumentException(receiver.getName() + " must be playing a character, alive, to receive the item.");
+            }
         } else if (!destination.equals("delete") || args.length != at + 5) {
             throw new IllegalArgumentException(USAGE);
         }
@@ -272,7 +299,7 @@ public final class BodyAdminCommand {
         }
     }
 
-    private static String mmoId(ItemStack item) {
+    static String mmoId(ItemStack item) {
         try {
             NBTItem nbt = NBTItem.get(item);
             return nbt.hasType() ? nbt.getType() + ":" + nbt.getString("MMOITEMS_ITEM_ID") : null;

@@ -31,6 +31,18 @@ class BodyEditorTest {
     private String blocked;
     private final List<UUID> asked = new ArrayList<>();
     private BodyEditor editor;
+    /** Slots 9-12 are accessory slots; a placeholder is any non-diamond item there. */
+    private final BodyEditor.Accessories accessories = new BodyEditor.Accessories() {
+        @Override
+        public boolean slot(int inventorySlot) {
+            return inventorySlot >= 9 && inventorySlot <= 12;
+        }
+
+        @Override
+        public boolean placeholder(byte[] item) {
+            return ItemStack.deserializeBytes(item).getType() != Material.DIAMOND;
+        }
+    };
     private final UUID owner = UUID.randomUUID();
     private final UUID character = UUID.randomUUID();
 
@@ -41,7 +53,7 @@ class BodyEditorTest {
         editor = new BodyEditor(store, (who, which) -> {
             asked.add(which);
             return blocked;
-        });
+        }, accessories);
         player.getInventory().clear();
         player.getInventory().setItem(0, new ItemStack(Material.DIAMOND, 3));
         player.getInventory().setItem(1, new ItemStack(Material.STICK));
@@ -106,13 +118,57 @@ class BodyEditorTest {
     void autoNeverPicksArmourOrTheOffhand() throws Exception {
         BodySnapshot body = editor.read(owner, character).body();
         for (int slot = 0; slot < 36; slot++) {
-            body = body.withSlot(Container.INVENTORY, slot, new ItemStack(Material.DIRT).serializeAsBytes());
+            if (slot < 9 || slot > 12) body = body.withSlot(Container.INVENTORY, slot, new ItemStack(Material.DIRT).serializeAsBytes());
         }
         store.write(owner, character, 1, "full", body);
 
         assertRefused(() -> editor.put(owner, character, Container.INVENTORY, -1,
                 new ItemStack(Material.GOLD_INGOT).serializeAsBytes(), 2, "staff-put:Fran"));
         assertEquals(0, store.read(owner, character).orElseThrow().body().slot(Container.INVENTORY, 40).length);
+    }
+
+    @Test
+    void accessorySlotsTakeNoOrdinaryItemsAndGiveNoPlaceholders() throws Exception {
+        BodySnapshot body = editor.read(owner, character).body()
+                .withSlot(Container.INVENTORY, 2, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 3, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 4, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 5, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 6, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 7, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 8, new ItemStack(Material.DIRT).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 9, new ItemStack(Material.DIAMOND_HOE).serializeAsBytes())
+                .withSlot(Container.INVENTORY, 11, new ItemStack(Material.DIAMOND).serializeAsBytes());
+        store.write(owner, character, 1, "accessories", body);
+        byte[] gold = new ItemStack(Material.GOLD_INGOT).serializeAsBytes();
+
+        assertEquals(13, editor.put(owner, character, Container.INVENTORY, -1, gold, 2, "staff-put:Fran").slot());
+        assertRefused(() -> editor.put(owner, character, Container.INVENTORY, 10, gold, 3, "staff-put:Fran"));
+        assertRefused(() -> editor.take(owner, character, Container.INVENTORY, 9, bytes -> true, 3, "staff-take:Fran"));
+        assertTrue(editor.accessorySlot(Container.INVENTORY, 10));
+        assertFalse(editor.accessorySlot(Container.ENDER_CHEST, 10));
+
+        BodyEditor.Change ring = editor.take(owner, character, Container.INVENTORY, 11, bytes -> true, 3, "staff-take:Fran");
+
+        assertEquals(Material.DIAMOND, item(ring.item()).getType());
+    }
+
+    @Test
+    void aWriteThatLandedBeforeADiskErrorStillCounts() throws Exception {
+        BodyStoreTest.FaultyFiles files = new BodyStoreTest.FaultyFiles();
+        BodyStore faulty = new BodyStore(temp.resolve("bodies"), files, java.time.Clock.systemUTC(), () -> 1);
+        BodyEditor failing = new BodyEditor(faulty, (who, which) -> null, BodyEditor.Accessories.NONE);
+        files.failOn("sync", 2);
+
+        BodyEditor.Change change = failing.take(owner, character, Container.INVENTORY, 1, bytes -> true, 1, "staff-take:Fran");
+
+        assertEquals(2, change.record().rev());
+        assertEquals(Material.STICK, item(change.item()).getType());
+        assertEquals(0, store.read(owner, character).orElseThrow().body().slot(Container.INVENTORY, 1).length);
+
+        files.failOn("write", 1);
+        assertThrows(IOException.class, () -> failing.take(owner, character, Container.INVENTORY, 0, bytes -> true, 2, "staff-take:Fran"));
+        assertEquals(2, store.read(owner, character).orElseThrow().rev());
     }
 
     @Test

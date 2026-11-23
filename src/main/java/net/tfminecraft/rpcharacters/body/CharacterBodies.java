@@ -156,7 +156,7 @@ public final class CharacterBodies {
     public boolean hasLease(UUID owner, UUID character) throws IOException { return leases.names(owner, character); }
 
     /** Staff slot edits on stowed bodies, guarded by {@link #editBlocked}. Main thread only. */
-    public BodyEditor editor() { return new BodyEditor(store, this::editBlocked); }
+    public BodyEditor editor() { return new BodyEditor(store, this::editBlocked, MmoInventorySlots.ACCESSORIES); }
 
     /**
      * Why staff cannot change this character's stowed body now, or null. Its body must not be on the player:
@@ -166,6 +166,8 @@ public final class CharacterBodies {
      */
     String editBlocked(UUID owner, UUID character) throws IOException {
         if (failed.contains(owner)) return "This account's character data needs attention first.";
+        // An unfinished first migration still expects the bodies it wrote at their first revision.
+        if (!migration.migrated(owner)) return "This account's character bodies are not fully set up yet.";
         BodyTag.Live body = live.get(owner);
         if (body != null && body.characterId().equals(character)) return "The player is playing this character right now.";
         if (leases.names(owner, character)) {
