@@ -155,6 +155,30 @@ public final class CharacterBodies {
     /** True while the account's activation lease names the character: its body is still in vanilla player data. */
     public boolean hasLease(UUID owner, UUID character) throws IOException { return leases.names(owner, character); }
 
+    /** Staff slot edits on stowed bodies, guarded by {@link #editBlocked}. Main thread only. */
+    public BodyEditor editor() { return new BodyEditor(store, this::editBlocked); }
+
+    /**
+     * Why staff cannot change this character's stowed body now, or null. Its body must not be on the player:
+     * live, or still named by the activation lease (after a crash, or a disconnect while dead). The account
+     * must not be joining or loading a character either: activation re-reads the stored revision and treats a
+     * moved one as broken data.
+     */
+    String editBlocked(UUID owner, UUID character) throws IOException {
+        if (failed.contains(owner)) return "This account's character data needs attention first.";
+        BodyTag.Live body = live.get(owner);
+        if (body != null && body.characterId().equals(character)) return "The player is playing this character right now.";
+        if (leases.names(owner, character)) {
+            return "This character's body is still on the player (playing, or not saved back since a crash or a death)."
+                    + " It can be changed once they leave it.";
+        }
+        if (requests.containsKey(owner) || applying.contains(owner) || enteringRoom.containsKey(owner)
+                || pendingAccounts.containsKey(owner) || deferredPrepare.contains(owner)) {
+            return "The player is joining or entering a character right now. Try again in a moment.";
+        }
+        return null;
+    }
+
     public void rememberSpawn(UUID owner, Location original) {
         originalSpawns.put(owner, original.clone());
     }

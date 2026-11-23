@@ -196,6 +196,9 @@ public class CommandTabCompleter implements TabCompleter {
 					completions.add(ClassPickReset.SUBCOMMAND);
 					completions.add(ClassPickAdminCommand.SUBCOMMAND);
 				}
+				if (net.tfminecraft.rpcharacters.body.BodyAdminCommand.canUse(sender)) {
+					completions.add(net.tfminecraft.rpcharacters.body.BodyAdminCommand.SUBCOMMAND);
+				}
 				if (HiddenCharacterAdminCommand.canUse(sender)) {
 					completions.add(HiddenCharacterAdminCommand.SUBCOMMAND);
 				}

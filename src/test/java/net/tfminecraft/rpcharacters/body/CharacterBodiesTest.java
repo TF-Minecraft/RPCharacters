@@ -310,6 +310,22 @@ class CharacterBodiesTest {
         assertTrue(bodies.hasLease(owner,first));
         assertFalse(bodies.hasLease(owner,second));
     }
+    @Test void staffBodyEditsWaitWhileTheBodyIsInPlayOrTheAccountIsEnteringOne() throws Exception {
+        assertNull(bodies.editBlocked(owner,first));
+        when(leases.names(owner,first)).thenReturn(true);
+        assertTrue(bodies.editBlocked(owner,first).contains("still on the player"));
+        assertNull(bodies.editBlocked(owner,second));
+        when(leases.names(owner,first)).thenReturn(false);
+        bodies.join(player);
+        assertTrue(bodies.editBlocked(owner,second).contains("joining or entering"));
+        bodies.takeAccount(player); bodies.prepare(account); drain();
+        bodies.select(account,a);
+        assertTrue(bodies.editBlocked(owner,second).contains("joining or entering"));
+        drain(); assertTrue(bodies.hasLiveBody(player));
+        assertEquals("The player is playing this character right now.",bodies.editBlocked(owner,first));
+        assertNull(bodies.editBlocked(owner,second));
+        assertNotNull(bodies.editor());
+    }
     @Test void requiredPackWaitsInsideRoomAfterRecoveryWithoutOpeningSelectionOrTeleportingTwice() throws Exception {
         tag=new BodyTag.Live(first,1); when(packs.ready(player)).thenReturn(false);
         bodies.join(player); bodies.prepare(account); queued.removeFirst().run();
