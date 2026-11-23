@@ -82,7 +82,8 @@ public class CommandTabCompleter implements TabCompleter {
 				completions.add("adminmode");
 				completions.add("discordgate");
 				completions.add("setworldspawn");
-			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)) {
+			} else if (ClassPickReset.canUse(sender) || HiddenCharacterAdminCommand.canUse(sender)
+					|| net.tfminecraft.rpcharacters.body.BodyAdminCommand.canUse(sender)) {
 				completions.add("admin");
 			}
 			completions.add("strikes");
